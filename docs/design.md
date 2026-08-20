@@ -577,37 +577,83 @@ Deliberate, and listed so nobody is surprised on the day:
 
 ## 8. Milestone 3 — Future
 
-Deliberately unrefined. An idea dump to be sorted later, not a commitment.
+Deliberately unrefined. An idea dump to be sorted later, not a commitment. Grouped only to stay
+navigable.
+
+**Three structural notes.** Most competitor-facing entries below need a **persistent identity and data
+that outlives a single event**, which is a real departure from MVP's one-JSON-file-per-tournament
+model rather than a feature bolted onto it. Most of them also need the cloud server (1), because they
+assume something reachable before and after the event, not a laptop switched on that morning.
+
+Third, and more limiting: **anything requiring cross-club data is structurally out of reach.** A
+self-hosted server only ever holds the events its own club ran, so league-wide ratings and a global
+opponent database — the things a centralised platform does well — cannot work here without becoming
+the very central service this project rejects. Career statistics, opponent history and achievements
+are therefore scoped to whatever a given server has seen. **The escape hatch is (26)**: exporting to
+HEMA Ratings feeds the shared community database without Porta di Ferro having to be a platform, and
+that is the right division of labour.
+
+### Deployment and access
 
 1. **Web/cloud server** — an easily deployed droplet or a web server on a PC, with clients connecting
    over the internet rather than the LAN. **A Linux install ships alongside the Windows one** from
    this point, since a Linux host becomes the normal deployment target.
-2. **Participant self-registration** — participants sign themselves up to an event and to
-   individual tournaments per discipline. **Depends on (1)**, since it needs a web-hosted server
-   standing before the event rather than a laptop switched on that morning.
-3. **Observer role.**
-4. **Fully data-driven rulesets** — replacing the hardcoded MVP rules. Includes making the
-   disqualification policy an organizer choice: score it as a match loss, or void the competitor
-   retroactively as MSL's written rule does.
-5. **Finals — best of three**, won by two wins or one win and two draws, then sudden death.
-6. **Events divided into tournaments**, with organizer options.
-7. **Disciplines** — weapon and ruleset selection per tournament (issues #2, #4).
-8. **Configurable elimination cut** — how many advance, set when organizing the tournament.
-9. **Club logos** — for the hosting club and individual competitors, on scoreboards and displays.
-   Runtime import plus a database in the repo.
-10. **Staff** — roles, availability, assignment, and the *pliktdomarsystem* under which competing
+2. **Observer role.**
+3. **Per-mat scoreboard clients** driving their own monitors, possibly handhelds.
+
+### Before the event
+
+4. **Events divided into tournaments**, with organizer options.
+5. **Event page** — one public page carrying everything about an event: venue, schedule, rules,
+   entry lists, and the pools once drawn.
+6. **Participant self-registration** — one-click entry to an event and to individual tournaments per
+   discipline.
+7. **Entry administration** — approve applications, track payment and attendance, assign categories,
+   and seed entrants. The organizer's desk work before a competitor ever reaches a mat.
+8. **Disciplines** — weapon and ruleset selection per tournament (issues #2, #4).
+9. **Categories** — open, women's, novice and so on, as an axis separate from discipline.
+10. **Touch-friendly pool building** — drag competitors between pools on a phone or a PC, with
+    filters and seeding, rather than only accepting what the generator produced.
+11. **Publish pools and structures ahead of the event**, so competitors arrive knowing their group.
+
+### Rules and formats
+
+12. **Fully data-driven rulesets** — replacing the hardcoded MVP rules. Includes making the
+    disqualification policy an organizer choice: score it as a match loss, or void the competitor
+    retroactively as MSL's written rule does.
+13. **Finals — best of three**, won by two wins or one win and two draws, then sudden death.
+14. **Configurable elimination cut** — how many advance, set when organizing the tournament.
+15. **Team events.**
+16. **Non-match events** — cutting, forms, solo.
+
+### During the event
+
+17. **Staff** — roles, availability, assignment, and the *pliktdomarsystem* under which competing
     obliges you to staff another discipline (issue #5).
-11. **Timetable** — generation, with personalised per-competitor schedules (issue #6).
-12. **Per-mat scoreboard clients** driving their own monitors, possibly handhelds.
-13. **Team events.**
-14. **Non-match events** — cutting, forms, solo.
-15. **Persistent public results** and competitor profiles.
-16. **Streaming overlay** — names, clubs, score, time, penalties, bracket context.
-17. **HEMA Ratings export.**
-18. **Statistics** over the exchange log.
-19. **Accessibility** — WCAG 2.1 AA as a stated goal.
-20. **GDPR / data retention options** — organizer chooses to store results indefinitely or push to
-    HEMA Ratings, with all participants consenting at signup.
+18. **Timetable** — generation, with personalised per-competitor schedules (issue #6).
+19. **Streaming overlay** — names, clubs, score, time, penalties, bracket context.
+20. **Shareable follow link** — a competitor sends friends a link that follows their matches live,
+    rather than making them hunt through a results page.
+
+### After the event
+
+21. **Persistent public results** and competitor profiles.
+22. **Career statistics** — a competitor's record across events, not just the current one.
+23. **Opponent history** — look up a potential opponent's record and the head-to-head against them,
+    across the events *this* server holds.
+24. **Statistics over the exchange log** — per competitor and per category, including the timing and
+    warning data MVP already records.
+25. **Achievements** — general and annual, earned across the events this server holds.
+26. **HEMA Ratings export** — one-button extraction in a form the community database can ingest.
+
+### Cross-cutting
+
+27. **Club logos** — for the hosting club and individual competitors, on scoreboards and displays.
+    Runtime import plus a database in the repo.
+28. **Accessibility** — WCAG 2.1 AA as a stated goal.
+29. **GDPR and data retention options** — organizer chooses to store results indefinitely or push to
+    HEMA Ratings, with all participants consenting at signup. Grows more significant with (21)–(26),
+    which all imply keeping personal data long after the event.
 
 ---
 
