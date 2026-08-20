@@ -121,6 +121,8 @@ later without changing the schema.
 The most important screen in the application. Large, unambiguous buttons; usable at a glance under
 time pressure.
 
+**Tablet, landscape**
+
 ```
 +--------------------------------------------------------------------+
 |                                                                    |
@@ -149,6 +151,54 @@ time pressure.
 ```
 
 Boxes drawn with `#` are selected; `+--+` are unselected.
+
+**Phone, portrait**
+
+```
++--------------------------------------------+
+|                                            |
+|                   02:47                    |
+|                                            |
+|   +----------------+  +----------------+   |
+|   |     START      |  |      STOP      |   |
+|   +----------------+  +----------------+   |
+|                                            |
+|          RED                 BLUE          |
+|      Fencer name         Fencer name       |
+|                                            |
+|           5  /!\ /!\          3            |
+|                                            |
+|   ##################  +----------------+   |
+|   #       2        #  |       2        |   |
+|   ##################  +----------------+   |
+|                                            |
+|   +----------------+  +----------------+   |
+|   |       1        |  |       1        |   |
+|   +----------------+  +----------------+   |
+|                                            |
+|   +----------------+  ##################   |
+|   |    WARNING     |  #    WARNING     #   |
+|   +----------------+  ##################   |
+|                                            |
+|   +------------------------------------+   |
+|   |          CONFIRM EXCHANGE          |   |
+|   +------------------------------------+   |
+|                                            |
++--------------------------------------------+
+```
+
+The layout adapts to the device rather than shrinking one design onto a smaller screen. On a
+phone the timer and its controls move to the top and the two fencers sit closer together
+beneath, with *Confirm exchange* spanning the full width at the bottom.
+
+The ordering follows from how often each control is used: **the most-pressed control belongs
+where the thumb already is.** *Confirm exchange* is pressed every single exchange, so it takes
+the bottom of the screen. Start and stop are pressed once per bout plus the occasional
+time-out, making them the least-used controls and the right ones to exile to the top.
+
+**Red stays on the left and blue on the right in every layout.** That mapping mirrors the mat
+and must never move, whatever the screen size — swapping sides is a deliberate action (§7), not
+something a device rotation should do.
 
 **Behaviour**
 
