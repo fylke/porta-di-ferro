@@ -115,29 +115,30 @@ The most important screen in the application. Large, unambiguous buttons; usable
 time pressure.
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                                                              │
-│      RED                  02:47                    BLUE      │
-│   Fencer name          [ START/STOP ]           Fencer name  │
-│                                                              │
-│        5                                            3        │
-│      score                                        score      │
-│                                                              │
-│   ┏━━━━━━━━━━┓ selected                     ┌──────────┐     │
-│   ┃    2     ┃                              │    2     │     │
-│   ┗━━━━━━━━━━┛                              └──────────┘     │
-│   ┌──────────┐                              ┌──────────┐     │
-│   │    1     │                              │    1     │     │
-│   └──────────┘                              └──────────┘     │
-│   ┌──────────┐                              ┏━━━━━━━━━━┓     │
-│   │ WARNING  │                              ┃ WARNING  ┃ red │
-│   └──────────┘                              ┗━━━━━━━━━━┛     │
-│                                                              │
-│            ┌────────────────────────────┐                    │
-│            │     CONFIRM EXCHANGE       │                    │
-│            └────────────────────────────┘                    │
-│                                                              │
-└──────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────┐
+│                                                                    │
+│         RED                   02:47                     BLUE       │
+│      Fencer name                                    Fencer name    │
+│                                                                    │
+│       5  /!\ /!\                                        3          │
+│                                                                    │
+│   ┏━━━━━━━━━━┓            ┌──────────────┐         ┌──────────┐    │
+│   ┃    2     ┃            │    START     │         │    2     │    │
+│   ┗━━━━━━━━━━┛            └──────────────┘         └──────────┘    │
+│                                                                    │
+│   ┌──────────┐            ┌──────────────┐         ┌──────────┐    │
+│   │    1     │            │     STOP     │         │    1     │    │
+│   └──────────┘            └──────────────┘         └──────────┘    │
+│                                                                    │
+│   ┌──────────┐                                     ┏━━━━━━━━━━┓    │
+│   │ WARNING  │                                     ┃ WARNING  ┃    │
+│   └──────────┘                                     ┗━━━━━━━━━━┛    │
+│                                                                    │
+│            ┌────────────────────────────────┐                      │
+│            │       CONFIRM EXCHANGE         │                      │
+│            └────────────────────────────────┘                      │
+│                                                                    │
+└────────────────────────────────────────────────────────────────────┘
 ```
 
 **Behaviour**
@@ -145,6 +146,10 @@ time pressure.
 - Red fencer on one side, blue on the other, mirroring the wristbands. **Sides are fixed in MVP**;
   swapping them is a stretch goal.
 - Each side shows current score, a **2-point** button, a **1-point** button, and a **warning** button.
+- **Confirmed warnings show as a warning triangle beside that fencer's score** — one triangle per
+  warning. The count is what matters, not merely that a warning exists: the secretariat needs to see
+  at a glance whether the next warning costs a point or ends the bout. Provisional, unconfirmed
+  warnings never appear here.
 - **Nothing takes effect until *Confirm exchange*.** Points and warnings alike are only selections
   until then — the score doesn't move, the warning isn't counted, and nothing is written to the log.
 
@@ -178,8 +183,36 @@ which is exactly the ruleset's maximum for a single hit.
 - **It does not stop at 03:00.** It keeps ticking past the limit until the **final exchange is
   confirmed**, which is what ends the bout. A completed bout's clock therefore routinely reads more
   than three minutes.
-- It is **not paused for scoring**, matching the ruleset. The manual start/stop control exists for the
-  ring judge's time-outs, not for ordinary exchanges.
+- It is **not paused for scoring**, matching the ruleset. The timer controls exist for the ring
+  judge's time-outs, not for ordinary exchanges.
+- **Start and stop are two separate full-size buttons**, the same size as the scoring buttons, with
+  **exactly one enabled at a time** — start is disabled while running, stop is disabled while
+  stopped. Two dedicated buttons rather than one toggle, so the control never depends on the
+  operator having read the current state correctly before pressing.
+
+**Colour**
+
+Each fencer's half of the screen is tinted with their colour — red one side, blue the other —
+matching the wristbands, so the secretariat's eye lands on the right half without reading anything.
+
+Two collisions fall out of that, and both are resolved by one rule: **hue means identity, never
+state.**
+
+- *A selected warning cannot be red*, because the red fencer's side is already red. **Selection is
+  shown by fill and border weight, not by hue** — the same treatment on both sides, so a selected
+  button looks selected regardless of which fencer it belongs to.
+- *The timer turning red at 02:50 is the one place red doesn't mean the red fencer.* It works because
+  the timer sits in the neutral centre column and the whole area floods at once, which reads as an
+  alarm rather than as identity. Keep it a full-area change rather than colouring the digits alone.
+
+Warning triangles and the warning buttons use **amber**, distinct from both fencer colours and
+conventional for the meaning.
+
+Accessibility work is a future milestone, but the layout already carries the redundancy that matters:
+fixed sides, RED and BLUE labels, and fencer names. Colour is never the only cue.
+
+The scoreboard and audience displays use the same colour language, so a spectator glancing between
+screens doesn't have to relearn it.
 
 ---
 
