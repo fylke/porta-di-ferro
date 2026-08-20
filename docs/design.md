@@ -7,10 +7,6 @@
 > another club runs theirs, or simply a better idea arriving mid-build — and that is the plan working
 > rather than failing. Anything recorded as settled can be reopened; writing decisions down is meant
 > to make disagreement concrete, not to freeze it.
->
-> The parts most likely to move are the ones never yet tested against a real match: whether the score
-> keeper view survives contact with a live one, whether a timer that runs past its own limit behaves
-> sensibly in practice, and whether a single screen really is legible from both mats.
 
 ---
 
