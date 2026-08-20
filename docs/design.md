@@ -6,12 +6,16 @@
 
 ## 1. What this is
 
-A HEMA tournament application: score bouts at the mat, run pools, show results. Built by two members
+A HEMA tournament application: score matches at the mat, run pools, show results. Built by two members
 of **MSL — Medeltida Stridsteknik Linköping IF**, a club in Linköping affiliated with Svenska
 HEMA-förbundet.
 
 **First target:** MSL's own club-internal event, **1 October 2026**. Small, forgiving, and a real
 deadline.
+
+**Terminology.** A **match** is one fencer against another, run to 8 points or 3 minutes. An
+**exchange** is a single scoring action within a match. Warnings, the point cap and the timer all
+belong to the match; points and the confirm action belong to the exchange.
 
 ### Why build it at all
 
@@ -65,7 +69,7 @@ downloadable installer exists does not, and it constrains that choice.
 | 3 | **Venue LAN** for MVP and stretch. Organizer's PC is the server and the source of truth. Cloud is a future milestone |
 | 4 | **Web clients** — Android browsers for MVP, iOS a stretch goal. Nothing to install on a client |
 | 5 | **Exchange log**, append-only, with timestamps. Score is derived, never stored directly |
-| 6 | **One writer per bout.** Handover is a stretch goal |
+| 6 | **One writer per match.** Handover is a stretch goal |
 | 7 | **Fencers entered locally.** No public registration, no payments |
 | 8 | **Local JSON files** as the database. The organizer owns and can read their data |
 | 9 | **Club-agnostic.** Nothing hardcoded to MSL except the ruleset in MVP |
@@ -81,7 +85,7 @@ downloadable installer exists does not, and it constrains that choice.
 | Surface | Runs on | Role |
 |---|---|---|
 | **Server** | Organizer's PC | Source of truth; fencer registration, tournament setup, pool generation, results |
-| **Score keeper client** | Tablet or phone at the mat | The score keeper's tool — the *sekretariat* of the Swedish rules. Scores one bout at a time |
+| **Score keeper client** | Tablet or phone at the mat | The score keeper's tool — the *sekretariat* of the Swedish rules. Scores one match at a time |
 | **Scoreboard** | Secondary monitor on the server PC | Live match display |
 
 Clients join over the venue LAN via a printed URL or QR code. **The server also serves the web app
@@ -92,12 +96,12 @@ itself** — at a venue with no internet, that's how a device that has never ope
 The network is never in the scoring path. A tap writes to the score keeper client's own local log and
 returns immediately; pushing to the server is asynchronous. The score keeper never waits on the LAN.
 
-Each bout is an **append-only log with exactly one writer**, so there is nothing to merge — the
-server orders and stores. This is log shipping, not distributed consensus. Events carry a per-bout
+Each match is an **append-only log with exactly one writer**, so there is nothing to merge — the
+server orders and stores. This is log shipping, not distributed consensus. Events carry a per-match
 sequence number; reconnecting means *"here is everything after sequence N"*. The primary key is
-`(bout_id, sequence)`, so retries are idempotent and need no deduplication logic.
+`(match_id, sequence)`, so retries are idempotent and need no deduplication logic.
 
-**Push after every confirmed exchange**, not at bout end, so a lost device costs at most one
+**Push after every confirmed exchange**, not at match end, so a lost device costs at most one
 exchange.
 
 Corrections are appended as new events rather than mutating history. MVP has no correction UI (§7),
@@ -105,13 +109,13 @@ but building the log this way means adding one later is a UI change rather than 
 
 ### The exchange log
 
-Recorded per bout:
+Recorded per match:
 
 - every confirmed exchange — timestamp, points awarded to each fencer
 - every warning — timestamp, fencer
 - **timer events** — started, stopped at timestamp X, resumed after Y seconds
 
-Nothing else. This is enough to reconstruct a bout completely and to produce post-event statistics
+Nothing else. This is enough to reconstruct a match completely and to produce post-event statistics
 later without changing the schema.
 
 ---
@@ -193,7 +197,7 @@ beneath, with *Confirm exchange* spanning the full width at the bottom.
 
 The ordering follows from how often each control is used: **the most-pressed control belongs
 where the thumb already is.** *Confirm exchange* is pressed every single exchange, so it takes
-the bottom of the screen. Start and stop are pressed once per bout plus the occasional
+the bottom of the screen. Start and stop are pressed once per match plus the occasional
 time-out, making them the least-used controls and the right ones to exile to the top.
 
 **Red stays on the left and blue on the right in every layout.** That mapping mirrors the mat
@@ -207,7 +211,7 @@ something a device rotation should do.
 - Each side shows current score, a **2-point** button, a **1-point** button, and a **warning** button.
 - **Confirmed warnings show as a warning triangle beside that fencer's score** — one triangle per
   warning. The count is what matters, not merely that a warning exists: the score keeper needs to see
-  at a glance whether the next warning costs a point or ends the bout. Provisional, unconfirmed
+  at a glance whether the next warning costs a point or ends the match. Provisional, unconfirmed
   warnings never appear here.
 - **Nothing takes effect until *Confirm exchange*.** Points and warnings alike are only selections
   until then — the score doesn't move, the warning isn't counted, and nothing is written to the log.
@@ -232,7 +236,7 @@ which is exactly the ruleset's maximum for a single hit.
 - Both fencers can be selected before confirming, which is how afterblows and doubles are entered.
 - **Confirming with nothing selected records a no-score exchange.** An exchange where neither fencer
   scored is a real event and is logged as such, not discarded.
-- **A third warning ends the bout**, so it asks for confirmation before committing (§5).
+- **A third warning ends the match**, so it asks for confirmation before committing (§5).
 
 **Timer**
 
@@ -240,7 +244,7 @@ which is exactly the ruleset's maximum for a single hit.
 - At **02:50 — ten seconds remaining — it turns red** (or is made equally unmissable) to signal the
   final exchange.
 - **It does not stop at 03:00.** It keeps ticking past the limit until the **final exchange is
-  confirmed**, which is what ends the bout. A completed bout's clock therefore routinely reads more
+  confirmed**, which is what ends the match. A completed match's clock therefore routinely reads more
   than three minutes.
 - It is **not paused for scoring**, matching the ruleset. The timer controls exist for the ring
   judge's time-outs, not for ordinary exchanges.
@@ -289,9 +293,9 @@ MSL's SM ruleset. Longsword scoring is used for all weapons at this stage.
 | Pool match points | Win **9**, draw **6**, loss **3** |
 | Forfeit | Recorded 8–0; winner takes 9 match points, forfeiter 0 |
 | Withdrawal during pools | Treated as if the fencer never participated — results retroactively voided |
-| Red / blue assignment | Fixed at pool creation, for every bout in the pool |
+| Red / blue assignment | Fixed at pool creation, for every match in the pool |
 
-**Warnings** escalate automatically, per fencer, and the count **resets each bout**:
+**Warnings** escalate automatically, per fencer, and the count **resets each match**:
 
 | Warning | Consequence |
 |---|---|
@@ -299,7 +303,7 @@ MSL's SM ruleset. Longsword scoring is used for all weapons at this stage.
 | Second | **Point deduction** — one point off the warned fencer |
 | Third | **Match loss, 0–8** against the warned fencer |
 
-Because the third warning ends the bout, the score keeper view confirms before committing it.
+Because the third warning ends the match, the score keeper view confirms before committing it.
 
 **Pool ranking**, in order, all divided by matches *completed*:
 
@@ -330,12 +334,12 @@ Target: run the 1 October club event.
    - **7.3 Pools** — generated matches per pool with status; results as JSON.
 8. **Scoreboard on a secondary monitor** — current points and warnings for red and blue, match time,
    and the winner when decided.
-9. **Pool generation** honouring min/max size, with **uneven pool sizes accepted**, and bout ordering
-   that minimises consecutive bouts on a best-effort basis, **reporting any remaining violations**
-   rather than guaranteeing none. Generation also **assigns red and blue for every bout**, aiming to
-   give each fencer a roughly even split across their own bouts — best-effort, like the ordering.
+9. **Pool generation** honouring min/max size, with **uneven pool sizes accepted**, and match ordering
+   that minimises consecutive matches on a best-effort basis, **reporting any remaining violations**
+   rather than guaranteeing none. Generation also **assigns red and blue for every match**, aiming to
+   give each fencer a roughly even split across their own matches — best-effort, like the ordering.
 10. **Export results as JSON.**
-11. **Printable pool sheets** as a paper fallback, listing each bout with its assigned colours.
+11. **Printable pool sheets** as a paper fallback, listing each match with its assigned colours.
 12. **Swedish UI.**
 13. **A Windows installer published to GitHub Releases.** Listed as a deliverable rather than assumed,
     because it is the acceptance criterion for the whole premise (§1).
@@ -366,7 +370,7 @@ Deliberate, and listed so nobody is surprised on the day:
   The escape hatch is that the database is **local JSON the organizer can hand-edit**. Proper
   correction is the first stretch goal.
 - **No eliminations, no finals.** Pools produce a ranking; anything beyond that is run on paper.
-- **No handover.** If a score keeper client dies mid-bout, the bout is re-entered.
+- **No handover.** If a score keeper client dies mid-match, the match is re-entered.
 
 ---
 
@@ -376,7 +380,7 @@ Deliberate, and listed so nobody is surprised on the day:
    deductions. The highest-value item in this milestone.
 2. **Eliminations** — top 8 from the pools.
 3. **Audience display** on a secondary monitor:
-   - the **winner and final scores, prominently**, when a bout is decided
+   - the **winner and final scores, prominently**, when a match is decided
    - the **upcoming match** — fencer names, colour-coded red and blue — in a smaller but still clearly
      legible font
    - an **"on deck" panel down the side** listing matches still to come, with red and blue background
@@ -423,7 +427,7 @@ Deliberately unrefined. An idea dump to be sorted later, not a commitment.
 11. **Timetable** — generation, with personalised per-competitor schedules (issue #6).
 12. **Per-mat scoreboard clients** driving their own monitors, possibly handhelds.
 13. **Team events.**
-14. **Non-bout events** — cutting, forms, solo.
+14. **Non-match events** — cutting, forms, solo.
 15. **Persistent public results** and fencer profiles.
 16. **Streaming overlay** — names, clubs, score, time, penalties, bracket context.
 17. **HEMA Ratings export.**
@@ -443,7 +447,7 @@ an MVP context, so several are reduced or deferred.
 |---|---|---|
 | **#1 Add a competitor** | **MVP**, reduced | Name and club only. Picture, phone number and club crest move to Future. Push notifications are out — they need internet, which a LAN-only server doesn't have |
 | **#2 Add a tournament** | **MVP**, reduced | Mats, min/max pool size, generate pools. Name, logo and discipline linkage move to Future |
-| **#3 Generate pools** | **MVP**, partly | Pool sizing and bout ordering in MVP. Club balancing is a stretch goal. Staff assignment is Future |
+| **#3 Generate pools** | **MVP**, partly | Pool sizing and match ordering in MVP. Club balancing is a stretch goal. Staff assignment is Future |
 | **#4 Add a discipline** | **Future** | MVP hardcodes one ruleset; disciplines only matter once rules are data-driven |
 | **#5 Add staff** | **Future** | Roles are irrelevant while the score keeper simply records the ring judge's decision |
 | **#6 Generate a timetable** | **Future** | The largest single piece of work in the issue set |
@@ -479,7 +483,7 @@ maintainability, not for what either of us has written most of before.
 |---|---|
 | **Installability treated as a late chore** | Would forfeit the entire premise. Test the 5-minute install from the first week, on a machine that isn't the developer's |
 | **No correction path in MVP** | Accepted deliberately (§6), but it means a mis-tap survives to the results. Hand-editing JSON is the only recourse. Raises the value of the paper fallback, and makes the stretch correction path the first thing to build afterwards |
-| **The warning button is destructive** | With automatic escalation, three taps end a bout 0–8 — and MVP has no undo. Mitigated by keeping warnings provisional until *Confirm exchange* and confirming the third one, but it remains the single most damaging control on the screen. Worth extra care in layout so it cannot be hit by accident |
+| **The warning button is destructive** | With automatic escalation, three taps end a match 0–8 — and MVP has no undo. Mitigated by keeping warnings provisional until *Confirm exchange* and confirming the third one, but it remains the single most damaging control on the screen. Worth extra care in layout so it cannot be hit by accident |
 | **Timer semantics past zero** | A count-up clock that ignores its own limit until an external event confirms is unusual and easy to get subtly wrong. Test the boundary explicitly |
 | **Club balancing untested** | Everyone shares a club at a club-internal event, so this path gets no real exercise. Cover synthetically |
 | **Scope creep from Future** | Milestone 3 is an idea dump, not a queue. Nothing moves out of it without being cut down first |
@@ -495,7 +499,7 @@ maintainability, not for what either of us has written most of before.
 - **Timer suite** — the 02:50 warning, running past 03:00, ending only on confirmation of the final
   exchange, and stop/start behaviour around time-outs.
 - **Warning escalation suite** — first warning scores nothing, second deducts a point, third forces a
-  0–8 loss; the count resets each bout; and a provisional warning cleared before confirmation has no
+  0–8 loss; the count resets each match; and a provisional warning cleared before confirmation has no
   effect at all.
 - **No-score exchanges** — confirming with nothing selected appends an exchange to the log and leaves
   both scores untouched.
@@ -503,9 +507,9 @@ maintainability, not for what either of us has written most of before.
   stopwatch, **installing the published asset from the Releases page rather than a local build**. That
   is the path a real organizer takes, and it is the only one worth measuring.
   **If this fails, the release fails.**
-- **Simulated event** — enter fencers, generate pools, score every bout, produce standings, asserting
+- **Simulated event** — enter fencers, generate pools, score every match, produce standings, asserting
   invariants end to end.
-- **Offline test** — disconnect a score keeper client mid-bout, score a full pool, reconnect, and assert the
+- **Offline test** — disconnect a score keeper client mid-match, score a full pool, reconnect, and assert the
   server's log matches the device's exactly.
 - **Club-night trials** — put the score keeper view in front of real fencers weekly. Worth more than any
   amount of synthetic testing.
