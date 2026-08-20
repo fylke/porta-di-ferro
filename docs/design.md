@@ -37,7 +37,7 @@ prior tooling installed. Installability is an acceptance criterion, not end-stag
 
 | # | Decision |
 |---|---|
-| 1 | **The table client records the ring judge's final decision.** It does not capture individual judge signals |
+| 1 | **The score keeper client records the ring judge's final decision.** It does not capture individual judge signals |
 | 2 | **Hardcoded MSL rules for MVP.** Data-driven rulesets are a future milestone |
 | 3 | **Venue LAN** for MVP and stretch. Organizer's PC is the server and the source of truth. Cloud is a future milestone |
 | 4 | **Web clients** — Android browsers for MVP, iOS a stretch goal. Nothing to install on a client |
@@ -51,7 +51,7 @@ prior tooling installed. Installability is an acceptance criterion, not end-stag
 
 ### The decision that removed the most work
 
-Decision 1 collapses almost the entire ruleset surface. Because the table waits for the ring judge's
+Decision 1 collapses almost the entire ruleset surface. Because the score keeper waits for the ring judge's
 announced award, the application never needs to know about:
 
 - how many judges there are, or how their votes resolve
@@ -74,7 +74,7 @@ represented — no special handling required.
 | Surface | Runs on | Role |
 |---|---|---|
 | **Server** | Organizer's PC | Source of truth; fencer registration, tournament setup, pool generation, results |
-| **Table client** | Tablet or phone at the mat | The secretariat's tool. Scores one bout at a time |
+| **Score keeper client** | Tablet or phone at the mat | The score keeper's tool — the *sekretariat* of the Swedish rules. Scores one bout at a time |
 | **Scoreboard** | Secondary monitor on the server PC | Live match display |
 
 Clients join over the venue LAN via a printed URL or QR code. **The server also serves the web app
@@ -82,8 +82,8 @@ itself** — at a venue with no internet, that's how a device that has never ope
 
 ### Sync
 
-The network is never in the scoring path. A tap writes to the table client's own local log and
-returns immediately; pushing to the server is asynchronous. The secretariat never waits on the LAN.
+The network is never in the scoring path. A tap writes to the score keeper client's own local log and
+returns immediately; pushing to the server is asynchronous. The score keeper never waits on the LAN.
 
 Each bout is an **append-only log with exactly one writer**, so there is nothing to merge — the
 server orders and stores. This is log shipping, not distributed consensus. Events carry a per-bout
@@ -109,7 +109,7 @@ later without changing the schema.
 
 ---
 
-## 4. The table (secretariat) view
+## 4. The score keeper view
 
 The most important screen in the application. Large, unambiguous buttons; usable at a glance under
 time pressure.
@@ -147,7 +147,7 @@ time pressure.
   swapping them is a stretch goal.
 - Each side shows current score, a **2-point** button, a **1-point** button, and a **warning** button.
 - **Confirmed warnings show as a warning triangle beside that fencer's score** — one triangle per
-  warning. The count is what matters, not merely that a warning exists: the secretariat needs to see
+  warning. The count is what matters, not merely that a warning exists: the score keeper needs to see
   at a glance whether the next warning costs a point or ends the bout. Provisional, unconfirmed
   warnings never appear here.
 - **Nothing takes effect until *Confirm exchange*.** Points and warnings alike are only selections
@@ -162,7 +162,7 @@ time pressure.
 - The **warning toggles independently** of the points — a fencer can be given points and a warning in
   the same exchange, or either alone.
 - **Selected state must be unmistakable at a glance.** A selected warning shows red or equally
-  prominent; a selected point button is clearly distinct from an unselected one. The secretariat has
+  prominent; a selected point button is clearly distinct from an unselected one. The score keeper has
   to be able to check the state in the moment before confirming, without studying it.
 
 This also enforces a rule for free: **a fencer can be awarded at most 2 points in one exchange**,
@@ -193,7 +193,7 @@ which is exactly the ruleset's maximum for a single hit.
 **Colour**
 
 Each fencer's half of the screen is tinted with their colour — red one side, blue the other —
-matching the wristbands, so the secretariat's eye lands on the right half without reading anything.
+matching the wristbands, so the score keeper's eye lands on the right half without reading anything.
 
 Two collisions fall out of that, and both are resolved by one rule: **hue means identity, never
 state.**
@@ -240,7 +240,7 @@ MSL's SM ruleset. Longsword scoring is used for all weapons at this stage.
 | Second | **Point deduction** — one point off the warned fencer |
 | Third | **Match loss, 0–8** against the warned fencer |
 
-Because the third warning ends the bout, the table view confirms before committing it.
+Because the third warning ends the bout, the score keeper view confirms before committing it.
 
 **Pool ranking**, in order, all divided by matches *completed*:
 
@@ -259,9 +259,9 @@ Dividing by *completed* matches is what makes retroactive withdrawal work correc
 
 Target: run the 1 October club event.
 
-1. **Server (organizer) + table (secretariat) clients** over the LAN.
+1. **Server (organizer) + score keeper clients** over the LAN.
 2. **Hardcoded MSL rules** per §5.
-3. **Table view** per §4.
+3. **Score keeper view** per §4.
 4. **Up to 2 mats** concurrently.
 5. **Up to 4 pools, up to 7 fencers each** — a ceiling of 28 fencers per run.
 6. **Pools only** — no eliminations.
@@ -304,7 +304,7 @@ Deliberate, and listed so nobody is surprised on the day:
   The escape hatch is that the database is **local JSON the organizer can hand-edit**. Proper
   correction is the first stretch goal.
 - **No eliminations, no finals.** Pools produce a ranking; anything beyond that is run on paper.
-- **No handover.** If a table client dies mid-bout, the bout is re-entered.
+- **No handover.** If a score keeper client dies mid-bout, the bout is re-entered.
 
 ---
 
@@ -319,14 +319,14 @@ Deliberate, and listed so nobody is surprised on the day:
      legible font
    - an **"on deck" panel down the side** listing matches still to come, with red and blue background
      colour-coding per fencer
-4. **Swap fencer sides** when the fencers are oriented the other way round from the table's point of
-   view. **Table view and audience view swap independently** of each other.
+4. **Swap fencer sides** when the fencers are oriented the other way round from the score keeper's point
+   of view. **Score keeper view and audience view swap independently** of each other.
 5. **Up to 4 mats, up to 8 pools** — 56 fencers per run. Mat assignment generalises to pool *N* on
    mat *((N−1) mod mats) + 1*.
 6. **Organizer override of mat assignment.**
 7. **Concurrent disciplines** — several runs at once, which requires a distinct port and data
    directory per instance.
-8. **Table client handover** — graceful (planned: bathroom break, shift change) and ungraceful
+8. **Score keeper client handover** — graceful (planned: bathroom break, shift change) and ungraceful
    (device died). Graceful flushes before releasing so nothing is lost; ungraceful increments a
    writer epoch, and any late events from the old device are quarantined and shown to the organizer
    rather than silently dropped.
@@ -382,7 +382,7 @@ an MVP context, so several are reduced or deferred.
 | **#2 Add a tournament** | **MVP**, reduced | Mats, min/max pool size, generate pools. Name, logo and discipline linkage move to Future |
 | **#3 Generate pools** | **MVP**, partly | Pool sizing and bout ordering in MVP. Club balancing is a stretch goal. Staff assignment is Future |
 | **#4 Add a discipline** | **Future** | MVP hardcodes one ruleset; disciplines only matter once rules are data-driven |
-| **#5 Add staff** | **Future** | Roles are irrelevant while the table simply records the ring judge's decision |
+| **#5 Add staff** | **Future** | Roles are irrelevant while the score keeper simply records the ring judge's decision |
 | **#6 Generate a timetable** | **Future** | The largest single piece of work in the issue set |
 
 ---
@@ -396,7 +396,7 @@ The next thing to settle. Two constraints dominate:
 1. **Installability.** A single self-contained artifact the organizer starts on a PC. No separate
    database server, no container runtime, no pre-installed language runtime. This is the whole
    premise, and it eliminates entire families of otherwise reasonable choices.
-2. **Shared scoring logic.** The table client needs it offline to show a live score; the server needs
+2. **Shared scoring logic.** The score keeper client needs it offline to show a live score; the server needs
    it as the authority. That means one language on both sides, a shared spec implemented twice, or a
    core compiled to WebAssembly.
 
@@ -440,9 +440,9 @@ maintainability, not for what either of us has written most of before.
   stopwatch. **If this fails, the release fails.**
 - **Simulated event** — enter fencers, generate pools, score every bout, produce standings, asserting
   invariants end to end.
-- **Offline test** — disconnect a table client mid-bout, score a full pool, reconnect, and assert the
+- **Offline test** — disconnect a score keeper client mid-bout, score a full pool, reconnect, and assert the
   server's log matches the device's exactly.
-- **Club-night trials** — put the table view in front of real fencers weekly. Worth more than any
+- **Club-night trials** — put the score keeper view in front of real fencers weekly. Worth more than any
   amount of synthetic testing.
 - **LAN dress rehearsal** before the event — real tablets, real server PC, real venue wifi, a mock
   pool. This is the acceptance test for 1 October, not the unit suite.
@@ -454,8 +454,8 @@ The MVP is built so partial completion still leaves something usable:
 
 | Tier | Run the event on |
 |---|---|
-| 1 | Full system — server, table clients, scoreboard |
-| 2 | Table clients alone, printed pool sheets, standings by hand |
+| 1 | Full system — server, score keeper clients, scoreboard |
+| 2 | Score keeper clients alone, printed pool sheets, standings by hand |
 | 3 | All paper |
 
 Pick the tier a week out, not on the morning.
