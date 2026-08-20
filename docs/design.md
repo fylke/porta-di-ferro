@@ -50,6 +50,7 @@ Two things called "points" exist, and confusing them is the easiest mistake to m
 | **Match points** | The pool-standings value of a *result* — 9 for a win, 6 a draw, 3 a loss. **Not the same as points scored** |
 | **Warning** | A penalty issued by the ring judge. The second deducts a point, the third loses the match 0–8. The count resets each match |
 | **Forfeit** | A match conceded, recorded 8–0 |
+| **Disqualification** | A competitor removed from the tournament for a severe violation. Awards them no match points |
 | **Withdrawal** | A competitor leaving the tournament during the pools. Their results are voided as though they never entered |
 
 **Application**
@@ -432,6 +433,33 @@ MSL's SM ruleset. Longsword scoring is used for all weapons at this stage.
 
 Because the third warning ends the match, the score keeper view confirms before committing it.
 
+In MVP the ladder only ever advances one step at a time. **Immediate escalation is a stretch goal**
+(Milestone 2, item 2): a ring judge may judge a violation severe enough to jump straight to a point
+deduction, a lost match, or disqualification without passing through the earlier steps.
+
+That is best modelled as a **penalty level per competitor per match** rather than a count of warnings:
+
+| Level | Effect |
+|---|---|
+| 0 | Clean |
+| 1 | Warning — recorded, no score effect |
+| 2 | Point deduction — one point off |
+| 3 | Match lost 0–8 |
+
+The warning button advances the level by one. Immediate escalation sets it directly, and **the level
+never moves backwards** — jumping straight to level 2 means the next warning takes it to 3, exactly as
+if two had been issued in sequence. Modelling a level rather than a tally is what makes both routes
+land in the same place.
+
+**Disqualification sits outside the level.** It ends the match and removes the competitor from the
+tournament, and the disqualified competitor **receives no match points**, as a forfeiting one does.
+
+> **Open question, to settle before disqualification is built.** MSL's rules say a competitor
+> disqualified *during the pools* is treated as though they never participated — the same retroactive
+> voiding as a withdrawal, which erases their completed matches and shifts everyone else's indices.
+> That is a stronger effect than simply scoring them zero, and the two readings disagree about what
+> happens to opponents they already beat. Which applies?
+
 **Pool ranking**, in order, all divided by matches *completed*:
 
 1. Match point index — match points ÷ matches completed
@@ -507,32 +535,35 @@ Deliberate, and listed so nobody is surprised on the day:
 
 1. **Correction path** — undo the last confirmed exchange, and a route for ring-judge point
    deductions. The highest-value item in this milestone.
-2. **Eliminations** — top 8 from the pools.
-3. **Server-assigned displays** — a device opens `/display` and the organizer chooses what it shows,
+2. **Immediate penalty escalation** — the ring judge may jump straight to a point deduction, a lost
+   match, or disqualification. Reached through a penalty menu on the warning control rather than more
+   buttons on the main view, with confirmation on every level above a plain warning.
+3. **Eliminations** — top 8 from the pools.
+4. **Server-assigned displays** — a device opens `/display` and the organizer chooses what it shows,
    reassigning on the fly and seeing which screens are live. Added *alongside* URL addressing, which
    remains supported. Cheap by this point, because the connected-client registry already exists for
-   handover (item 9).
-4. **Audience display**, a richer variant of the mat display:
+   handover (item 10).
+5. **Audience display**, a richer variant of the mat display:
    - the **winner and final scores, prominently**, when a match is decided
    - the **upcoming match** — competitor names, colour-coded red and blue — in a smaller but still clearly
      legible font
    - an **"on deck" panel down the side** listing matches still to come, with red and blue background
      colour-coding per competitor
-5. **Swap competitor sides** when the competitors are oriented the other way round from the score keeper's point
+6. **Swap competitor sides** when the competitors are oriented the other way round from the score keeper's point
    of view. **Score keeper view and audience view swap independently** of each other.
-6. **Up to 4 mats, up to 8 pools** — 56 competitors per run. Mat assignment generalises to pool *N* on
+7. **Up to 4 mats, up to 8 pools** — 56 competitors per run. Mat assignment generalises to pool *N* on
    mat *((N−1) mod mats) + 1*.
-7. **Organizer override of mat assignment.**
-8. **Concurrent disciplines** — several runs at once, which requires a distinct port and data
+8. **Organizer override of mat assignment.**
+9. **Concurrent disciplines** — several runs at once, which requires a distinct port and data
    directory per instance.
-9. **Score keeper client handover** — graceful (planned: bathroom break, shift change) and ungraceful
+10. **Score keeper client handover** — graceful (planned: bathroom break, shift change) and ungraceful
    (device died). Graceful flushes before releasing so nothing is lost; ungraceful increments a
    writer epoch, and any late events from the old device are quarantined and shown to the organizer
    rather than silently dropped.
-10. **English localisation** alongside Swedish.
-11. **PDF export** alongside JSON.
-12. **iOS client support.**
-13. **Club balancing in pool generation** — distribute competitors from the same club as evenly as
+11. **English localisation** alongside Swedish.
+12. **PDF export** alongside JSON.
+13. **iOS client support.**
+14. **Club balancing in pool generation** — distribute competitors from the same club as evenly as
     possible (issue #3). No effect at a club-internal event, so it needs synthetic testing.
 
 ---
