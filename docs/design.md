@@ -123,15 +123,15 @@ time pressure.
 │        5                                            3        │
 │      score                                        score      │
 │                                                              │
-│   ┌──────────┐                              ┌──────────┐     │
-│   │    2     │                              │    2     │     │
-│   └──────────┘                              └──────────┘     │
+│   ┏━━━━━━━━━━┓ selected                     ┌──────────┐     │
+│   ┃    2     ┃                              │    2     │     │
+│   ┗━━━━━━━━━━┛                              └──────────┘     │
 │   ┌──────────┐                              ┌──────────┐     │
 │   │    1     │                              │    1     │     │
 │   └──────────┘                              └──────────┘     │
-│   ┌──────────┐                              ┌──────────┐     │
-│   │ WARNING  │                              │ WARNING  │     │
-│   └──────────┘                              └──────────┘     │
+│   ┌──────────┐                              ┏━━━━━━━━━━┓     │
+│   │ WARNING  │                              ┃ WARNING  ┃ red │
+│   └──────────┘                              ┗━━━━━━━━━━┛     │
 │                                                              │
 │            ┌────────────────────────────┐                    │
 │            │     CONFIRM EXCHANGE       │                    │
@@ -145,9 +145,27 @@ time pressure.
 - Red fencer on one side, blue on the other, mirroring the wristbands. **Sides are fixed in MVP**;
   swapping them is a stretch goal.
 - Each side shows current score, a **2-point** button, a **1-point** button, and a **warning** button.
-- **Points and warnings are provisional until *Confirm exchange*** — only then are they applied and
-  written to the log. This allows both fencers to be awarded before committing, which is how
-  afterblows and doubles are entered, and it means a mis-tap can be cleared before it commits.
+- **Nothing takes effect until *Confirm exchange*.** Points and warnings alike are only selections
+  until then — the score doesn't move, the warning isn't counted, and nothing is written to the log.
+
+**Selection model**, per fencer:
+
+- The two point buttons are **mutually exclusive**. Selecting one deselects the other, so a fencer
+  holds at most one of {1, 2}.
+- **Pressing an already-selected button deselects it.** True of the point buttons and the warning
+  button alike, so any mis-tap is undone by tapping it again.
+- The **warning toggles independently** of the points — a fencer can be given points and a warning in
+  the same exchange, or either alone.
+- **Selected state must be unmistakable at a glance.** A selected warning shows red or equally
+  prominent; a selected point button is clearly distinct from an unselected one. The secretariat has
+  to be able to check the state in the moment before confirming, without studying it.
+
+This also enforces a rule for free: **a fencer can be awarded at most 2 points in one exchange**,
+which is exactly the ruleset's maximum for a single hit.
+
+**On confirmation**
+
+- Both fencers can be selected before confirming, which is how afterblows and doubles are entered.
 - **Confirming with nothing selected records a no-score exchange.** An exchange where neither fencer
   scored is a real event and is logged as such, not discarded.
 - **A third warning ends the bout**, so it asks for confirmation before committing (§5).
