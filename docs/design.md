@@ -129,10 +129,65 @@ downloadable installer exists does not, and it constrains that choice.
 |---|---|---|
 | **Server** | Organizer's PC | Source of truth; competitor registration, tournament setup, pool generation, results |
 | **Score keeper client** | Tablet or phone at the mat | The score keeper's tool — the *sekretariat* of the Swedish rules. Scores one match at a time |
-| **Scoreboard** | Secondary monitor on the server PC | Live match display |
+| **Display** | Any browser on the LAN | Live scoreboard for one mat, both mats, or the match roster |
 
 Clients join over the venue LAN via a printed URL or QR code. **The server also serves the web app
 itself** — at a venue with no internet, that's how a device that has never opened it gets it.
+
+### Displays
+
+A display is just a page the server serves, so **what renders it is not an application concern**:
+
+| URL | Shows |
+|---|---|
+| `/display/mat/1`, `/display/mat/2` | The live scoreboard for one mat |
+| `/display/mats` | Both mats side by side on a single screen |
+| `/display/roster` | The match roster |
+
+Open the URL in a browser and fullscreen it. A second monitor on the organizer's PC, a spare laptop
+beside the mat, a Raspberry Pi, an old tablet, or a venue TV with a built-in browser are all the same
+thing to the application. **MVP and the "displays away from the server PC" stretch case are therefore
+the same feature** — the difference is only what hardware the organizer plugs in.
+
+**The combined `/display/mats` view is what keeps MVP hardware-cheap.** If the organizers can find one
+spot visible from both mats, the whole event needs a single extra screen on a single video output,
+which almost any laptop already has. The trade is legibility: two mats sharing a screen means each
+gets half the width, so the display has to be closer, larger, or both.
+
+That matters because **the MVP must not depend on the server PC having several video outputs.** The
+workarounds for a one-HDMI laptop are real but each has a catch:
+
+| Approach | Catch |
+|---|---|
+| USB-C with DisplayPort Alt Mode | A genuine second output, if the laptop's port supports it. Many don't |
+| USB-C dock with two HDMI | Usually relies on MST; laptops without MST support silently mirror instead |
+| DisplayLink adapter | Works almost anywhere, but needs a driver installed |
+| DisplayPort daisy-chain | Needs the first monitor to have a DP *output*. Rare outside business monitors |
+| HDMI daisy-chain | Does not exist |
+
+None of this is worth fighting, because **any spare computer on the LAN is also a display**. That
+sidesteps cable length too: passive HDMI is dependable to roughly 10–15 m, and mats in a sports hall
+are easily further from the organizer's desk than that.
+
+**What a display shows**
+
+- **During a match** — competitor names and colours, scores, warning triangles, the match time, and
+  the winner with final scores once decided.
+- **Between matches** — the next match on that mat, plus the current pool standings. The screen is
+  never dead, and those are the two things people actually want to know.
+- The device must be **kept awake** with a screen wake lock.
+
+**Not Google Cast.** Cast devices generally need an internet connection to set up and work reliably,
+which collides directly with a LAN-only venue, and tab casting adds latency and softens text — the
+opposite of what a scoreboard needs. A small networked device at each monitor beats it on every axis
+that matters here.
+
+**Not a phone driving its own monitor either.** Some Android devices can output video over USB-C via
+DisplayPort Alt Mode, but Chrome on Android *mirrors* — a web page cannot render different content to
+an attached display. Showing the score keeper view on the phone and a scoreboard on the monitor would
+need Android's native `Presentation` API, so it is only reachable by abandoning web-only clients
+(decision 4). Not worth it: a dedicated cheap device per monitor is simpler, and cannot take the score
+keeper's screen down with it when it fails.
 
 ### Sync
 
@@ -375,8 +430,10 @@ Target: run the 1 October club event.
    - **7.1 Competitors** — registration and status. Stored as a local JSON database file.
    - **7.2 Tournament** — number of mats, min/max competitors per pool, generate pools.
    - **7.3 Pools** — generated matches per pool with status; results as JSON.
-8. **Scoreboard on a secondary monitor** — current points and warnings for red and blue, match time,
-   and the winner when decided.
+8. **Displays, addressed by URL** — `/display/mat/N` for one mat, `/display/mats` for both on a
+   single screen, `/display/roster` for the match roster. Rendered by whatever is convenient: a
+   second monitor on the server PC, or any spare machine on the LAN. Between matches a mat display
+   shows the next match on that mat and the current pool standings.
 9. **Pool generation** honouring min/max size, with **uneven pool sizes accepted**, and match ordering
    that minimises consecutive matches on a best-effort basis, **reporting any remaining violations**
    rather than guaranteeing none. Generation also **assigns red and blue for every match**, aiming to
@@ -422,27 +479,30 @@ Deliberate, and listed so nobody is surprised on the day:
 1. **Correction path** — undo the last confirmed exchange, and a route for ring-judge point
    deductions. The highest-value item in this milestone.
 2. **Eliminations** — top 8 from the pools.
-3. **Audience display** on a secondary monitor:
+3. **Server-assigned displays** — a device opens `/display` and the organizer chooses what it shows,
+   reassigning on the fly and seeing which screens are live. Cheap by this point, because the
+   connected-client registry already exists for handover (item 9).
+4. **Audience display**, a richer variant of the mat display:
    - the **winner and final scores, prominently**, when a match is decided
    - the **upcoming match** — competitor names, colour-coded red and blue — in a smaller but still clearly
      legible font
    - an **"on deck" panel down the side** listing matches still to come, with red and blue background
      colour-coding per competitor
-4. **Swap competitor sides** when the competitors are oriented the other way round from the score keeper's point
+5. **Swap competitor sides** when the competitors are oriented the other way round from the score keeper's point
    of view. **Score keeper view and audience view swap independently** of each other.
-5. **Up to 4 mats, up to 8 pools** — 56 competitors per run. Mat assignment generalises to pool *N* on
+6. **Up to 4 mats, up to 8 pools** — 56 competitors per run. Mat assignment generalises to pool *N* on
    mat *((N−1) mod mats) + 1*.
-6. **Organizer override of mat assignment.**
-7. **Concurrent disciplines** — several runs at once, which requires a distinct port and data
+7. **Organizer override of mat assignment.**
+8. **Concurrent disciplines** — several runs at once, which requires a distinct port and data
    directory per instance.
-8. **Score keeper client handover** — graceful (planned: bathroom break, shift change) and ungraceful
+9. **Score keeper client handover** — graceful (planned: bathroom break, shift change) and ungraceful
    (device died). Graceful flushes before releasing so nothing is lost; ungraceful increments a
    writer epoch, and any late events from the old device are quarantined and shown to the organizer
    rather than silently dropped.
-9. **English localisation** alongside Swedish.
-10. **PDF export** alongside JSON.
-11. **iOS client support.**
-12. **Club balancing in pool generation** — distribute competitors from the same club as evenly as
+10. **English localisation** alongside Swedish.
+11. **PDF export** alongside JSON.
+12. **iOS client support.**
+13. **Club balancing in pool generation** — distribute competitors from the same club as evenly as
     possible (issue #3). No effect at a club-internal event, so it needs synthetic testing.
 
 ---
