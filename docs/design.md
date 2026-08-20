@@ -1,16 +1,14 @@
 # Porta di Ferro — Design
 
-> **Companion:** [`open-questions.md`](./open-questions.md) — what's still undecided.
->
-> **Status:** proposed, not yet agreed. Tech stack deliberately not chosen here.
+> **Status:** proposed, not yet agreed. Tech stack deliberately not chosen here — see §10.
 
 ---
 
 ## 1. What this is
 
-A HEMA tournament application: score bouts at the mat, run pools, show results. Built by two
-members of **MSL — Medeltida Stridsteknik Linköping IF**, a club in Linköping affiliated with
-Svenska HEMA-förbundet.
+A HEMA tournament application: score bouts at the mat, run pools, show results. Built by two members
+of **MSL — Medeltida Stridsteknik Linköping IF**, a club in Linköping affiliated with Svenska
+HEMA-förbundet.
 
 **First target:** MSL's own club-internal event, **1 October 2026**. Small, forgiving, and a real
 deadline.
@@ -41,14 +39,15 @@ prior tooling installed. Installability is an acceptance criterion, not end-stag
 |---|---|
 | 1 | **The table client records the ring judge's final decision.** It does not capture individual judge signals |
 | 2 | **Hardcoded MSL rules for MVP.** Data-driven rulesets are a future milestone |
-| 3 | **Venue LAN.** Organizer's PC is the server and the source of truth. No cloud |
+| 3 | **Venue LAN** for MVP and stretch. Organizer's PC is the server and the source of truth. Cloud is a future milestone |
 | 4 | **Web clients** — Android browsers for MVP, iOS a stretch goal. Nothing to install on a client |
 | 5 | **Exchange log**, append-only, with timestamps. Score is derived, never stored directly |
 | 6 | **One writer per bout.** Handover is a stretch goal |
-| 7 | **Fencers imported/entered locally.** No public registration, no payments |
+| 7 | **Fencers entered locally.** No public registration, no payments |
 | 8 | **Local JSON files** as the database. The organizer owns and can read their data |
 | 9 | **Club-agnostic.** Nothing hardcoded to MSL except the ruleset in MVP |
 | 10 | **MIT licensed** |
+| 11 | **Swedish UI for MVP**, English localisation a stretch goal. **Internal identifiers are English** regardless |
 
 ### The decision that removed the most work
 
@@ -94,8 +93,8 @@ sequence number; reconnecting means *"here is everything after sequence N"*. The
 **Push after every confirmed exchange**, not at bout end, so a lost device costs at most one
 exchange.
 
-Corrections are appended as new events rather than mutating history, which keeps the log
-append-only and leaves an audit trail for disputes.
+Corrections are appended as new events rather than mutating history. MVP has no correction UI (§7),
+but building the log this way means adding one later is a UI change rather than a data migration.
 
 ### The exchange log
 
@@ -148,25 +147,30 @@ time pressure.
 - **Points are provisional until *Confirm exchange*** — only then are they applied to the score and
   written to the log. This allows both fencers to be awarded before committing, which is how
   afterblows and doubles are entered.
-- The **timer sits between them**, with start/stop.
-- At **10 seconds remaining the timer turns red** (or is made equally unmissable) to signal the final
-  exchange.
-- **The timer keeps running past that point** — the bout ends when the final exchange is confirmed,
-  not when the clock reaches zero.
+
+**Timer**
+
+- **Counts up from 00:00**, toward the 3-minute match time.
+- At **02:50 — ten seconds remaining — it turns red** (or is made equally unmissable) to signal the
+  final exchange.
+- **It does not stop at 03:00.** It keeps ticking past the limit until the **final exchange is
+  confirmed**, which is what ends the bout. A completed bout's clock therefore routinely reads more
+  than three minutes.
+- It is **not paused for scoring**, matching the ruleset. The manual start/stop control exists for the
+  ring judge's time-outs, not for ordinary exchanges.
 
 ---
 
 ## 5. MVP ruleset (hardcoded)
 
-MSL's SM ruleset, confirmed as the day-one target. Longsword scoring is used for all weapons at this
-stage.
+MSL's SM ruleset. Longsword scoring is used for all weapons at this stage.
 
 | Rule | Value |
 |---|---|
 | Point values | 1 or 2, as announced by the ring judge |
 | Point cap | 8 |
 | Match time | 3 minutes |
-| Final-exchange warning | 10 seconds remaining |
+| Final-exchange warning | 10 seconds remaining (02:50) |
 | Result types | Win / loss / **draw** (draws are possible in pools) |
 | Pool match points | Win **9**, draw **6**, loss **3** |
 | Forfeit | Recorded 8–0; winner takes 9 match points, forfeiter 0 |
@@ -185,7 +189,7 @@ Dividing by *completed* matches is what makes retroactive withdrawal work correc
 
 ---
 
-## Milestone 1 — MVP: Club Event Basics
+## 6. Milestone 1 — MVP: Club Event Basics
 
 Target: run the 1 October club event.
 
@@ -193,11 +197,10 @@ Target: run the 1 October club event.
 2. **Hardcoded MSL rules** per §5.
 3. **Table view** per §4.
 4. **Up to 2 mats** concurrently.
-5. **Up to 4 pools, up to 7 fencers each.** Fencer list view for registration; stored as a local JSON
-   database file.
+5. **Up to 4 pools, up to 7 fencers each** — a ceiling of 28 fencers per run.
 6. **Pools only** — no eliminations.
 7. **Server views:**
-   - **7.1 Fencers** — registration and status.
+   - **7.1 Fencers** — registration and status. Stored as a local JSON database file.
    - **7.2 Tournament** — number of mats, min/max fencers per pool, generate pools.
    - **7.3 Pools** — generated matches per pool with status; results as JSON.
 8. **Scoreboard on a secondary monitor** — current points and warnings for red and blue, match time,
@@ -207,29 +210,57 @@ Target: run the 1 October club event.
    rather than guaranteeing none.
 10. **Export results as JSON.**
 11. **Printable blank pool sheets** as a paper fallback.
+12. **Swedish UI.**
 
-**Out of scope for MVP:** eliminations, finals, handover, audience display, staff, timetable,
-categories, disciplines, club crests, accessibility work, GDPR features.
+### Mat assignment
+
+Fixed and predictable, because confusion at the mat costs more than throughput:
+
+- **Mat 1 runs pools 1 and 3. Mat 2 runs pools 2 and 4.** Odd pools to mat 1, even to mat 2.
+- The **first two pools start together**. When a pool finishes, that mat picks up its next pool.
+- **No organizer override in MVP** — the mapping is fixed. Override is a stretch goal.
+
+### Running several disciplines
+
+MVP has no concept of disciplines or divisions, and caps at 28 fencers. Multiple disciplines are
+handled by **starting a separate run of the application per discipline** — up to four. Each run is
+independent, with its own JSON database.
+
+### Accepted MVP limitations
+
+Deliberate, and listed so nobody is surprised on the day:
+
+- **No correction path.** There is no undo and no minus button. A mis-tap noticed after *Confirm
+  exchange* cannot be fixed in the UI, and a ring judge's point deduction has no direct entry.
+  The escape hatch is that the database is **local JSON the organizer can hand-edit**. Proper
+  correction is the first stretch goal.
+- **No eliminations, no finals.** Pools produce a ranking; anything beyond that is run on paper.
+- **No handover.** If a table client dies mid-bout, the bout is re-entered.
 
 ---
 
-## Milestone 2 — Club Event Stretch Goals
+## 7. Milestone 2 — Club Event Stretch Goals
 
-1. **Eliminations** — top 8 from the pools.
-2. **Secondary monitor audience display.**
-3. **Up to 4 mats, up to 8 pools.**
-4. **Table client handover** — graceful (planned; bathroom break, shift change) and ungraceful
+1. **Correction path** — undo the last confirmed exchange, and a route for ring-judge point
+   deductions. The highest-value item in this milestone.
+2. **Eliminations** — top 8 from the pools.
+3. **Secondary monitor audience display.**
+4. **Up to 4 mats, up to 8 pools** — 56 fencers per run. Mat assignment generalises to pool *N* on
+   mat *((N−1) mod mats) + 1*.
+5. **Organizer override of mat assignment.**
+6. **Table client handover** — graceful (planned: bathroom break, shift change) and ungraceful
    (device died). Graceful flushes before releasing so nothing is lost; ungraceful increments a
    writer epoch, and any late events from the old device are quarantined and shown to the organizer
    rather than silently dropped.
-5. **PDF export** alongside JSON.
-6. **iOS client support.**
-7. **Club balancing in pool generation** — distribute fencers from the same club as evenly as
-   possible (issue #3). No effect at a club-internal event, so it needs synthetic testing.
+7. **English localisation** alongside Swedish.
+8. **PDF export** alongside JSON.
+9. **iOS client support.**
+10. **Club balancing in pool generation** — distribute fencers from the same club as evenly as
+    possible (issue #3). No effect at a club-internal event, so it needs synthetic testing.
 
 ---
 
-## Milestone 3 — Future
+## 8. Milestone 3 — Future
 
 Deliberately unrefined. An idea dump to be sorted later, not a commitment.
 
@@ -257,11 +288,10 @@ Deliberately unrefined. An idea dump to be sorted later, not a commitment.
 19. **Accessibility** — WCAG 2.1 AA as a stated goal.
 20. **GDPR / data retention options** — organizer chooses to store results indefinitely or push to
     HEMA Ratings, with all participants consenting at signup.
-21. **Swedish and English localisation.**
 
 ---
 
-## 6. GitHub issues
+## 9. GitHub issues
 
 The issues take precedence over this document where they conflict. Not all are viable as written in
 an MVP context, so several are reduced or deferred.
@@ -277,28 +307,65 @@ an MVP context, so several are reduced or deferred.
 
 ---
 
-## 7. Risks
+## 10. Still to decide
+
+**Do warnings affect the score in MVP?**
+MSL's rules escalate warning → point deduction → loss of match → disqualification, but the ring judge
+applies that at their discretion. *Proposed: MVP records and displays warnings only, and any point
+consequence arrives through the normal scoring buttons as the ring judge directs.* This keeps MVP
+consistent with decision 1 — the app never interprets the rules, it records what was announced.
+
+**Who is red and who is blue?**
+Assigned automatically when pools are generated, or chosen at the table before the bout starts?
+
+**Concurrent runs on one PC.**
+If several disciplines run at the same time on the same machine, each instance needs its own port and
+its own data directory. If they run sequentially instead, this doesn't arise.
+
+### The stack
+
+The next thing to settle. Two constraints dominate:
+
+1. **Installability.** A single self-contained artifact the organizer starts on a PC. No separate
+   database server, no container runtime, no pre-installed language runtime. This is the whole
+   premise, and it eliminates entire families of otherwise reasonable choices.
+2. **Shared scoring logic.** The table client needs it offline to show a live score; the server needs
+   it as the authority. That means one language on both sides, a shared spec implemented twice, or a
+   core compiled to WebAssembly.
+
+These pull against each other — the easy answer to (2) is one language everywhere, while the easy
+answer to (1) is a compiled binary. That tension is the substance of the decision.
+
+Two things change the usual calculus: the Python `.gitignore` in the repo was an artefact and carries
+no signal, and the stack will be **built with Claude Code rather than chosen for existing
+familiarity** — so it should be optimised for the two constraints above and for long-term
+maintainability, not for what either of us has written most of before.
+
+---
+
+## 11. Risks
 
 | Risk | Assessment |
 |---|---|
 | **Installability treated as a late chore** | Would forfeit the entire premise. Test the 5-minute install from the first week, on a machine that isn't the developer's |
-| **28-fencer MVP ceiling** | 4 pools × 7 gives 28. The 1 October event was described as up to 40 across 1–4 disciplines, and MVP has no discipline concept — so a single tournament run must fit in 28. Confirm this works, or run the app once per discipline |
-| **No correction path after confirming** | The table view has no minus button and no undo. A mis-tap, or a ring judge ordering a point deduction, currently has nowhere to go. See open questions |
-| **Timer semantics past zero** | The clock continuing until the final exchange is confirmed is unusual and easy to get subtly wrong. Specify it precisely before building |
+| **No correction path in MVP** | Accepted deliberately (§6), but it means a mis-tap survives to the results. Hand-editing JSON is the only recourse. Raises the value of the paper fallback, and makes the stretch correction path the first thing to build afterwards |
+| **Timer semantics past zero** | A count-up clock that ignores its own limit until an external event confirms is unusual and easy to get subtly wrong. Test the boundary explicitly |
 | **Club balancing untested** | Everyone shares a club at a club-internal event, so this path gets no real exercise. Cover synthetically |
 | **Scope creep from Future** | Milestone 3 is an idea dump, not a queue. Nothing moves out of it without being cut down first |
 
 ---
 
-## 8. Verification
+## 12. Verification
 
 - **Pure logic** — unit and property tests on scoring, pool generation, ranking and the four indices.
   Deterministic, no UI or network needed, and painful to debug live at an event.
 - **Ranking suite** — the index chain, head-to-head fallback, 8–0 forfeits, and **retroactive voiding
   of a withdrawn fencer** with everyone else's indices recomputing correctly.
+- **Timer suite** — the 02:50 warning, running past 03:00, ending only on confirmation of the final
+  exchange, and stop/start behaviour around time-outs.
 - **Installability test**, treated as an acceptance test — clean machine, not a developer's, with a
   stopwatch. **If this fails, the release fails.**
-- **Simulated event** — import fencers, generate pools, score every bout, produce standings, asserting
+- **Simulated event** — enter fencers, generate pools, score every bout, produce standings, asserting
   invariants end to end.
 - **Offline test** — disconnect a table client mid-bout, score a full pool, reconnect, and assert the
   server's log matches the device's exactly.
