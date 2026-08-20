@@ -141,8 +141,20 @@ A display is just a page the server serves, so **what renders it is not an appli
 | URL | Shows |
 |---|---|
 | `/display/mat/1`, `/display/mat/2` | The live scoreboard for one mat |
-| `/display/mats` | Both mats side by side on a single screen |
+| `/display/mats` | Every active mat on a single screen |
+| `/display/mats?ids=1,2` | A chosen subset of mats |
 | `/display/roster` | The match roster |
+
+**URL addressing is permanent, not an MVP stopgap.** Server-assigned displays (Milestone 2) are a
+convenience layer *on top of* these URLs, never a replacement for them. Being able to point any
+browser at a known address stays useful indefinitely — for setting a screen up in seconds, for
+checking what a display should be showing when it isn't, and for later consumers such as the
+streaming overlay, which is just another page reading the same data.
+
+Display URLs are **unauthenticated and read-only**. Nothing here is secret: it is the same
+information the audience is already watching on a screen. That is safe on a venue LAN and needs
+revisiting only if the cloud server (Milestone 3) ever exposes an event to the open internet, where
+the question becomes whether an event should be publicly viewable rather than whether it is secret.
 
 Open the URL in a browser and fullscreen it. A second monitor on the organizer's PC, a spare laptop
 beside the mat, a Raspberry Pi, an old tablet, or a venue TV with a built-in browser are all the same
@@ -153,6 +165,23 @@ the same feature** — the difference is only what hardware the organizer plugs 
 spot visible from both mats, the whole event needs a single extra screen on a single video output,
 which almost any laptop already has. The trade is legibility: two mats sharing a screen means each
 gets half the width, so the display has to be closer, larger, or both.
+
+**Scaling the combined view past two mats** is a layout problem, not a plumbing one. Four full
+scoreboards in a 2×2 grid are unreadable from across a hall, so the view adapts to how many mats it
+is asked to show:
+
+| Mats shown | Layout |
+|---|---|
+| 1 | The full scoreboard |
+| 2 | Two full scoreboards side by side |
+| 3 or more | **One compact row per mat** — the two competitors, the score, the time — like a departures board. Wide and short rows stay legible at a distance in a way that shrunken scoreboards do not |
+
+The `?ids=` parameter matters more as mats are added, because it maps onto how a hall is actually
+laid out: a screen between mats 1 and 2 shows those two full-size, and another between mats 3 and 4
+shows the other pair. That beats one screen trying to serve the whole hall.
+
+*(A rotating carousel cycling one mat at a time is the obvious alternative. Rejected as the default:
+it keeps type large but guarantees the mat someone cares about is off-screen exactly when they look.)*
 
 That matters because **the MVP must not depend on the server PC having several video outputs.** The
 workarounds for a one-HDMI laptop are real but each has a catch:
@@ -480,8 +509,9 @@ Deliberate, and listed so nobody is surprised on the day:
    deductions. The highest-value item in this milestone.
 2. **Eliminations** — top 8 from the pools.
 3. **Server-assigned displays** — a device opens `/display` and the organizer chooses what it shows,
-   reassigning on the fly and seeing which screens are live. Cheap by this point, because the
-   connected-client registry already exists for handover (item 9).
+   reassigning on the fly and seeing which screens are live. Added *alongside* URL addressing, which
+   remains supported. Cheap by this point, because the connected-client registry already exists for
+   handover (item 9).
 4. **Audience display**, a richer variant of the mat display:
    - the **winner and final scores, prominently**, when a match is decided
    - the **upcoming match** — competitor names, colour-coded red and blue — in a smaller but still clearly
