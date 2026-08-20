@@ -31,6 +31,29 @@ So the open one can't practically be self-hosted, and the self-hostable one does
 Testable form: **download to running tournament in under 5 minutes**, by a non-programmer, with no
 prior tooling installed. Installability is an acceptance criterion, not end-stage packaging.
 
+### Distribution
+
+The promise above needs something to actually download, so **every release publishes install files as
+assets on the repository's GitHub Releases page**. That page is the distribution channel: an organizer
+downloads one file and runs it. No git clone, no build step, no toolchain.
+
+- **MVP: a Windows installer.** The server runs on the organizer's PC, which in practice means Windows.
+- **Linux install arrives with the web/cloud server** (Milestone 3), where a Linux host becomes the
+  normal deployment target rather than an unusual one.
+- macOS is not currently planned. Worth revisiting if the packaging turns out to be near-free once the
+  stack is chosen.
+
+Two properties matter beyond simply having a download:
+
+- **Versioned and pinnable.** An organizer should be able to take a specific known-good build a week
+  before their event and not have it move underneath them. Nobody wants to discover a regression the
+  morning of a tournament.
+- **Release notes written for organizers, not developers.** The audience is a club volunteer deciding
+  whether to upgrade before Saturday.
+
+The exact packaging format follows from the stack decision (§10) — but the requirement that a
+downloadable installer exists does not, and it constrains that choice.
+
 ---
 
 ## 2. Decisions
@@ -277,6 +300,8 @@ Target: run the 1 October club event.
 10. **Export results as JSON.**
 11. **Printable blank pool sheets** as a paper fallback.
 12. **Swedish UI.**
+13. **A Windows installer published to GitHub Releases.** Listed as a deliverable rather than assumed,
+    because it is the acceptance criterion for the whole premise (§1).
 
 ### Mat assignment
 
@@ -343,7 +368,8 @@ Deliberate, and listed so nobody is surprised on the day:
 Deliberately unrefined. An idea dump to be sorted later, not a commitment.
 
 1. **Web/cloud server** — an easily deployed droplet or a web server on a PC, with clients connecting
-   over the internet rather than the LAN.
+   over the internet rather than the LAN. **A Linux install ships alongside the Windows one** from
+   this point, since a Linux host becomes the normal deployment target.
 2. **Participant self-registration** — participants sign themselves up to an event and to
    individual tournaments per discipline. **Depends on (1)**, since it needs a web-hosted server
    standing before the event rather than a laptop switched on that morning.
@@ -437,7 +463,9 @@ maintainability, not for what either of us has written most of before.
 - **No-score exchanges** — confirming with nothing selected appends an exchange to the log and leaves
   both scores untouched.
 - **Installability test**, treated as an acceptance test — clean machine, not a developer's, with a
-  stopwatch. **If this fails, the release fails.**
+  stopwatch, **installing the published asset from the Releases page rather than a local build**. That
+  is the path a real organizer takes, and it is the only one worth measuring.
+  **If this fails, the release fails.**
 - **Simulated event** — enter fencers, generate pools, score every bout, produce standings, asserting
   invariants end to end.
 - **Offline test** — disconnect a score keeper client mid-bout, score a full pool, reconnect, and assert the
