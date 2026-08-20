@@ -117,7 +117,7 @@ downloadable installer exists does not, and it constrains that choice.
 | 1 | **The score keeper client records the ring judge's final decision.** It does not capture individual judge signals |
 | 2 | **Hardcoded MSL rules for MVP.** Data-driven rulesets are a future milestone |
 | 3 | **Venue LAN** for MVP and stretch. Organizer's PC is the server and the source of truth. Cloud is a future milestone |
-| 4 | **Web clients** — Android browsers for MVP, iOS a stretch goal. Nothing to install on a client |
+| 4 | **Web clients** — standard web, so any modern browser. Android is the tested target for MVP. Nothing to install on a client |
 | 5 | **Exchange log**, append-only, with timestamps. Score is derived, never stored directly |
 | 6 | **One writer per match.** Handover is a stretch goal |
 | 7 | **Competitors entered locally.** No public registration, no payments |
@@ -575,8 +575,7 @@ Deliberate, and listed so nobody is surprised on the day:
    rather than silently dropped.
 11. **English localisation** alongside Swedish.
 12. **PDF export** alongside JSON.
-13. **iOS client support.**
-14. **Club balancing in pool generation** — distribute competitors from the same club as evenly as
+13. **Club balancing in pool generation** — distribute competitors from the same club as evenly as
     possible (issue #3). No effect at a club-internal event, so it needs synthetic testing.
 
 ---
@@ -736,6 +735,10 @@ maintainability, not for what either of us has written most of before.
   invariants end to end.
 - **Offline test** — disconnect a score keeper client mid-match, score a full pool, reconnect, and assert the
   server's log matches the device's exactly.
+- **iOS / WebKit check** — every browser on iOS is WebKit, so there is no port, only compatibility.
+  Verify the screen wake lock (Safari 16.4+ only), local storage surviving a match, and Add to Home
+  Screen. Element fullscreen is unavailable on iPhone Safari, so treat iPhones as score keeper devices
+  rather than displays.
 - **Club-night trials** — put the score keeper view in front of real competitors weekly. Worth more than any
   amount of synthetic testing.
 - **LAN dress rehearsal** before the event — real tablets, real server PC, real venue wifi, a mock
