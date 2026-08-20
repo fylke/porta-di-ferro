@@ -72,22 +72,6 @@ downloadable installer exists does not, and it constrains that choice.
 | 10 | **MIT licensed** |
 | 11 | **Swedish UI for MVP**, English localisation a stretch goal. **Internal identifiers are English** regardless |
 
-### The decision that removed the most work
-
-Decision 1 collapses almost the entire ruleset surface. Because the score keeper waits for the ring judge's
-announced award, the application never needs to know about:
-
-- how many judges there are, or how their votes resolve
-- flag signal vocabularies
-- target zones or which weapon is in use
-- afterblows, double hits, or grappling actions
-
-All of it arrives as *"2 to red"* or *"1 to blue"* regardless. What remains is: **a point value of 1
-or 2, a warning, a timer, and pool arithmetic.** Grappling being permitted therefore costs nothing.
-
-Both fencers can be awarded points in the same exchange, which is how afterblows and doubles are
-represented — no special handling required.
-
 ---
 
 ## 3. Architecture
@@ -140,26 +124,26 @@ time pressure.
 ```
 ┌────────────────────────────────────────────────────────────────────┐
 │                                                                    │
-│         RED                   02:47                     BLUE       │
-│      Fencer name                                    Fencer name    │
+│       RED                     02:47                     BLUE       │
+│   Fencer name                                       Fencer name    │
 │                                                                    │
-│       5  /!\ /!\                                        3          │
+│        5   /!\ /!\                                       3         │
 │                                                                    │
-│   ┏━━━━━━━━━━┓            ┌──────────────┐         ┌──────────┐    │
-│   ┃    2     ┃            │    START     │         │    2     │    │
-│   ┗━━━━━━━━━━┛            └──────────────┘         └──────────┘    │
+│   ┏━━━━━━━━━━┓           ┌──────────────┐           ┌──────────┐   │
+│   ┃    2     ┃           │    START     │           │    2     │   │
+│   ┗━━━━━━━━━━┛           └──────────────┘           └──────────┘   │
 │                                                                    │
-│   ┌──────────┐            ┌──────────────┐         ┌──────────┐    │
-│   │    1     │            │     STOP     │         │    1     │    │
-│   └──────────┘            └──────────────┘         └──────────┘    │
+│   ┌──────────┐           ┌──────────────┐           ┌──────────┐   │
+│   │    1     │           │     STOP     │           │    1     │   │
+│   └──────────┘           └──────────────┘           └──────────┘   │
 │                                                                    │
-│   ┌──────────┐                                     ┏━━━━━━━━━━┓    │
-│   │ WARNING  │                                     ┃ WARNING  ┃    │
-│   └──────────┘                                     ┗━━━━━━━━━━┛    │
+│   ┌──────────┐                                      ┏━━━━━━━━━━┓   │
+│   │ WARNING  │                                      ┃ WARNING  ┃   │
+│   └──────────┘                                      ┗━━━━━━━━━━┛   │
 │                                                                    │
-│            ┌────────────────────────────────┐                      │
-│            │       CONFIRM EXCHANGE         │                      │
-│            └────────────────────────────────┘                      │
+│                  ┌──────────────────────────────┐                  │
+│                  │       CONFIRM EXCHANGE       │                  │
+│                  └──────────────────────────────┘                  │
 │                                                                    │
 └────────────────────────────────────────────────────────────────────┘
 ```
