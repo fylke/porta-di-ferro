@@ -142,11 +142,15 @@ time pressure.
 
 **Behaviour**
 
-- Red fencer on one side, blue on the other, mirroring the wristbands.
+- Red fencer on one side, blue on the other, mirroring the wristbands. **Sides are fixed in MVP**;
+  swapping them is a stretch goal.
 - Each side shows current score, a **2-point** button, a **1-point** button, and a **warning** button.
-- **Points are provisional until *Confirm exchange*** — only then are they applied to the score and
+- **Points and warnings are provisional until *Confirm exchange*** — only then are they applied and
   written to the log. This allows both fencers to be awarded before committing, which is how
-  afterblows and doubles are entered.
+  afterblows and doubles are entered, and it means a mis-tap can be cleared before it commits.
+- **Confirming with nothing selected records a no-score exchange.** An exchange where neither fencer
+  scored is a real event and is logged as such, not discarded.
+- **A third warning ends the bout**, so it asks for confirmation before committing (§5).
 
 **Timer**
 
@@ -175,6 +179,17 @@ MSL's SM ruleset. Longsword scoring is used for all weapons at this stage.
 | Pool match points | Win **9**, draw **6**, loss **3** |
 | Forfeit | Recorded 8–0; winner takes 9 match points, forfeiter 0 |
 | Withdrawal during pools | Treated as if the fencer never participated — results retroactively voided |
+| Red / blue assignment | Assigned when the match is about to start |
+
+**Warnings** escalate automatically, per fencer, and the count **resets each bout**:
+
+| Warning | Consequence |
+|---|---|
+| First | Recorded and displayed. No score effect |
+| Second | **Point deduction** — one point off the warned fencer |
+| Third | **Match loss, 0–8** against the warned fencer |
+
+Because the third warning ends the bout, the table view confirms before committing it.
 
 **Pool ranking**, in order, all divided by matches *completed*:
 
@@ -223,8 +238,11 @@ Fixed and predictable, because confusion at the mat costs more than throughput:
 ### Running several disciplines
 
 MVP has no concept of disciplines or divisions, and caps at 28 fencers. Multiple disciplines are
-handled by **starting a separate run of the application per discipline** — up to four. Each run is
-independent, with its own JSON database.
+handled by **starting a separate run of the application per discipline** — up to four, each with its
+own JSON database.
+
+**MVP runs them sequentially, one at a time.** Running disciplines concurrently is a stretch goal,
+and only then does the question of separate ports and data directories arise.
 
 ### Accepted MVP limitations
 
@@ -244,18 +262,27 @@ Deliberate, and listed so nobody is surprised on the day:
 1. **Correction path** — undo the last confirmed exchange, and a route for ring-judge point
    deductions. The highest-value item in this milestone.
 2. **Eliminations** — top 8 from the pools.
-3. **Secondary monitor audience display.**
-4. **Up to 4 mats, up to 8 pools** — 56 fencers per run. Mat assignment generalises to pool *N* on
+3. **Audience display** on a secondary monitor:
+   - the **winner and final scores, prominently**, when a bout is decided
+   - the **upcoming match** — fencer names, colour-coded red and blue — in a smaller but still clearly
+     legible font
+   - an **"on deck" panel down the side** listing matches still to come, with red and blue background
+     colour-coding per fencer
+4. **Swap fencer sides** when the fencers are oriented the other way round from the table's point of
+   view. **Table view and audience view swap independently** of each other.
+5. **Up to 4 mats, up to 8 pools** — 56 fencers per run. Mat assignment generalises to pool *N* on
    mat *((N−1) mod mats) + 1*.
-5. **Organizer override of mat assignment.**
-6. **Table client handover** — graceful (planned: bathroom break, shift change) and ungraceful
+6. **Organizer override of mat assignment.**
+7. **Concurrent disciplines** — several runs at once, which requires a distinct port and data
+   directory per instance.
+8. **Table client handover** — graceful (planned: bathroom break, shift change) and ungraceful
    (device died). Graceful flushes before releasing so nothing is lost; ungraceful increments a
    writer epoch, and any late events from the old device are quarantined and shown to the organizer
    rather than silently dropped.
-7. **English localisation** alongside Swedish.
-8. **PDF export** alongside JSON.
-9. **iOS client support.**
-10. **Club balancing in pool generation** — distribute fencers from the same club as evenly as
+9. **English localisation** alongside Swedish.
+10. **PDF export** alongside JSON.
+11. **iOS client support.**
+12. **Club balancing in pool generation** — distribute fencers from the same club as evenly as
     possible (issue #3). No effect at a club-internal event, so it needs synthetic testing.
 
 ---
@@ -266,7 +293,9 @@ Deliberately unrefined. An idea dump to be sorted later, not a commitment.
 
 1. **Web/cloud server** — an easily deployed droplet or a web server on a PC, with clients connecting
    over the internet rather than the LAN.
-2. **Participant role** — registration to an event and to individual tournaments.
+2. **Participant self-registration** — participants sign themselves up to an event and to
+   individual tournaments per discipline. **Depends on (1)**, since it needs a web-hosted server
+   standing before the event rather than a laptop switched on that morning.
 3. **Observer role.**
 4. **Fully data-driven rulesets** — replacing the hardcoded MVP rules.
 5. **Finals — best of three**, won by two wins or one win and two draws, then sudden death.
@@ -309,19 +338,6 @@ an MVP context, so several are reduced or deferred.
 
 ## 10. Still to decide
 
-**Do warnings affect the score in MVP?**
-MSL's rules escalate warning → point deduction → loss of match → disqualification, but the ring judge
-applies that at their discretion. *Proposed: MVP records and displays warnings only, and any point
-consequence arrives through the normal scoring buttons as the ring judge directs.* This keeps MVP
-consistent with decision 1 — the app never interprets the rules, it records what was announced.
-
-**Who is red and who is blue?**
-Assigned automatically when pools are generated, or chosen at the table before the bout starts?
-
-**Concurrent runs on one PC.**
-If several disciplines run at the same time on the same machine, each instance needs its own port and
-its own data directory. If they run sequentially instead, this doesn't arise.
-
 ### The stack
 
 The next thing to settle. Two constraints dominate:
@@ -349,6 +365,7 @@ maintainability, not for what either of us has written most of before.
 |---|---|
 | **Installability treated as a late chore** | Would forfeit the entire premise. Test the 5-minute install from the first week, on a machine that isn't the developer's |
 | **No correction path in MVP** | Accepted deliberately (§6), but it means a mis-tap survives to the results. Hand-editing JSON is the only recourse. Raises the value of the paper fallback, and makes the stretch correction path the first thing to build afterwards |
+| **The warning button is destructive** | With automatic escalation, three taps end a bout 0–8 — and MVP has no undo. Mitigated by keeping warnings provisional until *Confirm exchange* and confirming the third one, but it remains the single most damaging control on the screen. Worth extra care in layout so it cannot be hit by accident |
 | **Timer semantics past zero** | A count-up clock that ignores its own limit until an external event confirms is unusual and easy to get subtly wrong. Test the boundary explicitly |
 | **Club balancing untested** | Everyone shares a club at a club-internal event, so this path gets no real exercise. Cover synthetically |
 | **Scope creep from Future** | Milestone 3 is an idea dump, not a queue. Nothing moves out of it without being cut down first |
@@ -363,6 +380,11 @@ maintainability, not for what either of us has written most of before.
   of a withdrawn fencer** with everyone else's indices recomputing correctly.
 - **Timer suite** — the 02:50 warning, running past 03:00, ending only on confirmation of the final
   exchange, and stop/start behaviour around time-outs.
+- **Warning escalation suite** — first warning scores nothing, second deducts a point, third forces a
+  0–8 loss; the count resets each bout; and a provisional warning cleared before confirmation has no
+  effect at all.
+- **No-score exchanges** — confirming with nothing selected appends an exchange to the log and leaves
+  both scores untouched.
 - **Installability test**, treated as an acceptance test — clean machine, not a developer's, with a
   stopwatch. **If this fails, the release fails.**
 - **Simulated event** — enter fencers, generate pools, score every bout, produce standings, asserting
