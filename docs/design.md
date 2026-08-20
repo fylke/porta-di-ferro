@@ -50,7 +50,7 @@ Two things called "points" exist, and confusing them is the easiest mistake to m
 | **Match points** | The pool-standings value of a *result* — 9 for a win, 6 a draw, 3 a loss. **Not the same as points scored** |
 | **Warning** | A penalty issued by the ring judge. The second deducts a point, the third loses the match 0–8. The count resets each match |
 | **Forfeit** | A match conceded, recorded 8–0 |
-| **Disqualification** | A competitor removed from the rest of the tournament for a severe violation. Completed matches stand; current and remaining matches are recorded 8–0 against them, with no match points |
+| **Disqualification** | A severe violation ending the match. Recorded 8–0 with no match points. Removing the competitor from the tournament is done separately, by withdrawing them |
 | **Withdrawal** | A competitor leaving the tournament during the pools. Their results are voided as though they never entered |
 
 **Application**
@@ -429,7 +429,7 @@ MSL's SM ruleset. Longsword scoring is used for all weapons at this stage.
 |---|---|
 | First | Recorded and displayed. No score effect |
 | Second | **Point deduction** — one point off the warned competitor |
-| Third | **Match loss, 0–8** against the warned competitor |
+| Third | **Match loss, 0–8** against the warned competitor, earning them no match points |
 
 Because the third warning ends the match, the score keeper view confirms before committing it.
 
@@ -444,33 +444,28 @@ That is best modelled as a **penalty level per competitor per match** rather tha
 | 0 | Clean |
 | 1 | Warning — recorded, no score effect |
 | 2 | Point deduction — one point off |
-| 3 | Match lost 0–8 |
+| 3 | Match lost 0–8, no match points |
 
 The warning button advances the level by one. Immediate escalation sets it directly, and **the level
 never moves backwards** — jumping straight to level 2 means the next warning takes it to 3, exactly as
 if two had been issued in sequence. Modelling a level rather than a tally is what makes both routes
 land in the same place.
 
-**Level 3 is not the end of a competitor's tournament.** Losing a match 0–8 is a match-level penalty;
-they fence their next match as normal.
+**Disqualification is match-scoped while the rules are hardcoded** — that is, throughout MVP and
+Stretch. It is recorded exactly as level 3 is: **the match lost 0–8, with no match points.** The
+application does not model removal from the tournament, consistent with decision 1 — it records the
+outcome the ring judge announced and interprets nothing beyond it.
 
-**Disqualification is the tournament-level one, and sits outside the level.** It ends the current
-match and removes the competitor from the rest of the tournament:
+If the competitor genuinely leaves the event, the organizer marks them **withdrawn**, which already
+voids their results as though they never participated. The two mechanisms compose: disqualify the
+match, then withdraw the competitor. Nothing extra needs building, and the ranking indices stay
+correct because withdrawal removes them from the arithmetic entirely.
 
-- Their **completed matches stand.** Opponents keep the wins and match points they already earned.
-- The current match is recorded **8–0** against them, with **no match points**, as a forfeit is.
-- All of their **remaining matches are recorded as 8–0 forfeits** against them.
+Note that a penalty loss earns **no match points**, unlike an ordinary loss which is worth 3. That
+applies to level 3 and disqualification alike.
 
-This deliberately diverges from MSL's written rule, which treats a competitor disqualified during the
-pools as though they never participated — voiding their completed matches and shifting everyone
-else's indices. Scoring them zero instead keeps one person's misconduct from rewriting other people's
-results.
-
-> **Why the remaining matches must be recorded rather than simply dropped.** Every ranking index
-> divides by matches *completed*. A competitor disqualified after winning their first two matches
-> would otherwise finish on a match point index of 9.0 — top of the pool. Filling in the unplayed
-> matches as forfeits is what stops a disqualification from preserving a perfect record. MSL's
-> "as if they never participated" rule solves the same problem by the opposite route.
+**Once rules are data-driven** (Milestone 3), the treatment of a disqualification becomes an organizer
+choice — score it as a match loss, or void the competitor retroactively as MSL's written rule does.
 
 **Pool ranking**, in order, all divided by matches *completed*:
 
@@ -591,7 +586,9 @@ Deliberately unrefined. An idea dump to be sorted later, not a commitment.
    individual tournaments per discipline. **Depends on (1)**, since it needs a web-hosted server
    standing before the event rather than a laptop switched on that morning.
 3. **Observer role.**
-4. **Fully data-driven rulesets** — replacing the hardcoded MVP rules.
+4. **Fully data-driven rulesets** — replacing the hardcoded MVP rules. Includes making the
+   disqualification policy an organizer choice: score it as a match loss, or void the competitor
+   retroactively as MSL's written rule does.
 5. **Finals — best of three**, won by two wins or one win and two draws, then sudden death.
 6. **Events divided into tournaments**, with organizer options.
 7. **Disciplines** — weapon and ruleset selection per tournament (issues #2, #4).
