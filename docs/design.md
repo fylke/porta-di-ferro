@@ -289,7 +289,7 @@ MSL's SM ruleset. Longsword scoring is used for all weapons at this stage.
 | Pool match points | Win **9**, draw **6**, loss **3** |
 | Forfeit | Recorded 8–0; winner takes 9 match points, forfeiter 0 |
 | Withdrawal during pools | Treated as if the fencer never participated — results retroactively voided |
-| Red / blue assignment | Assigned when the match is about to start |
+| Red / blue assignment | Fixed at pool creation, for every bout in the pool |
 
 **Warnings** escalate automatically, per fencer, and the count **resets each bout**:
 
@@ -332,9 +332,10 @@ Target: run the 1 October club event.
    and the winner when decided.
 9. **Pool generation** honouring min/max size, with **uneven pool sizes accepted**, and bout ordering
    that minimises consecutive bouts on a best-effort basis, **reporting any remaining violations**
-   rather than guaranteeing none.
+   rather than guaranteeing none. Generation also **assigns red and blue for every bout**, aiming to
+   give each fencer a roughly even split across their own bouts — best-effort, like the ordering.
 10. **Export results as JSON.**
-11. **Printable blank pool sheets** as a paper fallback.
+11. **Printable pool sheets** as a paper fallback, listing each bout with its assigned colours.
 12. **Swedish UI.**
 13. **A Windows installer published to GitHub Releases.** Listed as a deliverable rather than assumed,
     because it is the acceptance criterion for the whole premise (§1).
