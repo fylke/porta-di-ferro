@@ -13,9 +13,52 @@ HEMA-förbundet.
 **First target:** MSL's own club-internal event, **1 October 2026**. Small, forgiving, and a real
 deadline.
 
-**Terminology.** A **match** is one fencer against another, run to 8 points or 3 minutes. An
-**exchange** is a single scoring action within a match. Warnings, the point cap and the timer all
-belong to the match; points and the confirm action belong to the exchange.
+### Definitions
+
+**Structure**
+
+| Term | Meaning |
+|---|---|
+| **Event** | A whole occasion, such as MSL's club event on 1 October. May contain several tournaments. **Not modelled in MVP** — one run of the application is one tournament |
+| **Tournament** | A single self-contained competition, assigned exactly one discipline. Owns its own competitors, pools and results |
+| **Discipline** | The weapon and ruleset a tournament is fought under — *open steel longsword*, for instance. Hardcoded in MVP |
+| **Pool** | A group of competitors within a tournament who each fence all the others once |
+| **Match** | One competitor against another. Run to 8 points or 3 minutes |
+| **Exchange** | A single scoring action within a match, ending when the ring judge breaks and announces the award |
+| **Elimination** | The knockout stage after the pools. Stretch goal |
+| **Mat** | The physical fencing area. Matches are assigned to mats, and a pool runs on one mat |
+
+**People**
+
+| Term | Meaning |
+|---|---|
+| **Competitor** | A person competing in a tournament. Red or blue in any given match |
+| **Event organizer** | Runs the event and operates the server — registers competitors, sets up tournaments, generates pools, publishes results |
+| **Ring judge** | Controls the match on the mat: starts and stops it, announces the award for each exchange, issues warnings. **The application records their decisions and interprets nothing** |
+| **Point judge** | Assesses hits and signals them to the ring judge. **Not represented in the app** — how many there are, and how they resolve disagreement, never reaches it |
+| **Score keeper** | Operates the score keeper client, recording what the ring judge announces and running the timer. The *sekretariat* of the Swedish rules |
+| **Coach** | One per competitor, permitted to advise during a match. Penalties for a coach's conduct fall on their competitor. Not modelled |
+| **Audience** | Spectators. Read the scoreboard and audience displays, and never interact with the app |
+
+**Scoring**
+
+Two things called "points" exist, and confusing them is the easiest mistake to make here:
+
+| Term | Meaning |
+|---|---|
+| **Point** | Awarded to a competitor in an exchange. Worth 1 or 2 |
+| **Match points** | The pool-standings value of a *result* — 9 for a win, 6 a draw, 3 a loss. **Not the same as points scored** |
+| **Warning** | A penalty issued by the ring judge. The second deducts a point, the third loses the match 0–8. The count resets each match |
+| **Forfeit** | A match conceded, recorded 8–0 |
+| **Withdrawal** | A competitor leaving the tournament during the pools. Their results are voided as though they never entered |
+
+**Application**
+
+| Term | Meaning |
+|---|---|
+| **Server** | The instance running on the organizer's PC. Source of truth, and serves the web app to the clients |
+| **Score keeper client** | The web client at the mat, one per mat |
+| **Scoreboard** | The display surface on a secondary monitor |
 
 ### Why build it at all
 
@@ -70,7 +113,7 @@ downloadable installer exists does not, and it constrains that choice.
 | 4 | **Web clients** — Android browsers for MVP, iOS a stretch goal. Nothing to install on a client |
 | 5 | **Exchange log**, append-only, with timestamps. Score is derived, never stored directly |
 | 6 | **One writer per match.** Handover is a stretch goal |
-| 7 | **Fencers entered locally.** No public registration, no payments |
+| 7 | **Competitors entered locally.** No public registration, no payments |
 | 8 | **Local JSON files** as the database. The organizer owns and can read their data |
 | 9 | **Club-agnostic.** Nothing hardcoded to MSL except the ruleset in MVP |
 | 10 | **MIT licensed** |
@@ -84,7 +127,7 @@ downloadable installer exists does not, and it constrains that choice.
 
 | Surface | Runs on | Role |
 |---|---|---|
-| **Server** | Organizer's PC | Source of truth; fencer registration, tournament setup, pool generation, results |
+| **Server** | Organizer's PC | Source of truth; competitor registration, tournament setup, pool generation, results |
 | **Score keeper client** | Tablet or phone at the mat | The score keeper's tool — the *sekretariat* of the Swedish rules. Scores one match at a time |
 | **Scoreboard** | Secondary monitor on the server PC | Live match display |
 
@@ -111,8 +154,8 @@ but building the log this way means adding one later is a UI change rather than 
 
 Recorded per match:
 
-- every confirmed exchange — timestamp, points awarded to each fencer
-- every warning — timestamp, fencer
+- every confirmed exchange — timestamp, points awarded to each competitor
+- every warning — timestamp, competitor
 - **timer events** — started, stopped at timestamp X, resumed after Y seconds
 
 Nothing else. This is enough to reconstruct a match completely and to produce post-event statistics
@@ -131,9 +174,9 @@ time pressure.
 +--------------------------------------------------------------------+
 |                                                                    |
 |       RED                     02:47                     BLUE       |
-|   Fencer name                                       Fencer name    |
+| Competitor name                                   Competitor name  |
 |                                                                    |
-|        5   /!\ /!\                                       3         |
+|        5  /!\ /!\                                        3         |
 |                                                                    |
 |   ############           +--------------+           +----------+   |
 |   #    2     #           |    START     |           |    2     |   |
@@ -168,7 +211,7 @@ Boxes drawn with `#` are selected; `+--+` are unselected.
 |   +----------------+  +----------------+   |
 |                                            |
 |          RED                 BLUE          |
-|      Fencer name         Fencer name       |
+|    Competitor name     Competitor name     |
 |                                            |
 |           5  /!\ /!\          3            |
 |                                            |
@@ -192,7 +235,7 @@ Boxes drawn with `#` are selected; `+--+` are unselected.
 ```
 
 The layout adapts to the device rather than shrinking one design onto a smaller screen. On a
-phone the timer and its controls move to the top and the two fencers sit closer together
+phone the timer and its controls move to the top and the two competitors sit closer together
 beneath, with *Confirm exchange* spanning the full width at the bottom.
 
 The ordering follows from how often each control is used: **the most-pressed control belongs
@@ -206,35 +249,35 @@ something a device rotation should do.
 
 **Behaviour**
 
-- Red fencer on one side, blue on the other, mirroring the wristbands. **Sides are fixed in MVP**;
+- Red competitor on one side, blue on the other, mirroring the wristbands. **Sides are fixed in MVP**;
   swapping them is a stretch goal.
 - Each side shows current score, a **2-point** button, a **1-point** button, and a **warning** button.
-- **Confirmed warnings show as a warning triangle beside that fencer's score** — one triangle per
+- **Confirmed warnings show as a warning triangle beside that competitor's score** — one triangle per
   warning. The count is what matters, not merely that a warning exists: the score keeper needs to see
   at a glance whether the next warning costs a point or ends the match. Provisional, unconfirmed
   warnings never appear here.
 - **Nothing takes effect until *Confirm exchange*.** Points and warnings alike are only selections
   until then — the score doesn't move, the warning isn't counted, and nothing is written to the log.
 
-**Selection model**, per fencer:
+**Selection model**, per competitor:
 
-- The two point buttons are **mutually exclusive**. Selecting one deselects the other, so a fencer
+- The two point buttons are **mutually exclusive**. Selecting one deselects the other, so a competitor
   holds at most one of {1, 2}.
 - **Pressing an already-selected button deselects it.** True of the point buttons and the warning
   button alike, so any mis-tap is undone by tapping it again.
-- The **warning toggles independently** of the points — a fencer can be given points and a warning in
+- The **warning toggles independently** of the points — a competitor can be given points and a warning in
   the same exchange, or either alone.
 - **Selected state must be unmistakable at a glance.** A selected warning shows red or equally
   prominent; a selected point button is clearly distinct from an unselected one. The score keeper has
   to be able to check the state in the moment before confirming, without studying it.
 
-This also enforces a rule for free: **a fencer can be awarded at most 2 points in one exchange**,
+This also enforces a rule for free: **a competitor can be awarded at most 2 points in one exchange**,
 which is exactly the ruleset's maximum for a single hit.
 
 **On confirmation**
 
-- Both fencers can be selected before confirming, which is how afterblows and doubles are entered.
-- **Confirming with nothing selected records a no-score exchange.** An exchange where neither fencer
+- Both competitors can be selected before confirming, which is how afterblows and doubles are entered.
+- **Confirming with nothing selected records a no-score exchange.** An exchange where neither competitor
   scored is a real event and is logged as such, not discarded.
 - **A third warning ends the match**, so it asks for confirmation before committing (§5).
 
@@ -255,24 +298,24 @@ which is exactly the ruleset's maximum for a single hit.
 
 **Colour**
 
-Each fencer's half of the screen is tinted with their colour — red one side, blue the other —
+Each competitor's half of the screen is tinted with their colour — red one side, blue the other —
 matching the wristbands, so the score keeper's eye lands on the right half without reading anything.
 
 Two collisions fall out of that, and both are resolved by one rule: **hue means identity, never
 state.**
 
-- *A selected warning cannot be red*, because the red fencer's side is already red. **Selection is
+- *A selected warning cannot be red*, because the red competitor's side is already red. **Selection is
   shown by fill and border weight, not by hue** — the same treatment on both sides, so a selected
-  button looks selected regardless of which fencer it belongs to.
-- *The timer turning red at 02:50 is the one place red doesn't mean the red fencer.* It works because
+  button looks selected regardless of which competitor it belongs to.
+- *The timer turning red at 02:50 is the one place red doesn't mean the red competitor.* It works because
   the timer sits in the neutral centre column and the whole area floods at once, which reads as an
   alarm rather than as identity. Keep it a full-area change rather than colouring the digits alone.
 
-Warning triangles and the warning buttons use **amber**, distinct from both fencer colours and
+Warning triangles and the warning buttons use **amber**, distinct from both competitor colours and
 conventional for the meaning.
 
 Accessibility work is a future milestone, but the layout already carries the redundancy that matters:
-fixed sides, RED and BLUE labels, and fencer names. Colour is never the only cue.
+fixed sides, RED and BLUE labels, and competitor names. Colour is never the only cue.
 
 The scoreboard and audience displays use the same colour language, so a spectator glancing between
 screens doesn't have to relearn it.
@@ -292,16 +335,16 @@ MSL's SM ruleset. Longsword scoring is used for all weapons at this stage.
 | Result types | Win / loss / **draw** (draws are possible in pools) |
 | Pool match points | Win **9**, draw **6**, loss **3** |
 | Forfeit | Recorded 8–0; winner takes 9 match points, forfeiter 0 |
-| Withdrawal during pools | Treated as if the fencer never participated — results retroactively voided |
+| Withdrawal during pools | Treated as if the competitor never participated — results retroactively voided |
 | Red / blue assignment | Fixed at pool creation, for every match in the pool |
 
-**Warnings** escalate automatically, per fencer, and the count **resets each match**:
+**Warnings** escalate automatically, per competitor, and the count **resets each match**:
 
 | Warning | Consequence |
 |---|---|
 | First | Recorded and displayed. No score effect |
-| Second | **Point deduction** — one point off the warned fencer |
-| Third | **Match loss, 0–8** against the warned fencer |
+| Second | **Point deduction** — one point off the warned competitor |
+| Third | **Match loss, 0–8** against the warned competitor |
 
 Because the third warning ends the match, the score keeper view confirms before committing it.
 
@@ -326,18 +369,18 @@ Target: run the 1 October club event.
 2. **Hardcoded MSL rules** per §5.
 3. **Score keeper view** per §4.
 4. **Up to 2 mats** concurrently.
-5. **Up to 4 pools, up to 7 fencers each** — a ceiling of 28 fencers per run.
+5. **Up to 4 pools, up to 7 competitors each** — a ceiling of 28 competitors per run.
 6. **Pools only** — no eliminations.
 7. **Server views:**
-   - **7.1 Fencers** — registration and status. Stored as a local JSON database file.
-   - **7.2 Tournament** — number of mats, min/max fencers per pool, generate pools.
+   - **7.1 Competitors** — registration and status. Stored as a local JSON database file.
+   - **7.2 Tournament** — number of mats, min/max competitors per pool, generate pools.
    - **7.3 Pools** — generated matches per pool with status; results as JSON.
 8. **Scoreboard on a secondary monitor** — current points and warnings for red and blue, match time,
    and the winner when decided.
 9. **Pool generation** honouring min/max size, with **uneven pool sizes accepted**, and match ordering
    that minimises consecutive matches on a best-effort basis, **reporting any remaining violations**
    rather than guaranteeing none. Generation also **assigns red and blue for every match**, aiming to
-   give each fencer a roughly even split across their own matches — best-effort, like the ordering.
+   give each competitor a roughly even split across their own matches — best-effort, like the ordering.
 10. **Export results as JSON.**
 11. **Printable pool sheets** as a paper fallback, listing each match with its assigned colours.
 12. **Swedish UI.**
@@ -354,7 +397,7 @@ Fixed and predictable, because confusion at the mat costs more than throughput:
 
 ### Running several disciplines
 
-MVP has no concept of disciplines or divisions, and caps at 28 fencers. Multiple disciplines are
+MVP has no concept of disciplines or divisions, and caps at 28 competitors. Multiple disciplines are
 handled by **starting a separate run of the application per discipline** — up to four, each with its
 own JSON database.
 
@@ -381,13 +424,13 @@ Deliberate, and listed so nobody is surprised on the day:
 2. **Eliminations** — top 8 from the pools.
 3. **Audience display** on a secondary monitor:
    - the **winner and final scores, prominently**, when a match is decided
-   - the **upcoming match** — fencer names, colour-coded red and blue — in a smaller but still clearly
+   - the **upcoming match** — competitor names, colour-coded red and blue — in a smaller but still clearly
      legible font
    - an **"on deck" panel down the side** listing matches still to come, with red and blue background
-     colour-coding per fencer
-4. **Swap fencer sides** when the fencers are oriented the other way round from the score keeper's point
+     colour-coding per competitor
+4. **Swap competitor sides** when the competitors are oriented the other way round from the score keeper's point
    of view. **Score keeper view and audience view swap independently** of each other.
-5. **Up to 4 mats, up to 8 pools** — 56 fencers per run. Mat assignment generalises to pool *N* on
+5. **Up to 4 mats, up to 8 pools** — 56 competitors per run. Mat assignment generalises to pool *N* on
    mat *((N−1) mod mats) + 1*.
 6. **Organizer override of mat assignment.**
 7. **Concurrent disciplines** — several runs at once, which requires a distinct port and data
@@ -399,7 +442,7 @@ Deliberate, and listed so nobody is surprised on the day:
 9. **English localisation** alongside Swedish.
 10. **PDF export** alongside JSON.
 11. **iOS client support.**
-12. **Club balancing in pool generation** — distribute fencers from the same club as evenly as
+12. **Club balancing in pool generation** — distribute competitors from the same club as evenly as
     possible (issue #3). No effect at a club-internal event, so it needs synthetic testing.
 
 ---
@@ -420,7 +463,7 @@ Deliberately unrefined. An idea dump to be sorted later, not a commitment.
 6. **Events divided into tournaments**, with organizer options.
 7. **Disciplines** — weapon and ruleset selection per tournament (issues #2, #4).
 8. **Configurable elimination cut** — how many advance, set when organizing the tournament.
-9. **Club logos** — for the hosting club and individual fencers, on scoreboards and displays.
+9. **Club logos** — for the hosting club and individual competitors, on scoreboards and displays.
    Runtime import plus a database in the repo.
 10. **Staff** — roles, availability, assignment, and the *pliktdomarsystem* under which competing
     obliges you to staff another discipline (issue #5).
@@ -428,7 +471,7 @@ Deliberately unrefined. An idea dump to be sorted later, not a commitment.
 12. **Per-mat scoreboard clients** driving their own monitors, possibly handhelds.
 13. **Team events.**
 14. **Non-match events** — cutting, forms, solo.
-15. **Persistent public results** and fencer profiles.
+15. **Persistent public results** and competitor profiles.
 16. **Streaming overlay** — names, clubs, score, time, penalties, bracket context.
 17. **HEMA Ratings export.**
 18. **Statistics** over the exchange log.
@@ -495,7 +538,7 @@ maintainability, not for what either of us has written most of before.
 - **Pure logic** — unit and property tests on scoring, pool generation, ranking and the four indices.
   Deterministic, no UI or network needed, and painful to debug live at an event.
 - **Ranking suite** — the index chain, head-to-head fallback, 8–0 forfeits, and **retroactive voiding
-  of a withdrawn fencer** with everyone else's indices recomputing correctly.
+  of a withdrawn competitor** with everyone else's indices recomputing correctly.
 - **Timer suite** — the 02:50 warning, running past 03:00, ending only on confirmation of the final
   exchange, and stop/start behaviour around time-outs.
 - **Warning escalation suite** — first warning scores nothing, second deducts a point, third forces a
@@ -507,11 +550,11 @@ maintainability, not for what either of us has written most of before.
   stopwatch, **installing the published asset from the Releases page rather than a local build**. That
   is the path a real organizer takes, and it is the only one worth measuring.
   **If this fails, the release fails.**
-- **Simulated event** — enter fencers, generate pools, score every match, produce standings, asserting
+- **Simulated event** — enter competitors, generate pools, score every match, produce standings, asserting
   invariants end to end.
 - **Offline test** — disconnect a score keeper client mid-match, score a full pool, reconnect, and assert the
   server's log matches the device's exactly.
-- **Club-night trials** — put the score keeper view in front of real fencers weekly. Worth more than any
+- **Club-night trials** — put the score keeper view in front of real competitors weekly. Worth more than any
   amount of synthetic testing.
 - **LAN dress rehearsal** before the event — real tablets, real server PC, real venue wifi, a mock
   pool. This is the acceptance test for 1 October, not the unit suite.
