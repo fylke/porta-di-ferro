@@ -50,7 +50,7 @@ Two things called "points" exist, and confusing them is the easiest mistake to m
 | **Match points** | The pool-standings value of a *result* — 9 for a win, 6 a draw, 3 a loss. **Not the same as points scored** |
 | **Warning** | A penalty issued by the ring judge. The second deducts a point, the third loses the match 0–8. The count resets each match |
 | **Forfeit** | A match conceded, recorded 8–0 |
-| **Disqualification** | A competitor removed from the tournament for a severe violation. Awards them no match points |
+| **Disqualification** | A competitor removed from the rest of the tournament for a severe violation. Completed matches stand; current and remaining matches are recorded 8–0 against them, with no match points |
 | **Withdrawal** | A competitor leaving the tournament during the pools. Their results are voided as though they never entered |
 
 **Application**
@@ -451,14 +451,26 @@ never moves backwards** — jumping straight to level 2 means the next warning t
 if two had been issued in sequence. Modelling a level rather than a tally is what makes both routes
 land in the same place.
 
-**Disqualification sits outside the level.** It ends the match and removes the competitor from the
-tournament, and the disqualified competitor **receives no match points**, as a forfeiting one does.
+**Level 3 is not the end of a competitor's tournament.** Losing a match 0–8 is a match-level penalty;
+they fence their next match as normal.
 
-> **Open question, to settle before disqualification is built.** MSL's rules say a competitor
-> disqualified *during the pools* is treated as though they never participated — the same retroactive
-> voiding as a withdrawal, which erases their completed matches and shifts everyone else's indices.
-> That is a stronger effect than simply scoring them zero, and the two readings disagree about what
-> happens to opponents they already beat. Which applies?
+**Disqualification is the tournament-level one, and sits outside the level.** It ends the current
+match and removes the competitor from the rest of the tournament:
+
+- Their **completed matches stand.** Opponents keep the wins and match points they already earned.
+- The current match is recorded **8–0** against them, with **no match points**, as a forfeit is.
+- All of their **remaining matches are recorded as 8–0 forfeits** against them.
+
+This deliberately diverges from MSL's written rule, which treats a competitor disqualified during the
+pools as though they never participated — voiding their completed matches and shifting everyone
+else's indices. Scoring them zero instead keeps one person's misconduct from rewriting other people's
+results.
+
+> **Why the remaining matches must be recorded rather than simply dropped.** Every ranking index
+> divides by matches *completed*. A competitor disqualified after winning their first two matches
+> would otherwise finish on a match point index of 9.0 — top of the pool. Filling in the unplayed
+> matches as forfeits is what stops a disqualification from preserving a perfect record. MSL's
+> "as if they never participated" rule solves the same problem by the opposite route.
 
 **Pool ranking**, in order, all divided by matches *completed*:
 
