@@ -1,87 +1,112 @@
-# Porta di Ferro — Open Design Questions
+# Porta di Ferro — Open Questions
 
-> Companion to [`design.md`](./design.md). Section references (§5, finding B, decision 11 …) point
-> into that document.
+> Companion to [`design.md`](./design.md). Answer in place by editing this file.
 >
-> Most of the original questionnaire is now answered — by the decisions in §4, and by the ruleset
-> findings in §5. These are what remain. Answer them **in place**, editing this file; several have a
-> **Default:** line, so "defaults except Q33 and Q46" is a complete answer.
->
-> Questions are grouped by the phase they block, so they can be answered just-in-time rather than
-> all at once. The ones under *Urgent* genuinely gate the start of work.
+> Most of the original questionnaire is now settled — see §3 for the record. What follows is what
+> genuinely remains.
 
-## Urgent — blocks starting phase 1
+---
 
-- **Q13c. Confirm the §5 SM parameters are what 1 October will use**, or give the diff. SM 2022 is four
-  years old; a newer club ruleset may supersede it.
-- **Q13e. How many flag judges on the day?** Four per mat is a lot of people for ≤40 participants. If
-  it's really two, the vote rule needs a defined two-judge form. Finding (C) means that's a config
-  value, not a rewrite — but it must be decided before the resolver is written.
-- **Q13f. Is grappling enabled on 1 October?** If off, finding (L) drops out and phase 1 gets
-  noticeably cheaper. *Recommend off for the first outing.*
-- **Q13b. Which 1–4 disciplines**, and do they all use the §5 weapon table?
-- **Q8. Mat hardware** — what will the tablets actually be on the day? Gloves in use?
-- **Q9. Separate spectator display** per mat? *Default for 1 Oct: no.*
+## 1. Blocks starting the MVP
 
-## Blocks phase 2 / the 1 October build
+**Q1. How is a mistake corrected after *Confirm exchange*?**
+The table view as specified has a 2-point button, a 1-point button and a warning button — no minus,
+no undo. Two situations have nowhere to go today:
 
-- **Q33. Pool size** for ≤40 across 1–4 disciplines. Are uneven sizes (5,5,4) acceptable?
-- **Q36. "No two bouts in a row"** — guarantee, or best-effort with a reported quality score?
-  *Default: best-effort, minimise and report violations.*
-- **Q2b. Do you want a final on 1 October?** If yes it's the §6 stretch item — and note finding (J)
-  says a proper final is best-of-three, so decide whether a single-bout final is acceptable.
-- **Q32b. How many mats** on 1 October? *Default assumption: 1–2.*
-- **Q40b. How many advance to elims**, if elims happen?
-- **Q65. Export formats** — CSV, JSON, printable PDF. Which do you need on the day?
+- a mis-tap that is only noticed after confirming
+- the ring judge ordering a **point deduction** as a penalty
 
-## Blocks phase 3
+Options: an undo of the last confirmed exchange; an edit mode over the bout history; a dedicated
+deduction control; or a supervisor override on the server. *Suggestion: undo-last-exchange in MVP,
+full history editing later — the append-only log supports both, so this is purely a UI decision.*
 
-- **Q29. Disciplines global or per-tournament?** *Default: global catalogue, copied into a tournament so
-  later template edits don't rewrite history.*
-- **Q31b. Swiss priority** — a real requirement per §5. Early or late in phase 3?
-- **Q30. Team events?** *Default: out of scope.*
-- **Q20. Non-bout events** — cutting, forms, solo? *Default: out of scope, but don't let the schema
-  preclude them (§3).*
-- **Q63. Persistent public results** after the event — permanent tournament pages, fencer profiles?
+**Q2. Exact timer semantics.**
+The clock turns red at 10 seconds and *keeps running until the final exchange is confirmed*. Needs
+pinning down before it's built:
 
-## Blocks phase 4
+- Does it count **down to 0:00 and stop**, count **negative**, or count **up** once past zero?
+- Does the 10-second warning fire again if the clock is stopped and restarted?
+- What ends the bout — confirming the final exchange, or an explicit "end bout" action?
+- Does reaching the **8-point cap** end the bout immediately on confirm, mid-exchange?
 
-- **Q46. Duty-judge specifics** (finding N): is one discipline of duty per competitor the actual rule?
-  Can people opt out by paying more, or is it mandatory? Do non-competing volunteers fill gaps first?
-  **This shapes the whole assignment algorithm.**
-- **Q48. Staff continuity goals** — hard constraints or soft preferences, and which wins in conflict?
-- **Q51. Timetable inputs** — venue hours, mat count, expected bout duration per discipline, changeover
-  time, fixed blocks. *(§5 gives 3-minute bouts plus the judging conference as a starting estimate —
-  measure the rest at BotB.)*
-- **Q53. Minimum rest between a competitor's bouts** — hard minimum, or just maximise?
-- **Q55. Personal schedule contents** — bouts, mat, gaps, standings, next opponent, and judging duties?
+**Q3. Do warnings affect the score in MVP?**
+MSL's rules escalate warning → point deduction → loss of match → disqualification, but the ring judge
+applies that at their discretion. *Suggestion: MVP records and displays warnings only, and any point
+consequence arrives through the normal scoring buttons as the ring judge directs.* Confirm.
 
-## Blocks phase 5
+**Q4. Who is red and who is blue?**
+Assigned automatically when pools are generated, or chosen at the table before the bout starts?
 
-- **Q57b. Which statistics matter most to you?** This shapes what the exchange log must capture in
-  phase 1 — cheap to record now, impossible to backfill. Judge calibration is available essentially
-  free; is that interesting or politically radioactive?
-- **Q62. Streaming overlay contents** — names, clubs, score, time, penalties, bracket context?
-- **Q66. HEMA Ratings** — export for ingestion? Import ratings for seeding?
-- **Q67. Import from HEMA Scorecard** — worth building as an adoption on-ramp?
+---
 
-## Cross-cutting
+## 2. Blocks finishing the MVP
 
-- **Q4. MSL's events only, or a product other clubs adopt?** The §2 thesis implies others — "anyone can
-  self-host" only matters if there's an *anyone*, and the natural audience is the rest of Svenska
-  HEMA-förbundet. Confirm, since it raises the bar on docs, packaging and Swedish localisation.
-- **Q64. GDPR** — confirm the finding (N) recommendation that the app stores **no medical data at all**.
-  Beyond that: who is controller (MSL, SvHEMAF, or joint), what's retention, is there a delete path?
-- ~~**Q69. Languages**~~ — **resolved**: Swedish and English both, from the first commit, with English
-  identifiers in code (decision 13). Carries one deliverable: **a glossary mapping the Swedish rule
-  terms to their English identifiers** (`flaggdomare → flag_judge`, `ringdomare → ring_judge`,
-  `sekretariat → secretariat`, `sista utväxlingen → last_exchange`), so the implementation stays
-  checkable against the Swedish source rules. Ships in phase 1.
-- **Q70. Accessibility** — WCAG 2.1 AA as a stated goal? *Default: yes; note finding (R).*
-- **Q72. Licence** — what's in `LICENSE`? Given §2, it should actively encourage other clubs to run and
-  modify it.
-- **Q73. Who's building what, and what do you each know well?** Drives the stack decision more than any
-  technical merit argument — especially given the §8 tension between constraints 1 and 2.
-- **Q74. Realistic hours per week?** **Directly determines whether the 1 October stretch goal is real.**
-- **Q75. The Python `.gitignore`** — deliberate, or an artefact of `gh repo create`?
-- **Q77. Testing appetite** — confirm heavy tests on the pure core, lighter elsewhere. *Default: yes.*
+**Q5. Does 1 October actually fit in 28 fencers?**
+MVP caps at 4 pools × 7 = **28**, but the event was described as up to 40 participants across 1–4
+disciplines, and MVP has no discipline concept. Either a single tournament run stays under 28, or the
+app gets run once per discipline. Which is it in practice?
+
+**Q6. How are pools assigned to the 2 mats?**
+One pool per mat running concurrently, or bouts from any pool dealt to whichever mat is free? The
+second is better for throughput and considerably more complex.
+
+**Q7. Is localisation still wanted, and in which milestone?**
+Swedish and English were agreed earlier, but the restructure left localisation unplaced — it now sits
+in Future. Worth deciding deliberately: **scaffolding i18n costs almost nothing at the start and is
+tedious to retrofit**, even if the Swedish strings arrive much later. *Suggestion: scaffold in MVP,
+translate whenever.*
+
+**Q8. Which milestone owns the cloud/web server?**
+It was described as a stretch goal in discussion but appears under Future in the milestone list.
+Currently placed in **Future**. Move it if that was the intent.
+
+---
+
+## 3. Settled
+
+Recorded so it doesn't get re-litigated.
+
+| | Decision |
+|---|---|
+| Ruleset | MSL SM rules confirmed; **longsword scoring for all weapons** at this stage |
+| Judges | **Irrelevant to the app** — the table waits for the ring judge's final decision |
+| Grappling | Permitted, and costs the app nothing under the above |
+| Client platform | **Android for MVP**, iOS a stretch goal. Gloves not a factor |
+| Scoreboard | Stretch: secondary monitor from the server PC. Future: per-mat clients |
+| Pools | Uneven sizes acceptable; best-effort bout ordering that **reports** remaining violations |
+| Eliminations | MVP none; stretch **top 8 from pools**; future configurable |
+| Mats | MVP 1–2, stretch up to 4 |
+| Export | MVP **JSON**, stretch **+ PDF** |
+| Exchange log | Timestamps, scoring, warnings, and **timer start/stop events** (stopped at X, resumed after Y seconds). Nothing else |
+| Rest between bouts | Maximise, but not a hard constraint |
+| Scope | Club-agnostic setup |
+| GDPR | Not an app concern for MVP or stretch. Future: organizer chooses indefinite storage or HEMA Ratings push, with participant consent at signup |
+| Licence | **MIT** — already in place |
+| Testing | Heavy tests on the pure logic core |
+| Scorecard import | Not worth the effort |
+| Staff, timetable, categories, team and non-bout events, public results, streaming overlay, HEMA Ratings, accessibility | **Future** |
+
+---
+
+## 4. Next decision — the stack
+
+Not a question for this document, but the next thing to settle, and it is now unblocked.
+
+Two constraints dominate:
+
+1. **Installability.** A single self-contained artifact the organizer starts on a PC. No separate
+   database server, no container runtime, no pre-installed language runtime. This is the whole
+   premise, and it eliminates entire families of otherwise reasonable choices.
+2. **Shared scoring logic.** The table client needs it offline to show a live score; the server needs
+   it as the authority. That means one language on both sides, a shared spec implemented twice, or a
+   core compiled to WebAssembly.
+
+These pull against each other — the easy answer to (2) is one language everywhere, while the easy
+answer to (1) is a compiled binary. That tension is the substance of the decision.
+
+Two answers change the usual calculus:
+
+- The Python `.gitignore` was an artefact, so **it carries no signal** and constrains nothing.
+- The stack will be **built with Claude Code rather than chosen for existing familiarity**, so it
+  should be optimised for the two constraints above and for long-term maintainability — not for what
+  either of you has written most of before.
