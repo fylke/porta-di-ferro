@@ -826,6 +826,7 @@ that is the right division of labour.
 20. **Streaming overlay** — names, clubs, score, time, penalties, bracket context.
 21. **Shareable follow link** — a competitor sends friends a link that follows their matches live,
     rather than making them hunt through a results page.
+22. **Score override edit** - when one level undo is not enough for fixing a faulty score, score keeper should be able to just overwrite the current score.
 
 ### After the event
 
