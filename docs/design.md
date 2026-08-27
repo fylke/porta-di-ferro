@@ -931,29 +931,35 @@ an MVP context, so several are reduced or deferred.
 | **#4 Add a discipline** | **Future** | MVP hardcodes one ruleset; disciplines only matter once rules are data-driven |
 | **#5 Add staff** | **Future** | Roles are irrelevant while the score keeper simply records the head referee's decision |
 | **#6 Generate a timetable** | **Future** | The largest single piece of work in the issue set |
+| **#8 Decide on a tech stack** | **Settled** | Go with an embedded Svelte SPA. Decision and reasoning in [`tech-stack.md`](tech-stack.md) |
 
 ---
 
 ## 10. Still to decide
 
-### The stack
+### The stack — settled
 
-The next thing to settle. Two constraints dominate:
+Go on the server, an embedded Svelte SPA on the clients, one signed Windows executable, and an
+optional cloud mirror built from the same repository. The two constraints that drove it —
+installability, and scoring logic the score keeper client needs offline — are unchanged; what
+changed is that they now have an answer. [`tech-stack.md`](tech-stack.md) carries the reasoning, the
+options that lost, and the triggers for reopening any of it.
 
-1. **Installability.** A single self-contained artifact the organizer starts on a PC. No separate
-   database server, no container runtime, no pre-installed language runtime. This is the whole
-   premise, and it eliminates entire families of otherwise reasonable choices.
-2. **Shared scoring logic.** The score keeper client needs it offline to show a live score; the server needs
-   it as the authority. That means one language on both sides, a shared spec implemented twice, or a
-   core compiled to WebAssembly.
+### What is genuinely still open
 
-These pull against each other — the easy answer to (2) is one language everywhere, while the easy
-answer to (1) is a compiled binary. That tension is the substance of the decision.
+Product questions first, because they are the ones this document owns:
 
-Two things change the usual calculus: the Python `.gitignore` in the repo was an artefact and carries
-no signal, and the stack will be **built with Claude Code rather than chosen for existing
-familiarity** — so it should be optimised for the two constraints above and for long-term
-maintainability, not for what either of us has written most of before.
+- **What a mirror publishes by default**, and how consent to it is captured at registration (§8, item
+  32). GDPR makes this a decision rather than a preference, and it gets sharper if a competitor is a
+  minor.
+- **Whether venue-wifi spectator access is enough for the near term**, deferring the mirror past
+  Milestone 3 entirely. It covers more of the spectator ask than it first appears to (§3).
+- **Whether ad-hoc streaming is worth the subsystem it drags in** (§8, item 23) — a genuinely
+  attractive feature that no other tournament app offers this cheaply, and the single largest piece
+  of new machinery in Milestone 3.
+
+The engineering questions that remain — code signing, how the mirror authenticates a push,
+multi-tenancy, macOS — are listed in [`tech-stack.md`](tech-stack.md) rather than duplicated here.
 
 ---
 
@@ -965,6 +971,9 @@ maintainability, not for what either of us has written most of before.
 | **Correction is one step deep in MVP** | Undo covers the last confirmed exchange only. An error noticed later still needs hand-editing JSON, which keeps the paper fallback valuable and makes full history editing the first Milestone 2 item |
 | **The score keeper view is unsettled** | Deliberately so — §4 gives a direction and a set of constraints, not a finished layout, and expects two or three prototypes. It is the most-used screen in the application, so leaving it open is a considered risk rather than an oversight. **Prototype early; it gates nothing else but everything depends on it being right** |
 | **Scope creep from Future** | Milestone 3 is an idea dump, not a queue. Nothing moves out of it without being cut down first |
+| **Code signing left until the first release** | An unsigned download triggers SmartScreen, and that dialog *is* the install wall. It sits directly on the 5-minute acceptance criterion, so pick a signing route early rather than in the week before an event |
+| **The match engine drifts between Go and TypeScript** | It exists twice (decision 13), and the shared test vectors are the only thing holding the two together. The failure mode is a rule that gets a fix in one implementation without earning a vector. If it bites, the escape hatch is compiling the Go engine to WebAssembly and deleting the second copy |
+| **The organizer gets a browser tab, not an application** | Choosing a server over a desktop app means "now open your browser" is part of the install. Mitigated by the executable opening the browser itself and the first screen showing the LAN URL and QR code, but it needs testing on the non-programmer, not assuming |
 
 ---
 
@@ -981,6 +990,12 @@ maintainability, not for what either of us has written most of before.
   effect at all.
 - **No-score exchanges** — confirming with nothing selected appends an exchange to the log and leaves
   both scores untouched.
+- **Engine parity suite** — the match engine exists in Go and in TypeScript (decision 13), so every
+  behaviour above is expressed as a shared JSON test vector that both implementations run. Divergence
+  fails the build, and a bug found in a real match earns a vector before it earns a fix.
+- **Cold-load budget** — measure what a phone downloads opening the app for the first time over venue
+  wifi, with no internet fallback and an empty cache. The number belongs in the release notes so a
+  regression is visible rather than discovered at an event.
 - **Installability test**, treated as an acceptance test — clean machine, not a developer's, with a
   stopwatch, **installing the published asset from the Releases page rather than a local build**. That
   is the path a real organizer takes, and it is the only one worth measuring.
@@ -1008,5 +1023,9 @@ The MVP is built so partial completion still leaves something usable:
 | 1 | Full system — server, score keeper clients, scoreboard |
 | 2 | Score keeper clients alone, printed pool sheets, standings by hand |
 | 3 | All paper |
+
+Tier 2 is not a degraded mode anyone has to build: local-first writes mean a score keeper client that
+never reaches a server still runs a match perfectly well (§3), and the score keeper simply reads the
+result out to whoever is holding the pool sheet.
 
 Pick the tier a week out, not on the morning.
