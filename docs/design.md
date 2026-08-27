@@ -1,6 +1,8 @@
 # Porta di Ferro — Design
 
-> **Status:** proposed, not yet agreed. Tech stack deliberately not chosen here — see §10.
+> **Status:** proposed, not yet agreed. The stack is settled — Go with an embedded Svelte SPA, in
+> [`tech-stack.md`](tech-stack.md). This document stays the product authority; that one holds the
+> engineering decisions.
 >
 > **This is a living document.** Everything in it is current best understanding rather than a
 > commitment. Real use will overturn parts of it — a club night, the 15 November event, watching how
@@ -102,14 +104,14 @@ assets on the repository's GitHub Releases page**. That page is the distribution
 downloads one file and runs it. No git clone, no build step, no toolchain.
 
 - **MVP: a Windows installer.** The server runs on the organizer's PC, which in practice means Windows.
-- **Linux install arrives with the web/cloud server** (Milestone 3), where a Linux host becomes the
+- **Linux install arrives with the cloud mirror** (Milestone 3), where a Linux host becomes the
   normal deployment target rather than an unusual one.
 - **A plain install file on every platform.** A container image is a fallback only where a native
   installer genuinely isn't practical — some cloud hosts — and never the primary path. The governing
   principle is the easiest possible installation, and "install Docker first" is exactly the wall this
   project exists to avoid.
-- macOS is not currently planned. Worth revisiting if the packaging turns out to be near-free once the
-  stack is chosen.
+- macOS is not currently planned. Cross-compiling the binary is free; signing and notarising it is
+  not, which is the part that would need deciding.
 
 Two properties matter beyond simply having a download:
 
@@ -119,8 +121,10 @@ Two properties matter beyond simply having a download:
 - **Release notes written for organizers, not developers.** The audience is a club volunteer deciding
   whether to upgrade before Saturday.
 
-The exact packaging format follows from the stack decision (§10) — but the requirement that a
-downloadable installer exists does not, and it constrains that choice.
+**In practice that is a signed `.exe` installer**, built from a single Go binary with the web app
+embedded in it — see [`tech-stack.md`](tech-stack.md). The signing is the part that matters: an
+unsigned download triggers SmartScreen, and that dialog is the install wall this project exists to
+avoid.
 
 ---
 
@@ -130,7 +134,7 @@ downloadable installer exists does not, and it constrains that choice.
 |---|---|
 | 1 | **The score keeper client records the head referee's final decision.** It does not capture individual judge signals |
 | 2 | **Hardcoded MSL rules for MVP.** Data-driven rulesets are a future milestone |
-| 3 | **Venue LAN** for MVP and stretch. Organizer's PC is the server and the source of truth. Cloud is a future milestone |
+| 3 | **Venue LAN** for MVP and stretch. Organizer's PC is the server and the source of truth. The cloud mirror is a future milestone, optional, and never authoritative |
 | 4 | **Web clients** — standard web, so any modern browser. Android is the tested target for MVP. Nothing to install on a client |
 | 5 | **Exchange log**, append-only, with timestamps. Score is derived, never stored directly |
 | 6 | **One writer per match.** Handover is a stretch goal |
@@ -139,6 +143,10 @@ downloadable installer exists does not, and it constrains that choice.
 | 9 | **Club-agnostic.** Nothing hardcoded to MSL except the ruleset in MVP |
 | 10 | **MIT licensed** |
 | 11 | **English UI for MVP**, Swedish localisation a stretch goal. **Internal identifiers are English** regardless |
+| 12 | **Go server with an embedded Svelte SPA**, shipped as one signed Windows executable. Full reasoning in [`tech-stack.md`](tech-stack.md) |
+| 13 | **The match engine is implemented twice** — Go and TypeScript — and held together by shared JSON test vectors. Pool generation and ranking stay server-side only |
+| 14 | **Two products, one core.** A required local executable, and an optional cloud mirror built from the same repository. Milestone 3 |
+| 15 | **SSE for everything the server pushes**, plain `POST` for everything a client writes. No WebSocket unless something needs a genuine round trip |
 
 ---
 
