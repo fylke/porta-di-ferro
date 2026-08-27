@@ -20,7 +20,7 @@ executable.** Everything else on this page follows from that sentence or qualifi
 |---|---|---|
 | **Server language** | **Go** | Single static binary, no runtime, cross-compiles in one command |
 | **HTTP** | `net/http` stdlib | Go 1.22 routing covers this workload; a framework buys nothing here |
-| **Client** | **Svelte 5 + Vite**, built to a static bundle | Fast iteration for §4's prototyping, small payload, large contributor pool |
+| **Client** | **Svelte 5 + Vite**, built to a static bundle | Fast iteration for design §4's prototyping, small payload, large contributor pool |
 | **Serving the client** | `//go:embed` | The binary *is* the web app — nothing to deploy separately |
 | **Local storage** | JSON files on disk | design.md decision 8; the organizer owns and can read their data |
 | **Client storage** | IndexedDB + service worker app shell | Local-first writes, and a device that loaded once works offline |
@@ -168,7 +168,7 @@ Stock Go produces a 2–4 MB WASM module. The issue analysis treated that as dis
 retracts that reasoning, so the option is genuinely open and is being declined on different grounds:
 
 - The `syscall/js` boundary means serialising across it and hand-writing glue on both sides.
-- It puts a Go toolchain inside the frontend build, which is exactly the friction §4 of design.md
+- It puts a Go toolchain inside the frontend build, which is exactly the friction that design §4
   cannot afford — the score keeper view needs the *most* iteration and would get the *least* support.
 - TinyGo removes the size cost but constrains reflection and parts of the standard library.
 
