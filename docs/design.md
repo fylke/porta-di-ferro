@@ -182,8 +182,15 @@ streaming overlay, which is just another page reading the same data.
 
 Display URLs are **unauthenticated and read-only**. Nothing here is secret: it is the same
 information the audience is already watching on a screen. That is safe on a venue LAN and needs
-revisiting only if the cloud server (Milestone 3) ever exposes an event to the open internet, where
+revisiting only if the cloud mirror (Milestone 3) ever exposes an event to the open internet, where
 the question becomes whether an event should be publicly viewable rather than whether it is secret.
+
+**Spectators at the venue are already served by these same URLs.** Anyone on venue wifi can open the
+roster or a mat scoreboard on their own phone, so a QR code on a poster is very nearly the whole
+feature. Worth recognising, because it covers most of what a spectator wants — what's on now, who's
+up next, how the pool stands — with no internet, no server outside the room, and none of the
+personal-data questions that come with publishing to the open web. People who are *not* at the event
+are a different problem, and the answer to that one is the cloud mirror below.
 
 Open the URL in a browser and fullscreen it. A second monitor on the organizer's PC, a spare laptop
 beside the mat, a Raspberry Pi, an old tablet, or a venue TV with a built-in browser are all the same
@@ -260,6 +267,16 @@ sequence number; reconnecting means *"here is everything after sequence N"*. The
 **Push after every confirmed exchange**, not at match end, so a lost device costs at most one
 exchange.
 
+**Writes are plain `POST`s, and everything the server pushes back is an SSE stream** (decision 15).
+Nothing a client renders depends on a live connection, so there is no work for a bidirectional
+transport to do.
+
+**A client that never reaches the server at all still works.** Because every tap is written locally
+first and the client holds the whole match log itself, a score keeper can run a full match on a
+device that has no server to talk to; the result is then read out to the organizer and entered by
+hand. This is not a separate mode to build — it is what local-first writes already give — and it is
+what tier 2 of the fallback ladder (§12) actually rests on.
+
 Corrections are appended as new events rather than mutating history. MVP has no correction UI (§7),
 but building the log this way means adding one later is a UI change rather than a data migration.
 
@@ -277,6 +294,31 @@ later without changing the schema.
 Because it stores each competitor's **raw assessed value** rather than the resulting score, the
 differential-versus-additive scoring question (§5) is purely an engine concern — matches recorded
 under one mode stay fully interpretable under the other, with no data migration.
+
+### The cloud mirror
+
+Milestone 3, optional, and described here rather than only in §8 because the architecture above is
+what makes it cheap.
+
+The mirror is an internet-facing server that receives the event log and the derived results from the
+organizer's PC and shows them to people who are not in the building. **It is a dumb presenter: it
+never re-derives anything and it is never a source of truth.**
+
+- **The append-only log is already a replication stream.** "Everything after sequence N" works over
+  the internet exactly as it works over the LAN, and `(match_id, sequence)` makes a retried push
+  harmless. There is no sync model left to invent.
+- **Replication is one-way from a single writer**, so there is nothing to merge and nothing to
+  reconcile. A mirror that has fallen behind is stale, never wrong.
+- **The cost of the split is that a bad derivation propagates silently**, because nothing on the far
+  side can recompute and disagree. For "who won, who is up next" that trade is fine; it would not be
+  if the mirror were ever allowed to become authoritative.
+
+> **The local product is complete without the mirror.** A club that never deploys one loses reach
+> and nothing else. Any feature that quietly makes the mirror mandatory has broken the split.
+
+Deployment, auth, multi-tenancy and the data-protection questions are in
+[`tech-stack.md`](tech-stack.md) — the container image is the easy part of that work, not the
+substance of it.
 
 ---
 
