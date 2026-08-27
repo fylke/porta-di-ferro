@@ -799,7 +799,7 @@ navigable.
 
 **Three structural notes.** Most competitor-facing entries below need a **persistent identity and data
 that outlives a single event**, which is a real departure from MVP's one-JSON-file-per-tournament
-model rather than a feature bolted onto it. Most of them also need the cloud server (1), because they
+model rather than a feature bolted onto it. Most of them also need the cloud mirror (1), because they
 assume something reachable before and after the event, not a laptop switched on that morning.
 
 Third, and more limiting: **anything requiring cross-club data is structurally out of reach.** A
@@ -812,9 +812,11 @@ that is the right division of labour.
 
 ### Deployment and access
 
-1. **Web/cloud server** — an easily deployed droplet or a web server on a PC, with clients connecting
-   over the internet rather than the LAN. **A Linux install ships alongside the Windows one** from
-   this point, since a Linux host becomes the normal deployment target.
+1. **Cloud mirror** — a second, optional server on a droplet or any Linux host, reachable from the
+   internet, so that people who are not at the venue can follow the event. It receives the event log
+   and the derived results from the organizer's PC and presents them; it never re-derives and is
+   never authoritative (§3). Built from the same repository as a second target, and shipped as both
+   a container image and **a Linux install alongside the Windows one** from this point.
 2. **Observer role.**
 3. **Per-mat scoreboard clients** driving their own monitors, possibly handhelds.
 
@@ -877,26 +879,42 @@ that is the right division of labour.
 21. **Shareable follow link** — a competitor sends friends a link that follows their matches live,
     rather than making them hunt through a results page.
 22. **Score override edit** - when one level undo is not enough for fixing a faulty score, score keeper should be able to just overwrite the current score.
+23. **Ad-hoc streaming** — point a phone at the QR code on a mat and be streaming that mat seconds
+    later, with none of the capture rig a normal production setup needs. The QR code does two jobs at
+    once: it says which mat is being filmed *and* it joins the phone to the mirror, so the stream
+    arrives already labelled and the streaming overlay (20) gets its metadata for free.
+
+    **The trust model is deliberately loose.** Someone can scan the code at mat 1 and point their
+    camera at mat 2, through malice or confusion. That is an accepted risk — the mitigation is that
+    a mat's ingest token is short-lived and revocable, not that misuse is prevented.
+
+    **Consent is enforceable here in a way it usually isn't**, because the mirror knows which
+    competitors are on which mat: streaming can simply be blocked on a mat where someone who has not
+    consented to being filmed is fencing (30). It is a mirror feature only, and a substantial one —
+    it adds a media subsystem rather than a screen. Technical implications in
+    [`tech-stack.md`](tech-stack.md).
 
 ### After the event
 
-22. **Persistent public results** and competitor profiles.
-23. **Career statistics** — a competitor's record across events, not just the current one.
-24. **Opponent history** — look up a potential opponent's record and the head-to-head against them,
+24. **Persistent public results** and competitor profiles.
+25. **Career statistics** — a competitor's record across events, not just the current one.
+26. **Opponent history** — look up a potential opponent's record and the head-to-head against them,
     across the events *this* server holds.
-25. **Statistics over the exchange log** — per competitor and per category, including the timing and
+27. **Statistics over the exchange log** — per competitor and per category, including the timing and
     warning data MVP already records.
-26. **Achievements** — general and annual, earned across the events this server holds.
-27. **HEMA Ratings export** — one-button extraction in a form the community database can ingest.
+28. **Achievements** — general and annual, earned across the events this server holds.
+29. **HEMA Ratings export** — one-button extraction in a form the community database can ingest.
 
 ### Cross-cutting
 
-28. **Club logos** — for the hosting club and individual competitors, on scoreboards and displays.
+30. **Club logos** — for the hosting club and individual competitors, on scoreboards and displays.
     Runtime import plus a database in the repo.
-29. **Accessibility** — WCAG 2.1 AA as a stated goal.
-30. **GDPR and data retention options** — organizer chooses to store results indefinitely or push to
-    HEMA Ratings, with all participants consenting at signup. Grows more significant with (21)–(26),
-    which all imply keeping personal data long after the event.
+31. **Accessibility** — WCAG 2.1 AA as a stated goal.
+32. **GDPR and data retention options** — **explicit consent at signup**, covering both what is
+    published and whether the competitor may be filmed, and an organizer choice between storing
+    results indefinitely and pushing them to HEMA Ratings. Grows more significant with (21)–(28),
+    which all imply keeping personal data long after the event, and it is what ad-hoc streaming (23)
+    checks before it will let a mat go live.
 
 ---
 
