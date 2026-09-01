@@ -1,6 +1,8 @@
 # Porta di Ferro — Design
 
-> **Status:** proposed, not yet agreed. Tech stack deliberately not chosen here — see §10.
+> **Status:** proposed, not yet agreed. The stack is settled — Go with an embedded Svelte SPA, in
+> [`tech-stack.md`](tech-stack.md). This document stays the product authority; that one holds the
+> engineering decisions.
 >
 > **This is a living document.** Everything in it is current best understanding rather than a
 > commitment. Real use will overturn parts of it — a club night, the 15 November event, watching how
@@ -102,14 +104,14 @@ assets on the repository's GitHub Releases page**. That page is the distribution
 downloads one file and runs it. No git clone, no build step, no toolchain.
 
 - **MVP: a Windows installer.** The server runs on the organizer's PC, which in practice means Windows.
-- **Linux install arrives with the web/cloud server** (Milestone 3), where a Linux host becomes the
+- **Linux install arrives with the cloud mirror** (Milestone 3), where a Linux host becomes the
   normal deployment target rather than an unusual one.
 - **A plain install file on every platform.** A container image is a fallback only where a native
   installer genuinely isn't practical — some cloud hosts — and never the primary path. The governing
   principle is the easiest possible installation, and "install Docker first" is exactly the wall this
   project exists to avoid.
-- macOS is not currently planned. Worth revisiting if the packaging turns out to be near-free once the
-  stack is chosen.
+- macOS is not currently planned. Cross-compiling the binary is free; signing and notarising it is
+  not, which is the part that would need deciding.
 
 Two properties matter beyond simply having a download:
 
@@ -119,8 +121,10 @@ Two properties matter beyond simply having a download:
 - **Release notes written for organizers, not developers.** The audience is a club volunteer deciding
   whether to upgrade before Saturday.
 
-The exact packaging format follows from the stack decision (§10) — but the requirement that a
-downloadable installer exists does not, and it constrains that choice.
+**In practice that is a signed `.exe` installer**, built from a single Go binary with the web app
+embedded in it — see [`tech-stack.md`](tech-stack.md). The signing is the part that matters: an
+unsigned download triggers SmartScreen, and that dialog is the install wall this project exists to
+avoid.
 
 ---
 
@@ -130,7 +134,7 @@ downloadable installer exists does not, and it constrains that choice.
 |---|---|
 | 1 | **The score keeper client records the head referee's final decision.** It does not capture individual judge signals |
 | 2 | **Hardcoded MSL rules for MVP.** Data-driven rulesets are a future milestone |
-| 3 | **Venue LAN** for MVP and stretch. Organizer's PC is the server and the source of truth. Cloud is a future milestone |
+| 3 | **Venue LAN** for MVP and stretch. Organizer's PC is the server and the source of truth. The cloud mirror is a future milestone, optional, and never authoritative |
 | 4 | **Web clients** — standard web, so any modern browser. Android is the tested target for MVP. Nothing to install on a client |
 | 5 | **Exchange log**, append-only, with timestamps. Score is derived, never stored directly |
 | 6 | **One writer per match.** Handover is a stretch goal |
@@ -139,6 +143,10 @@ downloadable installer exists does not, and it constrains that choice.
 | 9 | **Club-agnostic.** Nothing hardcoded to MSL except the ruleset in MVP |
 | 10 | **MIT licensed** |
 | 11 | **English UI for MVP**, Swedish localisation a stretch goal. **Internal identifiers are English** regardless |
+| 12 | **Go server with an embedded Svelte SPA**, shipped as one signed Windows executable. Full reasoning in [`tech-stack.md`](tech-stack.md) |
+| 13 | **The match engine is implemented twice** — Go and TypeScript — and held together by shared JSON test vectors. Pool generation and ranking stay server-side only |
+| 14 | **Two products, one core.** A required local executable, and an optional cloud mirror built from the same repository. Milestone 3 |
+| 15 | **SSE for everything the server pushes**, plain `POST` for everything a client writes. No WebSocket unless something needs a genuine round trip |
 
 ---
 
@@ -174,8 +182,15 @@ streaming overlay, which is just another page reading the same data.
 
 Display URLs are **unauthenticated and read-only**. Nothing here is secret: it is the same
 information the audience is already watching on a screen. That is safe on a venue LAN and needs
-revisiting only if the cloud server (Milestone 3) ever exposes an event to the open internet, where
+revisiting only if the cloud mirror (Milestone 3) ever exposes an event to the open internet, where
 the question becomes whether an event should be publicly viewable rather than whether it is secret.
+
+**Spectators at the venue are already served by these same URLs.** Anyone on venue wifi can open the
+roster or a mat scoreboard on their own phone, so a QR code on a poster is very nearly the whole
+feature. Worth recognising, because it covers most of what a spectator wants — what's on now, who's
+up next, how the pool stands — with no internet, no server outside the room, and none of the
+personal-data questions that come with publishing to the open web. People who are *not* at the event
+are a different problem, and the answer to that one is the cloud mirror below.
 
 Open the URL in a browser and fullscreen it. A second monitor on the organizer's PC, a spare laptop
 beside the mat, a Raspberry Pi, an old tablet, or a venue TV with a built-in browser are all the same
@@ -252,6 +267,16 @@ sequence number; reconnecting means *"here is everything after sequence N"*. The
 **Push after every confirmed exchange**, not at match end, so a lost device costs at most one
 exchange.
 
+**Writes are plain `POST`s, and everything the server pushes back is an SSE stream** (decision 15).
+Nothing a client renders depends on a live connection, so there is no work for a bidirectional
+transport to do.
+
+**A client that never reaches the server at all still works.** Because every tap is written locally
+first and the client holds the whole match log itself, a score keeper can run a full match on a
+device that has no server to talk to; the result is then read out to the organizer and entered by
+hand. This is not a separate mode to build — it is what local-first writes already give — and it is
+what tier 2 of the fallback ladder (§12) actually rests on.
+
 Corrections are appended as new events rather than mutating history. MVP has no correction UI (§7),
 but building the log this way means adding one later is a UI change rather than a data migration.
 
@@ -269,6 +294,31 @@ later without changing the schema.
 Because it stores each competitor's **raw assessed value** rather than the resulting score, the
 differential-versus-additive scoring question (§5) is purely an engine concern — matches recorded
 under one mode stay fully interpretable under the other, with no data migration.
+
+### The cloud mirror
+
+Milestone 3, optional, and described here rather than only in §8 because the architecture above is
+what makes it cheap.
+
+The mirror is an internet-facing server that receives the event log and the derived results from the
+organizer's PC and shows them to people who are not in the building. **It is a dumb presenter: it
+never re-derives anything and it is never a source of truth.**
+
+- **The append-only log is already a replication stream.** "Everything after sequence N" works over
+  the internet exactly as it works over the LAN, and `(match_id, sequence)` makes a retried push
+  harmless. There is no sync model left to invent.
+- **Replication is one-way from a single writer**, so there is nothing to merge and nothing to
+  reconcile. A mirror that has fallen behind is stale, never wrong.
+- **The cost of the split is that a bad derivation propagates silently**, because nothing on the far
+  side can recompute and disagree. For "who won, who is up next" that trade is fine; it would not be
+  if the mirror were ever allowed to become authoritative.
+
+> **The local product is complete without the mirror.** A club that never deploys one loses reach
+> and nothing else. Any feature that quietly makes the mirror mandatory has broken the split.
+
+Deployment, auth, multi-tenancy and the data-protection questions are in
+[`tech-stack.md`](tech-stack.md) — the container image is the easy part of that work, not the
+substance of it.
 
 ---
 
@@ -749,7 +799,7 @@ navigable.
 
 **Three structural notes.** Most competitor-facing entries below need a **persistent identity and data
 that outlives a single event**, which is a real departure from MVP's one-JSON-file-per-tournament
-model rather than a feature bolted onto it. Most of them also need the cloud server (1), because they
+model rather than a feature bolted onto it. Most of them also need the cloud mirror (1), because they
 assume something reachable before and after the event, not a laptop switched on that morning.
 
 Third, and more limiting: **anything requiring cross-club data is structurally out of reach.** A
@@ -762,9 +812,11 @@ that is the right division of labour.
 
 ### Deployment and access
 
-1. **Web/cloud server** — an easily deployed droplet or a web server on a PC, with clients connecting
-   over the internet rather than the LAN. **A Linux install ships alongside the Windows one** from
-   this point, since a Linux host becomes the normal deployment target.
+1. **Cloud mirror** — a second, optional server on a droplet or any Linux host, reachable from the
+   internet, so that people who are not at the venue can follow the event. It receives the event log
+   and the derived results from the organizer's PC and presents them; it never re-derives and is
+   never authoritative (§3). Built from the same repository as a second target, and shipped as both
+   a container image and **a Linux install alongside the Windows one** from this point.
 2. **Observer role.**
 3. **Per-mat scoreboard clients** driving their own monitors, possibly handhelds.
 
@@ -827,26 +879,42 @@ that is the right division of labour.
 21. **Shareable follow link** — a competitor sends friends a link that follows their matches live,
     rather than making them hunt through a results page.
 22. **Score override edit** - when one level undo is not enough for fixing a faulty score, score keeper should be able to just overwrite the current score.
+23. **Ad-hoc streaming** — point a phone at the QR code on a mat and be streaming that mat seconds
+    later, with none of the capture rig a normal production setup needs. The QR code does two jobs at
+    once: it says which mat is being filmed *and* it joins the phone to the mirror, so the stream
+    arrives already labelled and the streaming overlay (20) gets its metadata for free.
+
+    **The trust model is deliberately loose.** Someone can scan the code at mat 1 and point their
+    camera at mat 2, through malice or confusion. That is an accepted risk — the mitigation is that
+    a mat's ingest token is short-lived and revocable, not that misuse is prevented.
+
+    **Consent is enforceable here in a way it usually isn't**, because the mirror knows which
+    competitors are on which mat: streaming can simply be blocked on a mat where someone who has not
+    consented to being filmed is fencing (30). It is a mirror feature only, and a substantial one —
+    it adds a media subsystem rather than a screen. Technical implications in
+    [`tech-stack.md`](tech-stack.md).
 
 ### After the event
 
-22. **Persistent public results** and competitor profiles.
-23. **Career statistics** — a competitor's record across events, not just the current one.
-24. **Opponent history** — look up a potential opponent's record and the head-to-head against them,
+24. **Persistent public results** and competitor profiles.
+25. **Career statistics** — a competitor's record across events, not just the current one.
+26. **Opponent history** — look up a potential opponent's record and the head-to-head against them,
     across the events *this* server holds.
-25. **Statistics over the exchange log** — per competitor and per category, including the timing and
+27. **Statistics over the exchange log** — per competitor and per category, including the timing and
     warning data MVP already records.
-26. **Achievements** — general and annual, earned across the events this server holds.
-27. **HEMA Ratings export** — one-button extraction in a form the community database can ingest.
+28. **Achievements** — general and annual, earned across the events this server holds.
+29. **HEMA Ratings export** — one-button extraction in a form the community database can ingest.
 
 ### Cross-cutting
 
-28. **Club logos** — for the hosting club and individual competitors, on scoreboards and displays.
+30. **Club logos** — for the hosting club and individual competitors, on scoreboards and displays.
     Runtime import plus a database in the repo.
-29. **Accessibility** — WCAG 2.1 AA as a stated goal.
-30. **GDPR and data retention options** — organizer chooses to store results indefinitely or push to
-    HEMA Ratings, with all participants consenting at signup. Grows more significant with (21)–(26),
-    which all imply keeping personal data long after the event.
+31. **Accessibility** — WCAG 2.1 AA as a stated goal.
+32. **GDPR and data retention options** — **explicit consent at signup**, covering both what is
+    published and whether the competitor may be filmed, and an organizer choice between storing
+    results indefinitely and pushing them to HEMA Ratings. Grows more significant with (21)–(28),
+    which all imply keeping personal data long after the event, and it is what ad-hoc streaming (23)
+    checks before it will let a mat go live.
 
 ---
 
@@ -863,29 +931,35 @@ an MVP context, so several are reduced or deferred.
 | **#4 Add a discipline** | **Future** | MVP hardcodes one ruleset; disciplines only matter once rules are data-driven |
 | **#5 Add staff** | **Future** | Roles are irrelevant while the score keeper simply records the head referee's decision |
 | **#6 Generate a timetable** | **Future** | The largest single piece of work in the issue set |
+| **#8 Decide on a tech stack** | **Settled** | Go with an embedded Svelte SPA. Decision and reasoning in [`tech-stack.md`](tech-stack.md) |
 
 ---
 
 ## 10. Still to decide
 
-### The stack
+### The stack — settled
 
-The next thing to settle. Two constraints dominate:
+Go on the server, an embedded Svelte SPA on the clients, one signed Windows executable, and an
+optional cloud mirror built from the same repository. The two constraints that drove it —
+installability, and scoring logic the score keeper client needs offline — are unchanged; what
+changed is that they now have an answer. [`tech-stack.md`](tech-stack.md) carries the reasoning, the
+options that lost, and the triggers for reopening any of it.
 
-1. **Installability.** A single self-contained artifact the organizer starts on a PC. No separate
-   database server, no container runtime, no pre-installed language runtime. This is the whole
-   premise, and it eliminates entire families of otherwise reasonable choices.
-2. **Shared scoring logic.** The score keeper client needs it offline to show a live score; the server needs
-   it as the authority. That means one language on both sides, a shared spec implemented twice, or a
-   core compiled to WebAssembly.
+### What is genuinely still open
 
-These pull against each other — the easy answer to (2) is one language everywhere, while the easy
-answer to (1) is a compiled binary. That tension is the substance of the decision.
+Product questions first, because they are the ones this document owns:
 
-Two things change the usual calculus: the Python `.gitignore` in the repo was an artefact and carries
-no signal, and the stack will be **built with Claude Code rather than chosen for existing
-familiarity** — so it should be optimised for the two constraints above and for long-term
-maintainability, not for what either of us has written most of before.
+- **What a mirror publishes by default**, and how consent to it is captured at registration (§8, item
+  32). GDPR makes this a decision rather than a preference, and it gets sharper if a competitor is a
+  minor.
+- **Whether venue-wifi spectator access is enough for the near term**, deferring the mirror past
+  Milestone 3 entirely. It covers more of the spectator ask than it first appears to (§3).
+- **Whether ad-hoc streaming is worth the subsystem it drags in** (§8, item 23) — a genuinely
+  attractive feature that no other tournament app offers this cheaply, and the single largest piece
+  of new machinery in Milestone 3.
+
+The engineering questions that remain — code signing, how the mirror authenticates a push,
+multi-tenancy, macOS — are listed in [`tech-stack.md`](tech-stack.md) rather than duplicated here.
 
 ---
 
@@ -897,6 +971,9 @@ maintainability, not for what either of us has written most of before.
 | **Correction is one step deep in MVP** | Undo covers the last confirmed exchange only. An error noticed later still needs hand-editing JSON, which keeps the paper fallback valuable and makes full history editing the first Milestone 2 item |
 | **The score keeper view is unsettled** | Deliberately so — §4 gives a direction and a set of constraints, not a finished layout, and expects two or three prototypes. It is the most-used screen in the application, so leaving it open is a considered risk rather than an oversight. **Prototype early; it gates nothing else but everything depends on it being right** |
 | **Scope creep from Future** | Milestone 3 is an idea dump, not a queue. Nothing moves out of it without being cut down first |
+| **Code signing left until the first release** | An unsigned download triggers SmartScreen, and that dialog *is* the install wall. It sits directly on the 5-minute acceptance criterion, so pick a signing route early rather than in the week before an event |
+| **The match engine drifts between Go and TypeScript** | It exists twice (decision 13), and the shared test vectors are the only thing holding the two together. The failure mode is a rule that gets a fix in one implementation without earning a vector. If it bites, the escape hatch is compiling the Go engine to WebAssembly and deleting the second copy |
+| **The organizer gets a browser tab, not an application** | Choosing a server over a desktop app means "now open your browser" is part of the install. Mitigated by the executable opening the browser itself and the first screen showing the LAN URL and QR code, but it needs testing on the non-programmer, not assuming |
 
 ---
 
@@ -913,6 +990,12 @@ maintainability, not for what either of us has written most of before.
   effect at all.
 - **No-score exchanges** — confirming with nothing selected appends an exchange to the log and leaves
   both scores untouched.
+- **Engine parity suite** — the match engine exists in Go and in TypeScript (decision 13), so every
+  behaviour above is expressed as a shared JSON test vector that both implementations run. Divergence
+  fails the build, and a bug found in a real match earns a vector before it earns a fix.
+- **Cold-load budget** — measure what a phone downloads opening the app for the first time over venue
+  wifi, with no internet fallback and an empty cache. The number belongs in the release notes so a
+  regression is visible rather than discovered at an event.
 - **Installability test**, treated as an acceptance test — clean machine, not a developer's, with a
   stopwatch, **installing the published asset from the Releases page rather than a local build**. That
   is the path a real organizer takes, and it is the only one worth measuring.
@@ -940,5 +1023,9 @@ The MVP is built so partial completion still leaves something usable:
 | 1 | Full system — server, score keeper clients, scoreboard |
 | 2 | Score keeper clients alone, printed pool sheets, standings by hand |
 | 3 | All paper |
+
+Tier 2 is not a degraded mode anyone has to build: local-first writes mean a score keeper client that
+never reaches a server still runs a match perfectly well (§3), and the score keeper simply reads the
+result out to whoever is holding the pool sheet.
 
 Pick the tier a week out, not on the morning.
