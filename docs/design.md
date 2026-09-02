@@ -544,8 +544,10 @@ for space with per-exchange controls:
 - **Severe warnings — a `…` overflow menu, upper right.** Immediate escalation to a double warning, a
   match loss, or disqualification is rare and needs no immediate access. **No confirmation dialog.**
 
-**The `…` menu is the home for rare per-match controls generally**. It holds only severe warnings at first; later it gains the colour and side options from
-Milestone 2. Establishing the slot now avoids reopening a deliberately full grid to make room later.
+**The `…` menu is the home for rare per-match controls generally**. MVP builds the slot and little
+else — the ladder only ever advances one step at a time until Milestone 2 (§5) — and it then gains
+immediate penalty escalation and the colour and side options from Milestone 2. Establishing the slot
+now avoids reopening a deliberately full grid to make room later.
 
 **Severe warnings commit through *Confirm exchange*, with no extra dialog.** Choosing one from the menu
 makes it a pending selection; it commits with the rest of the exchange. Reaching into a buried menu is
@@ -757,8 +759,10 @@ Deliberate, and listed so nobody is surprised on the day:
 1. **Full history editing** — correct any exchange in a finished or running match, not just the last
    one. Undo of the last exchange is in MVP; this is the deeper version.
 2. **Immediate penalty escalation** — the head referee may jump straight to a point deduction, a lost
-   match, or disqualification. Reached through a penalty menu on the warning control rather than more
-   buttons on the main view, with confirmation on every level above a plain warning.
+   match, or disqualification. Reached from the `…` overflow menu (§4) rather than more buttons on the
+   main view, and **committed through *Confirm exchange* with no confirmation dialog of its own** —
+   reaching into a buried menu is already deliberate, and the normal confirm is the second gate.
+   Cancelling one is a tap on the warning button, not a second trip into the menu.
 3. **Eliminations** — top 8 from the pools.
 4. **Server-assigned displays** — a device opens `/display` and the organizer chooses what it shows,
    reassigning on the fly and seeing which screens are live. Added *alongside* URL addressing, which
