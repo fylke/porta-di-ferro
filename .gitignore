@@ -216,3 +216,22 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- Porta di Ferro ---------------------------------------------------------------
+#
+# Everything above came from a Python .gitignore template, and two of its rules collide
+# badly with a Go and Svelte tree: `lib/` matches web/src/lib/ -- which is the whole
+# TypeScript match engine -- and `dist/` matches web/dist/. Git will not descend into an
+# excluded directory, so each has to be un-ignored by name before anything inside it can
+# be.
+
+# The TypeScript match engine and the client-side libraries.
+!web/src/lib/
+
+# The built web bundle is embedded into the binary at build time, so it is not committed.
+# The directory itself is, because //go:embed needs it to exist on a fresh checkout.
+!web/dist/
+web/dist/*
+!web/dist/.gitkeep
+
+node_modules/
