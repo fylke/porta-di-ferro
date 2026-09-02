@@ -50,10 +50,19 @@ jobs:
           CGO_ENABLED: '0'
         run: go build -trimpath -ldflags "-s -w -X main.version=${{ steps.version.outputs.value }}" -o dist/porta.exe ./cmd/porta
 
-      # TODO: signing. An unsigned download triggers SmartScreen, and that dialog is the
-      # install wall this project exists to avoid. The route is not decided yet -- see
-      # issue #33 and docs/tech-stack.md §9. Until it is, the release is unsigned and the
-      # five-minute install test (issue #35) will include a "More info -> Run anyway" step.
+      # Deliberately unsigned. docs/tech-stack.md §9 weighed an OV certificate, Azure
+      # Trusted Signing and accepting the warning, and took the third: it is the cheapest
+      # thing that ships, and it buys evidence about whether the SmartScreen dialog is
+      # actually where organizers stop.
+      #
+      # The cost is real and is handled in the release notes below rather than hidden: a
+      # first-time downloader meets "Windows protected your PC" and has to click More info
+      # then Run anyway. A warning you were told to expect is an inconvenience; the same
+      # warning unannounced is where people give up.
+      #
+      # Signing later needs a certificate secret and a signtool step here -- no code
+      # change. The trigger to buy one is the install test (#35) showing the dialog costing
+      # real time, or a release aimed at a club that is not MSL.
 
       - name: Build the installer
         run: |
@@ -71,8 +80,16 @@ jobs:
           files: installer/Output/*.exe
           generate_release_notes: false
           body: |
-            Download the installer below and run it. Nothing else needs installing first.
+            Download `porta-di-ferro-...-setup.exe` below and run it. Nothing else needs
+            installing first — no Docker, no database, no toolchain.
 
-            <!-- Release notes are written for organizers, not developers: what changed for
-                 a club volunteer deciding whether to upgrade before Saturday. Fill this in
-                 before publishing (docs/design.md §1). -->
+            **Windows will warn you, and that is expected.** This build is not code-signed
+            yet, so you will see a blue box saying *"Windows protected your PC"*. Click
+            **More info**, then **Run anyway**. There is nothing else to it.
+
+            Once it starts, it opens your browser at the organizer page. That page shows the
+            address and a QR code to point the score keepers' tablets at.
+
+            <!-- Everything below this line is written for a club volunteer deciding whether
+                 to upgrade before Saturday, not for developers (docs/design.md §1). Say what
+                 changed for them; leave the refactors out. -->

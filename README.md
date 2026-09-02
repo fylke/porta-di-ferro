@@ -10,12 +10,16 @@ service, no account, no internet. Built by two members of
 
 1. Download the installer from [Releases](https://github.com/fylke/porta-di-ferro/releases)
    and run it.
-2. It opens your browser at the organizer page. That page shows a web address and a QR
+2. **Windows will warn you the first time.** These builds are not code-signed yet, so you
+   get a blue box saying *"Windows protected your PC"*. Click **More info**, then **Run
+   anyway**. Nothing is wrong; it is what Windows does with any download it has not seen
+   before.
+3. It opens your browser at the organizer page. That page shows a web address and a QR
    code.
-3. Enter the competitors, pick the number of mats and the pool size, and draw the pools.
-4. At each mat, open the address on a tablet or phone and pick the mat. That is the score
+4. Enter the competitors, pick the number of mats and the pool size, and draw the pools.
+5. At each mat, open the address on a tablet or phone and pick the mat. That is the score
    keeper client.
-5. Put a spare screen on `/display/mats` for the scoreboard, or `/display/roster` for the
+6. Put a spare screen on `/display/mats` for the scoreboard, or `/display/roster` for the
    match list. Any browser on the venue wifi can open them — a spectator's phone included.
 
 Everything is stored as plain JSON in a folder you own, so you can read it, back it up, and

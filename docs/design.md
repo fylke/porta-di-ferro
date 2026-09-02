@@ -642,6 +642,13 @@ scores. That is different arithmetic, not just different numbers.
 | Second | **Point deduction** — one point off the warned competitor |
 | Third | **Match loss, 0–8** against the warned competitor, earning them no match points |
 
+**The deduction floors at zero.** A competitor warned twice before scoring anything stays on nothing
+rather than going to −1. The written rule says "one point off" and does not say what happens to a
+competitor who has none; a negative score would feed straight into the score index and the reception
+index, so it would quietly distort the standings rather than merely looking odd. Reopen this if MSL's
+answer turns out to be that the opponent gains the point instead — that is a different rule, not a
+different edge case, and it would move in both engines together.
+
 Because the third warning ends the match, the score keeper view confirms before committing it.
 
 **A tournament-level warning count runs alongside the per-match one.** The per-match level governs
