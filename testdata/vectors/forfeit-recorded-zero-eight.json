@@ -1,0 +1,35 @@
+{
+  "name": "forfeit-recorded-zero-eight",
+  "description": "A conceded match is recorded 0-8; the winner takes 9 match points and the forfeiter none.",
+  "events": [
+    {
+      "seq": 1,
+      "type": "end",
+      "elapsedMs": 0,
+      "end": {
+        "reason": "forfeit",
+        "forfeiter": "red"
+      }
+    }
+  ],
+  "expect": {
+    "red": {
+      "score": 0,
+      "penalty": 0
+    },
+    "blue": {
+      "score": 8,
+      "penalty": 0
+    },
+    "exchanges": 0,
+    "elapsedMs": 0,
+    "running": false,
+    "ended": true,
+    "noMatchPoints": true,
+    "endReason": "forfeit",
+    "winner": "blue",
+    "pending": "none",
+    "lastSeq": 1,
+    "undoableSeq": 0
+  }
+}

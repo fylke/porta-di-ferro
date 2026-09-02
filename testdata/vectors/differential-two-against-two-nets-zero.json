@@ -1,0 +1,41 @@
+{
+  "name": "differential-two-against-two-nets-zero",
+  "description": "A 2 against a 2 gives nobody anything. This is why doubles need no special handling.",
+  "events": [
+    {
+      "seq": 1,
+      "type": "exchange",
+      "elapsedMs": 10000,
+      "exchange": {
+        "red": {
+          "value": 2,
+          "penalty": 0
+        },
+        "blue": {
+          "value": 2,
+          "penalty": 0
+        }
+      }
+    }
+  ],
+  "expect": {
+    "red": {
+      "score": 0,
+      "penalty": 0
+    },
+    "blue": {
+      "score": 0,
+      "penalty": 0
+    },
+    "exchanges": 1,
+    "elapsedMs": 10000,
+    "running": false,
+    "ended": false,
+    "noMatchPoints": false,
+    "endReason": "",
+    "winner": "",
+    "pending": "none",
+    "lastSeq": 1,
+    "undoableSeq": 1
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "name": "differential-two-against-one-awards-one",
+  "description": "A 2 against a 1 gives the winner 1 point and the other nothing.",
+  "events": [
+    {
+      "seq": 1,
+      "type": "exchange",
+      "elapsedMs": 12000,
+      "exchange": {
+        "red": {
+          "value": 2,
+          "penalty": 0
+        },
+        "blue": {
+          "value": 1,
+          "penalty": 0
+        }
+      }
+    }
+  ],
+  "expect": {
+    "red": {
+      "score": 1,
+      "penalty": 0
+    },
+    "blue": {
+      "score": 0,
+      "penalty": 0
+    },
+    "exchanges": 1,
+    "elapsedMs": 12000,
+    "running": false,
+    "ended": false,
+    "noMatchPoints": false,
+    "endReason": "",
+    "winner": "",
+    "pending": "none",
+    "lastSeq": 1,
+    "undoableSeq": 1
+  }
+}
