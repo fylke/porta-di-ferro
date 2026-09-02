@@ -104,6 +104,10 @@ jobs:
         with:
           files: installer/Output/*.exe
           generate_release_notes: false
+          # Any tag carrying a suffix -- v0.1.0-rc1, v0.2.0-beta -- publishes as a
+          # pre-release, so the Releases page never offers a candidate build to an
+          # organizer looking for the one to run their event on.
+          prerelease: ${{ contains(steps.version.outputs.value, '-') }}
           body: |
             Download `porta-di-ferro-...-setup.exe` below and run it. Nothing else needs
             installing first — no Docker, no database, no toolchain.
