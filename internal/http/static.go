@@ -29,7 +29,15 @@ func (s *Server) serveApp(w http.ResponseWriter, r *http.Request) {
 	}
 	f, err := s.assets.Open(name)
 	if err != nil {
-		// A client-side route, not a missing file.
+		// A request with a file extension asked for a file, so a miss is a miss. Falling
+		// through would answer a stale /assets/index-OLD.js -- or a missing /sw.js -- with
+		// 200 and a page of HTML, which the browser then fails to parse as a script. That
+		// is a miserable thing to debug at a venue, and it is what a 404 makes obvious.
+		if path.Ext(name) != "" {
+			http.NotFound(w, r)
+			return
+		}
+		// No extension: a client-side route, not a missing file.
 		s.serveIndex(w, r)
 		return
 	}
