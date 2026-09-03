@@ -1,0 +1,124 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build, e.g. v0.1.0'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: true
+
+      - name: Work out the version
+        id: version
+        shell: bash
+        run: echo "value=${GITHUB_REF_NAME:-${{ github.event.inputs.version }}}" >> "$GITHUB_OUTPUT"
+
+      - name: Build the web bundle
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+
+      # One static binary with the web app embedded in it. No runtime, no container, no
+      # separate database server -- the shortest possible path to "download one file and
+      # run it" (docs/design.md §1).
+      - name: Build the binary
+        env:
+          GOOS: windows
+          GOARCH: amd64
+          CGO_ENABLED: '0'
+        run: go build -trimpath -ldflags "-s -w -X main.version=${{ steps.version.outputs.value }}" -o dist/porta.exe ./cmd/porta
+
+      # Deliberately unsigned. docs/tech-stack.md §9 weighed an OV certificate, Azure
+      # Trusted Signing and accepting the warning, and took the third: it is the cheapest
+      # thing that ships, and it buys evidence about whether the SmartScreen dialog is
+      # actually where organizers stop.
+      #
+      # The cost is real and is handled in the release notes below rather than hidden: a
+      # first-time downloader meets "Windows protected your PC" and has to click More info
+      # then Run anyway. A warning you were told to expect is an inconvenience; the same
+      # warning unannounced is where people give up.
+      #
+      # Signing later needs a certificate secret and a signtool step here -- no code
+      # change. The trigger to buy one is the install test (#35) showing the dialog costing
+      # real time, or a release aimed at a club that is not MSL.
+
+      # windows-latest ships Inno Setup, but not always on PATH and not always at the same
+      # version. Resolving it explicitly means a runner image change shows up as a clear
+      # message here rather than as a mystery failure the week before an event.
+      - name: Find Inno Setup
+        id: inno
+        shell: pwsh
+        run: |
+          $candidates = @(
+            'iscc.exe',
+            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+            "${env:ProgramFiles}\Inno Setup 6\ISCC.exe",
+            "${env:ProgramFiles(x86)}\Inno Setup 5\ISCC.exe"
+          )
+          foreach ($c in $candidates) {
+            $found = Get-Command $c -ErrorAction SilentlyContinue
+            if ($found) {
+              "path=$($found.Source)" >> $env:GITHUB_OUTPUT
+              Write-Host "Using $($found.Source)"
+              exit 0
+            }
+          }
+          Write-Error "Inno Setup not found on this runner. Install it in the workflow, or pin a runner image that has it."
+          exit 1
+
+      - name: Build the installer
+        shell: pwsh
+        run: |
+          & '${{ steps.inno.outputs.path }}' /DMyAppVersion="${{ steps.version.outputs.value }}" installer\porta.iss
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: porta-di-ferro-windows
+          path: installer/Output/*.exe
+
+      - name: Publish to the release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: installer/Output/*.exe
+          generate_release_notes: false
+          # Any tag carrying a suffix -- v0.1.0-rc1, v0.2.0-beta -- publishes as a
+          # pre-release, so the Releases page never offers a candidate build to an
+          # organizer looking for the one to run their event on.
+          prerelease: ${{ contains(steps.version.outputs.value, '-') }}
+          body: |
+            Download `porta-di-ferro-...-setup.exe` below and run it. Nothing else needs
+            installing first — no Docker, no database, no toolchain.
+
+            **Windows will warn you, and that is expected.** This build is not code-signed
+            yet, so you will see a blue box saying *"Windows protected your PC"*. Click
+            **More info**, then **Run anyway**. There is nothing else to it.
+
+            Once it starts, it opens your browser at the organizer page. That page shows the
+            address and a QR code to point the score keepers' tablets at.
+
+            <!-- Everything below this line is written for a club volunteer deciding whether
+                 to upgrade before Saturday, not for developers (docs/design.md §1). Say what
+                 changed for them; leave the refactors out. -->

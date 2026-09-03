@@ -1,0 +1,64 @@
+{
+  "name": "end-match-draw",
+  "description": "Draws are possible in pools and are worth 6 match points each.",
+  "events": [
+    {
+      "seq": 1,
+      "type": "exchange",
+      "elapsedMs": 10000,
+      "exchange": {
+        "red": {
+          "value": 2,
+          "penalty": 0
+        },
+        "blue": {
+          "value": 0,
+          "penalty": 0
+        }
+      }
+    },
+    {
+      "seq": 2,
+      "type": "exchange",
+      "elapsedMs": 20000,
+      "exchange": {
+        "red": {
+          "value": 0,
+          "penalty": 0
+        },
+        "blue": {
+          "value": 2,
+          "penalty": 0
+        }
+      }
+    },
+    {
+      "seq": 3,
+      "type": "end",
+      "elapsedMs": 30000,
+      "end": {
+        "reason": "time"
+      }
+    }
+  ],
+  "expect": {
+    "red": {
+      "score": 2,
+      "penalty": 0
+    },
+    "blue": {
+      "score": 2,
+      "penalty": 0
+    },
+    "exchanges": 2,
+    "elapsedMs": 30000,
+    "running": false,
+    "ended": true,
+    "noMatchPoints": false,
+    "endReason": "time",
+    "winner": "",
+    "pending": "none",
+    "lastSeq": 3,
+    "undoableSeq": 0
+  }
+}

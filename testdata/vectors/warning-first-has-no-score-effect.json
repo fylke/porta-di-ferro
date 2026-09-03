@@ -1,0 +1,41 @@
+{
+  "name": "warning-first-has-no-score-effect",
+  "description": "Level 1 is recorded and displayed and nothing else.",
+  "events": [
+    {
+      "seq": 1,
+      "type": "exchange",
+      "elapsedMs": 3000,
+      "exchange": {
+        "red": {
+          "value": 0,
+          "penalty": 1
+        },
+        "blue": {
+          "value": 0,
+          "penalty": 0
+        }
+      }
+    }
+  ],
+  "expect": {
+    "red": {
+      "score": 0,
+      "penalty": 1
+    },
+    "blue": {
+      "score": 0,
+      "penalty": 0
+    },
+    "exchanges": 1,
+    "elapsedMs": 3000,
+    "running": false,
+    "ended": false,
+    "noMatchPoints": false,
+    "endReason": "",
+    "winner": "",
+    "pending": "none",
+    "lastSeq": 1,
+    "undoableSeq": 1
+  }
+}

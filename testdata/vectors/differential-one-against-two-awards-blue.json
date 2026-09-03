@@ -1,0 +1,41 @@
+{
+  "name": "differential-one-against-two-awards-blue",
+  "description": "The differential works both ways round; nothing about it favours red.",
+  "events": [
+    {
+      "seq": 1,
+      "type": "exchange",
+      "elapsedMs": 8000,
+      "exchange": {
+        "red": {
+          "value": 1,
+          "penalty": 0
+        },
+        "blue": {
+          "value": 2,
+          "penalty": 0
+        }
+      }
+    }
+  ],
+  "expect": {
+    "red": {
+      "score": 0,
+      "penalty": 0
+    },
+    "blue": {
+      "score": 1,
+      "penalty": 0
+    },
+    "exchanges": 1,
+    "elapsedMs": 8000,
+    "running": false,
+    "ended": false,
+    "noMatchPoints": false,
+    "endReason": "",
+    "winner": "",
+    "pending": "none",
+    "lastSeq": 1,
+    "undoableSeq": 1
+  }
+}
