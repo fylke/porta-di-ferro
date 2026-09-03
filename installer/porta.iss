@@ -35,10 +35,9 @@ WizardStyle=modern
 ; as the organizer, reads its own data directory, and binds a high port.
 ;
 ; PrivilegesRequiredOverridesAllowed=dialog was tried and removed. It adds Inno's "install
-; for all users / just me" dialog, which is one more decision a volunteer should not have
-; to make -- and it hangs a silent install outright, because there is nothing to answer it.
-; That was caught by installing the published v0.1.0-rc1 asset from a script; it is exactly
-; the class of problem the five-minute install test exists to find, and worth keeping found.
+; for all users / just me" dialog, and that is one more decision a volunteer should not have
+; to make: there is no good reason to pick either answer here, and the five minutes are for
+; running a tournament rather than reading dialogs.
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
