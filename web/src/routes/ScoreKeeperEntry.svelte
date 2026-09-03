@@ -1,10 +1,18 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { navigate } from '../router.svelte';
   import { Live } from '../lib/live.svelte';
 
   // The screen a score keeper lands on after scanning the QR code: pick a mat, once.
   const live = new Live();
-  live.start();
+
+  // Started and stopped with the component, like every other route. Opening the stream at
+  // module evaluation left an EventSource open after navigating on to /score/:mat, so the
+  // device carried a dead subscription for the rest of the event.
+  onMount(() => {
+    live.start();
+    return () => live.stop();
+  });
 
   const mats = $derived(
     live.snapshot ? Array.from({ length: live.snapshot.tournament.mats }, (_, i) => i + 1) : [],
