@@ -86,7 +86,15 @@ func (s *Server) patchCompetitor(w http.ResponseWriter, r *http.Request) {
 		}
 		found = true
 		if in.Name != nil {
-			competitors[i].Name = strings.TrimSpace(*in.Name)
+			name := strings.TrimSpace(*in.Name)
+			if name == "" {
+				// POST rejects an empty name, so PATCH has to as well. A blank one is
+				// not a harmless record: it reaches the scoreboard and the printed pool
+				// sheets, where nobody can tell who is meant to be fencing.
+				writeErr(w, http.StatusBadRequest, fmt.Errorf("a competitor needs a name"))
+				return
+			}
+			competitors[i].Name = name
 		}
 		if in.Club != nil {
 			competitors[i].Club = strings.TrimSpace(*in.Club)
@@ -133,10 +141,19 @@ func (s *Server) deleteCompetitor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out := make([]store.Competitor, 0, len(competitors))
+	found := false
 	for _, c := range competitors {
-		if c.ID != id {
-			out = append(out, c)
+		if c.ID == id {
+			found = true
+			continue
 		}
+		out = append(out, c)
+	}
+	if !found {
+		// Rewriting the same list and reporting success would hide a client bug, and it
+		// disagrees with PATCH, which already 404s on an unknown id.
+		writeErr(w, http.StatusNotFound, fmt.Errorf("no competitor %s", id))
+		return
 	}
 	if err := s.store.SaveCompetitors(out); err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
