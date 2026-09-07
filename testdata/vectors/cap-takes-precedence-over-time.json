@@ -1,0 +1,86 @@
+{
+  "name": "cap-takes-precedence-over-time",
+  "description": "One confirmation past the match time that also reaches the cap raises the cap dialog, not the final-exchange one.",
+  "events": [
+    {
+      "seq": 1,
+      "type": "exchange",
+      "elapsedMs": 10000,
+      "exchange": {
+        "red": {
+          "value": 2,
+          "penalty": 0
+        },
+        "blue": {
+          "value": 0,
+          "penalty": 0
+        }
+      }
+    },
+    {
+      "seq": 2,
+      "type": "exchange",
+      "elapsedMs": 20000,
+      "exchange": {
+        "red": {
+          "value": 2,
+          "penalty": 0
+        },
+        "blue": {
+          "value": 0,
+          "penalty": 0
+        }
+      }
+    },
+    {
+      "seq": 3,
+      "type": "exchange",
+      "elapsedMs": 30000,
+      "exchange": {
+        "red": {
+          "value": 2,
+          "penalty": 0
+        },
+        "blue": {
+          "value": 0,
+          "penalty": 0
+        }
+      }
+    },
+    {
+      "seq": 4,
+      "type": "exchange",
+      "elapsedMs": 185000,
+      "exchange": {
+        "red": {
+          "value": 2,
+          "penalty": 0
+        },
+        "blue": {
+          "value": 0,
+          "penalty": 0
+        }
+      }
+    }
+  ],
+  "expect": {
+    "red": {
+      "score": 8,
+      "penalty": 0
+    },
+    "blue": {
+      "score": 0,
+      "penalty": 0
+    },
+    "exchanges": 4,
+    "elapsedMs": 185000,
+    "running": false,
+    "ended": false,
+    "noMatchPoints": false,
+    "endReason": "",
+    "winner": "",
+    "pending": "point_cap",
+    "lastSeq": 4,
+    "undoableSeq": 4
+  }
+}

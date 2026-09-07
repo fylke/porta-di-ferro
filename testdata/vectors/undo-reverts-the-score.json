@@ -1,0 +1,64 @@
+{
+  "name": "undo-reverts-the-score",
+  "description": "Undo appends a correcting record; the voided exchange is skipped on replay rather than removed from the log.",
+  "events": [
+    {
+      "seq": 1,
+      "type": "exchange",
+      "elapsedMs": 5000,
+      "exchange": {
+        "red": {
+          "value": 2,
+          "penalty": 0
+        },
+        "blue": {
+          "value": 0,
+          "penalty": 0
+        }
+      }
+    },
+    {
+      "seq": 2,
+      "type": "exchange",
+      "elapsedMs": 9000,
+      "exchange": {
+        "red": {
+          "value": 0,
+          "penalty": 0
+        },
+        "blue": {
+          "value": 2,
+          "penalty": 0
+        }
+      }
+    },
+    {
+      "seq": 3,
+      "type": "undo",
+      "elapsedMs": 9000,
+      "undo": {
+        "seq": 2
+      }
+    }
+  ],
+  "expect": {
+    "red": {
+      "score": 2,
+      "penalty": 0
+    },
+    "blue": {
+      "score": 0,
+      "penalty": 0
+    },
+    "exchanges": 1,
+    "elapsedMs": 5000,
+    "running": false,
+    "ended": false,
+    "noMatchPoints": false,
+    "endReason": "",
+    "winner": "",
+    "pending": "none",
+    "lastSeq": 3,
+    "undoableSeq": 1
+  }
+}

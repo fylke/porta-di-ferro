@@ -1,0 +1,97 @@
+/*
+ * The colour language, in one place so the score keeper view, the displays and the
+ * organizer screens cannot drift apart. A spectator glancing between screens should not
+ * have to relearn it (design §4).
+ *
+ * The governing rule: HUE MEANS IDENTITY, NEVER STATE. Red is the red competitor and blue
+ * is the blue one, everywhere. Selection is shown by fill and border weight so a selected
+ * control looks selected on either side. Amber is warnings, and belongs to neither
+ * competitor. The one exception is the clock flooding red past 02:50, which works because
+ * it sits in the neutral centre and the whole area changes at once, reading as an alarm
+ * rather than as identity.
+ */
+
+:root {
+  --bg: #12141a;
+  --panel: #1a1d26;
+  --panel-2: #222633;
+  --line: #333949;
+  --ink: #eef1f7;
+  --ink-dim: #98a0b4;
+
+  --red: #b3202c;
+  --red-tint: #2a1418;
+  --red-bright: #e64553;
+  --blue: #1d4fa8;
+  --blue-tint: #131c2e;
+  --blue-bright: #4585e6;
+
+  --amber: #d99311;
+  --amber-bright: #f2b134;
+
+  --ok: #3f9e5a;
+
+  --radius: 10px;
+  --font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font);
+  -webkit-text-size-adjust: 100%;
+}
+
+#app {
+  height: 100%;
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  cursor: pointer;
+  border-radius: var(--radius);
+  /* Nothing on a score keeper's screen should ever be selected by a long press, and no
+     tap should be swallowed by a double-tap-to-zoom delay. */
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+input,
+select {
+  font-family: inherit;
+  font-size: 1rem;
+  color: var(--ink);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.55rem 0.7rem;
+}
+
+a {
+  color: var(--blue-bright);
+}
+
+.mono {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

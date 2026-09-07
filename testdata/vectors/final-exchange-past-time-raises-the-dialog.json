@@ -1,0 +1,41 @@
+{
+  "name": "final-exchange-past-time-raises-the-dialog",
+  "description": "Past the match time, every confirmation asks whether that was the last one.",
+  "events": [
+    {
+      "seq": 1,
+      "type": "exchange",
+      "elapsedMs": 181000,
+      "exchange": {
+        "red": {
+          "value": 1,
+          "penalty": 0
+        },
+        "blue": {
+          "value": 0,
+          "penalty": 0
+        }
+      }
+    }
+  ],
+  "expect": {
+    "red": {
+      "score": 1,
+      "penalty": 0
+    },
+    "blue": {
+      "score": 0,
+      "penalty": 0
+    },
+    "exchanges": 1,
+    "elapsedMs": 181000,
+    "running": false,
+    "ended": false,
+    "noMatchPoints": false,
+    "endReason": "",
+    "winner": "",
+    "pending": "final_exchange",
+    "lastSeq": 1,
+    "undoableSeq": 1
+  }
+}

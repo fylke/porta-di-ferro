@@ -1,0 +1,86 @@
+{
+  "name": "point-cap-reached-raises-the-dialog",
+  "description": "Reaching the cap ends the match by rule, so the engine raises the dialog and stops accepting exchanges; the End record is what actually closes it.",
+  "events": [
+    {
+      "seq": 1,
+      "type": "exchange",
+      "elapsedMs": 10000,
+      "exchange": {
+        "red": {
+          "value": 2,
+          "penalty": 0
+        },
+        "blue": {
+          "value": 0,
+          "penalty": 0
+        }
+      }
+    },
+    {
+      "seq": 2,
+      "type": "exchange",
+      "elapsedMs": 20000,
+      "exchange": {
+        "red": {
+          "value": 2,
+          "penalty": 0
+        },
+        "blue": {
+          "value": 0,
+          "penalty": 0
+        }
+      }
+    },
+    {
+      "seq": 3,
+      "type": "exchange",
+      "elapsedMs": 30000,
+      "exchange": {
+        "red": {
+          "value": 2,
+          "penalty": 0
+        },
+        "blue": {
+          "value": 0,
+          "penalty": 0
+        }
+      }
+    },
+    {
+      "seq": 4,
+      "type": "exchange",
+      "elapsedMs": 40000,
+      "exchange": {
+        "red": {
+          "value": 2,
+          "penalty": 0
+        },
+        "blue": {
+          "value": 0,
+          "penalty": 0
+        }
+      }
+    }
+  ],
+  "expect": {
+    "red": {
+      "score": 8,
+      "penalty": 0
+    },
+    "blue": {
+      "score": 0,
+      "penalty": 0
+    },
+    "exchanges": 4,
+    "elapsedMs": 40000,
+    "running": false,
+    "ended": false,
+    "noMatchPoints": false,
+    "endReason": "",
+    "winner": "",
+    "pending": "point_cap",
+    "lastSeq": 4,
+    "undoableSeq": 4
+  }
+}

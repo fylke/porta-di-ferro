@@ -313,16 +313,37 @@ An unsigned executable downloaded from GitHub Releases triggers SmartScreen, and
 precisely the install wall this project exists to avoid**. It is not a polish item; it sits directly
 on the five-minute acceptance criterion.
 
-Three routes, to be decided before the first public release:
+Three routes were on the table:
 
 | Route | Note |
 |---|---|
-| **OV certificate** | Cheapest. SmartScreen reputation still has to accumulate over downloads |
+| **OV certificate** | Cheapest that actually signs. SmartScreen reputation still has to accumulate over downloads |
 | **Azure Trusted Signing** | Subscription rather than a hardware token, and CI-friendly. Eligibility requires a legal entity with a verifiable history — worth checking whether MSL qualifies |
 | **Accept the warning** | Free. Costs a "More info → Run anyway" step inside the five-minute test, and it is exactly the kind of step a non-technical organizer stops at |
 
-Go binaries are also occasional Defender false-positive targets. Submit the first signed release for
-analysis rather than discovering it the week before an event.
+> **Decided: accept the warning, for now.** Releases are unsigned. This is the cheapest thing that
+> ships, and it buys time to find out whether the dialog is actually where organizers stop — which
+> is a question the install test (design §12) answers with evidence rather than assumption.
+
+**What that costs, stated plainly.** A first-time downloader meets *"Windows protected your PC"* and
+has to click **More info → Run anyway**. That is a step inside the five-minute budget, and it is
+exactly the kind of step this project exists to remove. It is accepted knowingly, not overlooked:
+
+- **The install instructions have to name it before the organizer meets it.** A warning you were
+  told to expect is an inconvenience; the same warning unannounced is where people stop. The README
+  and the release notes both say what the dialog looks like and what to click.
+- **The install test measures the path with the dialog in it.** If it costs real time, or the tester
+  hesitates, that is the trigger to buy a certificate rather than argue about it.
+- **An OV certificate remains the fallback** and needs no code change — only a secret and two lines
+  in the release workflow. Azure Trusted Signing is better still if MSL turns out to qualify.
+
+> [!NOTE]
+> **Revisit when** the install test shows the dialog costing time or stopping a non-technical
+> tester, or before the first release aimed at a club that is not MSL. Signing is a purchase and a
+> workflow change, not a redesign, so this decision stays cheap to reverse.
+
+Go binaries are also occasional Defender false-positive targets, and an unsigned one more so.
+Submit the first release for analysis rather than discovering it the week before an event.
 
 ---
 
@@ -397,7 +418,6 @@ the local product — the split is what separates them.
 
 ## 13. Still open
 
-- **Which signing route** (§9). Blocks the first public release, not the first line of code.
 - **How the mirror authenticates a push**, and what multi-tenancy looks like (§3).
 - **What is public by default** on a mirror, and how consent is captured at registration.
 - **Whether the match engine stays duplicated** or moves to WASM (§4) — trigger recorded there.

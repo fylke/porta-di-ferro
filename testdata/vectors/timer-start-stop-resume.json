@@ -1,0 +1,50 @@
+{
+  "name": "timer-start-stop-resume",
+  "description": "The clock control exists for the head referee's time-outs, not for ordinary exchanges.",
+  "events": [
+    {
+      "seq": 1,
+      "type": "timer",
+      "elapsedMs": 0,
+      "timer": {
+        "action": "start"
+      }
+    },
+    {
+      "seq": 2,
+      "type": "timer",
+      "elapsedMs": 45000,
+      "timer": {
+        "action": "stop"
+      }
+    },
+    {
+      "seq": 3,
+      "type": "timer",
+      "elapsedMs": 45000,
+      "timer": {
+        "action": "resume"
+      }
+    }
+  ],
+  "expect": {
+    "red": {
+      "score": 0,
+      "penalty": 0
+    },
+    "blue": {
+      "score": 0,
+      "penalty": 0
+    },
+    "exchanges": 0,
+    "elapsedMs": 45000,
+    "running": true,
+    "ended": false,
+    "noMatchPoints": false,
+    "endReason": "",
+    "winner": "",
+    "pending": "none",
+    "lastSeq": 3,
+    "undoableSeq": 0
+  }
+}

@@ -1,0 +1,101 @@
+{
+  "name": "point-cap-overshoot-records-nine",
+  "description": "At 7, a 2 against nothing gives 9. Recorded as it happened rather than clamped to 8, because point difference feeds two of the four ranking indices.",
+  "events": [
+    {
+      "seq": 1,
+      "type": "exchange",
+      "elapsedMs": 10000,
+      "exchange": {
+        "red": {
+          "value": 2,
+          "penalty": 0
+        },
+        "blue": {
+          "value": 0,
+          "penalty": 0
+        }
+      }
+    },
+    {
+      "seq": 2,
+      "type": "exchange",
+      "elapsedMs": 20000,
+      "exchange": {
+        "red": {
+          "value": 2,
+          "penalty": 0
+        },
+        "blue": {
+          "value": 0,
+          "penalty": 0
+        }
+      }
+    },
+    {
+      "seq": 3,
+      "type": "exchange",
+      "elapsedMs": 30000,
+      "exchange": {
+        "red": {
+          "value": 2,
+          "penalty": 0
+        },
+        "blue": {
+          "value": 0,
+          "penalty": 0
+        }
+      }
+    },
+    {
+      "seq": 4,
+      "type": "exchange",
+      "elapsedMs": 40000,
+      "exchange": {
+        "red": {
+          "value": 1,
+          "penalty": 0
+        },
+        "blue": {
+          "value": 0,
+          "penalty": 0
+        }
+      }
+    },
+    {
+      "seq": 5,
+      "type": "exchange",
+      "elapsedMs": 50000,
+      "exchange": {
+        "red": {
+          "value": 2,
+          "penalty": 0
+        },
+        "blue": {
+          "value": 0,
+          "penalty": 0
+        }
+      }
+    }
+  ],
+  "expect": {
+    "red": {
+      "score": 9,
+      "penalty": 0
+    },
+    "blue": {
+      "score": 0,
+      "penalty": 0
+    },
+    "exchanges": 5,
+    "elapsedMs": 50000,
+    "running": false,
+    "ended": false,
+    "noMatchPoints": false,
+    "endReason": "",
+    "winner": "",
+    "pending": "point_cap",
+    "lastSeq": 5,
+    "undoableSeq": 5
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "name": "penalty-loss-earns-no-match-points",
+  "description": "Unlike an ordinary loss, which is worth 3, a penalty loss earns nothing.",
+  "events": [
+    {
+      "seq": 1,
+      "type": "exchange",
+      "elapsedMs": 2000,
+      "exchange": {
+        "red": {
+          "value": 0,
+          "penalty": 1
+        },
+        "blue": {
+          "value": 0,
+          "penalty": 0
+        }
+      }
+    },
+    {
+      "seq": 2,
+      "type": "exchange",
+      "elapsedMs": 4000,
+      "exchange": {
+        "red": {
+          "value": 0,
+          "penalty": 1
+        },
+        "blue": {
+          "value": 0,
+          "penalty": 0
+        }
+      }
+    },
+    {
+      "seq": 3,
+      "type": "exchange",
+      "elapsedMs": 6000,
+      "exchange": {
+        "red": {
+          "value": 0,
+          "penalty": 1
+        },
+        "blue": {
+          "value": 0,
+          "penalty": 0
+        }
+      }
+    },
+    {
+      "seq": 4,
+      "type": "end",
+      "elapsedMs": 6000,
+      "end": {
+        "reason": "penalty"
+      }
+    }
+  ],
+  "expect": {
+    "red": {
+      "score": 0,
+      "penalty": 3
+    },
+    "blue": {
+      "score": 8,
+      "penalty": 0
+    },
+    "exchanges": 3,
+    "elapsedMs": 6000,
+    "running": false,
+    "ended": true,
+    "noMatchPoints": true,
+    "endReason": "penalty",
+    "winner": "blue",
+    "pending": "none",
+    "lastSeq": 4,
+    "undoableSeq": 0
+  }
+}

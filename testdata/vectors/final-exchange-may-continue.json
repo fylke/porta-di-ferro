@@ -1,0 +1,64 @@
+{
+  "name": "final-exchange-may-continue",
+  "description": "Continuing is a legitimate call after time, so the dialog simply comes back after the next confirmation. The clock keeps running throughout and the match does not end at three minutes.",
+  "events": [
+    {
+      "seq": 1,
+      "type": "timer",
+      "elapsedMs": 0,
+      "timer": {
+        "action": "start"
+      }
+    },
+    {
+      "seq": 2,
+      "type": "exchange",
+      "elapsedMs": 181000,
+      "exchange": {
+        "red": {
+          "value": 1,
+          "penalty": 0
+        },
+        "blue": {
+          "value": 0,
+          "penalty": 0
+        }
+      }
+    },
+    {
+      "seq": 3,
+      "type": "exchange",
+      "elapsedMs": 186000,
+      "exchange": {
+        "red": {
+          "value": 1,
+          "penalty": 0
+        },
+        "blue": {
+          "value": 0,
+          "penalty": 0
+        }
+      }
+    }
+  ],
+  "expect": {
+    "red": {
+      "score": 2,
+      "penalty": 0
+    },
+    "blue": {
+      "score": 0,
+      "penalty": 0
+    },
+    "exchanges": 2,
+    "elapsedMs": 186000,
+    "running": true,
+    "ended": false,
+    "noMatchPoints": false,
+    "endReason": "",
+    "winner": "",
+    "pending": "final_exchange",
+    "lastSeq": 3,
+    "undoableSeq": 3
+  }
+}
