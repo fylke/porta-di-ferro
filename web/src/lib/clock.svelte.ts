@@ -40,7 +40,7 @@ export function formatClock(ms: number): string {
 }
 
 export function isFlashing(ms: number, ended: boolean): boolean {
-  return !ended && ms >= MSL.finalWarningMs;
+  return !ended && ms >= MSL.finalExchangeMs;
 }
 
 /**

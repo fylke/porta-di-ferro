@@ -451,6 +451,10 @@ which is exactly the ruleset's maximum for a single hit.
 - At **02:50 — ten seconds remaining — it flashes** to signal the final exchange. Flashing rather
   than a static colour change, to catch the eye of a score keeper who is watching the mat. Needs real
   testing.
+- **The flash is the final-exchange threshold, not a separate cue.** From 02:50 on, confirming an
+  exchange raises the final-exchange dialog. Holding the dialog back to 03:00 left ten seconds where
+  the clock was announcing the end of the match and a confirmation quietly carried on, which is the
+  one stretch of a match where the score keeper most needs to be asked.
 - **It does not stop at 03:00.** It keeps ticking past the limit until the **final exchange is
   confirmed**, which is what ends the match. A completed match's clock therefore routinely reads more
   than three minutes.
@@ -499,8 +503,8 @@ screens doesn't have to relearn it.
 
 ### Match-ending dialogs
 
-**Final exchange.** Once the clock is past the final-exchange threshold, confirming an exchange raises
-a dialog:
+**Final exchange.** From the final-exchange threshold — 02:50, when the clock starts flashing —
+confirming an exchange raises a dialog:
 
 - **End match** — the match ends, and **the timestamp of that final confirmed exchange is the match end
   time**. The running clock is disregarded from that point.
@@ -523,7 +527,7 @@ it, not as one identical dialog:
 
 | Trigger | Choices | Why |
 |---|---|---|
-| Final exchange (past time) | **End match** / **Continue one more exchange** | Play may legitimately continue; the head referee decides |
+| Final exchange (02:50 on) | **End match** / **Continue one more exchange** | Play may legitimately continue; the head referee decides |
 | Point cap reached | **End match** / **Undo last exchange** | The rules end it, so the only alternative is that the entry was a mistake |
 | Warning cap reached | **End match** / **Undo last exchange** | Same |
 
@@ -607,7 +611,7 @@ MSL's SM ruleset. Longsword scoring is used for all weapons at this stage.
 | Exchange scoring | **Differential** — the difference between the two assessments is awarded |
 | Point cap | 8 |
 | Match time | 3 minutes |
-| Final-exchange warning | 10 seconds remaining (02:50) |
+| Final-exchange threshold | 10 seconds remaining (02:50) — the clock flashes, and a confirmation from here raises the dialog |
 | Result types | Win / loss / **draw** (draws are possible in pools) |
 | Pool match points | Win **9**, draw **6**, loss **3** |
 | Forfeit | Recorded 0–8; winner takes 9 match points, forfeiter 0 |

@@ -10,7 +10,7 @@ export interface Ruleset {
   maxValue: number;
   pointCap: number;
   matchTimeMs: number;
-  finalWarningMs: number;
+  finalExchangeMs: number;
   penaltyLoss: number;
   penaltyDeduction: number;
   forfeitScore: number;
@@ -23,7 +23,7 @@ export const MSL: Ruleset = {
   maxValue: 2,
   pointCap: 8,
   matchTimeMs: 3 * 60 * 1000,
-  finalWarningMs: 2 * 60 * 1000 + 50 * 1000,
+  finalExchangeMs: 2 * 60 * 1000 + 50 * 1000,
   penaltyLoss: 3,
   penaltyDeduction: 2,
   forfeitScore: 8,
@@ -33,11 +33,12 @@ export const MSL: Ruleset = {
 };
 
 /**
- * Ten seconds remain. A cue for the score keeper only: it has no effect on scoring, and
- * the clock does not stop when it fires.
+ * Ten seconds remain. The clock does not stop when it fires, but scoring is not untouched
+ * by it: the flash is what tells the mat the next exchange is the last, so a confirmation
+ * from here on raises the final-exchange dialog.
  */
 export function flashing(r: Ruleset, elapsedMs: number, ended: boolean): boolean {
-  return !ended && elapsedMs >= r.finalWarningMs;
+  return !ended && elapsedMs >= r.finalExchangeMs;
 }
 
 export function emptyState(): State {

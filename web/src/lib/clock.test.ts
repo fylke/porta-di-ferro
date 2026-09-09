@@ -61,8 +61,8 @@ describe('the readout', () => {
   });
 
   it('flashes from the final-exchange threshold until the match ends', () => {
-    expect(isFlashing(MSL.finalWarningMs - 1, false)).toBe(false);
-    expect(isFlashing(MSL.finalWarningMs, false)).toBe(true);
-    expect(isFlashing(MSL.finalWarningMs, true)).toBe(false);
+    expect(isFlashing(MSL.finalExchangeMs - 1, false)).toBe(false);
+    expect(isFlashing(MSL.finalExchangeMs, false)).toBe(true);
+    expect(isFlashing(MSL.finalExchangeMs, true)).toBe(false);
   });
 });

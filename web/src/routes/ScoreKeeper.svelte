@@ -68,7 +68,7 @@
 
   const capHeadline = $derived.by(() => {
     if (!matchState) return '';
-    if (matchState.pending === 'final_exchange') return 'Time is up. Was that the final exchange?';
+    if (matchState.pending === 'final_exchange') return 'Was that the final exchange?';
     if (matchState.red.score === matchState.blue.score) return `Draw ${matchState.red.score}–${matchState.blue.score}`;
     const leader = matchState.red.score > matchState.blue.score ? names.red : names.blue;
     const high = Math.max(matchState.red.score, matchState.blue.score);
