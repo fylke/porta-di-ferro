@@ -15,7 +15,10 @@ service, no account, no internet. Built by two members of
    anyway**. Nothing is wrong; it is what Windows does with any download it has not seen
    before.
 3. It opens your browser at the organizer page. That page shows a web address and a QR
-   code.
+   code. **Do not hand out the `localhost` address in the console** — that one only works
+   on the PC itself. The organizer page shows an address on the venue network instead, and
+   if the PC is on more than one network it offers a picker so you can choose the one the
+   tablets are on.
 4. Enter the competitors, pick the number of mats and the pool size, and draw the pools.
 5. At each mat, open the address on a tablet or phone and pick the mat. That is the score
    keeper client.

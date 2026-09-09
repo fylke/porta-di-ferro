@@ -7,6 +7,17 @@ export interface Competitor {
   withdrawn: boolean;
 }
 
+/**
+ * One address on the organizer's PC that a client could open. The organizer's own browser
+ * is on localhost, which is the one address no other device can reach, so the client URL
+ * and the QR code are composed from this list rather than from window.location.
+ */
+export interface Address {
+  ip: string;
+  interface: string;
+  private: boolean;
+}
+
 export interface MatchView {
   id: string;
   pool: number;
@@ -83,6 +94,7 @@ async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
 
 export const api = {
   state: () => req<Snapshot>('GET', '/api/state'),
+  addresses: () => req<Address[]>('GET', '/api/addresses'),
   addCompetitor: (name: string, club: string) =>
     req<Competitor>('POST', '/api/competitors', { name, club }),
   updateCompetitor: (id: string, patch: Partial<Pick<Competitor, 'name' | 'club' | 'withdrawn'>>) =>
