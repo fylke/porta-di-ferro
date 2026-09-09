@@ -30,9 +30,27 @@ export class ScoreKeeperSession {
 
   async load(): Promise<void> {
     await this.log.load();
-    // A match that was already running when this device joined keeps counting from now;
-    // the elapsed time in the log is the floor.
-    this.runningSince = this.state.running ? Date.now() : null;
+    // A match that was already running when this device joined carries on from where the
+    // log left it, not from the moment the page opened. Anchoring to now instead rewound
+    // the clock by however long the device had been away, so a score keeper who refreshed
+    // mid-match no longer agreed with the mat display -- the other half of issue #58.
+    this.runningSince = this.state.running ? Date.now() - this.sinceLastEvent() : null;
+  }
+
+  /**
+   * How long ago the last event in the log happened, by this device's clock.
+   *
+   * One device keeps score for a match, so those timestamps were written by the very
+   * clock now reading them and the answer is exact -- including after a stretch offline,
+   * when the server's own idea of when it last saw an event is the one that is wrong.
+   * A timestamp that will not parse falls back to zero, which is the behaviour this
+   * replaces and so never worse than it.
+   */
+  private sinceLastEvent(): number {
+    const last = this.log.events[this.log.events.length - 1];
+    const at = last?.at ? Date.parse(last.at) : NaN;
+    if (Number.isNaN(at)) return 0;
+    return Math.max(0, Date.now() - at);
   }
 
   /** Derived from the log every time it is read, never stored. */

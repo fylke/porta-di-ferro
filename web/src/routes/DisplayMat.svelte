@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { keepAwake } from '../lib/wakelock';
   import Scoreboard from './Scoreboard.svelte';
-  import { Clock, Live, matchOn, namesFor, nextOn } from './lib-display.svelte';
+  import { Clock, Live, liveElapsed, matchOn, namesFor, nextOn } from './lib-display.svelte';
 
   let { mat }: { mat: number } = $props();
 
@@ -24,21 +24,7 @@
   const names = $derived(namesFor(live.snapshot, match));
   const upcoming = $derived(nextOn(live.snapshot, mat));
   const upcomingNames = $derived(namesFor(live.snapshot, upcoming));
-  // A display has no writer of its own, so it anchors the clock to the moment it saw the
-  // match start running. Close enough for a scoreboard, and never wrong in a way anyone
-  // can see from across a hall.
-  let startedAt = $state(Date.now());
-  let wasRunning = $state(false);
-  $effect(() => {
-    const running = !!match?.state.running;
-    if (running && !wasRunning) startedAt = Date.now();
-    wasRunning = running;
-  });
-  const elapsed = $derived(
-    match?.state.running
-      ? match.state.elapsedMs + (clock.now - startedAt)
-      : (match?.state.elapsedMs ?? 0),
-  );
+  const elapsed = $derived(liveElapsed(match, live, clock.now));
 </script>
 
 <main>

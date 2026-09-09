@@ -27,6 +27,12 @@ export interface MatchView {
   blue: string;
   state: State;
   status: 'pending' | 'running' | 'complete';
+  /**
+   * How long ago the server saw this match's last event, in milliseconds. Present only
+   * while the clock is running. A display adds it to state.elapsedMs to place its clock
+   * where the mat's actually is, instead of restarting from whenever the page loaded.
+   */
+  sinceMs?: number;
 }
 
 export interface Standing {
