@@ -1,4 +1,5 @@
 <script lang="ts">
+  import WarningTriangle from '../WarningTriangle.svelte';
   import type { Side } from '../../lib/match';
   import type { Selection } from '../../lib/scorekeeper.svelte';
 
@@ -42,7 +43,7 @@
     {score}
     {#if warnings > 0}
       <span class="warnings" aria-label="{warnings} warnings">
-        {#each { length: warnings } as _, i (i)}<span class="triangle">&#9650;</span>{/each}
+        {#each { length: warnings } as _, i (i)}<WarningTriangle />{/each}
       </span>
     {/if}
   </div>
@@ -123,7 +124,8 @@
      whether the next one costs a point or ends the match. */
   .warnings {
     display: inline-flex;
-    gap: 0.15rem;
+    align-items: center;
+    gap: 0.2rem;
     font-size: 0.4em;
     color: var(--amber-bright);
   }

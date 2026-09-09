@@ -2,8 +2,17 @@
   import { onMount } from 'svelte';
   import { navigate } from '../router.svelte';
   import { Live } from '../lib/live.svelte';
+  import { matchOn, namesFor } from './lib-display.svelte';
 
-  // The screen a score keeper lands on after scanning the QR code: pick a mat, once.
+  /**
+   * The screen a score keeper lands on after scanning the QR code: pick a mat, once.
+   *
+   * It is deliberately the whole page. The code used to point at the organizer view, so a
+   * tablet arrived on the competitor register and the setup form with the mat picker
+   * somewhere further down -- an organizer's screen, on the organizer's PC, none of it any
+   * use at a mat. What a score keeper needs here is one decision, in buttons big enough to
+   * hit without looking.
+   */
   const live = new Live();
 
   // Started and stopped with the component, like every other route. Opening the stream at
@@ -17,6 +26,16 @@
   const mats = $derived(
     live.snapshot ? Array.from({ length: live.snapshot.tournament.mats }, (_, i) => i + 1) : [],
   );
+
+  // What is on each mat right now. A score keeper standing at a mat knows the two people
+  // in front of them long before they know which number the organizer gave the mat, so
+  // the names are the label that actually identifies the button.
+  function upNext(mat: number) {
+    const match = matchOn(live.snapshot, mat);
+    if (!match) return null;
+    const names = namesFor(live.snapshot, match);
+    return { pool: match.pool, ...names };
+  }
 </script>
 
 <main>
@@ -26,9 +45,22 @@
   {/if}
   <div class="mats">
     {#each mats as mat (mat)}
-      <button onclick={() => navigate(`/score/${mat}`)}>Mat {mat}</button>
+      {@const up = upNext(mat)}
+      <button onclick={() => navigate(`/score/${mat}`)}>
+        <span class="n">Mat {mat}</span>
+        <span class="up">
+          {#if up}
+            Pool {up.pool} &middot; {up.red} v {up.blue}
+          {:else}
+            Nothing up yet
+          {/if}
+        </span>
+      </button>
     {/each}
   </div>
+  {#if mats.length === 0 && !live.error}
+    <p class="hint">Waiting for the organizer to set up the mats.</p>
+  {/if}
   <p class="hint">
     Pick the mat this device is sitting at. It stays on that mat for the whole event, and
     follows whichever match is up next there.
@@ -50,11 +82,23 @@
     gap: 1rem;
   }
   button {
-    padding: 2rem;
-    font-size: 1.6rem;
-    font-weight: 700;
+    display: grid;
+    gap: 0.4rem;
+    padding: 1.6rem;
+    text-align: left;
     background: var(--panel-2);
     border: 2px solid var(--line);
+  }
+  .n {
+    font-size: 1.6rem;
+    font-weight: 700;
+  }
+  .up {
+    font-size: 1rem;
+    color: var(--ink-dim);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .hint {
     color: var(--ink-dim);

@@ -19,12 +19,18 @@
   --ink: #eef1f7;
   --ink-dim: #98a0b4;
 
-  --red: #b3202c;
-  --red-tint: #2a1418;
-  --red-bright: #e64553;
-  --blue: #1d4fa8;
-  --blue-tint: #131c2e;
-  --blue-bright: #4585e6;
+  /* The two identity colours, and the one place brightness is not a matter of taste. A
+     score keeper glances down between exchanges and has to land on the right half without
+     reading anything, and a spectator is doing the same from across a hall. The first
+     tints were dark enough that in a bright venue the two halves read as one grey screen,
+     so both are saturated and light enough to separate at a glance while keeping --ink
+     above 8:1 on them. */
+  --red: #d62839;
+  --red-tint: #6e1f2a;
+  --red-bright: #ff5c69;
+  --blue: #2f6fe4;
+  --blue-tint: #1b3f80;
+  --blue-bright: #63a4ff;
 
   --amber: #d99311;
   --amber-bright: #f2b134;

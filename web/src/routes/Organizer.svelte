@@ -69,6 +69,15 @@
   // so it never has to be configured or passed through the API.
   const port = $derived(window.location.port ? `:${window.location.port}` : '');
   const clientURL = $derived(chosenIP ? `http://${chosenIP}${port}` : '');
+  /**
+   * What the QR code encodes, and what an organizer reads out: the score keeper's own
+   * page, not the front door.
+   *
+   * Scanning the code used to land a tablet on this very screen -- the competitor
+   * register, the setup, the pool tables -- with the mat picker somewhere below it. That
+   * is the organizer's page on the organizer's PC, and none of it is any use at a mat.
+   */
+  const scoreURL = $derived(clientURL ? `${clientURL}/score` : '');
 
   async function refresh() {
     try {
@@ -100,7 +109,7 @@
       <div>
         <h2>Join from a tablet or phone</h2>
         {#if clientURL}
-          <p class="url">{clientURL}</p>
+          <p class="url">{scoreURL}</p>
           {#if addresses.length > 1}
             <label class="network">
               Network
@@ -116,9 +125,8 @@
             </p>
           {:else}
             <p class="hint">
-              Point a score keeper's device at that address, or let them scan the code.
-              Every device on the venue wifi can reach it &mdash; including a spectator's
-              own phone, for the roster and the mat scoreboards.
+              Point a score keeper's device at that address, or let them scan the code. It
+              opens straight on the mat picker.
             </p>
           {/if}
         {:else}
@@ -129,14 +137,22 @@
             still works.
           </p>
         {/if}
+        {#if clientURL}
+          <p class="hint">
+            Spare screens and spectators&rsquo; phones open
+            <span class="mono">{clientURL}/display/mats</span> or
+            <span class="mono">{clientURL}/display/roster</span>. Any device on the venue
+            wifi can reach them.
+          </p>
+        {/if}
         <p class="links">
           <a href="/score">Score keeper</a>
           <a href="/display/mat/1">Mat 1</a>
           {#if snapshot.tournament.mats > 1}<a href="/display/mat/2">Mat 2</a>{/if}
         </p>
       </div>
-      {#if clientURL}
-        <img class="qr" alt="QR code for {clientURL}" src="/api/qr.png?url={encodeURIComponent(clientURL)}" />
+      {#if scoreURL}
+        <img class="qr" alt="QR code for {scoreURL}" src="/api/qr.png?url={encodeURIComponent(scoreURL)}" />
       {/if}
     </section>
 
@@ -212,10 +228,13 @@
     color: var(--amber-bright);
   }
   .hint {
-    margin: 0;
+    margin: 0 0 0.4rem;
     color: var(--ink-dim);
     line-height: 1.55;
     max-width: 40rem;
+  }
+  .hint .mono {
+    color: var(--ink);
   }
   .links {
     display: flex;
