@@ -7,6 +7,7 @@
  * nothing is written to the log (design §4).
  */
 import { MSL, replay, type Event, type Side, type State } from './match';
+import { reanchor } from './clock.svelte';
 import { MatchLog } from './sync.svelte';
 
 export interface Selection {
@@ -69,6 +70,20 @@ export class ScoreKeeperSession {
     this.blue = { value: 0, penalty: 0 };
   }
 
+  /**
+   * Appends an event and moves the clock's anchor with it, so the readout carries on from
+   * the number that was on screen rather than jumping.
+   *
+   * Every write goes through here. An event carries the elapsed time at the moment it
+   * happened, and replaying it moves the base the live clock counts up from -- so the
+   * anchor has to move by the same amount or the interval between them is counted twice.
+   */
+  private async commit(event: Event): Promise<void> {
+    const before = this.state.elapsedMs;
+    await this.log.write([event]);
+    this.runningSince = reanchor(this.runningSince, before, this.state.elapsedMs);
+  }
+
   private event(type: Event['type'], elapsedMs: number, extra: Partial<Event>): Event {
     return {
       seq: this.log.nextSeq(),
@@ -92,14 +107,16 @@ export class ScoreKeeperSession {
       },
     });
     this.clearSelection();
-    await this.log.write([event]);
+    await this.commit(event);
   }
 
   async toggleClock(elapsedMs: number): Promise<void> {
     if (this.state.ended) return;
     const running = this.state.running;
     const action = running ? 'stop' : this.state.elapsedMs > 0 ? 'resume' : 'start';
-    await this.log.write([this.event('timer', elapsedMs, { timer: { action } })]);
+    await this.commit(this.event('timer', elapsedMs, { timer: { action } }));
+    // The clock control is the one place the anchor is set outright rather than moved:
+    // starting or resuming is exactly the moment the base becomes now.
     this.runningSince = running ? null : Date.now();
   }
 
@@ -107,17 +124,17 @@ export class ScoreKeeperSession {
   async undo(elapsedMs: number): Promise<void> {
     const target = this.state.undoableSeq;
     if (target === 0) return;
-    await this.log.write([this.event('undo', elapsedMs, { undo: { seq: target } })]);
+    await this.commit(this.event('undo', elapsedMs, { undo: { seq: target } }));
   }
 
   async end(elapsedMs: number, reason: State['endReason']): Promise<void> {
-    await this.log.write([this.event('end', elapsedMs, { end: { reason } })]);
+    await this.commit(this.event('end', elapsedMs, { end: { reason } }));
     this.runningSince = null;
   }
 
   /** A match conceded before it starts. Recorded 0-8. */
   async forfeit(side: Side): Promise<void> {
-    await this.log.write([this.event('end', 0, { end: { reason: 'forfeit', forfeiter: side } })]);
+    await this.commit(this.event('end', 0, { end: { reason: 'forfeit', forfeiter: side } }));
     this.runningSince = null;
   }
 }
