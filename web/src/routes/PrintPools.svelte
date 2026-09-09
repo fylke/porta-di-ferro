@@ -15,6 +15,31 @@
     return () => live.stop();
   });
 
+  type Paper = 'A4' | 'letter';
+  let paper = $state<Paper>('A4');
+
+  /**
+   * Prints on a named paper size.
+   *
+   * The size lives in an `@page` rule, which a component stylesheet cannot reach and a
+   * class cannot switch, so the rule is written into the document whole. Two buttons
+   * rather than a line of text telling the organizer to go and check the printer: the
+   * sheets are printed once, days before the event, and the only thing anybody wants at
+   * that moment is the right paper coming out.
+   */
+  function printOn(size: Paper) {
+    paper = size;
+    const id = 'porta-page-size';
+    let rule = document.getElementById(id) as HTMLStyleElement | null;
+    if (!rule) {
+      rule = document.createElement('style');
+      rule.id = id;
+      document.head.appendChild(rule);
+    }
+    rule.textContent = `@page { size: ${size}; margin: 12mm; }`;
+    window.print();
+  }
+
   const name = $derived(nameLookup(live.snapshot));
   const club = $derived.by(() => {
     const byId = new Map((live.snapshot?.competitors ?? []).map((c) => [c.id, c.club]));
@@ -24,8 +49,9 @@
 
 <div class="sheets">
   <p class="noprint">
-    <button onclick={() => window.print()}>Print</button>
-    One sheet per pool. Check the printer is on A4 and that backgrounds are off.
+    <button class:chosen={paper === 'A4'} onclick={() => printOn('A4')}>Print A4</button>
+    <button class:chosen={paper === 'letter'} onclick={() => printOn('letter')}>Print letter</button>
+    One sheet per pool. Turn background graphics off in the print dialog.
   </p>
 
   {#each live.snapshot?.pools ?? [] as pool (pool.number)}
@@ -52,8 +78,9 @@
             <th>#</th>
             <th class="red">Red</th>
             <th class="s">Score</th>
+            <th class="w">Warnings</th>
+            <th class="blue group">Blue</th>
             <th class="s">Score</th>
-            <th class="blue">Blue</th>
             <th class="w">Warnings</th>
           </tr>
         </thead>
@@ -63,8 +90,9 @@
               <td>{m.order}</td>
               <td class="red">{name(m.red)}</td>
               <td class="s"></td>
+              <td class="w"></td>
+              <td class="blue group">{name(m.blue)}</td>
               <td class="s"></td>
-              <td class="blue">{name(m.blue)}</td>
               <td class="w"></td>
             </tr>
           {/each}
@@ -103,6 +131,13 @@
     background: #eee;
     border: 1px solid #bbb;
     color: #111;
+  }
+  /* Which size was printed last, so a second run of the same sheets is one click and not
+     a guess. */
+  .noprint button.chosen {
+    background: #111;
+    color: #fff;
+    border-color: #111;
   }
   article {
     max-width: 46rem;
@@ -148,29 +183,30 @@
     height: 2rem;
   }
   /* The colours are printed as words rather than fills, because a pool sheet has to
-     survive a black-and-white printer. */
+     survive a black-and-white printer. Left and right are deliberately not printed: the
+     score keeper's screen fixes red to the left, but which side of the mat someone starts
+     on is the head referee's business, and a sheet that claimed otherwise would be wrong
+     as often as it was right. */
   .red {
     font-weight: 700;
   }
   .blue {
     font-weight: 700;
   }
-  th.red::after {
-    content: ' (left)';
-    font-weight: 400;
-    text-transform: none;
-  }
-  th.blue::after {
-    content: ' (right)';
-    font-weight: 400;
-    text-transform: none;
-  }
   .s {
-    width: 3.5rem;
+    width: 3rem;
     text-align: center;
   }
+  /* One warning box per fencer, not one per bout. Warnings are counted per competitor and
+     the count is what decides the match -- the second costs a point and the third ends it
+     -- so a shared box cannot record the thing the paper exists to record. */
   .w {
-    width: 7rem;
+    width: 4.5rem;
+  }
+  /* Where one fencer's columns end and the other's begin, so the two score-and-warnings
+     pairs cannot be read as one run of four boxes. */
+  .group {
+    border-left: 2px solid #111;
   }
   footer {
     font-size: 0.78rem;
