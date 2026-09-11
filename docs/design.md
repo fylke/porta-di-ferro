@@ -462,6 +462,9 @@ which is exactly the ruleset's maximum for a single hit.
   referee's time-outs, not for ordinary exchanges.
 - **One play/pause toggle**, generously sized. It is the only control that must be hit fast, so it is
   among the largest on the screen.
+- **A reset beside it**, small and behind a confirmation, puts the clock back to 00:00 for a clock
+  started by mistake. It is a correction appended to the log like any other, not a rewrite of the
+  start.
 - **The time readout is large too**, not just its button. The score keeper is watching the mat, so the
   clock must be readable at a glance rather than looked at directly — prominent, but **not
   oppressively so**. Giving the number half the screen starves the scoring controls, which matter just

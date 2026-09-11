@@ -134,6 +134,11 @@ function applyTimer(s: State, e: Event): void {
   s.elapsedMs = e.elapsedMs;
   if (e.timer.action === 'start' || e.timer.action === 'resume') s.running = true;
   else if (e.timer.action === 'stop') s.running = false;
+  else if (e.timer.action === 'reset') {
+    // Zero regardless of what the event carries: a reset means 00:00 by definition.
+    s.running = false;
+    s.elapsedMs = 0;
+  }
 }
 
 function applyEnd(r: Ruleset, s: State, e: Event): void {

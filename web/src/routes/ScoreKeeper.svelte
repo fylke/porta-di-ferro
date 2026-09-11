@@ -15,6 +15,7 @@
   let sk = $state<ScoreKeeperSession | null>(null);
   let loadedMatch = $state('');
   let askUndo = $state(false);
+  let askReset = $state(false);
   let menuOpen = $state(false);
   // Which final-exchange dialog the head referee has already answered "continue" to.
   let dismissedFinal = $state(0);
@@ -142,9 +143,20 @@
 
       <div class="centre" class:flashing>
         <div class="time mono">{formatClock(elapsed)}</div>
-        <button class="clock" disabled={matchState.ended} onclick={() => void sk?.toggleClock(elapsed)}>
-          {matchState.running ? 'PAUSE' : 'PLAY'}
-        </button>
+        <div class="clock-row">
+          <button class="clock" disabled={matchState.ended} onclick={() => void sk?.toggleClock(elapsed)}>
+            {matchState.running ? 'PAUSE' : 'PLAY'}
+          </button>
+          <!-- For a clock started by mistake. Small, because it is rare; confirmed, because
+               it is a correction to the record rather than a pause. -->
+          <button
+            class="reset"
+            aria-label="Reset the clock to zero"
+            title="Reset the clock to zero"
+            disabled={matchState.ended || (elapsed === 0 && !matchState.running)}
+            onclick={() => (askReset = true)}>&#8634;</button
+          >
+        </div>
         <div class="sync" class:offline={sk.log.sync === 'offline'}>
           {#if sk.log.sync === 'offline'}
             Offline &middot; {sk.log.pendingCount} to send
@@ -195,6 +207,19 @@
         void sk?.undo(elapsed);
       }}
       onCancel={() => (askUndo = false)}
+    />
+  {/if}
+
+  {#if askReset}
+    <ConfirmDialog
+      headline="Reset the clock to 00:00?"
+      detail="For a clock that was started by mistake. The scores stay as they are, and the reset is recorded in the log."
+      confirmLabel="Yes, reset it"
+      onConfirm={() => {
+        askReset = false;
+        void sk?.resetClock(elapsed);
+      }}
+      onCancel={() => (askReset = false)}
     />
   {/if}
 </main>
@@ -252,16 +277,36 @@
     font-weight: 800;
     line-height: 1;
   }
-  /* Among the largest controls on the screen: the only one that must be hit fast. */
-  .clock {
+  /* Play/pause is among the largest controls on the screen: the only one that must be hit
+     fast. It cedes a narrow strip on its right to reset, which is rare and confirmed, so the
+     two cannot be confused by size alone. */
+  .clock-row {
     align-self: stretch;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0.4rem;
+    min-height: 0;
+  }
+  .clock {
     font-size: clamp(0.9rem, 2.6vh, 1.3rem);
     font-weight: 800;
     letter-spacing: 0.06em;
     background: var(--panel-2);
     border: 2px solid var(--line);
   }
-  .clock:active {
+  .reset {
+    width: clamp(2.6rem, 6vh, 3.4rem);
+    font-size: clamp(1.1rem, 3vh, 1.6rem);
+    line-height: 1;
+    background: var(--panel-2);
+    border: 2px solid var(--line);
+    color: var(--ink-dim);
+  }
+  .reset:disabled {
+    opacity: 0.35;
+  }
+  .clock:active,
+  .reset:active {
     filter: brightness(1.35);
   }
   .sync {
@@ -372,6 +417,9 @@
     }
     .clock {
       padding: 0.9rem;
+    }
+    .reset {
+      width: 3.2rem;
     }
   }
 </style>

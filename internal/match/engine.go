@@ -157,6 +157,12 @@ func applyTimer(s *State, e Event) {
 		s.Running = true
 	case TimerStop:
 		s.Running = false
+	case TimerReset:
+		// Zero regardless of what the event carries: a reset means 00:00 by definition,
+		// and a client that stamped it with the time it was pressed at must not leave the
+		// clock there.
+		s.Running = false
+		s.ElapsedMS = 0
 	}
 }
 

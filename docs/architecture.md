@@ -57,6 +57,8 @@ stateDiagram-v2
     PendingMatch --> InProgress_Paused: First Interaction / Timer Start
     InProgress_Paused --> InProgress_Running: Timer Start / Resume
     InProgress_Running --> InProgress_Paused: Timer Stop / Pause
+    InProgress_Running --> InProgress_Paused: Timer Reset (clock to 00:00, scores kept)
+    InProgress_Paused --> InProgress_Paused: Timer Reset (clock to 00:00, scores kept)
 
     state InProgress_Running {
         [*] --> ScoreCheck

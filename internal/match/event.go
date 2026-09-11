@@ -23,7 +23,7 @@ const (
 	// through a confirmation, so a single record carries both: atomic per-exchange
 	// commit is a design property (design §4), not an implementation detail.
 	TypeExchange EventType = "exchange"
-	// TypeTimer is a clock action: start, stop for a time-out, or resume.
+	// TypeTimer is a clock action: start, stop for a time-out, resume, or reset to zero.
 	TypeTimer EventType = "timer"
 	// TypeUndo voids an earlier record by sequence number. History is never mutated;
 	// a correction is appended, which is what makes full history editing a UI change
@@ -65,13 +65,18 @@ type Exchange struct {
 	Blue Assessment `json:"blue"`
 }
 
-// TimerAction is one of the three clock actions.
+// TimerAction is one of the four clock actions.
 type TimerAction string
 
 const (
 	TimerStart  TimerAction = "start"
 	TimerStop   TimerAction = "stop"
 	TimerResume TimerAction = "resume"
+	// TimerReset puts the clock back to 00:00, stopped. It exists for a clock started by
+	// mistake -- the score keeper's thumb, or the auto-start on a point that was then
+	// deselected -- and is a correction appended like any other rather than a rewrite of
+	// the start event.
+	TimerReset TimerAction = "reset"
 )
 
 // Timer is a clock action.

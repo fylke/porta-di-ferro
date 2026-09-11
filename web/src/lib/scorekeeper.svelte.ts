@@ -138,6 +138,16 @@ export class ScoreKeeperSession {
     this.runningSince = running ? null : Date.now();
   }
 
+  /**
+   * Puts the clock back to 00:00, stopped. For a clock started by mistake -- and a
+   * correction appended like any other, so the log still shows that it happened.
+   */
+  async resetClock(elapsedMs: number): Promise<void> {
+    if (this.state.ended) return;
+    await this.commit(this.event('timer', elapsedMs, { timer: { action: 'reset' } }));
+    this.runningSince = null;
+  }
+
   /** Undo of the last confirmed exchange. Appends a correction; never mutates history. */
   async undo(elapsedMs: number): Promise<void> {
     const target = this.state.undoableSeq;

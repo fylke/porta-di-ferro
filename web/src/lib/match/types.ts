@@ -10,7 +10,8 @@ export type EventType = 'exchange' | 'timer' | 'undo' | 'end';
 
 export type Reason = '' | 'time' | 'point_cap' | 'penalty' | 'forfeit';
 
-export type TimerAction = 'start' | 'stop' | 'resume';
+/** Reset puts the clock back to 00:00, stopped -- a correction for a clock started by mistake. */
+export type TimerAction = 'start' | 'stop' | 'resume' | 'reset';
 
 export type Pending = 'none' | 'final_exchange' | 'point_cap' | 'penalty_cap';
 
