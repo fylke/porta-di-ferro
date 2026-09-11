@@ -110,7 +110,11 @@ func applyExchange(r Ruleset, s *State, e Event) bool {
 		s.pendEnd(PendingPointCap)
 		return true
 	}
-	if e.ElapsedMS >= r.MatchTimeMS {
+	// From the final-exchange threshold on, the clock is flashing to tell the mat that
+	// the next exchange is the last one -- so every confirmation from there asks the head
+	// referee whether it was. Play may still legitimately continue past 03:00; that is
+	// the referee's call and the dialog is where it is made.
+	if e.ElapsedMS >= r.FinalExchangeMS {
 		s.pendEnd(PendingFinalExchange)
 		return true
 	}

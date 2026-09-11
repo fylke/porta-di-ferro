@@ -1,6 +1,8 @@
 package httpapi
 
 import (
+	"time"
+
 	"github.com/fylke/porta-di-ferro/internal/match"
 	"github.com/fylke/porta-di-ferro/internal/store"
 	"github.com/fylke/porta-di-ferro/internal/tournament"
@@ -12,6 +14,19 @@ type MatchView struct {
 	store.Match
 	State  match.State `json:"state"`
 	Status string      `json:"status"`
+	// SinceMS is how long ago this server saw the last event in the match, and is set
+	// only while the clock is running.
+	//
+	// A display has no writer of its own, so its clock has to be placed rather than
+	// started: State.ElapsedMS is the time at the last event, which may have been a
+	// minute ago. Adding this to it, and then counting on from the moment the snapshot
+	// arrived, is what makes a scoreboard opened mid-match agree with the mat instead of
+	// restarting the clock from whenever the page happened to load.
+	//
+	// A duration rather than a timestamp, so a display whose own clock is wrong -- and a
+	// spare screen's clock usually is -- never has to agree with the server about what
+	// time it is.
+	SinceMS int64 `json:"sinceMs,omitempty"`
 }
 
 // PoolView is a pool with its matches and its live standings.
@@ -84,7 +99,15 @@ func (s *Server) snapshot() (Snapshot, error) {
 			if !st.Ended {
 				complete = false
 			}
-			views = append(views, MatchView{Match: m, State: st, Status: status})
+			view := MatchView{Match: m, State: st, Status: status}
+			if st.Running {
+				if at, ok := s.store.LastEventAt(m.ID); ok {
+					if since := time.Since(at).Milliseconds(); since > 0 {
+						view.SinceMS = since
+					}
+				}
+			}
+			views = append(views, view)
 		}
 		snap.Pools = append(snap.Pools, PoolView{
 			Number:      p.Number,

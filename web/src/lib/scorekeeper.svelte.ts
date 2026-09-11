@@ -7,6 +7,7 @@
  * nothing is written to the log (design §4).
  */
 import { MSL, replay, type Event, type Side, type State } from './match';
+import { reanchor } from './clock.svelte';
 import { MatchLog } from './sync.svelte';
 
 export interface Selection {
@@ -29,9 +30,27 @@ export class ScoreKeeperSession {
 
   async load(): Promise<void> {
     await this.log.load();
-    // A match that was already running when this device joined keeps counting from now;
-    // the elapsed time in the log is the floor.
-    this.runningSince = this.state.running ? Date.now() : null;
+    // A match that was already running when this device joined carries on from where the
+    // log left it, not from the moment the page opened. Anchoring to now instead rewound
+    // the clock by however long the device had been away, so a score keeper who refreshed
+    // mid-match no longer agreed with the mat display -- the other half of issue #58.
+    this.runningSince = this.state.running ? Date.now() - this.sinceLastEvent() : null;
+  }
+
+  /**
+   * How long ago the last event in the log happened, by this device's clock.
+   *
+   * One device keeps score for a match, so those timestamps were written by the very
+   * clock now reading them and the answer is exact -- including after a stretch offline,
+   * when the server's own idea of when it last saw an event is the one that is wrong.
+   * A timestamp that will not parse falls back to zero, which is the behaviour this
+   * replaces and so never worse than it.
+   */
+  private sinceLastEvent(): number {
+    const last = this.log.events[this.log.events.length - 1];
+    const at = last?.at ? Date.parse(last.at) : NaN;
+    if (Number.isNaN(at)) return 0;
+    return Math.max(0, Date.now() - at);
   }
 
   /** Derived from the log every time it is read, never stored. */
@@ -69,6 +88,20 @@ export class ScoreKeeperSession {
     this.blue = { value: 0, penalty: 0 };
   }
 
+  /**
+   * Appends an event and moves the clock's anchor with it, so the readout carries on from
+   * the number that was on screen rather than jumping.
+   *
+   * Every write goes through here. An event carries the elapsed time at the moment it
+   * happened, and replaying it moves the base the live clock counts up from -- so the
+   * anchor has to move by the same amount or the interval between them is counted twice.
+   */
+  private async commit(event: Event): Promise<void> {
+    const before = this.state.elapsedMs;
+    await this.log.write([event]);
+    this.runningSince = reanchor(this.runningSince, before, this.state.elapsedMs);
+  }
+
   private event(type: Event['type'], elapsedMs: number, extra: Partial<Event>): Event {
     return {
       seq: this.log.nextSeq(),
@@ -92,14 +125,16 @@ export class ScoreKeeperSession {
       },
     });
     this.clearSelection();
-    await this.log.write([event]);
+    await this.commit(event);
   }
 
   async toggleClock(elapsedMs: number): Promise<void> {
     if (this.state.ended) return;
     const running = this.state.running;
     const action = running ? 'stop' : this.state.elapsedMs > 0 ? 'resume' : 'start';
-    await this.log.write([this.event('timer', elapsedMs, { timer: { action } })]);
+    await this.commit(this.event('timer', elapsedMs, { timer: { action } }));
+    // The clock control is the one place the anchor is set outright rather than moved:
+    // starting or resuming is exactly the moment the base becomes now.
     this.runningSince = running ? null : Date.now();
   }
 
@@ -107,17 +142,17 @@ export class ScoreKeeperSession {
   async undo(elapsedMs: number): Promise<void> {
     const target = this.state.undoableSeq;
     if (target === 0) return;
-    await this.log.write([this.event('undo', elapsedMs, { undo: { seq: target } })]);
+    await this.commit(this.event('undo', elapsedMs, { undo: { seq: target } }));
   }
 
   async end(elapsedMs: number, reason: State['endReason']): Promise<void> {
-    await this.log.write([this.event('end', elapsedMs, { end: { reason } })]);
+    await this.commit(this.event('end', elapsedMs, { end: { reason } }));
     this.runningSince = null;
   }
 
   /** A match conceded before it starts. Recorded 0-8. */
   async forfeit(side: Side): Promise<void> {
-    await this.log.write([this.event('end', 0, { end: { reason: 'forfeit', forfeiter: side } })]);
+    await this.commit(this.event('end', 0, { end: { reason: 'forfeit', forfeiter: side } }));
     this.runningSince = null;
   }
 }

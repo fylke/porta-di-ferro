@@ -1,0 +1,41 @@
+{
+  "name": "final-exchange-at-the-flash-raises-the-dialog",
+  "description": "From 02:50, when the clock starts flashing, a confirmation asks whether that was the last one.",
+  "events": [
+    {
+      "seq": 1,
+      "type": "exchange",
+      "elapsedMs": 172000,
+      "exchange": {
+        "red": {
+          "value": 2,
+          "penalty": 0
+        },
+        "blue": {
+          "value": 1,
+          "penalty": 0
+        }
+      }
+    }
+  ],
+  "expect": {
+    "red": {
+      "score": 1,
+      "penalty": 0
+    },
+    "blue": {
+      "score": 0,
+      "penalty": 0
+    },
+    "exchanges": 1,
+    "elapsedMs": 172000,
+    "running": false,
+    "ended": false,
+    "noMatchPoints": false,
+    "endReason": "",
+    "winner": "",
+    "pending": "final_exchange",
+    "lastSeq": 1,
+    "undoableSeq": 1
+  }
+}

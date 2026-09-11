@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { MatchView } from '../api';
+  import WarningTriangle from './WarningTriangle.svelte';
   import { formatClock, isFlashing } from '../lib/clock.svelte';
 
   /**
@@ -44,7 +45,7 @@
       <div class="name">{names.red}</div>
       <div class="score mono">{board.red.score}</div>
       <div class="warns">
-        {#each { length: board.red.penalty } as _, i (i)}<span>&#9650;</span>{/each}
+        {#each { length: board.red.penalty } as _, i (i)}<WarningTriangle />{/each}
       </div>
     </div>
 
@@ -61,7 +62,7 @@
       <div class="name">{names.blue}</div>
       <div class="score mono">{board.blue.score}</div>
       <div class="warns">
-        {#each { length: board.blue.penalty } as _, i (i)}<span>&#9650;</span>{/each}
+        {#each { length: board.blue.penalty } as _, i (i)}<WarningTriangle />{/each}
       </div>
     </div>
   {/if}
@@ -123,7 +124,8 @@
   }
   .warns {
     display: flex;
-    gap: 0.2rem;
+    align-items: center;
+    gap: 0.25rem;
     color: var(--amber-bright);
     font-size: clamp(0.9rem, 3vh, 2rem);
     min-height: 1em;

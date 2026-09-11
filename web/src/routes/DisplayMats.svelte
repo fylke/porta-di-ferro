@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { keepAwake } from '../lib/wakelock';
   import Scoreboard from './Scoreboard.svelte';
-  import { Clock, Live, matchOn, namesFor } from './lib-display.svelte';
+  import { Clock, Live, liveElapsed, matchOn, namesFor } from './lib-display.svelte';
 
   /**
    * Every active mat on a single screen, or a chosen subset via ?ids=1,2.
@@ -43,24 +43,18 @@
   });
 
   const compact = $derived(mats.length >= 3);
-  const started = new Map<number, number>();
-
-  function elapsedFor(mat: number): number {
-    const match = matchOn(live.snapshot, mat);
-    if (!match) return 0;
-    if (!match.state.running) {
-      started.delete(mat);
-      return match.state.elapsedMs;
-    }
-    if (!started.has(mat)) started.set(mat, Date.now());
-    return match.state.elapsedMs + (clock.now - (started.get(mat) ?? Date.now()));
-  }
 </script>
 
 <main class:compact style="--rows: {mats.length}">
   {#each mats as mat (mat)}
     {@const match = matchOn(live.snapshot, mat)}
-    <Scoreboard {mat} {match} names={namesFor(live.snapshot, match)} elapsed={elapsedFor(mat)} {compact} />
+    <Scoreboard
+      {mat}
+      {match}
+      names={namesFor(live.snapshot, match)}
+      elapsed={liveElapsed(match, live, clock.now)}
+      {compact}
+    />
   {/each}
   {#if mats.length === 0}
     <p class="empty">No mats are set up yet.</p>

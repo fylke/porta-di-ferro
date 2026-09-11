@@ -45,6 +45,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/stream", s.stream)
 	mux.HandleFunc("GET /api/export.json", s.exportJSON)
 	mux.HandleFunc("GET /api/qr.png", s.qr)
+	mux.HandleFunc("GET /api/addresses", s.addresses)
 
 	mux.HandleFunc("POST /api/competitors", s.addCompetitor)
 	mux.HandleFunc("PATCH /api/competitors/{id}", s.patchCompetitor)

@@ -10,8 +10,9 @@ import (
 // package so the test is a client of the wire format, the way a browser is.
 type matchView struct {
 	store.Match
-	State  match.State `json:"state"`
-	Status string      `json:"status"`
+	State   match.State `json:"state"`
+	Status  string      `json:"status"`
+	SinceMS int64       `json:"sinceMs"`
 }
 
 type poolView struct {
