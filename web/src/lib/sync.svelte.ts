@@ -12,6 +12,39 @@ import type { Event } from './match';
 
 export type SyncState = 'idle' | 'pushing' | 'offline';
 
+let flushingAll = false;
+
+/**
+ * Hands the server every match log on this device that it does not have yet, not only the
+ * one on screen.
+ *
+ * A pool run offline is several finished matches, and by the time the LAN is back only
+ * the last of them is open in a MatchLog. Without this, the earlier ones would sit in
+ * IndexedDB until somebody happened to reopen each on the same device -- which is to say
+ * never, and the whole point of running the pool offline was to report it afterwards.
+ * Outstanding is derived the same way load() derives it, by asking the server what it has,
+ * so nothing has to be flagged in storage.
+ */
+export async function flushAll(except = ''): Promise<void> {
+  if (flushingAll) return;
+  flushingAll = true;
+  try {
+    for (const id of await db.matches()) {
+      if (id === except) continue;
+      const local = await db.read(id);
+      if (local.length === 0) continue;
+      const remote = await api.events(id, 0);
+      const have = new Set(remote.map((e) => e.seq));
+      const missing = local.filter((e) => !have.has(e.seq));
+      if (missing.length > 0) await api.pushEvents(id, missing);
+    }
+  } catch {
+    // The LAN went again. The next successful flush of the open match tries the rest.
+  } finally {
+    flushingAll = false;
+  }
+}
+
 export class MatchLog {
   matchId = $state('');
   events = $state<Event[]>([]);
@@ -64,6 +97,7 @@ export class MatchLog {
 
     this.durable = db.usable();
     await this.flush();
+    if (this.sync === 'idle') void flushAll(this.matchId);
     this.start();
   }
 
@@ -98,6 +132,9 @@ export class MatchLog {
       for (const e of batch) this.pushed.add(e.seq);
       this.pendingCount = 0;
       this.sync = 'idle';
+      // Reaching the server with this match's backlog means the LAN is back: the matches
+      // finished before it are waiting too.
+      void flushAll(this.matchId);
     } catch {
       // The LAN is down, or the server is. Neither stops the match: the log is already on
       // this device and the next flush will carry it.

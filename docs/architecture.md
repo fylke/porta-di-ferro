@@ -155,7 +155,7 @@ flowchart TD
 
 ## 5. Offline & Local-First Resilience
 
-Scorekeeper devices stay operational even during transient venue Wi-Fi dropouts by leveraging a Service Worker app shell and IndexedDB event spooling.
+Scorekeeper devices stay operational even during transient venue Wi-Fi dropouts by leveraging a Service Worker app shell and IndexedDB event spooling. The last snapshot is kept in `localStorage` too, so a client opens with the pool's schedule and names when the server is unreachable; the score keeper client keeps its own record of which matches it has finished, so it can move through a whole pool offline. On reconnect, every match log on the device that the server is missing is pushed — not only the match on screen.
 
 ```mermaid
 sequenceDiagram
@@ -189,6 +189,8 @@ sequenceDiagram
         Note over App,LAN: Wi-Fi Restored
         App->>LAN: Flush Pending Queue in Sequence
         LAN-->>App: 200 OK
+        App->>LAN: GET /api/matches/:id/events for every other match on the device
+        App->>LAN: POST whatever the server is missing (finished offline earlier)
         App->>IDB: Clear Synced Events
     end
 ```

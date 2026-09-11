@@ -277,6 +277,12 @@ device that has no server to talk to; the result is then read out to the organiz
 hand. This is not a separate mode to build — it is what local-first writes already give — and it is
 what tier 2 of the fallback ladder (§12) actually rests on.
 
+**A whole pool, not only a match.** The client keeps the last snapshot it saw, so it opens with the
+pool, the names and the running order even when the server is out of reach, and it keeps its own
+account of which matches it has finished, so *Next match* works with nobody to ask. When the LAN is
+back, it hands over every match log on the device the server is missing — not just the one on
+screen — because by then the earlier matches are closed and nobody would reopen them by hand.
+
 Corrections are appended as new events rather than mutating history. MVP has no correction UI (§7),
 but building the log this way means adding one later is a UI change rather than a data migration.
 

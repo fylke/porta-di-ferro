@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { Live } from '../lib/live.svelte';
   import { ScoreKeeperSession } from '../lib/scorekeeper.svelte';
   import { Clock, formatClock, isFlashing } from '../lib/clock.svelte';
@@ -9,7 +9,8 @@
   import ConfirmDialog from './ConfirmDialog.svelte';
   import OptionsSheet from './OptionsSheet.svelte';
   import { matchesOn } from './lib-display.svelte';
-  import { MSL, type Side } from '../lib/match';
+  import { MSL, replay, type Side } from '../lib/match';
+  import * as db from '../lib/db';
   import { ended, penaltyLoss } from '../lib/outcome';
 
   let { mat, variant = 'panels' }: { mat: number; variant?: string } = $props();
@@ -49,8 +50,33 @@
   let exhausted = $state(false);
   const rememberedKey = $derived(`porta.mat.${mat}.current`);
 
+  // Matches this device has finished that the server may not know about yet -- the
+  // whole point of running a pool offline. Found by replaying the logs on this device, so
+  // they survive a reload, and kept up to date as matches end here.
+  let localDone = $state(new Set<string>());
+  const queueKey = $derived(queue.map((m) => m.id).join(','));
+  $effect(() => {
+    const ids = queueKey ? queueKey.split(',') : [];
+    if (ids.length === 0) return;
+    void (async () => {
+      const done = new Set<string>();
+      for (const id of ids) {
+        const events = await db.read(id);
+        if (events.length > 0 && replay(MSL, events).ended) done.add(id);
+      }
+      // Merged rather than replaced, so a match that ended here since the scan began is
+      // not forgotten; untracked, so the merge does not re-run the scan.
+      localDone = new Set([...untrack(() => localDone), ...done]);
+    })();
+  });
+
+  /** Open means neither the server nor this device has seen it end. */
+  function isOpen(m: { id: string; status: string }): boolean {
+    return m.status !== 'complete' && !localDone.has(m.id);
+  }
+
   function firstOpen(): string {
-    return queue.find((m) => m.status !== 'complete')?.id ?? '';
+    return queue.find(isOpen)?.id ?? '';
   }
 
   $effect(() => {
@@ -64,7 +90,7 @@
     } catch {
       // No memory on this browser; the mat's own position is the fallback.
     }
-    const open = queue.find((m) => m.id === remembered && m.status !== 'complete');
+    const open = queue.find((m) => m.id === remembered && isOpen(m));
     matchId = open?.id ?? firstOpen();
   });
 
@@ -80,8 +106,8 @@
   /** The score keeper has read the result and is ready for the next two. */
   function nextMatch() {
     const i = queue.findIndex((m) => m.id === matchId);
-    const after = queue.slice(i + 1).find((m) => m.status !== 'complete');
-    const elsewhere = queue.find((m) => m.status !== 'complete' && m.id !== matchId);
+    const after = queue.slice(i + 1).find(isOpen);
+    const elsewhere = queue.find((m) => isOpen(m) && m.id !== matchId);
     matchId = after?.id ?? elsewhere?.id ?? '';
     if (!matchId) {
       exhausted = true;
@@ -137,6 +163,11 @@
   });
 
   const matchState = $derived(sk ? sk.state : null);
+  $effect(() => {
+    if (matchState?.ended && matchId && !localDone.has(matchId)) {
+      localDone = new Set([...localDone, matchId]);
+    }
+  });
   const elapsed = $derived(sk && matchState ? clock.elapsed(matchState, sk.runningSince) : 0);
   const flashing = $derived(matchState ? isFlashing(elapsed, matchState.ended) : false);
 
@@ -297,9 +328,11 @@
             >
           </div>
         {/if}
-        <div class="sync" class:offline={sk.log.sync === 'offline'}>
+        <div class="sync" class:offline={sk.log.sync === 'offline' || live.stale}>
           {#if sk.log.sync === 'offline'}
             Offline &middot; {sk.log.pendingCount} to send
+          {:else if live.stale}
+            Offline &middot; schedule from {new Date(live.cachedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           {:else}
             Mat {mat} &middot; pool {view.pool}
           {/if}

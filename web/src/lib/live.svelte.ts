@@ -6,8 +6,19 @@
  */
 import { api, type Snapshot } from '../api';
 
+/** Where the last snapshot this device saw is kept, so a client can start with no server. */
+const CACHE = 'porta.snapshot';
+
 export class Live {
   #snapshot = $state<Snapshot | null>(null);
+  /**
+   * True while the snapshot in hand is the cached copy rather than one the server sent
+   * this session. The schedule is complete and the names are right; only the statuses
+   * may be behind, and the score keeper client keeps its own account of those.
+   */
+  stale = $state(false);
+  /** When the cached copy was saved, for the screen to say how old the schedule is. */
+  cachedAt = $state(0);
   /**
    * When the snapshot in hand arrived, by this device's clock. A display counts its match
    * clock on from here, so it has to move with every assignment -- which is why the
@@ -26,11 +37,39 @@ export class Live {
   set snapshot(next: Snapshot | null) {
     this.#snapshot = next;
     this.receivedAt = Date.now();
+    this.stale = false;
+    if (!next) return;
+    try {
+      localStorage.setItem(CACHE, JSON.stringify({ at: Date.now(), snapshot: next }));
+    } catch {
+      // No room or no storage. The live copy still works; only the offline start is lost.
+    }
   }
 
   async start(): Promise<void> {
     await this.refresh();
+    if (!this.#snapshot) this.restore();
     this.connect();
+  }
+
+  /**
+   * Starts from the last snapshot this device saw. This is what lets a score keeper client
+   * open with the server unreachable and still know the pool, the names and the running
+   * order -- a whole pool can be scored before the LAN is back (issue #70). The service
+   * worker keeps the app shell for the same reason; this keeps the data.
+   */
+  private restore(): void {
+    try {
+      const raw = localStorage.getItem(CACHE);
+      if (!raw) return;
+      const { at, snapshot } = JSON.parse(raw) as { at: number; snapshot: Snapshot };
+      this.#snapshot = snapshot;
+      this.receivedAt = Date.now();
+      this.cachedAt = at;
+      this.stale = true;
+    } catch {
+      // A corrupt or absent cache is the same as no cache.
+    }
   }
 
   /** Asks for the whole picture again. Cheap at this size, and always safe. */

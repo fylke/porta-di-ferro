@@ -40,8 +40,10 @@
 
 <main>
   <h1>Which mat?</h1>
-  {#if live.error}
+  {#if live.error && !live.snapshot}
     <p class="err">Cannot reach the server: {live.error}</p>
+  {:else if live.stale}
+    <p class="err">The server is out of reach. This is the schedule from the last time it was seen; scoring still works.</p>
   {/if}
   <div class="mats">
     {#each mats as mat (mat)}

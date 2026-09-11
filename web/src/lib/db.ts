@@ -84,6 +84,19 @@ export async function append(matchId: string, events: Event[]): Promise<void> {
   });
 }
 
+/** Every match this device holds a log for. Empty if storage is unavailable. */
+export async function matches(): Promise<string[]> {
+  return attempt<string[]>([], async (db) => {
+    const index = db.transaction(STORE, 'readonly').objectStore(STORE).index('byMatch');
+    const keys = await new Promise<IDBValidKey[]>((resolve, reject) => {
+      const req = index.getAllKeys();
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    return [...new Set(keys.map(String))];
+  });
+}
+
 /** Reads a match's durable log, in sequence order. Empty if storage is unavailable. */
 export async function read(matchId: string): Promise<Event[]> {
   return attempt<Event[]>([], async (db) => {
