@@ -526,7 +526,10 @@ a well-defined moment to ask and a well-defined timestamp to record.
 **Point cap.** Confirming an exchange that takes either competitor **to or past 8** raises a dialog
 announcing the result — *"Red wins 9–3"* — with **End match** or **Undo last exchange**.
 
-**Warning cap.** A warning that would take a competitor to the match-loss level raises the same dialog.
+**Warning cap.** A warning that would take a competitor to the match-loss level raises the same dialog
+— worded for the loser, not the winner: *"Ada loses the match on a third warning"*, *"Bo is
+disqualified"*, with the 8–0 as the second line. A match that ends on warnings is the one result the
+head referee will be asked to justify, and *"Bo wins 8–0"* was true and useless.
 
 The three share a shape but **not their second action** — build them as one component parameterised on
 it, not as one identical dialog:

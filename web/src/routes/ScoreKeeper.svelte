@@ -8,6 +8,8 @@
   import EndDialog from './EndDialog.svelte';
   import ConfirmDialog from './ConfirmDialog.svelte';
   import { matchesOn } from './lib-display.svelte';
+  import { MSL } from '../lib/match';
+  import { ended, penaltyLoss } from '../lib/outcome';
 
   let { mat, variant = 'panels' }: { mat: number; variant?: string } = $props();
 
@@ -120,14 +122,23 @@
       !(matchState.pending === 'final_exchange' && dismissedFinal === matchState.lastSeq),
   );
 
-  const capHeadline = $derived.by(() => {
-    if (!matchState) return '';
-    if (matchState.pending === 'final_exchange') return 'Was that the final exchange?';
-    if (matchState.red.score === matchState.blue.score) return `Draw ${matchState.red.score}–${matchState.blue.score}`;
+  // The end dialog's wording. A penalty loss names the loser and why, because that is
+  // the one result a head referee will be asked to justify; the others name the winner.
+  const capText = $derived.by((): { headline: string; detail: string } => {
+    if (!matchState || !sk) return { headline: '', detail: '' };
+    if (matchState.pending === 'final_exchange') {
+      return { headline: 'Was that the final exchange?', detail: '' };
+    }
+    if (matchState.pending === 'penalty_cap') {
+      return penaltyLoss(MSL, matchState, names, sk.log.events);
+    }
+    if (matchState.red.score === matchState.blue.score) {
+      return { headline: `Draw ${matchState.red.score}–${matchState.blue.score}`, detail: '' };
+    }
     const leader = matchState.red.score > matchState.blue.score ? names.red : names.blue;
     const high = Math.max(matchState.red.score, matchState.blue.score);
     const low = Math.min(matchState.red.score, matchState.blue.score);
-    return `${leader} wins ${high}–${low}`;
+    return { headline: `${leader} wins ${high}–${low}`, detail: '' };
   });
 
   async function endMatch() {
@@ -163,14 +174,9 @@
   }
 
   // What the centre column says once the match is over, in place of the clock controls.
-  const result = $derived.by(() => {
-    if (!matchState?.ended) return '';
-    if (matchState.endReason === 'forfeit') {
-      return `${matchState.winner === 'red' ? names.blue : names.red} forfeits`;
-    }
-    if (!matchState.winner) return 'Draw';
-    return `${nameOf(matchState.winner)} wins`;
-  });
+  const result = $derived(
+    matchState?.ended && sk ? ended(MSL, matchState, names, sk.log.events) : null,
+  );
 </script>
 
 <main class="sk">
@@ -219,8 +225,8 @@
           <!-- The result holds the centre until Next match is pressed, so it can actually be
                read, and read back to the head referee, before the next two names appear. -->
           <div class="result" aria-live="polite">
-            <span class="outcome">{result}</span>
-            <span class="final mono">{matchState.red.score}&ndash;{matchState.blue.score}</span>
+            <span class="outcome">{result?.headline}</span>
+            <span class="final mono">{result?.detail}</span>
           </div>
         {:else}
           <div class="clock-row">
@@ -282,7 +288,8 @@
   {#if showEndDialog && matchState}
     <EndDialog
       pending={matchState.pending}
-      headline={capHeadline}
+      headline={capText.headline}
+      detail={capText.detail}
       onEnd={() => void endMatch()}
       onSecond={() => void secondAction()}
     />
