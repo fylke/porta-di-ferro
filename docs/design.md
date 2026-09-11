@@ -806,7 +806,10 @@ Deliberate, and listed so nobody is surprised on the day:
 11. **Swedish localisation** alongside English.
 12. **PDF export** alongside JSON.
 13. **Club balancing in pool generation** — distribute competitors from the same club as evenly as
-    possible (issue #3). No effect at a club-internal event, so it needs synthetic testing.
+    possible (issue #3). No effect at a club-internal event, so it needs synthetic testing. *(Built.
+    The objectives give way in this order: pool sizes within one of each other, never traded; club
+    spread, best-effort — a greedy deal, a swap pass, and what remains reported; then running order
+    and colours, decided per pool and unable to conflict with either.)*
 
 ---
 

@@ -125,7 +125,7 @@ Tournaments progress through competitor intake, pool generation, schedule assign
 
 ```mermaid
 flowchart TD
-    A[Add / Register Competitors] --> B[Generate Pools]
+    A[Add / Register Competitors] --> B[Generate Pools: sizes within one, clubs spread by a greedy deal plus a swap pass, remainder reported]
     B --> C[Generate Schedule & Assign Mats]
     C --> C2{Organizer override?}
     C2 -- Move / reorder pool --> C3[Pool.Sequence updated; snapshot serves pools in run order]

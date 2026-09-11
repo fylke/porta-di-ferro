@@ -24,8 +24,9 @@ type Limits struct {
 func DefaultLimits() Limits { return Limits{MaxMats: 4, MaxPools: 8, MaxPool: 7} }
 
 // Generate draws the pools for a tournament: sizes honouring the configured minimum and
-// maximum with uneven sizes accepted, a running order that minimises consecutive matches
-// on a best-effort basis, and red and blue assigned for every match.
+// maximum with uneven sizes accepted, clubs spread across the pools as evenly as those
+// sizes allow, a running order that minimises consecutive matches on a best-effort basis,
+// and red and blue assigned for every match.
 //
 // Anything it could not satisfy comes back in Violations rather than being guaranteed
 // away (design §6 item 9).
@@ -67,12 +68,10 @@ func Generate(t store.Tournament, competitors []store.Competitor, lim Limits) (s
 	rng := rand.New(rand.NewSource(t.Seed))
 	rng.Shuffle(len(order), func(i, j int) { order[i], order[j] = order[j], order[i] })
 
-	// Dealt round-robin, so sizes differ by at most one. Club balancing is Milestone 2.
-	buckets := make([][]store.Competitor, count)
-	for i, c := range order {
-		b := i % count
-		buckets[b] = append(buckets[b], c)
-	}
+	// Dealt so that sizes differ by at most one and each club is spread as evenly as the
+	// sizes allow; what could not be spread is reported (clubs.go).
+	buckets := deal(order, count)
+	violations = append(violations, balance(buckets)...)
 
 	pools := make([]store.Pool, 0, count)
 	for i, bucket := range buckets {
