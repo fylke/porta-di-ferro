@@ -460,6 +460,9 @@ which is exactly the ruleset's maximum for a single hit.
   than three minutes.
 - It is **not paused for scoring**, matching the ruleset. The timer control exists for the head
   referee's time-outs, not for ordinary exchanges.
+- **Selecting a point starts it** if it is not running. A point being awarded means fencing has been
+  happening, and a score keeper who forgot to press play is the commonest way a match clock ends up
+  wrong at a competition. Deselecting the point does not stop it again.
 - **One play/pause toggle**, generously sized. It is the only control that must be hit fast, so it is
   among the largest on the screen.
 - **A reset beside it**, small and behind a confirmation, puts the clock back to 00:00 for a clock

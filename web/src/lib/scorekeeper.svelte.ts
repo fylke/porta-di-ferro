@@ -65,10 +65,17 @@ export class ScoreKeeperSession {
   /**
    * The point buttons are mutually exclusive, and pressing an already-selected one
    * deselects it -- so any mis-tap is undone by tapping it again.
+   *
+   * Selecting a point also starts the clock if it is not running. A point being awarded
+   * means fencing has been happening, and a score keeper who forgot to press play is the
+   * most common way a match clock ends up wrong at a competition. Deselecting does not
+   * stop it again: the clock is now right, and a mis-tap on the point is not a time-out.
    */
   togglePoint(side: Side, value: number): void {
     const sel = this.selection(side);
-    sel.value = sel.value === value ? 0 : value;
+    const selecting = sel.value !== value;
+    sel.value = selecting ? value : 0;
+    if (selecting && !this.state.running && !this.state.ended) void this.startClock();
   }
 
   /** The warning toggles independently of the points. */
@@ -130,12 +137,24 @@ export class ScoreKeeperSession {
 
   async toggleClock(elapsedMs: number): Promise<void> {
     if (this.state.ended) return;
-    const running = this.state.running;
-    const action = running ? 'stop' : this.state.elapsedMs > 0 ? 'resume' : 'start';
-    await this.commit(this.event('timer', elapsedMs, { timer: { action } }));
-    // The clock control is the one place the anchor is set outright rather than moved:
-    // starting or resuming is exactly the moment the base becomes now.
-    this.runningSince = running ? null : Date.now();
+    if (!this.state.running) {
+      await this.startClock();
+      return;
+    }
+    await this.commit(this.event('timer', elapsedMs, { timer: { action: 'stop' } }));
+    this.runningSince = null;
+  }
+
+  /**
+   * Starts a stopped clock: a first start from zero, or a resume after a time-out. The
+   * one place the anchor is set outright rather than moved, because starting is exactly
+   * the moment the base becomes now.
+   */
+  private async startClock(): Promise<void> {
+    const base = this.state.elapsedMs;
+    const action = base > 0 ? 'resume' : 'start';
+    await this.commit(this.event('timer', base, { timer: { action } }));
+    this.runningSince = Date.now();
   }
 
   /**
