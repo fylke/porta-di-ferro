@@ -18,7 +18,8 @@ service, no account, no internet. Built by two members of
    code. **Do not hand out the `localhost` address in the console** — that one only works
    on the PC itself. The organizer page shows an address on the venue network instead, and
    if the PC is on more than one network it offers a picker so you can choose the one the
-   tablets are on.
+   tablets are on. Wi-Fi networks are listed by name, and the list follows the PC if you
+   switch networks — no reload needed.
 4. Enter the competitors, pick the number of mats and the pool size, and draw the pools.
 5. At each mat, open the address on a tablet or phone and pick the mat. That is the score
    keeper client.

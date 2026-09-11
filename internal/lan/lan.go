@@ -23,6 +23,10 @@ type Address struct {
 	IP        string `json:"ip"`
 	Interface string `json:"interface"`
 	Private   bool   `json:"private"`
+	// SSID is the wireless network the adapter is on, when it is one and the platform
+	// can say. This is the field an organizer can actually act on: a PC that joined the
+	// office wifi instead of the hall's is found by its name, never by its IP.
+	SSID string `json:"ssid,omitempty"`
 }
 
 // virtual matches the adapters a phone in the hall is never on: hypervisor host-only
@@ -45,6 +49,7 @@ func Addresses() []Address {
 	if err != nil {
 		return []Address{}
 	}
+	wifi := ssids()
 	out := []Address{}
 	for _, iface := range ifaces {
 		// An adapter that is down, or a loopback, cannot carry a score keeper's tablet.
@@ -70,6 +75,7 @@ func Addresses() []Address {
 				IP:        ip.String(),
 				Interface: iface.Name,
 				Private:   ip.IsPrivate(),
+				SSID:      wifi[iface.Name],
 			})
 		}
 	}

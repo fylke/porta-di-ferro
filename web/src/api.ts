@@ -16,6 +16,8 @@ export interface Address {
   ip: string;
   interface: string;
   private: boolean;
+  /** The wifi network's name, when the adapter is wireless and the platform can say. */
+  ssid?: string;
 }
 
 export interface MatchView {

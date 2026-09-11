@@ -19,6 +19,8 @@ type Server struct {
 	hub    *hub
 	assets fs.FS
 
+	addressCache addressCache
+
 	// writeMu serialises writes. One organizer and at most four mats: a single lock is
 	// simpler than anything cleverer and cannot be got wrong.
 	writeMu sync.Mutex
