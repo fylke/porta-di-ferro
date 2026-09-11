@@ -63,7 +63,7 @@ stateDiagram-v2
     state InProgress_Running {
         [*] --> ScoreCheck
         ScoreCheck --> ExchangeConfirmed: Record Exchange (Differential 1-2 pts)
-        ExchangeConfirmed --> WarningIssued: Penalty Level 1 (Warning) / 2 (-1 pt)
+        ExchangeConfirmed --> WarningIssued: Penalty +1 (Warning) / +2 (Double, -1 pt) / +3 (Triple)
         WarningIssued --> ScoreCheck
         ExchangeConfirmed --> ScoreCheck
     }

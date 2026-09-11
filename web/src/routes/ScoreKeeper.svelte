@@ -164,6 +164,11 @@
     askForfeit = side;
   }
 
+  function escalate(side: 'red' | 'blue', levels: 2 | 3) {
+    menuOpen = false;
+    sk?.escalate(side, levels);
+  }
+
   function forfeit(side: 'red' | 'blue') {
     askForfeit = null;
     void sk?.forfeit(side);
@@ -192,12 +197,36 @@
       >&hellip;</button
     >
     {#if menuOpen}
-      <!-- The home for rare per-match controls. It holds forfeits now; Milestone 2 adds
-           immediate penalty escalation and the colour and side options. Establishing the
-           slot now avoids reopening a deliberately full grid to make room later. -->
+      <!-- The home for rare per-match controls: immediate penalty escalation and forfeits,
+           grouped by competitor so the name is read before the consequence. An escalation
+           is a pending selection that commits with Confirm exchange and has no dialog of
+           its own; a forfeit ends the match on the spot, so it asks. -->
       <div class="menu" role="menu">
-        <button role="menuitem" onclick={() => askToForfeit('red')}>{names.red} forfeits</button>
-        <button role="menuitem" onclick={() => askToForfeit('blue')}>{names.blue} forfeits</button>
+        {#each ['red', 'blue'] as const as side (side)}
+          <div class="menu-head {side}">{nameOf(side)}</div>
+          <button
+            role="menuitem"
+            disabled={!matchState || matchState.ended}
+            onclick={() => escalate(side, 2)}
+          >
+            <span>Double warning</span><span class="why">loses a point</span>
+          </button>
+          <button
+            role="menuitem"
+            disabled={!matchState || matchState.ended}
+            onclick={() => escalate(side, 3)}
+          >
+            <span>Triple warning</span><span class="why">loses the match</span>
+          </button>
+          <button
+            role="menuitem"
+            disabled={!matchState || matchState.ended}
+            onclick={() => askToForfeit(side)}
+          >
+            <span>Forfeits</span><span class="why">recorded 0&ndash;8</span>
+          </button>
+        {/each}
+        <div class="menu-head">This screen</div>
         <a role="menuitem" href="/score/{mat}?variant={variant === 'panels' ? 'edge' : 'panels'}">
           Try the other layout
         </a>
@@ -507,12 +536,13 @@
     border: 1px solid var(--line);
     border-radius: var(--radius);
     display: grid;
-    min-width: 14rem;
-    overflow: hidden;
+    min-width: 17rem;
+    max-height: calc(100dvh - 3.5rem);
+    overflow: auto;
   }
   .menu button,
   .menu a {
-    padding: 0.85rem 1rem;
+    padding: 0.75rem 1rem;
     text-align: left;
     background: none;
     border: none;
@@ -520,6 +550,34 @@
     color: var(--ink);
     text-decoration: none;
     font-size: 0.95rem;
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+  .menu button:disabled {
+    opacity: 0.4;
+  }
+  .menu .why {
+    color: var(--ink-dim);
+    font-size: 0.8rem;
+  }
+  .menu-head {
+    padding: 0.55rem 1rem 0.2rem;
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    border-top: 1px solid var(--line);
+  }
+  .menu-head:first-child {
+    border-top: none;
+  }
+  .menu-head.red {
+    color: var(--red-bright);
+  }
+  .menu-head.blue {
+    color: var(--blue-bright);
   }
   .menu button:active,
   .menu a:active {

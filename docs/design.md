@@ -790,7 +790,9 @@ Deliberate, and listed so nobody is surprised on the day:
    match, or disqualification. Reached from the `…` overflow menu (§4) rather than more buttons on the
    main view, and **committed through *Confirm exchange* with no confirmation dialog of its own** —
    reaching into a buried menu is already deliberate, and the normal confirm is the second gate.
-   Cancelling one is a tap on the warning button, not a second trip into the menu.
+   Cancelling one is a tap on the warning button, not a second trip into the menu. *(Built. The
+   question of a dialog per level was settled §4's way: none on choosing; the end-of-match dialog that
+   a match loss raises is the same one a third ordinary warning raises, and it names the escalation.)*
 3. **Eliminations** — top 8 from the pools.
 4. **Server-assigned displays** — a device opens `/display` and the organizer chooses what it shows,
    reassigning on the fly and seeing which screens are live. Added *alongside* URL addressing, which

@@ -31,6 +31,12 @@
     onPoint: (value: number) => void;
     onWarning: () => void;
   } = $props();
+
+  // The punctuation encodes severity, so the label reads as more alarming exactly as the
+  // consequence gets worse -- a third cue alongside colour and size (design §4).
+  const warningLabel = $derived(
+    selection.penalty >= 3 ? 'TRIPLE!!!' : selection.penalty === 2 ? 'DOUBLE!!' : 'WARNING!',
+  );
 </script>
 
 <section class="panel {side} v-{variant}" aria-label="{side} competitor">
@@ -63,9 +69,10 @@
   <button
     class="warning"
     class:selected={selection.penalty > 0}
+    class:severe={selection.penalty > 1}
     {disabled}
     aria-pressed={selection.penalty > 0}
-    onclick={onWarning}>WARNING!</button
+    onclick={onWarning}>{warningLabel}</button
   >
 </section>
 
@@ -169,6 +176,15 @@
     background: var(--amber-bright);
     border-color: var(--amber-bright);
     color: #1a1200;
+  }
+  /* A pending escalation is the same amber -- hue is identity, and amber is warnings --
+     but heavier, because it is about to cost a point or the match. */
+  .warning.severe {
+    font-size: clamp(0.95rem, 2.5vh, 1.2rem);
+    letter-spacing: 0.08em;
+    box-shadow:
+      inset 0 0 0 4px var(--bg),
+      inset 0 0 0 6px var(--amber-bright);
   }
 
   button:active {

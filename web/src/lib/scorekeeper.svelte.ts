@@ -13,7 +13,11 @@ import { MatchLog } from './sync.svelte';
 export interface Selection {
   /** The selected point value, or 0 for none. The two point buttons are exclusive. */
   value: number;
-  /** Penalty levels to apply. 0 or 1 in the MVP; escalation is Milestone 2. */
+  /**
+   * Penalty levels to apply: 0 none, 1 a warning, 2 straight to a point deduction, 3
+   * straight to a match loss. The warning button toggles between 0 and 1; the severe
+   * levels are chosen from the overflow menu and show on the same button.
+   */
   penalty: number;
 }
 
@@ -78,10 +82,26 @@ export class ScoreKeeperSession {
     if (selecting && !this.state.running && !this.state.ended) void this.startClock();
   }
 
-  /** The warning toggles independently of the points. */
+  /**
+   * The warning toggles independently of the points, and it is also how a severe warning
+   * is cancelled: tapping a selected DOUBLE!! or TRIPLE!!! clears it back to nothing, and
+   * the next tap is an ordinary warning again. Cancelling a mis-picked escalation never
+   * means going back into the menu (design §4).
+   */
   toggleWarning(side: Side): void {
     const sel = this.selection(side);
     sel.penalty = sel.penalty > 0 ? 0 : 1;
+  }
+
+  /**
+   * Immediate escalation: the head referee has judged a violation severe enough to skip
+   * the ladder. It is a pending selection like any other and commits with Confirm
+   * exchange -- reaching into a buried menu is already deliberate, and the normal confirm
+   * is the second gate. What the engine does with it is the same as with an ordinary
+   * warning, applied two or three levels at once.
+   */
+  escalate(side: Side, levels: 2 | 3): void {
+    this.selection(side).penalty = levels;
   }
 
   get anythingSelected(): boolean {
