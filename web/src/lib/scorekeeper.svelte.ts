@@ -6,7 +6,7 @@
  * selections until then -- the score does not move, the warning is not counted, and
  * nothing is written to the log (design §4).
  */
-import { MSL, replay, type Event, type Side, type State } from './match';
+import { MSL, optionsOf, replay, type Event, type Options, type Side, type State } from './match';
 import { reanchor } from './clock.svelte';
 import { MatchLog } from './sync.svelte';
 
@@ -60,6 +60,21 @@ export class ScoreKeeperSession {
   /** Derived from the log every time it is read, never stored. */
   get state(): State {
     return replay(MSL, this.log.events);
+  }
+
+  /** How the match is shown -- colours and display sides -- also from the log. */
+  get options(): Options {
+    return optionsOf(this.log.events);
+  }
+
+  /**
+   * Changes how the match is shown. An options record rides the log like everything else,
+   * which is what gets it to the displays through the same path as the score and lets it
+   * work with no server to talk to.
+   */
+  async setOptions(patch: Partial<Options>, elapsedMs: number): Promise<void> {
+    const next = { ...this.options, ...patch };
+    await this.commit(this.event('options', elapsedMs, { options: next }));
   }
 
   selection(side: Side): Selection {

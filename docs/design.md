@@ -286,7 +286,9 @@ Recorded per match:
 
 - every confirmed exchange — timestamp, points awarded to each competitor
 - every warning — timestamp, competitor
-- **timer events** — started, stopped at timestamp X, resumed after Y seconds
+- **timer events** — started, stopped at timestamp X, resumed after Y seconds, reset to zero
+- **options** — the competitors' colours and which side each takes on the displays. Presentation
+  only: the engine ignores it, and it is in the log so it reaches every screen by the same path
 
 Nothing else. This is enough to reconstruct a match completely and to produce post-event statistics
 later without changing the schema.
@@ -809,7 +811,9 @@ Deliberate, and listed so nobody is surprised on the day:
    competitors' colours away from the red/blue default, and swap which side each occupies — on the
    score keeper view and on the display **independently of each other**. Swapping sides risks
    cognitive dissonance against the physical corners, so changing colours is often the better answer
-   to the same problem.
+   to the same problem. *(Built. Colours and the display swap are an `options` record in the match
+   log — no effect on the score, read by every screen through the same path as the score, and
+   changeable with no server to talk to. The score keeper's own swap is per device.)*
 7. **Up to 4 mats, up to 8 pools** — 56 competitors per run. Mat assignment generalises to pool *N* on
    mat *((N−1) mod mats) + 1*.
 8. **Organizer override of mat assignment.**

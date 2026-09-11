@@ -48,7 +48,7 @@ flowchart TB
 
 ## 2. Match Engine State Machine & Scoring Logic
 
-Matches are driven by an append-only event log. State is pure and recomputed by replaying events. Points are differential (e.g., scoring $2$ vs $1$ awards $1$ net point to the higher scorer), capped at $8$ points or $3$ minutes ($180\,000\text{ ms}$).
+Matches are driven by an append-only event log. State is pure and recomputed by replaying events. Event types are `exchange`, `timer` (start / stop / resume / reset), `undo`, `end`, and `options` — the last carries the competitors' colours and the display side order, is ignored by replay, and is read separately by `OptionsOf` / `optionsOf` so presentation can never fail a scoring vector. Points are differential (e.g., scoring $2$ vs $1$ awards $1$ net point to the higher scorer), capped at $8$ points or $3$ minutes ($180\,000\text{ ms}$).
 
 ```mermaid
 stateDiagram-v2

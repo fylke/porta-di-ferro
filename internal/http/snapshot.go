@@ -27,6 +27,9 @@ type MatchView struct {
 	// spare screen's clock usually is -- never has to agree with the server about what
 	// time it is.
 	SinceMS int64 `json:"sinceMs,omitempty"`
+	// Options is how the match is presented -- colours and display sides -- read from
+	// the log by match.OptionsOf. Always present, defaults filled in.
+	Options match.Options `json:"options"`
 }
 
 // PoolView is a pool with its matches and its live standings.
@@ -99,7 +102,7 @@ func (s *Server) snapshot() (Snapshot, error) {
 			if !st.Ended {
 				complete = false
 			}
-			view := MatchView{Match: m, State: st, Status: status}
+			view := MatchView{Match: m, State: st, Status: status, Options: match.OptionsOf(events)}
 			if st.Running {
 				if at, ok := s.store.LastEventAt(m.ID); ok {
 					if since := time.Since(at).Milliseconds(); since > 0 {

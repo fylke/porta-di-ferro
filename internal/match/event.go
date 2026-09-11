@@ -31,6 +31,12 @@ const (
 	TypeUndo EventType = "undo"
 	// TypeEnd closes the match.
 	TypeEnd EventType = "end"
+	// TypeOptions changes how the match is shown: the competitors' colours, and which
+	// side each takes on the display. It has no effect on the score and Replay ignores
+	// it; OptionsOf reads it. It rides the log rather than a separate setting so that
+	// it reaches the displays through the same path as everything else, and so that a
+	// score keeper client with no server to talk to can still change it.
+	TypeOptions EventType = "options"
 )
 
 // Reason records why a match ended.
@@ -95,6 +101,17 @@ type End struct {
 	Forfeiter Side   `json:"forfeiter,omitempty"`
 }
 
+// Options is how a match is presented. Red and Blue are colour names from the client's
+// palette -- "red", "blue", "green", ... -- and stay attached to the sides they name:
+// the red side may be shown in green, but it is still the red side in every record.
+// SwapDisplay puts the blue side on the left of the scoreboards; the score keeper's own
+// screen swaps independently of this, per device (design §7 item 6).
+type Options struct {
+	Red         string `json:"red"`
+	Blue        string `json:"blue"`
+	SwapDisplay bool   `json:"swapDisplay"`
+}
+
 // Event is one line of a match's .ndjson log.
 //
 // The primary key is (Match, Seq), which is what makes a retried push idempotent and
@@ -113,4 +130,5 @@ type Event struct {
 	Timer     *Timer    `json:"timer,omitempty"`
 	Undo      *Undo     `json:"undo,omitempty"`
 	End       *End      `json:"end,omitempty"`
+	Options   *Options  `json:"options,omitempty"`
 }

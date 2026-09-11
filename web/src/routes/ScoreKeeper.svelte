@@ -7,8 +7,9 @@
   import CompetitorPanel from './variants/CompetitorPanel.svelte';
   import EndDialog from './EndDialog.svelte';
   import ConfirmDialog from './ConfirmDialog.svelte';
+  import OptionsSheet from './OptionsSheet.svelte';
   import { matchesOn } from './lib-display.svelte';
-  import { MSL } from '../lib/match';
+  import { MSL, type Side } from '../lib/match';
   import { ended, penaltyLoss } from '../lib/outcome';
 
   let { mat, variant = 'panels' }: { mat: number; variant?: string } = $props();
@@ -21,6 +22,7 @@
   let askReset = $state(false);
   let askForfeit = $state<'red' | 'blue' | null>(null);
   let menuOpen = $state(false);
+  let optionsOpen = $state(false);
   // Which final-exchange dialog the head referee has already answered "continue" to.
   let dismissedFinal = $state(0);
 
@@ -92,6 +94,29 @@
   }
 
   const view = $derived(queue.find((m) => m.id === matchId) ?? null);
+
+  // Which side of this screen each competitor is on. This device's own choice, kept per
+  // mat, and independent of the displays' -- so a score keeper who sits facing the mat
+  // from the far side can mirror their screen without turning every scoreboard round.
+  const swapKey = $derived(`porta.mat.${mat}.swap`);
+  let swapHere = $state(false);
+  $effect(() => {
+    try {
+      swapHere = localStorage.getItem(swapKey) === '1';
+    } catch {
+      swapHere = false;
+    }
+  });
+  function setSwapHere(swap: boolean) {
+    swapHere = swap;
+    try {
+      localStorage.setItem(swapKey, swap ? '1' : '0');
+    } catch {
+      // Fine without it.
+    }
+  }
+  const order = $derived<[Side, Side]>(swapHere ? ['blue', 'red'] : ['red', 'blue']);
+  const options = $derived(sk ? sk.options : { red: 'red', blue: 'blue', swapDisplay: false });
   const names = $derived.by(() => {
     const byId = new Map((live.snapshot?.competitors ?? []).map((c) => [c.id, c.name]));
     return {
@@ -169,6 +194,11 @@
     sk?.escalate(side, levels);
   }
 
+  function openOptions() {
+    menuOpen = false;
+    optionsOpen = true;
+  }
+
   function forfeit(side: 'red' | 'blue') {
     askForfeit = null;
     void sk?.forfeit(side);
@@ -226,6 +256,10 @@
             <span>Forfeits</span><span class="why">recorded 0&ndash;8</span>
           </button>
         {/each}
+        <div class="menu-head">Match</div>
+        <button role="menuitem" disabled={!matchState} onclick={openOptions}>
+          <span>Colours and sides&hellip;</span>
+        </button>
         <div class="menu-head">This screen</div>
         <a role="menuitem" href="/score/{mat}?variant={variant === 'panels' ? 'edge' : 'panels'}">
           Try the other layout
@@ -236,17 +270,7 @@
 
   {#if view && sk && matchState}
     <div class="grid">
-      <CompetitorPanel
-        side="red"
-        name={names.red}
-        score={matchState.red.score}
-        warnings={matchState.red.penalty}
-        selection={sk.red}
-        {variant}
-        disabled={matchState.ended}
-        onPoint={(v) => sk?.togglePoint('red', v)}
-        onWarning={() => sk?.toggleWarning('red')}
-      />
+      {@render panel(order[0])}
 
       <div class="centre" class:flashing>
         <div class="time mono">{formatClock(elapsed)}</div>
@@ -282,17 +306,7 @@
         </div>
       </div>
 
-      <CompetitorPanel
-        side="blue"
-        name={names.blue}
-        score={matchState.blue.score}
-        warnings={matchState.blue.penalty}
-        selection={sk.blue}
-        {variant}
-        disabled={matchState.ended}
-        onPoint={(v) => sk?.togglePoint('blue', v)}
-        onWarning={() => sk?.toggleWarning('blue')}
-      />
+      {@render panel(order[1])}
     </div>
 
     {#if matchState.ended}
@@ -312,6 +326,18 @@
         <p class="dim">This screen follows the mat. It fills in when a match is up.</p>
       {/if}
     </div>
+  {/if}
+
+  {#if optionsOpen && sk}
+    <OptionsSheet
+      {options}
+      {names}
+      {swapHere}
+      onColour={(side, colour) => void sk?.setOptions({ [side]: colour }, elapsed)}
+      onSwapHere={setSwapHere}
+      onSwapDisplay={(swap) => void sk?.setOptions({ swapDisplay: swap }, elapsed)}
+      onClose={() => (optionsOpen = false)}
+    />
   {/if}
 
   {#if showEndDialog && matchState}
@@ -360,6 +386,23 @@
   {/if}
 </main>
 
+{#snippet panel(side: Side)}
+  {#if sk && matchState}
+    <CompetitorPanel
+      {side}
+      colour={options[side]}
+      name={names[side]}
+      score={matchState[side].score}
+      warnings={matchState[side].penalty}
+      selection={sk.selection(side)}
+      {variant}
+      disabled={matchState.ended}
+      onPoint={(v) => sk?.togglePoint(side, v)}
+      onWarning={() => sk?.toggleWarning(side)}
+    />
+  {/if}
+{/snippet}
+
 <style>
   .sk {
     height: 100dvh;
@@ -369,9 +412,10 @@
     overflow: hidden;
   }
 
-  /* Red stays on the left and blue on the right in every layout. That mapping mirrors the
-     mat and must never move, whatever the screen size: swapping sides is a deliberate
-     action, not something a device rotation does. */
+  /* Red stays on the left and blue on the right in every layout unless the score keeper
+     swaps them from the menu. That mapping mirrors the mat and must never move by itself,
+     whatever the screen size: swapping sides is a deliberate action, not something a
+     device rotation does. */
   .grid {
     display: grid;
     grid-template-columns: 1fr minmax(7rem, 0.55fr) 1fr;

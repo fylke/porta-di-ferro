@@ -12,6 +12,7 @@
    */
   let {
     side,
+    colour = side,
     name,
     score,
     warnings,
@@ -22,6 +23,8 @@
     onWarning,
   }: {
     side: Side;
+    /** The palette colour this side is shown in. Defaults to the side's own. */
+    colour?: string;
     name: string;
     score: number;
     warnings: number;
@@ -39,9 +42,15 @@
   );
 </script>
 
-<section class="panel {side} v-{variant}" aria-label="{side} competitor">
+<!-- The side is the identity in every record; the colour is only how it is shown. Both are
+     announced, because a score keeper told "green" by the referee needs to find green. -->
+<section
+  class="panel v-{variant}"
+  style="--side-tint: var(--tint-{colour}); --side-bright: var(--bright-{colour})"
+  aria-label="{side} competitor, shown in {colour}"
+>
   <header>
-    <span class="label">{side.toUpperCase()}</span>
+    <span class="label">{colour.toUpperCase()}</span>
     <span class="name">{name}</span>
   </header>
 
@@ -86,11 +95,8 @@
     padding: 0.75rem;
     min-height: 0;
   }
-  .panel.red {
-    background: var(--red-tint);
-  }
-  .panel.blue {
-    background: var(--blue-tint);
+  .panel {
+    background: var(--side-tint);
   }
 
   header {
@@ -104,11 +110,8 @@
     letter-spacing: 0.08em;
     font-size: 0.85rem;
   }
-  .red .label {
-    color: var(--red-bright);
-  }
-  .blue .label {
-    color: var(--blue-bright);
+  .label {
+    color: var(--side-bright);
   }
   .name {
     font-size: 1rem;

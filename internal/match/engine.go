@@ -46,6 +46,9 @@ func Replay(r Ruleset, events []Event) State {
 			s.Pending = PendingNone
 		case TypeEnd:
 			applyEnd(r, &s, e)
+		case TypeOptions:
+			// Presentation only. It is in the log so it reaches every screen; what it
+			// says is read by OptionsOf, never by the score.
 		}
 	}
 	if !s.Ended && len(applied) > 0 {
