@@ -30,7 +30,7 @@ func New(st *store.Store, assets fs.FS) *Server {
 	return &Server{
 		store:  st,
 		rules:  match.MSL(),
-		limits: tournament.MVPLimits(),
+		limits: tournament.DefaultLimits(),
 		hub:    newHub(),
 		assets: assets,
 	}

@@ -38,7 +38,7 @@ day, a pool can be run on paper and entered afterwards.
 | `/` | Organizer: competitors, setup, pools and standings |
 | `/score` | Score keeper — pick a mat |
 | `/display/mat/1`, `/display/mat/2` | One mat's scoreboard |
-| `/display/mats` | Every mat on one screen; `?ids=1,2` for a subset |
+| `/display/mats` | Every mat on one screen; `?ids=1,2` for a subset — with four mats, one screen between mats 1 and 2 and another between 3 and 4 beats one screen for the hall |
 | `/display/roster` | The match roster |
 | `/print/pools` | Printable pool sheets |
 | `/api/export.json` | The whole tournament as JSON |
@@ -47,7 +47,7 @@ day, a pool can be run on paper and entered afterwards.
 
 This is Milestone 1, scoped to run MSL's club event on 15 November 2026:
 
-- Up to 2 mats, up to 4 pools of up to 7 competitors — 28 per run
+- Up to 4 mats, up to 8 pools of up to 7 competitors — 56 per run
 - Pools only; eliminations are Milestone 2
 - MSL's ruleset, hardcoded: 8 points or 3 minutes, differential scoring, the three-step
   warning ladder

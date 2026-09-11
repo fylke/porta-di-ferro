@@ -58,6 +58,8 @@
       <select bind:value={mats} onchange={save}>
         <option value={1}>1</option>
         <option value={2}>2</option>
+        <option value={3}>3</option>
+        <option value={4}>4</option>
       </select>
     </label>
     <label>
@@ -89,7 +91,7 @@
     <dt>Ruleset</dt>
     <dd>MSL, hardcoded &middot; 8 points &middot; 3 minutes &middot; differential scoring</dd>
     <dt>Ceiling</dt>
-    <dd>2 mats, 4 pools of up to 7 &mdash; 28 competitors</dd>
+    <dd>4 mats, 8 pools of up to 7 &mdash; 56 competitors</dd>
     <dt>Data</dt>
     <dd class="path">{snapshot.dir}</dd>
   </dl>

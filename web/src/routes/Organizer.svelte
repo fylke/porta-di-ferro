@@ -147,8 +147,9 @@
         {/if}
         <p class="links">
           <a href="/score">Score keeper</a>
-          <a href="/display/mat/1">Mat 1</a>
-          {#if snapshot.tournament.mats > 1}<a href="/display/mat/2">Mat 2</a>{/if}
+          {#each { length: snapshot.tournament.mats } as _, i (i)}
+            <a href="/display/mat/{i + 1}">Mat {i + 1}</a>
+          {/each}
         </p>
       </div>
       {#if scoreURL}

@@ -792,7 +792,8 @@ Deliberate, and listed so nobody is surprised on the day:
    cognitive dissonance against the physical corners, so changing colours is often the better answer
    to the same problem.
 7. **Up to 4 mats, up to 8 pools** — 56 competitors per run. Mat assignment generalises to pool *N* on
-   mat *((N−1) mod mats) + 1*.
+   mat *((N−1) mod mats) + 1*. *(Built: the ceiling is a set of three numbers, and the assignment rule
+   was already the general one.)*
 8. **Organizer override of mat assignment.**
 9. **Concurrent disciplines** — several runs at once, which requires a distinct port and data
    directory per instance.
