@@ -109,7 +109,9 @@ sequenceDiagram
     alt Server accepts event
         Server->>Server: Replay & Validate via Go Engine
         Server->>Server: Append to Match JSON on Disk
-        Server-->>LocalEngine: 200 OK (Event Log)
+        Server-->>LocalEngine: 200 OK (written, server-derived state, lastSeq)
+        LocalEngine->>LocalEngine: Compare server state with own replay of the same log
+        Note over LocalEngine: A difference is a dual-engine bug: banner + console report.<br/>Score keeper may adopt the server's state for the rest of the match.
         Server-)Displays: Broadcast SSE (match_updated)
         Displays->>Displays: Re-render Scoreboard / Roster
     else Network offline or delayed

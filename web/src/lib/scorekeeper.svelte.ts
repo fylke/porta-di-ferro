@@ -57,9 +57,17 @@ export class ScoreKeeperSession {
     return Math.max(0, Date.now() - at);
   }
 
-  /** Derived from the log every time it is read, never stored. */
+  /**
+   * Derived from the log every time it is read, never stored -- unless the score keeper
+   * has chosen the server's state after a disagreement, in which case the server's answer
+   * for the same log is shown instead. Once this device writes past what the server has
+   * answered for, its own replay is the only state there is until the next push.
+   */
   get state(): State {
-    return replay(MSL, this.log.events);
+    const local = replay(MSL, this.log.events);
+    const server = this.log.serverState;
+    if (this.log.aligned && server && server.lastSeq === local.lastSeq) return server;
+    return local;
   }
 
   /** How the match is shown -- colours and display sides -- also from the log. */

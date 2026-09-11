@@ -12,6 +12,7 @@
   import { MSL, replay, type Side } from '../lib/match';
   import * as db from '../lib/db';
   import { ended, penaltyLoss } from '../lib/outcome';
+  import { summarise } from '../lib/drift';
 
   let { mat, variant = 'panels' }: { mat: number; variant?: string } = $props();
 
@@ -331,6 +332,8 @@
         <div class="sync" class:offline={sk.log.sync === 'offline' || live.stale}>
           {#if sk.log.sync === 'offline'}
             Offline &middot; {sk.log.pendingCount} to send
+          {:else if sk.log.aligned}
+            Mat {mat} &middot; showing the server&rsquo;s scoring
           {:else if live.stale}
             Offline &middot; schedule from {new Date(live.cachedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           {:else}
@@ -342,6 +345,21 @@
       {@render panel(order[1])}
     </div>
 
+    {#if sk.log.drift}
+      <!-- The two engines disagree about the same log. Non-blocking: the match goes on,
+           and the score keeper decides whose numbers it goes on under. Either way the
+           console has the full report. -->
+      <div class="drift" role="alert">
+        <span>
+          The server scores this match differently ({sk.log.drift.fields.join(', ')}):
+          {summarise(sk.log.drift.local, sk.log.drift.server)}.
+        </span>
+        <span class="drift-actions">
+          <button onclick={() => sk?.log.alignToServer()}>Use the server's</button>
+          <button onclick={() => sk?.log.dismissDrift()}>Keep this one</button>
+        </span>
+      </div>
+    {/if}
     {#if matchState.ended}
       <button class="confirm next" onclick={nextMatch}>NEXT MATCH</button>
     {:else}
@@ -578,6 +596,31 @@
   }
   .confirm:active {
     filter: brightness(1.3);
+  }
+
+  .drift {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.6rem 0.9rem;
+    background: var(--amber);
+    color: #1a1200;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+  .drift-actions {
+    display: flex;
+    gap: 0.5rem;
+  }
+  .drift button {
+    padding: 0.45rem 0.8rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    background: #1a1200;
+    color: var(--amber-bright);
+    border: none;
   }
 
   /* Rare and destructive, so they sit outside the main grid rather than competing for

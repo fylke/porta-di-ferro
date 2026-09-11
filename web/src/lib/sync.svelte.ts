@@ -8,7 +8,8 @@
  */
 import { api } from '../api';
 import * as db from './db';
-import type { Event } from './match';
+import { differences } from './drift';
+import { MSL, replay, type Event, type State } from './match';
 
 export type SyncState = 'idle' | 'pushing' | 'offline';
 
@@ -52,6 +53,22 @@ export class MatchLog {
   pendingCount = $state(0);
   /** False when the log lives only in memory, so a refresh would lose it. */
   durable = $state(true);
+
+  /**
+   * The state the server derived from this log the last time it answered a push. The
+   * engine exists twice, and this is the one place a live match can show the two apart.
+   */
+  serverState = $state<State | null>(null);
+  /** Set when the server disagreed with this device about the same log. */
+  drift = $state<{ local: State; server: State; fields: string[] } | null>(null);
+  /**
+   * True once the score keeper has chosen the server's numbers over this device's. The
+   * session then shows the server's state whenever it has one for the current log, which
+   * is the fallback for a dual-engine bug found in a live match: the match goes on under
+   * the server's rules, and the bug earns a vector afterwards.
+   */
+  aligned = $state(false);
+  private driftDismissedAt = 0;
 
   /**
    * Sequence numbers the server has confirmed. Held here rather than as a flag in
@@ -128,8 +145,9 @@ export class MatchLog {
     }
     this.sync = 'pushing';
     try {
-      await api.pushEvents(this.matchId, batch);
+      const res = await api.pushEvents(this.matchId, batch);
       for (const e of batch) this.pushed.add(e.seq);
+      this.check(res.state);
       this.pendingCount = 0;
       this.sync = 'idle';
       // Reaching the server with this match's backlog means the LAN is back: the matches
@@ -140,6 +158,43 @@ export class MatchLog {
       // this device and the next flush will carry it.
       this.sync = 'offline';
     }
+  }
+
+  /**
+   * Compares what the server derived with what this device derived from the same log.
+   * Only when the two logs are the same length: a server that is ahead has another
+   * writer, which is a handover matter, not an engine one.
+   */
+  private check(server: State): void {
+    this.serverState = server;
+    const local = replay(MSL, this.events);
+    if (server.lastSeq !== local.lastSeq) return;
+    const fields = differences(local, server);
+    if (fields.length === 0) {
+      this.drift = null;
+      return;
+    }
+    if (this.driftDismissedAt === local.lastSeq) return;
+    this.drift = { local, server, fields };
+    // Loud in the console as well as on screen: this is the bug report.
+    console.error('porta: the server derived a different state from the same log', {
+      match: this.matchId,
+      fields,
+      local,
+      server,
+    });
+  }
+
+  /** The score keeper has seen the disagreement and is carrying on with this device's numbers. */
+  dismissDrift(): void {
+    this.driftDismissedAt = this.drift?.local.lastSeq ?? 0;
+    this.drift = null;
+  }
+
+  /** The score keeper has chosen the server's numbers. */
+  alignToServer(): void {
+    this.aligned = true;
+    this.drift = null;
   }
 
   private start(): void {
