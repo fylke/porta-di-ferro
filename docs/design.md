@@ -930,6 +930,10 @@ that is the right division of labour.
     results indefinitely and pushing them to HEMA Ratings. Grows more significant with (21)–(28),
     which all imply keeping personal data long after the event, and it is what ad-hoc streaming (23)
     checks before it will let a mat go live.
+33. **Client-server state reconciliation & hard alignment** — client scorekeeper session validates
+    its optimistic state against the Go server's response state in `POST /api/matches/:id/events`,
+    logging warnings on divergence and optionally hard-aligning client state to the authoritative
+    server state if drift occurs.
 
 ---
 
@@ -947,6 +951,7 @@ an MVP context, so several are reduced or deferred.
 | **#5 Add staff** | **Future** | Roles are irrelevant while the score keeper simply records the head referee's decision |
 | **#6 Generate a timetable** | **Future** | The largest single piece of work in the issue set |
 | **#8 Decide on a tech stack** | **Settled** | Go with an embedded Svelte SPA. Decision and reasoning in [`tech-stack.md`](tech-stack.md) |
+| **#9 Engine state reconciliation & drift detection** | **Future** | Scorekeeper client validates local derived state against Go server's response payload on write, alerting on discrepancies and offering resync |
 
 ---
 
