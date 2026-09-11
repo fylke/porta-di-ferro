@@ -7,6 +7,7 @@
   import CompetitorPanel from './variants/CompetitorPanel.svelte';
   import EndDialog from './EndDialog.svelte';
   import ConfirmDialog from './ConfirmDialog.svelte';
+  import { matchesOn } from './lib-display.svelte';
 
   let { mat, variant = 'panels' }: { mat: number; variant?: string } = $props();
 
@@ -16,6 +17,7 @@
   let loadedMatch = $state('');
   let askUndo = $state(false);
   let askReset = $state(false);
+  let askForfeit = $state<'red' | 'blue' | null>(null);
   let menuOpen = $state(false);
   // Which final-exchange dialog the head referee has already answered "continue" to.
   let dismissedFinal = $state(0);
@@ -32,11 +34,62 @@
     };
   });
 
-  // The mat follows whichever match is up next there: when one finishes, the next appears.
-  const matchId = $derived(live.snapshot?.mats?.[String(mat)] ?? '');
-  const view = $derived(
-    live.snapshot?.pools.flatMap((p) => p.matches).find((m) => m.id === matchId) ?? null,
-  );
+  // Every match on this mat, in running order. The server's own idea of which one is up
+  // is the first of these that is not complete -- but this device does not follow that
+  // blindly. A finished match stays on screen, with its result, until the score keeper
+  // presses Next match: the server moving the mat on the instant the end was written
+  // meant the final score was replaced by the next two names before anyone had read it.
+  const queue = $derived(matchesOn(live.snapshot, mat));
+  let matchId = $state('');
+  // Every match on the mat is done and the score keeper has said so.
+  let exhausted = $state(false);
+  const rememberedKey = $derived(`porta.mat.${mat}.current`);
+
+  function firstOpen(): string {
+    return queue.find((m) => m.status !== 'complete')?.id ?? '';
+  }
+
+  $effect(() => {
+    if (queue.length === 0) return;
+    // Still on a match the mat still has: stay there, finished or not.
+    if (matchId && queue.some((m) => m.id === matchId)) return;
+    // Otherwise pick up where this device left off, or where the mat is.
+    let remembered = '';
+    try {
+      remembered = localStorage.getItem(rememberedKey) ?? '';
+    } catch {
+      // No memory on this browser; the mat's own position is the fallback.
+    }
+    const open = queue.find((m) => m.id === remembered && m.status !== 'complete');
+    matchId = open?.id ?? firstOpen();
+  });
+
+  $effect(() => {
+    if (!matchId) return;
+    try {
+      localStorage.setItem(rememberedKey, matchId);
+    } catch {
+      // Fine without it.
+    }
+  });
+
+  /** The score keeper has read the result and is ready for the next two. */
+  function nextMatch() {
+    const i = queue.findIndex((m) => m.id === matchId);
+    const after = queue.slice(i + 1).find((m) => m.status !== 'complete');
+    const elsewhere = queue.find((m) => m.status !== 'complete' && m.id !== matchId);
+    matchId = after?.id ?? elsewhere?.id ?? '';
+    if (!matchId) {
+      exhausted = true;
+      try {
+        localStorage.removeItem(rememberedKey);
+      } catch {
+        // Fine without it.
+      }
+    }
+  }
+
+  const view = $derived(queue.find((m) => m.id === matchId) ?? null);
   const names = $derived.by(() => {
     const byId = new Map((live.snapshot?.competitors ?? []).map((c) => [c.id, c.name]));
     return {
@@ -95,10 +148,29 @@
     await sk?.undo(elapsed);
   }
 
-  function forfeit(side: 'red' | 'blue') {
+  function askToForfeit(side: 'red' | 'blue') {
     menuOpen = false;
+    askForfeit = side;
+  }
+
+  function forfeit(side: 'red' | 'blue') {
+    askForfeit = null;
     void sk?.forfeit(side);
   }
+
+  function nameOf(side: 'red' | 'blue'): string {
+    return side === 'red' ? names.red : names.blue;
+  }
+
+  // What the centre column says once the match is over, in place of the clock controls.
+  const result = $derived.by(() => {
+    if (!matchState?.ended) return '';
+    if (matchState.endReason === 'forfeit') {
+      return `${matchState.winner === 'red' ? names.blue : names.red} forfeits`;
+    }
+    if (!matchState.winner) return 'Draw';
+    return `${nameOf(matchState.winner)} wins`;
+  });
 </script>
 
 <main class="sk">
@@ -118,8 +190,8 @@
            immediate penalty escalation and the colour and side options. Establishing the
            slot now avoids reopening a deliberately full grid to make room later. -->
       <div class="menu" role="menu">
-        <button role="menuitem" onclick={() => forfeit('red')}>{names.red} forfeits</button>
-        <button role="menuitem" onclick={() => forfeit('blue')}>{names.blue} forfeits</button>
+        <button role="menuitem" onclick={() => askToForfeit('red')}>{names.red} forfeits</button>
+        <button role="menuitem" onclick={() => askToForfeit('blue')}>{names.blue} forfeits</button>
         <a role="menuitem" href="/score/{mat}?variant={variant === 'panels' ? 'edge' : 'panels'}">
           Try the other layout
         </a>
@@ -143,20 +215,29 @@
 
       <div class="centre" class:flashing>
         <div class="time mono">{formatClock(elapsed)}</div>
-        <div class="clock-row">
-          <button class="clock" disabled={matchState.ended} onclick={() => void sk?.toggleClock(elapsed)}>
-            {matchState.running ? 'PAUSE' : 'PLAY'}
-          </button>
-          <!-- For a clock started by mistake. Small, because it is rare; confirmed, because
-               it is a correction to the record rather than a pause. -->
-          <button
-            class="reset"
-            aria-label="Reset the clock to zero"
-            title="Reset the clock to zero"
-            disabled={matchState.ended || (elapsed === 0 && !matchState.running)}
-            onclick={() => (askReset = true)}>&#8634;</button
-          >
-        </div>
+        {#if matchState.ended}
+          <!-- The result holds the centre until Next match is pressed, so it can actually be
+               read, and read back to the head referee, before the next two names appear. -->
+          <div class="result" aria-live="polite">
+            <span class="outcome">{result}</span>
+            <span class="final mono">{matchState.red.score}&ndash;{matchState.blue.score}</span>
+          </div>
+        {:else}
+          <div class="clock-row">
+            <button class="clock" onclick={() => void sk?.toggleClock(elapsed)}>
+              {matchState.running ? 'PAUSE' : 'PLAY'}
+            </button>
+            <!-- For a clock started by mistake. Small, because it is rare; confirmed, because
+                 it is a correction to the record rather than a pause. -->
+            <button
+              class="reset"
+              aria-label="Reset the clock to zero"
+              title="Reset the clock to zero"
+              disabled={elapsed === 0 && !matchState.running}
+              onclick={() => (askReset = true)}>&#8634;</button
+            >
+          </div>
+        {/if}
         <div class="sync" class:offline={sk.log.sync === 'offline'}>
           {#if sk.log.sync === 'offline'}
             Offline &middot; {sk.log.pendingCount} to send
@@ -179,13 +260,22 @@
       />
     </div>
 
-    <button class="confirm" disabled={matchState.ended} onclick={() => void sk?.confirm(elapsed)}>
-      {matchState.ended ? 'MATCH OVER' : 'CONFIRM EXCHANGE'}
-    </button>
+    {#if matchState.ended}
+      <button class="confirm next" onclick={nextMatch}>NEXT MATCH</button>
+    {:else}
+      <button class="confirm" onclick={() => void sk?.confirm(elapsed)}>CONFIRM EXCHANGE</button>
+    {/if}
   {:else}
     <div class="waiting">
-      <p>{live.error ? live.error : `Waiting for a match on mat ${mat}.`}</p>
-      <p class="dim">This screen follows the mat. It fills in when a match is up.</p>
+      {#if live.error && queue.length === 0}
+        <p>{live.error}</p>
+      {:else if exhausted || (queue.length > 0 && !firstOpen())}
+        <p>Every match on mat {mat} is done.</p>
+        <p class="dim">Nothing more is scheduled here. Check with the organizer.</p>
+      {:else}
+        <p>Waiting for a match on mat {mat}.</p>
+        <p class="dim">This screen follows the mat. It fills in when a match is up.</p>
+      {/if}
     </div>
   {/if}
 
@@ -207,6 +297,16 @@
         void sk?.undo(elapsed);
       }}
       onCancel={() => (askUndo = false)}
+    />
+  {/if}
+
+  {#if askForfeit}
+    <ConfirmDialog
+      headline="{nameOf(askForfeit)} forfeits?"
+      detail="Recorded 0–8. {nameOf(askForfeit === 'red' ? 'blue' : 'red')} takes the win and the match points; {nameOf(askForfeit)} earns none."
+      confirmLabel="Yes, {nameOf(askForfeit)} forfeits"
+      onConfirm={() => forfeit(askForfeit!)}
+      onCancel={() => (askForfeit = null)}
     />
   {/if}
 
@@ -309,6 +409,29 @@
   .reset:active {
     filter: brightness(1.35);
   }
+  .result {
+    align-self: stretch;
+    display: grid;
+    align-content: center;
+    gap: 0.3rem;
+    padding: 0.6rem 0.4rem;
+    border: 2px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--panel-2);
+  }
+  .outcome {
+    font-size: clamp(0.9rem, 2.4vh, 1.2rem);
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .final {
+    font-size: clamp(1.4rem, 5vh, 2.6rem);
+    font-weight: 800;
+    line-height: 1;
+  }
   .sync {
     font-size: 0.75rem;
     color: var(--ink-dim);
@@ -333,6 +456,12 @@
   .confirm:disabled {
     background: var(--panel-2);
     color: var(--ink-dim);
+  }
+  /* The same slot, a different job: the one press that moves the mat on. Neutral rather
+     than green, so a thumb that has been hitting Confirm all match notices the change. */
+  .confirm.next {
+    background: var(--ink);
+    color: #0d0f14;
   }
   .confirm:active {
     filter: brightness(1.3);

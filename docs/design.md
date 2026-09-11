@@ -545,6 +545,14 @@ conditions, **the cap takes precedence**.
 8** — point difference feeds two of the four ranking indices, so clamping would quietly distort the
 standings. That leaves forfeits (recorded 8–0) as the only place 8 is a hard number.
 
+### After the match
+
+**The result stays on screen until the score keeper presses *Next match*.** The clock controls give
+way to the outcome and the final score, and *Confirm exchange* becomes *Next match*. The mat does
+not move on by itself: when it did, the final score was replaced by the next two names the instant
+the end was written, before anyone had read it or read it back to the head referee. **Forfeits ask
+first**, for the same reason undo does — they end the match, and a menu tap should not.
+
 ### Corner controls — rare, destructive, out of the way
 
 Two controls sit outside the main grid, because they are unusual and damaging and should not compete
