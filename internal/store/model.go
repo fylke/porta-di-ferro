@@ -36,8 +36,12 @@ type Match struct {
 
 // Pool is a group of competitors who each fence all the others once.
 type Pool struct {
-	Number      int      `json:"number"`
-	Mat         int      `json:"mat"`
+	Number int `json:"number"`
+	Mat    int `json:"mat"`
+	// Sequence is the pool's place in its mat's queue. The generator sets it to the pool
+	// number, so the default order is by number; the organizer's override moves it. A
+	// file from before the field existed has zeros throughout, which reads the same way.
+	Sequence    int      `json:"sequence,omitempty"`
 	Competitors []string `json:"competitors"`
 	Matches     []Match  `json:"matches"`
 }

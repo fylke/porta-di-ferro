@@ -81,7 +81,7 @@ func Generate(t store.Tournament, competitors []store.Competitor, lim Limits) (s
 		// more than throughput: pool N on mat ((N-1) mod mats)+1. With two mats that is
 		// exactly design §6, odd pools to mat 1 and even to mat 2; with four, pools 1
 		// and 5 share mat 1.
-		mat := ((number - 1) % t.Mats) + 1
+		mat := DefaultMat(number, t.Mats)
 		ids := make([]string, len(bucket))
 		for j, c := range bucket {
 			ids[j] = c.ID
@@ -91,6 +91,7 @@ func Generate(t store.Tournament, competitors []store.Competitor, lim Limits) (s
 		pools = append(pools, store.Pool{
 			Number:      number,
 			Mat:         mat,
+			Sequence:    number,
 			Competitors: ids,
 			Matches:     matches,
 		})

@@ -162,7 +162,7 @@
       <Setup {snapshot} onchange={refresh} />
     </div>
 
-    <Pools {snapshot} />
+    <Pools {snapshot} onchange={refresh} />
   {/if}
 </main>
 

@@ -31,8 +31,13 @@ type MatchView struct {
 
 // PoolView is a pool with its matches and its live standings.
 type PoolView struct {
-	Number      int                   `json:"number"`
-	Mat         int                   `json:"mat"`
+	Number int `json:"number"`
+	Mat    int `json:"mat"`
+	// Sequence is the pool's place in its mat's queue; Overridden says the organizer put
+	// it somewhere other than where the default mapping would, so the screens can show
+	// that it was deliberate.
+	Sequence    int                   `json:"sequence"`
+	Overridden  bool                  `json:"overridden"`
 	Competitors []string              `json:"competitors"`
 	Matches     []MatchView           `json:"matches"`
 	Standings   []tournament.Standing `json:"standings"`
@@ -53,7 +58,13 @@ type Snapshot struct {
 }
 
 // snapshot builds the whole derived picture. It is deliberately recomputed rather than
-// cached: a tournament is at most 56 matches, and a cache is a second source of truth.
+// cached: a tournament is at most a few hundred matches, and a cache is a second source
+// of truth.
+//
+// Pools come out in run order -- by mat, then by the organizer's queue -- rather than by
+// number. Every consumer that filters pools by mat then has the mat's running order for
+// free, which is what keeps the score keeper, the displays and the roster agreeing on
+// which pool a mat picks up next.
 func (s *Server) snapshot() (Snapshot, error) {
 	competitors, err := s.store.Competitors()
 	if err != nil {
@@ -78,7 +89,7 @@ func (s *Server) snapshot() (Snapshot, error) {
 		Dir:         s.store.Dir(),
 	}
 
-	for _, p := range t.Pools {
+	for _, p := range tournament.RunOrder(t) {
 		states := map[string]match.State{}
 		views := make([]MatchView, 0, len(p.Matches))
 		complete := true
@@ -112,6 +123,8 @@ func (s *Server) snapshot() (Snapshot, error) {
 		snap.Pools = append(snap.Pools, PoolView{
 			Number:      p.Number,
 			Mat:         p.Mat,
+			Sequence:    p.Sequence,
+			Overridden:  tournament.Overridden(t, p.Number),
 			Competitors: p.Competitors,
 			Matches:     views,
 			Standings:   tournament.Rank(s.rules, p, byID, states, t.Seed),
@@ -119,7 +132,8 @@ func (s *Server) snapshot() (Snapshot, error) {
 		})
 	}
 
-	// A mat runs its pools in order: when one finishes, that mat picks up its next.
+	// A mat runs its pools in queue order, which is the order snap.Pools is already in:
+	// when one finishes, that mat picks up its next.
 	for mat := 1; mat <= t.Mats; mat++ {
 		snap.Mats[mat] = ""
 		for _, p := range snap.Pools {

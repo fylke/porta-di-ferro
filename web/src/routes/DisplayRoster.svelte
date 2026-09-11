@@ -23,7 +23,10 @@
   <div class="pools">
     {#each live.snapshot?.pools ?? [] as pool (pool.number)}
       <section>
-        <h2>Pool {pool.number} <span class="mat">Mat {pool.mat}</span></h2>
+        <h2>
+          Pool {pool.number}
+          <span class="mat">Mat {pool.mat}{#if pool.overridden} &middot; moved{/if}</span>
+        </h2>
         <ol>
           {#each pool.matches as m (m.id)}
             <li class={m.status}>

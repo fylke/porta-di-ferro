@@ -18,6 +18,8 @@ type matchView struct {
 type poolView struct {
 	Number      int                   `json:"number"`
 	Mat         int                   `json:"mat"`
+	Sequence    int                   `json:"sequence"`
+	Overridden  bool                  `json:"overridden"`
 	Competitors []string              `json:"competitors"`
 	Matches     []matchView           `json:"matches"`
 	Standings   []tournament.Standing `json:"standings"`

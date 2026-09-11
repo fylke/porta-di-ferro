@@ -794,7 +794,9 @@ Deliberate, and listed so nobody is surprised on the day:
 7. **Up to 4 mats, up to 8 pools** — 56 competitors per run. Mat assignment generalises to pool *N* on
    mat *((N−1) mod mats) + 1*. *(Built: the ceiling is a set of three numbers, and the assignment rule
    was already the general one.)*
-8. **Organizer override of mat assignment.**
+8. **Organizer override of mat assignment.** *(Built: move a pool to another mat, where it queues last,
+   or step it up or down its mat's queue. Every screen reads pools in run order, so all of them follow;
+   the organizer view and the roster mark a moved pool as moved.)*
 9. **Concurrent disciplines** — several runs at once, which requires a distinct port and data
    directory per instance.
 10. **Score keeper client handover** — graceful (planned: bathroom break, shift change) and ungraceful

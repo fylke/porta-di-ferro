@@ -56,6 +56,10 @@ export interface Standing {
 export interface PoolView {
   number: number;
   mat: number;
+  /** The pool's place in its mat's queue. Pools arrive sorted by mat, then by this. */
+  sequence: number;
+  /** The organizer put it somewhere other than the default mapping would. */
+  overridden: boolean;
   competitors: string[];
   matches: MatchView[];
   standings: Standing[];
@@ -109,6 +113,10 @@ export const api = {
   saveTournament: (mats: number, minPoolSize: number, maxPoolSize: number) =>
     req<unknown>('PUT', '/api/tournament', { mats, minPoolSize, maxPoolSize }),
   generatePools: () => req<unknown>('POST', '/api/tournament/pools'),
+  movePool: (number: number, mat: number) =>
+    req<unknown>('PATCH', `/api/tournament/pools/${number}`, { mat }),
+  reorderPool: (number: number, move: 'up' | 'down') =>
+    req<unknown>('PATCH', `/api/tournament/pools/${number}`, { move }),
   events: (matchId: string, after = 0) =>
     req<Event[]>('GET', `/api/matches/${matchId}/events?after=${after}`),
   pushEvents: (matchId: string, events: Event[]) =>

@@ -127,7 +127,10 @@ Tournaments progress through competitor intake, pool generation, schedule assign
 flowchart TD
     A[Add / Register Competitors] --> B[Generate Pools]
     B --> C[Generate Schedule & Assign Mats]
-    C --> D[Execute Matches at Mats]
+    C --> C2{Organizer override?}
+    C2 -- Move / reorder pool --> C3[Pool.Sequence updated; snapshot serves pools in run order]
+    C2 -- No --> D
+    C3 --> D[Execute Matches at Mats]
     D --> E{Competitor Withdrawn?}
 
     E -- Yes --> F[Void All Matches for Withdrawn Competitor]
