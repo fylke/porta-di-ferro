@@ -6,15 +6,47 @@ import { Live } from '../lib/live.svelte';
 import { Clock } from '../lib/clock.svelte';
 import type { MatchView, Snapshot } from '../api';
 
+/** Every match in the tournament: the pools in run order, then the bracket. */
+export function allMatches(snapshot: Snapshot | null): MatchView[] {
+  return [...(snapshot?.pools ?? []).flatMap((p) => p.matches), ...(snapshot?.bracket?.matches ?? [])];
+}
+
 export function matchOn(snapshot: Snapshot | null, mat: number): MatchView | null {
   const id = snapshot?.mats?.[String(mat)] ?? '';
   if (!id) return null;
-  return snapshot?.pools.flatMap((p) => p.matches).find((m) => m.id === id) ?? null;
+  return allMatches(snapshot).find((m) => m.id === id) ?? null;
 }
 
-/** Every match on a mat, in the order the mat runs them: pool by pool, then by order. */
+/**
+ * Every match on a mat, in the order the mat runs them: pool by pool, then by order,
+ * then the bracket matches assigned to the mat. A bracket match whose competitors are
+ * not known yet is not something a mat can run and is left out until they are.
+ */
 export function matchesOn(snapshot: Snapshot | null, mat: number): MatchView[] {
-  return (snapshot?.pools ?? []).filter((p) => p.mat === mat).flatMap((p) => p.matches);
+  const pools = (snapshot?.pools ?? []).filter((p) => p.mat === mat).flatMap((p) => p.matches);
+  const bracket = (snapshot?.bracket?.matches ?? []).filter((m) => m.mat === mat && m.red && m.blue);
+  return [...pools, ...bracket];
+}
+
+/** Bracket matches on a mat still waiting for a feeder to be decided. */
+export function unfilledOn(snapshot: Snapshot | null, mat: number): MatchView[] {
+  return (snapshot?.bracket?.matches ?? []).filter((m) => m.mat === mat && (!m.red || !m.blue));
+}
+
+/** "Quarter-final 2", "Semi-final 1", "Bronze match", "Final". */
+export function roundLabel(m: { round?: string; slot?: number }): string {
+  switch (m.round) {
+    case 'quarter':
+      return `Quarter-final ${m.slot ?? ''}`.trim();
+    case 'semi':
+      return `Semi-final ${m.slot ?? ''}`.trim();
+    case 'bronze':
+      return 'Bronze match';
+    case 'final':
+      return 'Final';
+    default:
+      return '';
+  }
 }
 
 export function nextOn(snapshot: Snapshot | null, mat: number): MatchView | null {
@@ -26,6 +58,18 @@ export function nextOn(snapshot: Snapshot | null, mat: number): MatchView | null
     .filter((m) => m.status !== 'complete');
   const i = onMat.findIndex((m) => m.id === current.id);
   return i >= 0 && i + 1 < onMat.length ? onMat[i + 1] : null;
+}
+
+/**
+ * The matches after the current one on a mat, in running order, up to count. The current
+ * match is whatever the mat is showing -- possibly a finished one the score keeper is
+ * holding -- so "after" is by position, not by status.
+ */
+export function upcomingOn(snapshot: Snapshot | null, mat: number, count: number): MatchView[] {
+  const current = matchOn(snapshot, mat);
+  const onMat = matchesOn(snapshot, mat);
+  const i = current ? onMat.findIndex((m) => m.id === current.id) : -1;
+  return onMat.slice(i + 1).filter((m) => m.status !== 'complete').slice(0, count);
 }
 
 export function nameLookup(snapshot: Snapshot | null): (id: string) => string {

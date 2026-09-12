@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { keepAwake } from '../lib/wakelock';
-  import { Live, nameLookup } from './lib-display.svelte';
+  import { Live, nameLookup, roundLabel } from './lib-display.svelte';
 
   /** Every match in the event and where it stands. The screen competitors check. */
   const live = new Live();
@@ -41,6 +41,30 @@
         </ol>
       </section>
     {/each}
+    {#if live.snapshot?.bracket}
+      <section class="bracket">
+        <h2>Eliminations</h2>
+        <ol>
+          {#each live.snapshot.bracket.matches as m (m.id)}
+            <li class={m.status}>
+              <span class="n">{roundLabel(m)}</span>
+              <span class="red">{m.red ? name(m.red) : '—'}</span>
+              <span class="score mono">
+                {#if m.status === 'pending'}v{:else}{m.state.red.score}–{m.state.blue.score}{/if}
+              </span>
+              <span class="blue">{m.blue ? name(m.blue) : '—'}</span>
+            </li>
+          {/each}
+        </ol>
+        {#if live.snapshot.bracket.podium.first}
+          <p class="podium">
+            <strong>1.</strong> {name(live.snapshot.bracket.podium.first)}
+            <strong>2.</strong> {name(live.snapshot.bracket.podium.second)}
+            {#if live.snapshot.bracket.podium.third}<strong>3.</strong> {name(live.snapshot.bracket.podium.third)}{/if}
+          </p>
+        {/if}
+      </section>
+    {/if}
     {#if (live.snapshot?.pools ?? []).length === 0}
       <p class="empty">Pools have not been drawn yet.</p>
     {/if}
@@ -55,6 +79,24 @@
   h1 {
     margin: 0 0 1rem;
     font-size: clamp(1.3rem, 4vh, 2.2rem);
+  }
+  .bracket {
+    grid-column: 1 / -1;
+  }
+  .bracket .n {
+    min-width: 7.5rem;
+    font-size: 0.8em;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .podium {
+    margin: 0.6rem 0 0;
+    display: flex;
+    gap: 1rem;
+    font-size: clamp(1rem, 3vh, 1.6rem);
+  }
+  .podium strong {
+    color: var(--amber-bright);
   }
   .pools {
     display: grid;

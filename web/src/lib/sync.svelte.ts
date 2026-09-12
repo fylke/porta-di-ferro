@@ -6,12 +6,18 @@
  * Retries are safe because the server is idempotent on (match, seq), so this needs no
  * deduplication logic and no acknowledgement protocol -- just "try again later".
  */
-import { api } from '../api';
+import { api, ApiError, type Client } from '../api';
 import * as db from './db';
 import { differences } from './drift';
 import { MSL, replay, type Event, type State } from './match';
+import { clientId } from './presence.svelte';
 
-export type SyncState = 'idle' | 'pushing' | 'offline';
+/**
+ * 'stale' is the one state a match does not come back from on its own: another device
+ * has taken this match over, and whatever this one still holds has been set aside for
+ * the organizer (design §7 item 10).
+ */
+export type SyncState = 'idle' | 'pushing' | 'offline' | 'stale';
 
 let flushingAll = false;
 
@@ -37,7 +43,21 @@ export async function flushAll(except = ''): Promise<void> {
       const remote = await api.events(id, 0);
       const have = new Set(remote.map((e) => e.seq));
       const missing = local.filter((e) => !have.has(e.seq));
-      if (missing.length > 0) await api.pushEvents(id, missing);
+      if (missing.length === 0) continue;
+      // Claim it first, the way the open match was claimed. If somebody else holds it
+      // now, push anyway on a dead epoch: the server sets the events aside and the
+      // organizer sees them, which beats leaving them here where nobody will.
+      let epoch = 0;
+      try {
+        epoch = (await api.claim(id, clientId())).epoch;
+      } catch (e) {
+        if (!(e instanceof ApiError) || e.status !== 409) throw e;
+      }
+      try {
+        await api.pushEvents(id, missing, { client: clientId(), epoch });
+      } catch (e) {
+        if (!(e instanceof ApiError) || e.status !== 409) throw e;
+      }
     }
   } catch {
     // The LAN went again. The next successful flush of the open match tries the rest.
@@ -53,6 +73,17 @@ export class MatchLog {
   pendingCount = $state(0);
   /** False when the log lives only in memory, so a refresh would lose it. */
   durable = $state(true);
+
+  /**
+   * This device's tenure of the match: the epoch the server granted, or 0 until it has.
+   * Every push is stamped with it. A device that never reached the server -- a match run
+   * with no LAN -- claims on its first successful contact and pushes after.
+   */
+  epoch = $state(0);
+  /** Set when another live device holds this match. The score keeper decides what to do. */
+  contested = $state<Client | null>(null);
+  /** How many of this device's events the server set aside when it found them stale. */
+  quarantined = $state(0);
 
   /**
    * The state the server derived from this log the last time it answered a push. The
@@ -114,9 +145,57 @@ export class MatchLog {
     if (missing.length > 0) await db.append(this.matchId, missing);
 
     this.durable = db.usable();
+    // Claimed as soon as it is opened, backlog or not, so a second device opening the
+    // same mat is told this one is here rather than finding the match free.
+    await this.claim();
     await this.flush();
     if (this.sync === 'idle') void flushAll(this.matchId);
     this.start();
+  }
+
+  /**
+   * Asks the server for the match. Granted when nobody holds it, or the holder is this
+   * device, or the holder has gone quiet; refused when another live device has it, in
+   * which case `contested` names it and nothing is pushed until the score keeper takes
+   * over or walks away.
+   */
+  private async claim(force = false): Promise<boolean> {
+    if (this.epoch > 0 && !force) return true;
+    try {
+      const res = await api.claim(this.matchId, clientId(), force);
+      this.epoch = res.epoch;
+      this.contested = null;
+      return true;
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        const holder = (e.body as { holder?: Client } | null)?.holder ?? null;
+        this.contested = holder ?? { id: '?', role: 'scorekeeper', name: 'another device', lastSeen: '', alive: true };
+        return false;
+      }
+      // Offline. The claim happens on the first contact that works.
+      return false;
+    }
+  }
+
+  /** The score keeper has chosen to take the match from the device that holds it. */
+  async takeOver(): Promise<void> {
+    if (await this.claim(true)) await this.flush();
+  }
+
+  /**
+   * The graceful half of handover: everything this device holds goes to the server, then
+   * the match is let go, so the next device claims it without having to take it over.
+   */
+  async release(): Promise<void> {
+    this.stop();
+    await this.flush();
+    if (this.epoch > 0 && this.sync === 'idle') {
+      try {
+        await api.releaseClaim(this.matchId, clientId());
+      } catch {
+        // The server will treat this device as gone soon enough.
+      }
+    }
   }
 
   /** Appends to the log and returns. The push happens after; so does the disk write. */
@@ -161,16 +240,22 @@ export class MatchLog {
 
   /** Hands everything unsent to the server. Safe to call at any time, from anywhere. */
   async flush(): Promise<void> {
-    if (this.sync === 'pushing') return;
+    if (this.sync === 'pushing' || this.sync === 'stale') return;
     const batch = this.outstanding();
     this.pendingCount = batch.length;
     if (batch.length === 0) {
       if (this.sync !== 'idle') this.sync = 'idle';
       return;
     }
+    // Nothing is pushed under nobody's name: the claim comes first, and a refused claim
+    // leaves the backlog here for the score keeper to decide about.
+    if (!(await this.claim())) {
+      if (!this.contested) this.sync = 'offline';
+      return;
+    }
     this.sync = 'pushing';
     try {
-      const res = await api.pushEvents(this.matchId, batch);
+      const res = await api.pushEvents(this.matchId, batch, { client: clientId(), epoch: this.epoch });
       for (const e of batch) this.pushed.add(e.seq);
       this.check(res.state);
       this.pendingCount = 0;
@@ -178,7 +263,15 @@ export class MatchLog {
       // Reaching the server with this match's backlog means the LAN is back: the matches
       // finished before it are waiting too.
       void flushAll(this.matchId);
-    } catch {
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        // Another device has taken this match over. The server has set these events
+        // aside for the organizer; this device stops writing and says so.
+        this.quarantined = batch.length;
+        this.sync = 'stale';
+        this.stop();
+        return;
+      }
       // The LAN is down, or the server is. Neither stops the match: the log is already on
       // this device and the next flush will carry it.
       this.sync = 'offline';

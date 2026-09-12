@@ -8,11 +8,14 @@
   import EndDialog from './EndDialog.svelte';
   import ConfirmDialog from './ConfirmDialog.svelte';
   import OptionsSheet from './OptionsSheet.svelte';
-  import { matchesOn } from './lib-display.svelte';
+  import { matchesOn, roundLabel, unfilledOn } from './lib-display.svelte';
   import { MSL, replay, type Side } from '../lib/match';
   import * as db from '../lib/db';
   import { ended, penaltyLoss } from '../lib/outcome';
   import { summarise } from '../lib/drift';
+  import { inSuddenDeath, suddenDeathDecided as decidedOnSuddenDeath } from '../lib/knockout';
+  import { Heartbeat } from '../lib/presence.svelte';
+  import { navigate } from '../router.svelte';
 
   let { mat, variant = 'panels' }: { mat: number; variant?: string } = $props();
 
@@ -28,17 +31,40 @@
   // Which final-exchange dialog the head referee has already answered "continue" to.
   let dismissedFinal = $state(0);
 
+  // This device's heartbeat: which mat it sits at and which match it is on. The server
+  // uses it for two things -- letting another device take over when this one dies, and
+  // pointing the displays at the match this one is holding, finished or not.
+  const beat = new Heartbeat('scorekeeper');
+
   onMount(() => {
     live.start();
     clock.start();
+    beat.start({ mat });
     const release = keepAwake();
     return () => {
       clock.stop();
       live.stop();
+      beat.stop();
       sk?.log.stop();
       release();
     };
   });
+
+  $effect(() => {
+    beat.update({ mat, match: matchId });
+  });
+
+  /**
+   * Hand over this mat: everything this device holds goes to the server, the match is
+   * let go, and the device leaves the mat -- so the next one claims without having to
+   * take anything over (design §7 item 10, the graceful case).
+   */
+  async function handOver() {
+    menuOpen = false;
+    await sk?.log.release();
+    await beat.release();
+    navigate('/score');
+  }
 
   // Every match on this mat, in running order. The server's own idea of which one is up
   // is the first of these that is not complete -- but this device does not follow that
@@ -106,6 +132,9 @@
 
   /** The score keeper has read the result and is ready for the next two. */
   function nextMatch() {
+    // Let go of the finished match on the way out, so the log is flushed and the claim
+    // released before the next device could want it.
+    void sk?.log.release();
     const i = queue.findIndex((m) => m.id === matchId);
     const after = queue.slice(i + 1).find(isOpen);
     const elsewhere = queue.find((m) => isOpen(m) && m.id !== matchId);
@@ -178,17 +207,42 @@
   const elapsed = $derived(sk && matchState ? clock.elapsed(matchState, sk.runningSince) : 0);
   const flashing = $derived(matchState ? isFlashing(elapsed, matchState.ended) : false);
 
+  /**
+   * Sudden death (design §7 item 3, MSL's SM rules): a bracket match cannot be drawn.
+   * When the final exchange leaves the scores level, the match goes on -- the clock keeps
+   * running, no dialog -- and the first point wins. The engine still raises the
+   * final-exchange question on every confirmation past the threshold; this is the client
+   * declining to ask it while the scores are level, and asking a different one once they
+   * are not.
+   */
+  const knockout = $derived(!!view?.round);
+  const suddenDeath = $derived(inSuddenDeath(matchState, knockout));
+  // Whether this match reached the final-exchange threshold with the scores level, which
+  // is what makes the next decisive exchange sudden death rather than an ordinary final
+  // exchange the referee may continue from.
+  let wasLevelAtTime = $state(false);
+  $effect(() => {
+    if (suddenDeath) wasLevelAtTime = true;
+    if (!matchId || matchState?.ended) wasLevelAtTime = false;
+  });
+  const suddenDeathDecided = $derived(decidedOnSuddenDeath(matchState, knockout, wasLevelAtTime));
+
   const showEndDialog = $derived(
     !!matchState &&
       !matchState.ended &&
       matchState.pending !== 'none' &&
-      !(matchState.pending === 'final_exchange' && dismissedFinal === matchState.lastSeq),
+      !suddenDeath &&
+      !(matchState.pending === 'final_exchange' && !suddenDeathDecided && dismissedFinal === matchState.lastSeq),
   );
 
   // The end dialog's wording. A penalty loss names the loser and why, because that is
   // the one result a head referee will be asked to justify; the others name the winner.
   const capText = $derived.by((): { headline: string; detail: string } => {
     if (!matchState || !sk) return { headline: '', detail: '' };
+    if (matchState.pending === 'final_exchange' && suddenDeathDecided) {
+      const leader = matchState.red.score > matchState.blue.score ? names.red : names.blue;
+      return { headline: `${leader} wins on sudden death`, detail: `${matchState.red.score}–${matchState.blue.score}` };
+    }
     if (matchState.pending === 'final_exchange') {
       return { headline: 'Was that the final exchange?', detail: '' };
     }
@@ -213,7 +267,7 @@
 
   async function secondAction() {
     if (!matchState) return;
-    if (matchState.pending === 'final_exchange') {
+    if (matchState.pending === 'final_exchange' && !suddenDeathDecided) {
       // Play continues, and the dialog comes back after the next confirmation. Nothing is
       // written: "we carried on" is not an event, and a record of it would only be noise.
       dismissedFinal = matchState.lastSeq;
@@ -299,6 +353,9 @@
           <span>Colours and sides&hellip;</span>
         </button>
         <div class="menu-head">This screen</div>
+        <button role="menuitem" onclick={() => void handOver()}>
+          <span>Hand over this mat</span><span class="why">to another device</span>
+        </button>
         <a role="menuitem" href="/score/{mat}?variant={variant === 'panels' ? 'edge' : 'panels'}">
           Try the other layout
         </a>
@@ -312,6 +369,9 @@
 
       <div class="centre" class:flashing>
         <div class="time mono">{formatClock(elapsed)}</div>
+        {#if suddenDeath}
+          <div class="sudden" role="status">SUDDEN DEATH<span>first point wins</span></div>
+        {/if}
         {#if matchState.ended}
           <!-- The result holds the centre until Next match is pressed, so it can actually be
                read, and read back to the head referee, before the next two names appear. -->
@@ -342,6 +402,8 @@
             Mat {mat} &middot; showing the server&rsquo;s scoring
           {:else if live.stale}
             Offline &middot; schedule from {new Date(live.cachedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          {:else if view.round}
+            Mat {mat} &middot; {roundLabel(view)}
           {:else}
             Mat {mat} &middot; pool {view.pool}
           {/if}
@@ -351,6 +413,22 @@
       {@render panel(order[1])}
     </div>
 
+    {#if sk.log.sync === 'stale'}
+      <!-- Another device took this match over. This one is done with it: its unsent
+           exchanges are with the organizer, and nothing it writes now would be kept. -->
+      <div class="drift stale" role="alert">
+        <span>
+          Another device has taken over this match.
+          {#if sk.log.quarantined > 0}
+            {sk.log.quarantined} exchange{sk.log.quarantined === 1 ? '' : 's'} from this device
+            {sk.log.quarantined === 1 ? 'was' : 'were'} set aside for the organizer.
+          {/if}
+        </span>
+        <span class="drift-actions">
+          <button onclick={() => void handOver()}>Leave the mat</button>
+        </span>
+      </div>
+    {/if}
     {#if sk.log.drift}
       <!-- The two engines disagree about the same log. Non-blocking: the match goes on,
            and the score keeper decides whose numbers it goes on under. Either way the
@@ -369,12 +447,17 @@
     {#if matchState.ended}
       <button class="confirm next" onclick={nextMatch}>NEXT MATCH</button>
     {:else}
-      <button class="confirm" onclick={() => void sk?.confirm(elapsed)}>CONFIRM EXCHANGE</button>
+      <button class="confirm" disabled={sk.log.sync === 'stale'} onclick={() => void sk?.confirm(elapsed)}>
+        CONFIRM EXCHANGE
+      </button>
     {/if}
   {:else}
     <div class="waiting">
       {#if live.error && queue.length === 0}
         <p>{live.error}</p>
+      {:else if unfilledOn(live.snapshot, mat).length > 0}
+        <p>Waiting for the {roundLabel(unfilledOn(live.snapshot, mat)[0]).toLowerCase()}.</p>
+        <p class="dim">Its competitors come from matches still running on the other mats.</p>
       {:else if exhausted || (queue.length > 0 && !firstOpen())}
         <p>Every match on mat {mat} is done.</p>
         <p class="dim">Nothing more is scheduled here. Check with the organizer.</p>
@@ -383,6 +466,18 @@
         <p class="dim">This screen follows the mat. It fills in when a match is up.</p>
       {/if}
     </div>
+  {/if}
+
+  {#if sk?.log.contested}
+    <!-- Another live device holds this match. Taking over is deliberate: whatever that
+         device still has unsent will be set aside for the organizer, not merged. -->
+    <ConfirmDialog
+      headline="Mat {mat} is being scored by {sk.log.contested.name}"
+      detail="Take it over on this device? Anything the other device has not yet sent will be set aside for the organizer rather than counted."
+      confirmLabel="Take over on this device"
+      onConfirm={() => void sk?.log.takeOver()}
+      onCancel={() => navigate('/score')}
+    />
   {/if}
 
   {#if optionsOpen && sk}
@@ -402,6 +497,7 @@
       pending={matchState.pending}
       headline={capText.headline}
       detail={capText.detail}
+      second={suddenDeathDecided ? 'Undo last exchange' : ''}
       onEnd={() => void endMatch()}
       onSecond={() => void secondAction()}
     />
@@ -546,6 +642,25 @@
   .reset:active {
     filter: brightness(1.35);
   }
+  /* The one time the centre says something other than the clock while the match is on.
+     Amber, not red: it is a state of the match, and red is the flash. */
+  .sudden {
+    display: grid;
+    gap: 0.15rem;
+    padding: 0.4rem 0.5rem;
+    border-radius: var(--radius);
+    background: var(--amber-bright);
+    color: #1a1200;
+    font-size: clamp(0.85rem, 2.2vh, 1.1rem);
+    font-weight: 800;
+    letter-spacing: 0.08em;
+  }
+  .sudden span {
+    font-size: 0.7em;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: lowercase;
+  }
   .result {
     align-self: stretch;
     display: grid;
@@ -615,6 +730,14 @@
     color: #1a1200;
     font-size: 0.9rem;
     font-weight: 600;
+  }
+  .drift.stale {
+    background: var(--red);
+    color: var(--ink);
+  }
+  .drift.stale button {
+    background: var(--ink);
+    color: #0d0f14;
   }
   .drift-actions {
     display: flex;

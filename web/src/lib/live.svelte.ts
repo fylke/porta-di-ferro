@@ -4,7 +4,7 @@
  * connection being up -- a display that loses the server shows stale data rather than
  * breaking (design decision 15).
  */
-import { api, type Snapshot } from '../api';
+import { api, type Presence, type Snapshot } from '../api';
 
 /** Where the last snapshot this device saw is kept, so a client can start with no server. */
 const CACHE = 'porta.snapshot';
@@ -27,6 +27,8 @@ export class Live {
   receivedAt = $state(0);
   connected = $state(false);
   error = $state('');
+  /** Who is connected and what has been set aside. Only the organizer view reads it. */
+  presence = $state<Presence | null>(null);
   /**
    * The last match whose log the organizer rewrote, with a nonce so two edits of the
    * same match in a row both register. A score keeper holding that match reloads it.
@@ -106,6 +108,7 @@ export class Live {
       try {
         const update = JSON.parse(ev.data) as { kind: string; match?: string; data: unknown };
         if (update.kind === 'state') this.snapshot = update.data as Snapshot;
+        if (update.kind === 'presence') this.presence = update.data as Presence;
         if (update.kind === 'log-replaced' && typeof update.match === 'string') {
           this.replaced = { match: update.match, nonce: Date.now() };
         }

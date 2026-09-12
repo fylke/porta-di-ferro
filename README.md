@@ -20,11 +20,18 @@ service, no account, no internet. Built by two members of
    if the PC is on more than one network it offers a picker so you can choose the one the
    tablets are on. Wi-Fi networks are listed by name, and the list follows the PC if you
    switch networks — no reload needed.
-4. Enter the competitors, pick the number of mats and the pool size, and draw the pools.
+4. Enter the competitors, pick the number of mats and the pool size, and draw the pools. When
+   every pool match is in, draw the eliminations from the same page; the mats pick the
+   quarter-finals up on their own.
 5. At each mat, open the address on a tablet or phone and pick the mat. That is the score
    keeper client.
-6. Put a spare screen on `/display/mats` for the scoreboard, or `/display/roster` for the
-   match list. Any browser on the venue wifi can open them — a spectator's phone included.
+6. Put a spare screen on `/display` and choose what it shows from the organizer page — or go
+   straight to `/display/mats` for the scoreboards, `/display/audience/1` for the audience
+   display with the on-deck list, or `/display/roster` for the match list. Any browser on the
+   venue wifi can open them — a spectator's phone included.
+7. To hand a mat to another tablet, pick *Hand over this mat* in the `…` menu; the new tablet
+   picks the mat and carries on. If a tablet dies mid-match, the new one takes over and
+   anything the old one had not sent is set aside for you on the organizer page.
 
 Everything is stored as plain JSON in a folder you own, so you can read it, back it up, and
 in a pinch fix it in a text editor.
@@ -40,6 +47,8 @@ day, a pool can be run on paper and entered afterwards.
 | `/score` | Score keeper — pick a mat |
 | `/display/mat/1`, `/display/mat/2` | One mat's scoreboard |
 | `/display/mats` | Every mat on one screen; `?ids=1,2` for a subset — with four mats, one screen between mats 1 and 2 and another between 3 and 4 beats one screen for the hall |
+| `/display/audience/1` | The audience display for a mat: the scoreboard, the result when decided, the next match, and the on-deck list |
+| `/display` | A screen the organizer assigns from the organizer page, and reassigns without touching it |
 | `/display/roster` | The match roster |
 | `/print/pools` | Printable pool sheets |
 | `/api/export.json` | The whole tournament as JSON |
@@ -49,12 +58,15 @@ day, a pool can be run on paper and entered afterwards.
 This is Milestone 1, scoped to run MSL's club event on 15 November 2026:
 
 - Up to 4 mats, up to 8 pools of up to 7 competitors — 56 per run
-- Pools only; eliminations are Milestone 2
+- Pools, then eliminations: top 8 by the overall ranking, single elimination with a bronze
+  match, sudden death instead of a draw
 - MSL's ruleset, hardcoded: 8 points or 3 minutes, differential scoring, the three-step
   warning ladder
 - Undo of the last confirmed exchange at the mat, and full history editing on the organizer
   page: a pencil on any match opens its log. Saving rewrites the log and keeps the previous
   version beside it as a backup
+- Score keeper handover, graceful or not, with a writer epoch per match so a lost tablet can
+  never write over its replacement
 - English only
 - Several disciplines are run one after another, as separate runs of the application
 

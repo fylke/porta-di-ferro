@@ -283,6 +283,12 @@ account of which matches it has finished, so *Next match* works with nobody to a
 back, it hands over every match log on the device the server is missing — not just the one on
 screen — because by then the earlier matches are closed and nobody would reopen them by hand.
 
+**One writer per match, made safe by an epoch.** A device claims a match before it writes and stamps
+every push with the epoch it was granted. A handover — graceful or not — moves the epoch on, and a
+push stamped with an older one is quarantined and shown to the organizer rather than appended or
+dropped (§7 item 10). A push with no stamp is the anonymous path — paper entry, the tests — and is
+accepted as it always was.
+
 Corrections made at the mat are appended as new events rather than mutating history: the score
 keeper's undo is a record that says "not that one", and the log still shows what was entered.
 
@@ -648,7 +654,8 @@ MSL's SM ruleset. Longsword scoring is used for all weapons at this stage.
 | Pool match points | Win **9**, draw **6**, loss **3** |
 | Forfeit | Recorded 0–8; winner takes 9 match points, forfeiter 0 |
 | Withdrawal during pools | Treated as if the competitor never participated — results retroactively voided |
-| Red / blue assignment | Fixed at pool creation, for every match in the pool |
+| Red / blue assignment | Fixed at pool creation, for every match in the pool; the higher seed takes red in the bracket |
+| Eliminations | Top 8 by the overall ranking, single elimination with a third-place match; a level score at the final exchange goes to sudden death, first point wins |
 
 ### Exchange scoring is differential
 
@@ -812,11 +819,18 @@ Deliberate, and listed so nobody is surprised on the day:
    Cancelling one is a tap on the warning button, not a second trip into the menu. *(Built. The
    question of a dialog per level was settled §4's way: none on choosing; the end-of-match dialog that
    a match loss raises is the same one a third ordinary warning raises, and it names the escalation.)*
-3. **Eliminations** — top 8 from the pools.
+3. **Eliminations** — top 8 from the pools. *(Built. The cut is the overall ranking across every pool
+   by the full index chain, once every pool match is in. Single elimination, seeded the standard way
+   — 1 v 8 and 4 v 5 feed one semi-final, 2 v 7 and 3 v 6 the other — with a match for third place,
+   as the SM rules run it. A field under eight cuts at four, under four at two. Same 8 points and 3
+   minutes as the pools; a bracket match cannot be drawn, so a level score at the final exchange goes
+   to **sudden death**, first point wins. Later rounds are derived from results, never stored, so a
+   corrected quarter-final corrects the semi-final on its own. Best-of-three finals stay Milestone 3.)*
 4. **Server-assigned displays** — a device opens `/display` and the organizer chooses what it shows,
    reassigning on the fly and seeing which screens are live. Added *alongside* URL addressing, which
    remains supported. Cheap by this point, because the connected-client registry already exists for
-   handover (item 10).
+   handover (item 10). *(Built. A screen heartbeats and renders whatever the answer says; the
+   assignment is kept on disk so a hall of screens survives the organizer's laptop rebooting.)*
 5. **Audience display**, a richer variant of the mat display:
    - the **winner and final scores, prominently**, when a match is decided
    - the **upcoming match** — competitor names, colour-coded red and blue — in a smaller but still clearly
@@ -824,6 +838,11 @@ Deliberate, and listed so nobody is surprised on the day:
    - an **"on deck" panel down the side** listing the next 3–5 matches, with red and blue background
      colour-coding per competitor. During pools this is what tells a competitor whether there is time
      to refill a water bottle or take a jacket off
+
+   *(Built, at `/display/audience/N`. The result stays up because **the mat follows its score
+   keeper**: the server points a mat at whatever match the live score keeper is holding, finished or
+   not, until *Next match* is pressed — so every display shows the winner for exactly as long as the
+   score keeper does, and none of them has to guess.)*
 6. **Competitor colour and side options**, reached from the `…` overflow menu (§4): change the
    competitors' colours away from the red/blue default, and swap which side each occupies — on the
    score keeper view and on the display **independently of each other**. Swapping sides risks
@@ -842,7 +861,11 @@ Deliberate, and listed so nobody is surprised on the day:
 10. **Score keeper client handover** — graceful (planned: bathroom break, shift change) and ungraceful
    (device died). Graceful flushes before releasing so nothing is lost; ungraceful increments a
    writer epoch, and any late events from the old device are quarantined and shown to the organizer
-   rather than silently dropped.
+   rather than silently dropped. *(Built. A device claims a match before it writes and stamps every
+   push with its epoch; a contested claim is refused with who holds it and can be taken over
+   explicitly; a claim on a dead device goes through without asking. The graceful case is *Hand over
+   this mat* in the `…` menu, and *Next match* releases the finished match on the way out. It needed
+   no round trip: heartbeats are `POST`s and the registry comes back over SSE.)*
 11. **Swedish localisation** alongside English.
 12. **PDF export** alongside JSON.
 13. **Club balancing in pool generation** — distribute competitors from the same club as evenly as
