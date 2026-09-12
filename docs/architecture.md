@@ -6,7 +6,7 @@ This document provides architectural diagrams for Porta di Ferro, illustrating c
 
 ## 1. System & Deployment Architecture
 
-Porta di Ferro runs as a single Go binary on the organizer's PC, embedding the Svelte 5 SPA via `//go:embed`. Devices connect locally across the venue LAN without requiring an external internet connection.
+Porta di Ferro runs as a single Go binary on the organizer's PC, embedding the Svelte 5 SPA via `//go:embed`. Devices connect locally across the venue LAN without requiring an external internet connection. Several disciplines at once are several processes: the first can spawn siblings (`POST /api/instances`) on the next free ports, each with its own data directory, and stops them when it exits.
 
 ```mermaid
 flowchart TB

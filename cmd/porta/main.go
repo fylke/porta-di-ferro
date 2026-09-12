@@ -31,6 +31,8 @@ var version = "dev"
 func main() {
 	dir := flag.String("dir", defaultDir(), "tournament data directory")
 	port := flag.Int("port", 8080, "port to listen on")
+	name := flag.String("name", "", "the discipline this run is for, shown on every page")
+	parent := flag.String("parent", "", "URL of the instance that started this one")
 	noBrowser := flag.Bool("no-browser", false, "do not open a browser on start")
 	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
@@ -45,7 +47,7 @@ func main() {
 		fatal("could not open the tournament directory %s: %v", *dir, err)
 	}
 
-	srv := httpapi.New(st, web.Assets())
+	srv := httpapi.New(st, web.Assets(), httpapi.Instance{Name: *name, Port: *port, Parent: *parent})
 	addr := fmt.Sprintf(":%d", *port)
 	httpServer := &http.Server{
 		Addr:    addr,
@@ -56,7 +58,7 @@ func main() {
 
 	addrs := lan.Addresses()
 	clients := clientURL(addrs, *port)
-	banner(addrs, *dir, *port)
+	banner(addrs, *dir, *port, *name)
 
 	go func() {
 		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -81,15 +83,21 @@ func main() {
 	case <-quit:
 	}
 
+	// Closing the discipline the organizer started closes the ones it started.
+	srv.StopChildren()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	httpServer.Shutdown(ctx)
 	fmt.Println("\nStopped. Your tournament is saved in", *dir)
 }
 
-func banner(addrs []lan.Address, dir string, port int) {
+func banner(addrs []lan.Address, dir string, port int, name string) {
 	fmt.Println()
-	fmt.Println("  Porta di Ferro", version)
+	if name != "" {
+		fmt.Println("  Porta di Ferro", version, "--", name)
+	} else {
+		fmt.Println("  Porta di Ferro", version)
+	}
 	fmt.Println()
 	fmt.Println("  Organizer      http://localhost:" + fmt.Sprint(port) + "/   (this PC only)")
 	if len(addrs) == 0 {

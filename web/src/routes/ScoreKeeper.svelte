@@ -337,7 +337,7 @@
           {:else if live.stale}
             Offline &middot; schedule from {new Date(live.cachedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           {:else}
-            Mat {mat} &middot; pool {view.pool}
+            {#if live.snapshot?.instance.name}{live.snapshot.instance.name} &middot; {/if}Mat {mat} &middot; pool {view.pool}
           {/if}
         </div>
       </div>

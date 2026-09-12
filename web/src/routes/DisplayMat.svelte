@@ -29,7 +29,7 @@
 
 <main>
   <div class="board">
-    <Scoreboard {mat} {match} {names} {elapsed} />
+    <Scoreboard {mat} {match} {names} {elapsed} discipline={live.snapshot?.instance.name ?? ''} />
   </div>
   {#if match?.state.ended || !match}
     <footer>

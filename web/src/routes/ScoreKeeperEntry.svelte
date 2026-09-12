@@ -40,6 +40,9 @@
 
 <main>
   <h1>Which mat?</h1>
+  {#if live.snapshot?.instance.name}
+    <p class="discipline">{live.snapshot.instance.name}</p>
+  {/if}
   {#if live.error && !live.snapshot}
     <p class="err">Cannot reach the server: {live.error}</p>
   {:else if live.stale}
@@ -78,6 +81,12 @@
   h1 {
     font-size: 2rem;
     margin: 0 0 1.5rem;
+  }
+  .discipline {
+    margin: -1rem 0 1.5rem;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--amber-bright);
   }
   .mats {
     display: grid;

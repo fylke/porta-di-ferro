@@ -54,6 +54,7 @@
       names={namesFor(live.snapshot, match)}
       elapsed={liveElapsed(match, live, clock.now)}
       {compact}
+      discipline={live.snapshot?.instance.name ?? ''}
     />
   {/each}
   {#if mats.length === 0}

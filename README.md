@@ -55,7 +55,8 @@ This is Milestone 1, scoped to run MSL's club event on 15 November 2026:
 - Undo of the last confirmed exchange. Deeper correction is Milestone 2, and until then the
   escape hatch is the JSON on disk
 - English only
-- Several disciplines are run one after another, as separate runs of the application
+- Several disciplines run at once, each its own run of the application on its own port and
+  data folder, started from the organizer page and named on every page
 
 The full picture is in [`docs/design.md`](docs/design.md); the engineering decisions and
 what was ruled out are in [`docs/tech-stack.md`](docs/tech-stack.md).
