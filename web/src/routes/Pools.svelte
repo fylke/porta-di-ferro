@@ -1,19 +1,54 @@
 <script lang="ts">
-  import type { Snapshot } from '../api';
+  import { api, type Snapshot } from '../api';
   import { nameLookup } from './lib-display.svelte';
 
-  /** The organizer's screen for a running tournament: matches, status, live standings. */
-  let { snapshot }: { snapshot: Snapshot } = $props();
+  /**
+   * The organizer's screen for a running tournament: matches, status, live standings --
+   * and the override of the mat assignment. Pools arrive in run order, by mat and then
+   * by queue, so the list reads the way the hall runs.
+   */
+  let { snapshot, onchange }: { snapshot: Snapshot; onchange: () => void } = $props();
 
   const name = $derived(nameLookup(snapshot));
   const fmt = (n: number) => (Number.isFinite(n) ? n.toFixed(2) : '0.00');
+  const mats = $derived(Array.from({ length: snapshot.tournament.mats }, (_, i) => i + 1));
+
+  let error = $state('');
+  async function override(run: () => Promise<unknown>) {
+    error = '';
+    try {
+      await run();
+      onchange();
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+    }
+  }
 </script>
 
-{#each snapshot.pools as pool (pool.number)}
+{#if error}<p class="err">{error}</p>{/if}
+
+{#each snapshot.pools as pool, i (pool.number)}
+  {#if i === 0 || snapshot.pools[i - 1].mat !== pool.mat}
+    <h3 class="mat-head">Mat {pool.mat}</h3>
+  {/if}
   <section>
     <h2>
       Pool {pool.number}
-      <span class="meta">Mat {pool.mat} &middot; {pool.complete ? 'complete' : 'in progress'}</span>
+      <span class="meta">{pool.complete ? 'complete' : 'in progress'}</span>
+      {#if pool.overridden}
+        <!-- Visible as an override, so nobody has to wonder why mat 2 is running pool 3. -->
+        <span class="tag override" title="Moved by the organizer from where the draw put it">moved</span>
+      {/if}
+      <span class="controls">
+        <label>
+          Mat
+          <select value={pool.mat} onchange={(e) => void override(() => api.movePool(pool.number, Number(e.currentTarget.value)))}>
+            {#each mats as m (m)}<option value={m}>{m}</option>{/each}
+          </select>
+        </label>
+        <button title="Run this pool earlier on its mat" aria-label="Move pool {pool.number} up" onclick={() => void override(() => api.reorderPool(pool.number, 'up'))}>&uarr;</button>
+        <button title="Run this pool later on its mat" aria-label="Move pool {pool.number} down" onclick={() => void override(() => api.reorderPool(pool.number, 'down'))}>&darr;</button>
+      </span>
     </h2>
 
     <div class="split">
@@ -77,13 +112,57 @@
     margin: 0 0 0.8rem;
     font-size: 1.1rem;
     display: flex;
-    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.4rem 0.8rem;
     align-items: baseline;
   }
   .meta {
     font-size: 0.85rem;
     font-weight: 400;
     color: var(--ink-dim);
+  }
+  .mat-head {
+    margin: 1.4rem 0 0.5rem;
+    font-size: 0.8rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+  .tag.override {
+    background: var(--amber);
+    color: #1a1200;
+  }
+  /* The override lives on the pool's own header, small and to the right: it is an escape
+     hatch for the day, not a setting anyone should be reaching for. */
+  .controls {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.8rem;
+    font-weight: 400;
+    color: var(--ink-dim);
+  }
+  .controls label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .controls select {
+    padding: 0.25rem 0.4rem;
+    font-size: 0.85rem;
+  }
+  .controls button {
+    padding: 0.25rem 0.55rem;
+    font-size: 0.9rem;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    color: var(--ink);
+  }
+  .err {
+    color: var(--amber-bright);
+    margin: 0 0 0.8rem;
   }
   .split {
     display: grid;

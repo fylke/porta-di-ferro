@@ -10,21 +10,23 @@ import (
 	"github.com/fylke/porta-di-ferro/internal/store"
 )
 
-// Limits are the MVP ceiling from design §6: up to 2 mats, up to 4 pools, up to 7
-// competitors each. Milestone 2 raises them to 4 mats and 8 pools; the code below is
-// already written in the general form, so that is a change to these numbers.
+// Limits are the ceiling a run of the application accepts. The code below is written in
+// the general form; the ceiling is only these numbers.
 type Limits struct {
 	MaxMats  int
 	MaxPools int
 	MaxPool  int
 }
 
-// MVPLimits is the ceiling the 15 November event runs under.
-func MVPLimits() Limits { return Limits{MaxMats: 2, MaxPools: 4, MaxPool: 7} }
+// DefaultLimits is the Milestone 2 ceiling (design §7 item 7): up to 4 mats and 8 pools
+// of up to 7, so 56 competitors per run. The MVP ran under 2, 4 and 7, and the mat
+// assignment below is the same rule at either size.
+func DefaultLimits() Limits { return Limits{MaxMats: 4, MaxPools: 8, MaxPool: 7} }
 
 // Generate draws the pools for a tournament: sizes honouring the configured minimum and
-// maximum with uneven sizes accepted, a running order that minimises consecutive matches
-// on a best-effort basis, and red and blue assigned for every match.
+// maximum with uneven sizes accepted, clubs spread across the pools as evenly as those
+// sizes allow, a running order that minimises consecutive matches on a best-effort basis,
+// and red and blue assigned for every match.
 //
 // Anything it could not satisfy comes back in Violations rather than being guaranteed
 // away (design §6 item 9).
@@ -66,20 +68,19 @@ func Generate(t store.Tournament, competitors []store.Competitor, lim Limits) (s
 	rng := rand.New(rand.NewSource(t.Seed))
 	rng.Shuffle(len(order), func(i, j int) { order[i], order[j] = order[j], order[i] })
 
-	// Dealt round-robin, so sizes differ by at most one. Club balancing is Milestone 2.
-	buckets := make([][]store.Competitor, count)
-	for i, c := range order {
-		b := i % count
-		buckets[b] = append(buckets[b], c)
-	}
+	// Dealt so that sizes differ by at most one and each club is spread as evenly as the
+	// sizes allow; what could not be spread is reported (clubs.go).
+	buckets := deal(order, count)
+	violations = append(violations, balance(buckets)...)
 
 	pools := make([]store.Pool, 0, count)
 	for i, bucket := range buckets {
 		number := i + 1
 		// Mat assignment is fixed and predictable, because confusion at the mat costs
-		// more than throughput. With two mats this is exactly design §6: odd pools to
-		// mat 1, even to mat 2.
-		mat := ((number - 1) % t.Mats) + 1
+		// more than throughput: pool N on mat ((N-1) mod mats)+1. With two mats that is
+		// exactly design §6, odd pools to mat 1 and even to mat 2; with four, pools 1
+		// and 5 share mat 1.
+		mat := DefaultMat(number, t.Mats)
 		ids := make([]string, len(bucket))
 		for j, c := range bucket {
 			ids[j] = c.ID
@@ -89,6 +90,7 @@ func Generate(t store.Tournament, competitors []store.Competitor, lim Limits) (s
 		pools = append(pools, store.Pool{
 			Number:      number,
 			Mat:         mat,
+			Sequence:    number,
 			Competitors: ids,
 			Matches:     matches,
 		})

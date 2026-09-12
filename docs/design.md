@@ -821,8 +821,11 @@ Deliberate, and listed so nobody is surprised on the day:
    log — no effect on the score, read by every screen through the same path as the score, and
    changeable with no server to talk to. The score keeper's own swap is per device.)*
 7. **Up to 4 mats, up to 8 pools** — 56 competitors per run. Mat assignment generalises to pool *N* on
-   mat *((N−1) mod mats) + 1*.
-8. **Organizer override of mat assignment.**
+   mat *((N−1) mod mats) + 1*. *(Built: the ceiling is a set of three numbers, and the assignment rule
+   was already the general one.)*
+8. **Organizer override of mat assignment.** *(Built: move a pool to another mat, where it queues last,
+   or step it up or down its mat's queue. Every screen reads pools in run order, so all of them follow;
+   the organizer view and the roster mark a moved pool as moved.)*
 9. **Concurrent disciplines** — several runs at once, which requires a distinct port and data
    directory per instance.
 10. **Score keeper client handover** — graceful (planned: bathroom break, shift change) and ungraceful
@@ -832,7 +835,10 @@ Deliberate, and listed so nobody is surprised on the day:
 11. **Swedish localisation** alongside English.
 12. **PDF export** alongside JSON.
 13. **Club balancing in pool generation** — distribute competitors from the same club as evenly as
-    possible (issue #3). No effect at a club-internal event, so it needs synthetic testing.
+    possible (issue #3). No effect at a club-internal event, so it needs synthetic testing. *(Built.
+    The objectives give way in this order: pool sizes within one of each other, never traded; club
+    spread, best-effort — a greedy deal, a swap pass, and what remains reported; then running order
+    and colours, decided per pool and unable to conflict with either.)*
 
 ---
 

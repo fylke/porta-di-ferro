@@ -67,6 +67,50 @@ func (s *Server) generatePools(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, drawn)
 }
 
+// patchPool is the organizer's override of the mat assignment (design §7 item 8): move a
+// pool to another mat, where it queues last, or step it up or down the queue of the mat it
+// is on. Either way every view follows, because they all read the pools in run order.
+func (s *Server) patchPool(w http.ResponseWriter, r *http.Request) {
+	number, err := strconv.Atoi(r.PathValue("number"))
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	var in struct {
+		Mat  int    `json:"mat"`
+		Move string `json:"move"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	t, err := s.store.Tournament()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	switch {
+	case in.Mat > 0:
+		t, err = tournament.MovePool(t, number, in.Mat)
+	case in.Move == "up" || in.Move == "down":
+		t, err = tournament.ReorderPool(t, number, in.Move == "up")
+	default:
+		err = errNoOverride
+	}
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	if err := s.store.SaveTournament(t); err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.publishState()
+	writeJSON(w, http.StatusOK, t)
+}
+
 func (s *Server) getEvents(w http.ResponseWriter, r *http.Request) {
 	after, _ := strconv.Atoi(r.URL.Query().Get("after"))
 	events, err := s.store.Events(r.PathValue("id"), after)
