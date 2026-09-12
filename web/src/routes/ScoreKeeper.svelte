@@ -14,6 +14,8 @@
   import { ended, penaltyLoss } from '../lib/outcome';
   import { summarise } from '../lib/drift';
   import { inSuddenDeath, suddenDeathDecided as decidedOnSuddenDeath } from '../lib/knockout';
+  import { Heartbeat } from '../lib/presence.svelte';
+  import { navigate } from '../router.svelte';
 
   let { mat, variant = 'panels' }: { mat: number; variant?: string } = $props();
 
@@ -29,17 +31,40 @@
   // Which final-exchange dialog the head referee has already answered "continue" to.
   let dismissedFinal = $state(0);
 
+  // This device's heartbeat: which mat it sits at and which match it is on. The server
+  // uses it for two things -- letting another device take over when this one dies, and
+  // pointing the displays at the match this one is holding, finished or not.
+  const beat = new Heartbeat('scorekeeper');
+
   onMount(() => {
     live.start();
     clock.start();
+    beat.start({ mat });
     const release = keepAwake();
     return () => {
       clock.stop();
       live.stop();
+      beat.stop();
       sk?.log.stop();
       release();
     };
   });
+
+  $effect(() => {
+    beat.update({ mat, match: matchId });
+  });
+
+  /**
+   * Hand over this mat: everything this device holds goes to the server, the match is
+   * let go, and the device leaves the mat -- so the next one claims without having to
+   * take anything over (design §7 item 10, the graceful case).
+   */
+  async function handOver() {
+    menuOpen = false;
+    await sk?.log.release();
+    await beat.release();
+    navigate('/score');
+  }
 
   // Every match on this mat, in running order. The server's own idea of which one is up
   // is the first of these that is not complete -- but this device does not follow that
@@ -107,6 +132,9 @@
 
   /** The score keeper has read the result and is ready for the next two. */
   function nextMatch() {
+    // Let go of the finished match on the way out, so the log is flushed and the claim
+    // released before the next device could want it.
+    void sk?.log.release();
     const i = queue.findIndex((m) => m.id === matchId);
     const after = queue.slice(i + 1).find(isOpen);
     const elsewhere = queue.find((m) => isOpen(m) && m.id !== matchId);
@@ -319,6 +347,9 @@
           <span>Colours and sides&hellip;</span>
         </button>
         <div class="menu-head">This screen</div>
+        <button role="menuitem" onclick={() => void handOver()}>
+          <span>Hand over this mat</span><span class="why">to another device</span>
+        </button>
         <a role="menuitem" href="/score/{mat}?variant={variant === 'panels' ? 'edge' : 'panels'}">
           Try the other layout
         </a>
@@ -376,6 +407,22 @@
       {@render panel(order[1])}
     </div>
 
+    {#if sk.log.sync === 'stale'}
+      <!-- Another device took this match over. This one is done with it: its unsent
+           exchanges are with the organizer, and nothing it writes now would be kept. -->
+      <div class="drift stale" role="alert">
+        <span>
+          Another device has taken over this match.
+          {#if sk.log.quarantined > 0}
+            {sk.log.quarantined} exchange{sk.log.quarantined === 1 ? '' : 's'} from this device
+            {sk.log.quarantined === 1 ? 'was' : 'were'} set aside for the organizer.
+          {/if}
+        </span>
+        <span class="drift-actions">
+          <button onclick={() => void handOver()}>Leave the mat</button>
+        </span>
+      </div>
+    {/if}
     {#if sk.log.drift}
       <!-- The two engines disagree about the same log. Non-blocking: the match goes on,
            and the score keeper decides whose numbers it goes on under. Either way the
@@ -394,7 +441,9 @@
     {#if matchState.ended}
       <button class="confirm next" onclick={nextMatch}>NEXT MATCH</button>
     {:else}
-      <button class="confirm" onclick={() => void sk?.confirm(elapsed)}>CONFIRM EXCHANGE</button>
+      <button class="confirm" disabled={sk.log.sync === 'stale'} onclick={() => void sk?.confirm(elapsed)}>
+        CONFIRM EXCHANGE
+      </button>
     {/if}
   {:else}
     <div class="waiting">
@@ -411,6 +460,18 @@
         <p class="dim">This screen follows the mat. It fills in when a match is up.</p>
       {/if}
     </div>
+  {/if}
+
+  {#if sk?.log.contested}
+    <!-- Another live device holds this match. Taking over is deliberate: whatever that
+         device still has unsent will be set aside for the organizer, not merged. -->
+    <ConfirmDialog
+      headline="Mat {mat} is being scored by {sk.log.contested.name}"
+      detail="Take it over on this device? Anything the other device has not yet sent will be set aside for the organizer rather than counted."
+      confirmLabel="Take over on this device"
+      onConfirm={() => void sk?.log.takeOver()}
+      onCancel={() => navigate('/score')}
+    />
   {/if}
 
   {#if optionsOpen && sk}
@@ -663,6 +724,14 @@
     color: #1a1200;
     font-size: 0.9rem;
     font-weight: 600;
+  }
+  .drift.stale {
+    background: var(--red);
+    color: var(--ink);
+  }
+  .drift.stale button {
+    background: var(--ink);
+    color: #0d0f14;
   }
   .drift-actions {
     display: flex;

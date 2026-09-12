@@ -165,10 +165,23 @@ func (s *Server) postEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.writeMu.Lock()
-	written, err := s.store.Append(id, events)
+	stale, err := s.admit(r, id, events)
+	var written []match.Event
+	if err == nil && !stale {
+		written, err = s.store.Append(id, events)
+	}
 	s.writeMu.Unlock()
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	if stale {
+		// Another device holds this match now. The events are set aside for the
+		// organizer, and the sender is told so it can stop -- and say so on screen.
+		writeJSON(w, http.StatusConflict, map[string]any{
+			"error":       "another device has taken over this match",
+			"quarantined": len(events),
+		})
 		return
 	}
 	if len(written) > 0 {

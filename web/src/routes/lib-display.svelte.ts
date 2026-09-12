@@ -60,6 +60,18 @@ export function nextOn(snapshot: Snapshot | null, mat: number): MatchView | null
   return i >= 0 && i + 1 < onMat.length ? onMat[i + 1] : null;
 }
 
+/**
+ * The matches after the current one on a mat, in running order, up to count. The current
+ * match is whatever the mat is showing -- possibly a finished one the score keeper is
+ * holding -- so "after" is by position, not by status.
+ */
+export function upcomingOn(snapshot: Snapshot | null, mat: number, count: number): MatchView[] {
+  const current = matchOn(snapshot, mat);
+  const onMat = matchesOn(snapshot, mat);
+  const i = current ? onMat.findIndex((m) => m.id === current.id) : -1;
+  return onMat.slice(i + 1).filter((m) => m.status !== 'complete').slice(0, count);
+}
+
 export function nameLookup(snapshot: Snapshot | null): (id: string) => string {
   const byId = new Map((snapshot?.competitors ?? []).map((c) => [c.id, c.name]));
   return (id: string) => byId.get(id) ?? '—';
