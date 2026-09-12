@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { api, type Snapshot } from '../api';
+  import { api, type MatchView, type Snapshot } from '../api';
   import { nameLookup, roundLabel } from './lib-display.svelte';
+  import MatchEditor from './MatchEditor.svelte';
 
   /**
    * The cut and the bracket (design §7 item 3). Drawn once every pool match is in, from
@@ -19,6 +20,10 @@
   const cut = $derived(snapshot.overall.length >= 8 ? 8 : snapshot.overall.length >= 4 ? 4 : 2);
   const seeds = $derived(snapshot.overall.slice(0, cut));
   const scored = $derived(!!bracket && bracket.matches.some((m) => m.status !== 'pending'));
+
+  // A bracket match's log is editable like any other; a corrected result re-fills the
+  // rounds after it on its own.
+  let editing = $state<MatchView | null>(null);
 
   let error = $state('');
   let busy = $state(false);
@@ -45,6 +50,15 @@
   const heading = (round: string) =>
     round === 'quarter' ? 'Quarter-finals' : round === 'semi' ? 'Semi-finals' : round === 'bronze' ? 'Bronze match' : 'Final';
 </script>
+
+{#if editing}
+  <MatchEditor
+    match={editing}
+    names={{ red: name(editing.red), blue: name(editing.blue) }}
+    onClose={() => (editing = null)}
+    onSaved={onchange}
+  />
+{/if}
 
 {#if snapshot.pools.length > 0}
   <section>
@@ -111,6 +125,9 @@
                     {#if m.status === 'pending'}v{:else}{m.state.red.score}–{m.state.blue.score}{/if}
                   </span>
                   <span class="blue">{m.blue ? name(m.blue) : '—'}</span>
+                  {#if m.red && m.blue}
+                    <button class="edit" title="Edit this match's log" aria-label="Edit the log of {roundLabel(m)}" onclick={() => (editing = m)}>&#9998;</button>
+                  {/if}
                 </li>
               {/each}
             </ol>
@@ -225,7 +242,7 @@
   }
   li {
     display: grid;
-    grid-template-columns: 1fr auto 1fr;
+    grid-template-columns: 1fr auto 1fr auto;
     grid-template-rows: auto auto;
     gap: 0.1rem 0.5rem;
     align-items: baseline;
@@ -259,6 +276,18 @@
   }
   li.running .score {
     color: var(--amber-bright);
+  }
+  .edit {
+    padding: 0.1rem 0.4rem;
+    font-size: 0.85rem;
+    background: none;
+    border: 1px solid transparent;
+    color: var(--ink-dim);
+    opacity: 0.6;
+  }
+  .edit:hover {
+    opacity: 1;
+    border-color: var(--line);
   }
   .podium {
     margin: 0.9rem 0 0;

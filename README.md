@@ -62,8 +62,9 @@ This is Milestone 1, scoped to run MSL's club event on 15 November 2026:
   match, sudden death instead of a draw
 - MSL's ruleset, hardcoded: 8 points or 3 minutes, differential scoring, the three-step
   warning ladder
-- Undo of the last confirmed exchange. Deeper correction is Milestone 2, and until then the
-  escape hatch is the JSON on disk
+- Undo of the last confirmed exchange at the mat, and full history editing on the organizer
+  page: a pencil on any match opens its log. Saving rewrites the log and keeps the previous
+  version beside it as a backup
 - Score keeper handover, graceful or not, with a writer epoch per match so a lost tablet can
   never write over its replacement
 - English only

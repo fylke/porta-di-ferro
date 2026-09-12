@@ -197,6 +197,13 @@ export const api = {
   events: (matchId: string, after = 0) =>
     req<Event[]>('GET', `/api/matches/${matchId}/events?after=${after}`),
   /**
+   * The organizer's editor saving: the whole log, rewritten. The server keeps the version
+   * being replaced as a backup and tells a score keeper holding the match to reload.
+   */
+  replaceEvents: (matchId: string, events: Event[]) =>
+    req<{ backup: string; state: State }>('PUT', `/api/matches/${matchId}/events`, events),
+  backups: (matchId: string) => req<string[]>('GET', `/api/matches/${matchId}/backups`),
+  /**
    * Stamped with who is pushing and which epoch it holds, so a device whose match has
    * been handed to another is told so -- a 409 -- rather than having its backlog appended
    * or silently dropped. No stamp is the anonymous path: the tests and paper entry.

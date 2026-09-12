@@ -289,8 +289,15 @@ push stamped with an older one is quarantined and shown to the organizer rather 
 dropped (§7 item 10). A push with no stamp is the anonymous path — paper entry, the tests — and is
 accepted as it always was.
 
-Corrections are appended as new events rather than mutating history. MVP has no correction UI (§7),
-but building the log this way means adding one later is a UI change rather than a data migration.
+Corrections made at the mat are appended as new events rather than mutating history: the score
+keeper's undo is a record that says "not that one", and the log still shows what was entered.
+
+**The organizer's editor is the one deliberate exception** (§7 item 1, decided September 2026). It
+rewrites the log rather than appending to it, because a log the organizer has corrected should read
+as the match that happened, not as the match plus a trail of what was thought to have happened —
+and a match log is what the standings, the bracket and the export are built from. What makes that
+safe is that nothing is lost: the version being replaced is kept beside the log as a dated backup,
+every time, and a score keeper holding the match is told to reload it.
 
 ### The exchange log
 
@@ -800,7 +807,11 @@ Deliberate, and listed so nobody is surprised on the day:
 ## 7. Milestone 2 — Club Event Stretch Goals
 
 1. **Full history editing** — correct any exchange in a finished or running match, not just the last
-   one. Undo of the last exchange is in MVP; this is the deeper version.
+   one. Undo of the last exchange is in MVP; this is the deeper version. *(Built, on the organizer
+   page: a pencil on every match opens its log; any event can be changed, moved or deleted and an
+   exchange or the end added, with the client engine replaying the edited log as it stands. Saving
+   rewrites the log and keeps the previous version as a backup — see §3, Sync. This is what retires
+   the hand-edit-the-JSON escape hatch.)*
 2. **Immediate penalty escalation** — the head referee may jump straight to a point deduction, a lost
    match, or disqualification. Reached from the `…` overflow menu (§4) rather than more buttons on the
    main view, and **committed through *Confirm exchange* with no confirmation dialog of its own** —
@@ -1046,7 +1057,7 @@ multi-tenancy, macOS — are listed in [`tech-stack.md`](tech-stack.md) rather t
 | Risk | Assessment |
 |---|---|
 | **Installability treated as a late chore** | Would forfeit the entire premise. Test the 5-minute install from the first week, on a machine that isn't the developer's |
-| **Correction is one step deep in MVP** | Undo covers the last confirmed exchange only. An error noticed later still needs hand-editing JSON, which keeps the paper fallback valuable and makes full history editing the first Milestone 2 item |
+| **Correction is one step deep in MVP** | Undo covers the last confirmed exchange only. An error noticed later still needs hand-editing JSON, which keeps the paper fallback valuable and makes full history editing the first Milestone 2 item. *Closed by the organizer's editor (§7 item 1).* |
 | **The score keeper view is unsettled** | Deliberately so — §4 gives a direction and a set of constraints, not a finished layout, and expects two or three prototypes. It is the most-used screen in the application, so leaving it open is a considered risk rather than an oversight. **Prototype early; it gates nothing else but everything depends on it being right** |
 | **Scope creep from Future** | Milestone 3 is an idea dump, not a queue. Nothing moves out of it without being cut down first |
 | **Code signing left until the first release** | An unsigned download triggers SmartScreen, and that dialog *is* the install wall. It sits directly on the 5-minute acceptance criterion, so pick a signing route early rather than in the week before an event |

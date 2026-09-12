@@ -192,6 +192,12 @@
     }
   });
 
+  // The organizer rewrote the log of the match on this screen: take the server's copy.
+  $effect(() => {
+    const r = live.replaced;
+    if (r && r.match === matchId && sk) void sk.log.reload();
+  });
+
   const matchState = $derived(sk ? sk.state : null);
   $effect(() => {
     if (matchState?.ended && matchId && !localDone.has(matchId)) {

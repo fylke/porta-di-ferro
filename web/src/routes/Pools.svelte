@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { api, type Snapshot } from '../api';
+  import { api, type MatchView, type Snapshot } from '../api';
   import { nameLookup } from './lib-display.svelte';
+  import MatchEditor from './MatchEditor.svelte';
 
   /**
    * The organizer's screen for a running tournament: matches, status, live standings --
@@ -12,6 +13,9 @@
   const name = $derived(nameLookup(snapshot));
   const fmt = (n: number) => (Number.isFinite(n) ? n.toFixed(2) : '0.00');
   const mats = $derived(Array.from({ length: snapshot.tournament.mats }, (_, i) => i + 1));
+
+  // The match whose log is open in the editor (design §7 item 1).
+  let editing = $state<MatchView | null>(null);
 
   let error = $state('');
   async function override(run: () => Promise<unknown>) {
@@ -63,6 +67,7 @@
             <span class="blue">{name(m.blue)}</span>
             {#if m.state.endReason === 'forfeit'}<span class="tag">forfeit</span>{/if}
             {#if m.state.endReason === 'penalty'}<span class="tag">penalty</span>{/if}
+            <button class="edit" title="Edit this match's log" aria-label="Edit the log of match {m.order}" onclick={() => (editing = m)}>&#9998;</button>
           </li>
         {/each}
       </ol>
@@ -99,6 +104,15 @@
 
 {#if snapshot.pools.length === 0}
   <p class="empty">Draw the pools to get started.</p>
+{/if}
+
+{#if editing}
+  <MatchEditor
+    match={editing}
+    names={{ red: name(editing.red), blue: name(editing.blue) }}
+    onClose={() => (editing = null)}
+    onSaved={onchange}
+  />
 {/if}
 
 <style>
@@ -163,6 +177,21 @@
   .err {
     color: var(--amber-bright);
     margin: 0 0 0.8rem;
+  }
+  /* Present on every match, quiet until hovered: an error is often noticed after the
+     match has left the mat, and the fix should be one click from the table. */
+  .edit {
+    margin-left: auto;
+    padding: 0.1rem 0.45rem;
+    font-size: 0.85rem;
+    background: none;
+    border: 1px solid transparent;
+    color: var(--ink-dim);
+    opacity: 0.6;
+  }
+  .edit:hover {
+    opacity: 1;
+    border-color: var(--line);
   }
   .split {
     display: grid;

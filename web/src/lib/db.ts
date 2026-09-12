@@ -84,6 +84,26 @@ export async function append(matchId: string, events: Event[]): Promise<void> {
   });
 }
 
+/** Drops a match's durable log, for when the server's copy has been rewritten over it. */
+export async function clear(matchId: string): Promise<void> {
+  await attempt<void>(undefined, async (db) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    const index = tx.objectStore(STORE).index('byMatch');
+    const keys = await new Promise<IDBValidKey[]>((resolve, reject) => {
+      const req = index.getAllKeys(IDBKeyRange.only(matchId));
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    // The index yields primary keys -- [match, seq] -- which is what delete wants.
+    for (const key of keys) tx.objectStore(STORE).delete(key);
+    await new Promise<void>((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+  });
+}
+
 /** Every match this device holds a log for. Empty if storage is unavailable. */
 export async function matches(): Promise<string[]> {
   return attempt<string[]>([], async (db) => {
