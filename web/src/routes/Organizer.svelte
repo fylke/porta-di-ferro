@@ -137,6 +137,7 @@
       <a href="/display/roster" target="_blank" rel="noreferrer">Roster</a>
       <a href="/print/pools" target="_blank" rel="noreferrer">Pool sheets</a>
       <a href="/api/export.json">Export JSON</a>
+      <a href="/api/export.pdf">Export PDF</a>
     </nav>
   </header>
 

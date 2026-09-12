@@ -837,7 +837,9 @@ Deliberate, and listed so nobody is surprised on the day:
    writer epoch, and any late events from the old device are quarantined and shown to the organizer
    rather than silently dropped.
 11. **Swedish localisation** alongside English.
-12. **PDF export** alongside JSON.
+12. **PDF export** alongside JSON. *(Built, at `/api/export.pdf`: a page per pool with the standings
+    and the indices that produced them and every match with its result, made on the server so it
+    comes out the same from a curl as from a click. The eliminations page follows once item 3 lands.)*
 13. **Club balancing in pool generation** — distribute competitors from the same club as evenly as
     possible (issue #3). No effect at a club-internal event, so it needs synthetic testing. *(Built.
     The objectives give way in this order: pool sizes within one of each other, never traded; club

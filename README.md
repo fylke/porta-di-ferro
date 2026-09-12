@@ -43,6 +43,7 @@ day, a pool can be run on paper and entered afterwards.
 | `/display/roster` | The match roster |
 | `/print/pools` | Printable pool sheets |
 | `/api/export.json` | The whole tournament as JSON |
+| `/api/export.pdf` | Standings with their indices and every result, one page per pool, to print and pin up |
 
 ## What it does today
 

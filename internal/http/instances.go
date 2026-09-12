@@ -37,7 +37,7 @@ type Instance struct {
 	// Parent is the URL of the instance that started this one, or empty for the first.
 	Parent string `json:"parent,omitempty"`
 	// Self marks the instance answering the request, in a list of siblings.
-	Self bool `json:"self"`
+	Self bool   `json:"self"`
 	URL  string `json:"url"`
 }
 
