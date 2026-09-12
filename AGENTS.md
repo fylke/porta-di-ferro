@@ -14,4 +14,4 @@
 ## Key Conventions
 
 - **Dual Match Engine**: The scoring match engine is implemented in both Go (`internal/match/`) and TypeScript (`web/src/lib/match/`), verified against shared JSON vectors.
-- **Append-Only Event Stream**: Match state is derived by replaying the event log. Do not store mutable derived state directly.
+- **Append-Only Event Stream**: Match state is derived by replaying the event log. Do not store mutable derived state directly. The organizer's history editor is the one deliberate exception: it rewrites a match log wholesale via `PUT /api/matches/{id}/events` and always keeps the previous version as a `.bak` beside it.

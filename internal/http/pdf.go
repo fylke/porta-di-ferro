@@ -8,11 +8,13 @@ import (
 	"github.com/go-pdf/fpdf"
 
 	"github.com/fylke/porta-di-ferro/internal/match"
+	"github.com/fylke/porta-di-ferro/internal/tournament"
 )
 
 // PDF export (design §7 item 12): the tournament laid out to be printed and pinned up at
 // the venue, which is what distinguishes it from the JSON export. Final standings per
-// pool with the indices that produced them, and every match and its result.
+// pool with the indices that produced them, every match and its result, the overall
+// ranking once the pools are done, and the bracket and podium once they exist.
 //
 // Made on the server with a pure-Go library rather than by printing the page from a
 // browser, because the export is the thing an organizer files and forwards, and it should
@@ -58,6 +60,14 @@ func buildPDF(snap Snapshot) *fpdf.Fpdf {
 			}
 		}
 		return "?"
+	}
+	club := func(id string) string {
+		for _, c := range snap.Competitors {
+			if c.ID == id {
+				return c.Club
+			}
+		}
+		return ""
 	}
 	h1 := func(s string) {
 		pdf.SetFont("Helvetica", "B", 18)
@@ -147,6 +157,56 @@ func buildPDF(snap Snapshot) *fpdf.Fpdf {
 		head([]string{"#", "Red", "Blue", "Result"}, matchWidths)
 		for _, m := range p.Matches {
 			row([]string{fmt.Sprint(m.Order), name(m.Red), name(m.Blue), score(m)}, matchWidths, false)
+		}
+	}
+
+	if snap.PoolsComplete && len(snap.Overall) > 0 {
+		pdf.AddPage()
+		h1("Overall ranking")
+		small("Everyone across the pools, by the same chain as the pool tables. The seeding for the eliminations.")
+		pdf.Ln(2)
+		head(standingsCols, standingsWidths)
+		for _, st := range snap.Overall {
+			row([]string{
+				fmt.Sprint(st.Rank), st.Name, st.Club, fmt.Sprint(st.Completed),
+				fmt.Sprintf("%d-%d-%d", st.Wins, st.Draws, st.Losses),
+				fmtIdx(st.MatchPointIndex), fmtIdx(st.VictoryIndex), fmtIdx(st.ScoreIndex), fmtIdx(st.ReceptionIndex),
+			}, standingsWidths, st.Rank <= 8)
+		}
+	}
+
+	if snap.Bracket != nil {
+		pdf.AddPage()
+		h1("Eliminations")
+		roundName := map[string]string{
+			tournament.RoundQuarter: "Quarter-final", tournament.RoundSemi: "Semi-final",
+			tournament.RoundBronze: "Bronze match", tournament.RoundFinal: "Final",
+		}
+		bracketWidths := []float64{34, 52, 52, 40}
+		head([]string{"Round", "Red", "Blue", "Result"}, bracketWidths)
+		or := func(id string) string {
+			if id == "" {
+				return "-"
+			}
+			return name(id)
+		}
+		for _, m := range snap.Bracket.Matches {
+			label := roundName[m.Round]
+			if m.Round == tournament.RoundQuarter || m.Round == tournament.RoundSemi {
+				label = fmt.Sprintf("%s %d", label, m.Slot)
+			}
+			row([]string{label, or(m.Red), or(m.Blue), score(m)}, bracketWidths, false)
+		}
+		if snap.Bracket.Podium.First != "" {
+			h2("Podium")
+			pdf.SetFont("Helvetica", "", 11)
+			pdf.SetTextColor(0, 0, 0)
+			for i, id := range []string{snap.Bracket.Podium.First, snap.Bracket.Podium.Second, snap.Bracket.Podium.Third} {
+				if id == "" {
+					continue
+				}
+				pdf.CellFormat(0, 7, tr(fmt.Sprintf("%d.  %s  (%s)", i+1, name(id), club(id))), "", 1, "L", false, 0, "")
+			}
 		}
 	}
 

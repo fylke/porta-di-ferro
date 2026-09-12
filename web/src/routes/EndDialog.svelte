@@ -13,6 +13,7 @@
     pending,
     headline,
     detail = '',
+    second = '',
     onEnd,
     onSecond,
   }: {
@@ -20,12 +21,14 @@
     headline: string;
     /** The score line, when the headline is about who lost rather than who won. */
     detail?: string;
+    /** Overrides the second action's label; sudden death ends like a cap, not like time. */
+    second?: string;
     onEnd: () => void;
     onSecond: () => void;
   } = $props();
 
   const secondLabel = $derived(
-    pending === 'final_exchange' ? 'Continue one more exchange' : 'Undo last exchange',
+    second || (pending === 'final_exchange' ? 'Continue one more exchange' : 'Undo last exchange'),
   );
 </script>
 

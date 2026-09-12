@@ -55,9 +55,10 @@ func TestPDFExportIsARealDocument(t *testing.T) {
 	if !bytes.HasPrefix(body, []byte("%PDF-")) || !bytes.Contains(body, []byte("%%EOF")) {
 		t.Errorf("the body should be a complete PDF, starts %q", firstBytes(body))
 	}
-	// One page per pool: fpdf writes each page as its own object.
-	if pages := bytes.Count(body, []byte("/Type /Page\n")); pages != len(snap.Pools) {
-		t.Errorf("two pools should be two pages, the document has %d", pages)
+	// One page per pool, then the overall ranking once every pool match is in. fpdf
+	// writes each page as its own object.
+	if pages := bytes.Count(body, []byte("/Type /Page\n")); pages != len(snap.Pools)+1 {
+		t.Errorf("two finished pools should be three pages, the document has %d", pages)
 	}
 	if len(body) < 2000 {
 		t.Errorf("a scored two-pool tournament should not fit in %d bytes", len(body))
