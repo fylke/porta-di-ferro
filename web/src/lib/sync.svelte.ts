@@ -76,6 +76,7 @@ export class MatchLog {
    * when there is no storage to write a flag to.
    */
   private pushed = new Set<number>();
+  // Note: reload() replaces this set outright, so it cannot be readonly.
   private timer: ReturnType<typeof setInterval> | null = null;
 
   constructor(matchId: string) {
@@ -124,6 +125,30 @@ export class MatchLog {
     await db.append(this.matchId, events);
     this.durable = db.usable();
     void this.flush();
+  }
+
+  /**
+   * The organizer has rewritten this match's log. The server's copy is now the match;
+   * whatever this device had is replaced by it, unsent events included -- they were
+   * written against a history that no longer exists, and the organizer's edit is the
+   * later and more deliberate act.
+   */
+  async reload(): Promise<void> {
+    let remote: Event[];
+    try {
+      remote = await api.events(this.matchId, 0);
+    } catch {
+      // Offline: the old copy stays until the next contact.
+      return;
+    }
+    await db.clear(this.matchId);
+    await db.append(this.matchId, remote);
+    this.pushed = new Set(remote.map((e) => e.seq));
+    this.events = remote;
+    this.pendingCount = 0;
+    this.drift = null;
+    this.serverState = null;
+    if (this.sync === 'offline') this.sync = 'idle';
   }
 
   nextSeq(): number {

@@ -123,6 +123,13 @@ export const api = {
     req<unknown>('PATCH', `/api/tournament/pools/${number}`, { move }),
   events: (matchId: string, after = 0) =>
     req<Event[]>('GET', `/api/matches/${matchId}/events?after=${after}`),
+  /**
+   * The organizer's editor saving: the whole log, rewritten. The server keeps the version
+   * being replaced as a backup and tells a score keeper holding the match to reload.
+   */
+  replaceEvents: (matchId: string, events: Event[]) =>
+    req<{ backup: string; state: State }>('PUT', `/api/matches/${matchId}/events`, events),
+  backups: (matchId: string) => req<string[]>('GET', `/api/matches/${matchId}/backups`),
   pushEvents: (matchId: string, events: Event[]) =>
     req<{ written: number; state: State; lastSeq: number }>(
       'POST',

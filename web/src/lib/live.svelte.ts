@@ -27,6 +27,11 @@ export class Live {
   receivedAt = $state(0);
   connected = $state(false);
   error = $state('');
+  /**
+   * The last match whose log the organizer rewrote, with a nonce so two edits of the
+   * same match in a row both register. A score keeper holding that match reloads it.
+   */
+  replaced = $state<{ match: string; nonce: number } | null>(null);
 
   private source: EventSource | null = null;
 
@@ -99,8 +104,11 @@ export class Live {
     };
     source.onmessage = (ev) => {
       try {
-        const update = JSON.parse(ev.data) as { kind: string; data: unknown };
+        const update = JSON.parse(ev.data) as { kind: string; match?: string; data: unknown };
         if (update.kind === 'state') this.snapshot = update.data as Snapshot;
+        if (update.kind === 'log-replaced' && typeof update.match === 'string') {
+          this.replaced = { match: update.match, nonce: Date.now() };
+        }
       } catch {
         // A malformed frame is not worth taking the stream down for.
       }

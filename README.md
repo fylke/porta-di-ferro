@@ -52,8 +52,9 @@ This is Milestone 1, scoped to run MSL's club event on 15 November 2026:
 - Pools only; eliminations are Milestone 2
 - MSL's ruleset, hardcoded: 8 points or 3 minutes, differential scoring, the three-step
   warning ladder
-- Undo of the last confirmed exchange. Deeper correction is Milestone 2, and until then the
-  escape hatch is the JSON on disk
+- Undo of the last confirmed exchange at the mat, and full history editing on the organizer
+  page: a pencil on any match opens its log. Saving rewrites the log and keeps the previous
+  version beside it as a backup
 - English only
 - Several disciplines are run one after another, as separate runs of the application
 
