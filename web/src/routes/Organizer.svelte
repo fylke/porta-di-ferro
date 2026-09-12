@@ -5,6 +5,7 @@
   import Competitors from './Competitors.svelte';
   import Setup from './Setup.svelte';
   import Pools from './Pools.svelte';
+  import Eliminations from './Eliminations.svelte';
 
   /**
    * The first screen an organizer sees. It carries the LAN address and a QR code large
@@ -199,6 +200,7 @@
       <Setup {snapshot} onchange={refresh} />
     </div>
 
+    <Eliminations {snapshot} onchange={refresh} />
     <Pools {snapshot} onchange={refresh} />
   {/if}
 </main>

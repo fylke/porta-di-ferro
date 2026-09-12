@@ -67,6 +67,37 @@ func (s *Server) generatePools(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, drawn)
 }
 
+// drawBracket is the cut: the eliminations drawn from the overall ranking once every
+// pool match is in. Drawing again replaces the bracket, which is the same escape hatch
+// drawing the pools again is, and carries the same warning in the organizer view.
+func (s *Server) drawBracket(w http.ResponseWriter, r *http.Request) {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	snap, err := s.snapshot()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	if !snap.PoolsComplete {
+		writeErr(w, http.StatusBadRequest, errPoolsNotDone)
+		return
+	}
+	t := snap.Tournament
+	bracket, err := tournament.Bracket(t, snap.Overall)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	t.Bracket = bracket
+	t.BracketAt = time.Now().Format(time.RFC3339)
+	if err := s.store.SaveTournament(t); err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.publishState()
+	writeJSON(w, http.StatusOK, t)
+}
+
 // patchPool is the organizer's override of the mat assignment (design §7 item 8): move a
 // pool to another mat, where it queues last, or step it up or down the queue of the mat it
 // is on. Either way every view follows, because they all read the pools in run order.

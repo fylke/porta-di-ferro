@@ -47,6 +47,14 @@ type PoolView struct {
 	Complete    bool                  `json:"complete"`
 }
 
+// BracketView is the eliminations with every slot that can be filled filled, the
+// tournament's podium so far, and the overall ranking the seeds came from.
+type BracketView struct {
+	Matches  []MatchView       `json:"matches"`
+	Podium   tournament.Podium `json:"podium"`
+	Complete bool              `json:"complete"`
+}
+
 // Snapshot is everything an organizer view or a display needs in one response. Clients
 // take this on load and then follow the SSE stream; a display that loses the server shows
 // stale data rather than breaking.
@@ -54,7 +62,13 @@ type Snapshot struct {
 	Competitors []store.Competitor `json:"competitors"`
 	Tournament  store.Tournament   `json:"tournament"`
 	Pools       []PoolView         `json:"pools"`
-	Ruleset     match.Ruleset      `json:"ruleset"`
+	// Overall is everyone ranked across the pools by the pool chain -- the seeding for
+	// the eliminations, and meaningful once PoolsComplete.
+	Overall       []tournament.Standing `json:"overall"`
+	PoolsComplete bool                  `json:"poolsComplete"`
+	// Bracket is the eliminations, once drawn.
+	Bracket *BracketView  `json:"bracket,omitempty"`
+	Ruleset match.Ruleset `json:"ruleset"`
 	// Mats maps a mat number to the match it is currently running, or the next one due.
 	Mats map[int]string `json:"mats"`
 	Dir  string         `json:"dir"`
@@ -92,36 +106,47 @@ func (s *Server) snapshot() (Snapshot, error) {
 		Dir:         s.store.Dir(),
 	}
 
+	// Every match's state, pools and bracket alike, replayed once and shared.
+	all := map[string]match.State{}
+	view := func(m store.Match) (MatchView, error) {
+		events, err := s.store.Events(m.ID, 0)
+		if err != nil {
+			return MatchView{}, err
+		}
+		st := match.Replay(s.rules, events)
+		all[m.ID] = st
+		status := "pending"
+		switch {
+		case st.Ended:
+			status = "complete"
+		case len(events) > 0:
+			status = "running"
+		}
+		v := MatchView{Match: m, State: st, Status: status, Options: match.OptionsOf(events)}
+		if st.Running {
+			if at, ok := s.store.LastEventAt(m.ID); ok {
+				if since := time.Since(at).Milliseconds(); since > 0 {
+					v.SinceMS = since
+				}
+			}
+		}
+		return v, nil
+	}
+
 	for _, p := range tournament.RunOrder(t) {
 		states := map[string]match.State{}
 		views := make([]MatchView, 0, len(p.Matches))
 		complete := true
 		for _, m := range p.Matches {
-			events, err := s.store.Events(m.ID, 0)
+			v, err := view(m)
 			if err != nil {
 				return Snapshot{}, err
 			}
-			st := match.Replay(s.rules, events)
-			states[m.ID] = st
-			status := "pending"
-			switch {
-			case st.Ended:
-				status = "complete"
-			case len(events) > 0:
-				status = "running"
-			}
-			if !st.Ended {
+			states[m.ID] = v.State
+			if !v.State.Ended {
 				complete = false
 			}
-			view := MatchView{Match: m, State: st, Status: status, Options: match.OptionsOf(events)}
-			if st.Running {
-				if at, ok := s.store.LastEventAt(m.ID); ok {
-					if since := time.Since(at).Milliseconds(); since > 0 {
-						view.SinceMS = since
-					}
-				}
-			}
-			views = append(views, view)
+			views = append(views, v)
 		}
 		snap.Pools = append(snap.Pools, PoolView{
 			Number:      p.Number,
@@ -135,8 +160,37 @@ func (s *Server) snapshot() (Snapshot, error) {
 		})
 	}
 
+	snap.Overall = tournament.Overall(s.rules, t, byID, all)
+	snap.PoolsComplete = tournament.PoolsComplete(t, byID, all)
+
+	// The eliminations: later rounds filled from the results that feed them, then
+	// replayed like any other match. A slot that is not filled yet is not a match a mat
+	// can run, so it stays out of the mat's queue until it is.
+	if len(t.Bracket) > 0 {
+		bv := &BracketView{Complete: true}
+		for _, m := range tournament.Fill(t.Bracket, all) {
+			v, err := view(m)
+			if err != nil {
+				return Snapshot{}, err
+			}
+			if !v.State.Ended {
+				bv.Complete = false
+			}
+			bv.Matches = append(bv.Matches, v)
+		}
+		// Fill again now that the bracket's own states are known, so a semi-final
+		// decided a moment ago already shows the finalists.
+		filled := tournament.Fill(t.Bracket, all)
+		for i := range bv.Matches {
+			bv.Matches[i].Match = filled[i]
+		}
+		bv.Podium = tournament.Result(filled, all)
+		snap.Bracket = bv
+	}
+
 	// A mat runs its pools in queue order, which is the order snap.Pools is already in:
-	// when one finishes, that mat picks up its next.
+	// when one finishes, that mat picks up its next -- and after the pools, the bracket
+	// matches assigned to it, once both their competitors are known.
 	for mat := 1; mat <= t.Mats; mat++ {
 		snap.Mats[mat] = ""
 		for _, p := range snap.Pools {
@@ -150,6 +204,15 @@ func (s *Server) snapshot() (Snapshot, error) {
 				}
 			}
 			if snap.Mats[mat] != "" {
+				break
+			}
+		}
+		if snap.Mats[mat] != "" || snap.Bracket == nil {
+			continue
+		}
+		for _, m := range snap.Bracket.Matches {
+			if m.Mat == mat && m.Status != "complete" && m.Red != "" && m.Blue != "" {
+				snap.Mats[mat] = m.ID
 				break
 			}
 		}
