@@ -35,7 +35,11 @@
     <footer>
       {#if upcoming}
         <span class="label">Next on mat {mat}</span>
-        <span class="up"><span class="red">{upcomingNames.red}</span> v <span class="blue">{upcomingNames.blue}</span></span>
+        <span class="up">
+          <span style="color: var(--bright-{upcoming.options.red})">{upcomingNames.red}</span>
+          v
+          <span style="color: var(--bright-{upcoming.options.blue})">{upcomingNames.blue}</span>
+        </span>
       {:else}
         <span class="label">No more matches on mat {mat}</span>
       {/if}
@@ -75,12 +79,6 @@
   .up {
     font-size: clamp(1rem, 4vh, 2.4rem);
     font-weight: 700;
-  }
-  .red {
-    color: var(--red-bright);
-  }
-  .blue {
-    color: var(--blue-bright);
   }
   .stale {
     position: absolute;

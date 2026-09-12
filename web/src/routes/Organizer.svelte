@@ -23,7 +23,17 @@
   onMount(() => {
     live.start();
     void pickAddress();
-    return () => live.stop();
+    // The list follows the PC between networks without a reload. Joining the wrong wifi
+    // first is a reasonable thing to have happen, and the organizer should see the right
+    // one appear the moment the PC is on it. Only while this tab is visible: a background
+    // tab has nobody looking at it.
+    const poll = setInterval(() => {
+      if (document.visibilityState === 'visible') void refreshAddresses();
+    }, 5000);
+    return () => {
+      clearInterval(poll);
+      live.stop();
+    };
   });
 
   /**
@@ -38,6 +48,10 @@
     } catch {
       addresses = [];
     }
+    choosePreferred();
+  }
+
+  function choosePreferred() {
     // If this page was itself opened over the network, that address is not a guess -- it
     // demonstrably works from at least one other device, which is more than the server's
     // ranking can know.
@@ -45,6 +59,26 @@
     const remembered = addresses.find((a) => a.ip === remembering());
     chosenIP = (here ?? remembered ?? addresses[0])?.ip ?? '';
   }
+
+  /** Re-reads the list, and re-picks only if the chosen address has gone. */
+  async function refreshAddresses() {
+    let next: Address[];
+    try {
+      next = await api.addresses();
+    } catch {
+      return;
+    }
+    if (JSON.stringify(next) === JSON.stringify(addresses)) return;
+    addresses = next;
+    if (!addresses.some((a) => a.ip === chosenIP)) choosePreferred();
+  }
+
+  /** "Wi-Fi Hall-Guest" when the network has a name; the adapter otherwise. */
+  function describe(a: Address): string {
+    return a.ssid ? `Wi-Fi ${a.ssid}` : a.interface;
+  }
+
+  const chosen = $derived(addresses.find((a) => a.ip === chosenIP) ?? null);
 
   // Both sides of the memory are guarded: a browser with site data switched off throws on
   // access rather than returning null, and that must not take the join panel down with it.
@@ -110,12 +144,15 @@
         <h2>Join from a tablet or phone</h2>
         {#if clientURL}
           <p class="url">{scoreURL}</p>
+          {#if chosen}
+            <p class="on">on {describe(chosen)}</p>
+          {/if}
           {#if addresses.length > 1}
             <label class="network">
               Network
               <select value={chosenIP} onchange={(e) => choose(e.currentTarget.value)}>
                 {#each addresses as a (a.ip)}
-                  <option value={a.ip}>{a.interface} &mdash; {a.ip}</option>
+                  <option value={a.ip}>{describe(a)}: {a.ip}</option>
                 {/each}
               </select>
             </label>
@@ -223,6 +260,11 @@
   }
   .url.none {
     color: var(--ink-dim);
+  }
+  .on {
+    margin: -0.3rem 0 0.6rem;
+    color: var(--ink-dim);
+    font-size: 0.95rem;
   }
   .hint.warn {
     color: var(--amber-bright);

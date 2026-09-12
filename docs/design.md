@@ -277,6 +277,12 @@ device that has no server to talk to; the result is then read out to the organiz
 hand. This is not a separate mode to build — it is what local-first writes already give — and it is
 what tier 2 of the fallback ladder (§12) actually rests on.
 
+**A whole pool, not only a match.** The client keeps the last snapshot it saw, so it opens with the
+pool, the names and the running order even when the server is out of reach, and it keeps its own
+account of which matches it has finished, so *Next match* works with nobody to ask. When the LAN is
+back, it hands over every match log on the device the server is missing — not just the one on
+screen — because by then the earlier matches are closed and nobody would reopen them by hand.
+
 Corrections are appended as new events rather than mutating history. MVP has no correction UI (§7),
 but building the log this way means adding one later is a UI change rather than a data migration.
 
@@ -286,7 +292,9 @@ Recorded per match:
 
 - every confirmed exchange — timestamp, points awarded to each competitor
 - every warning — timestamp, competitor
-- **timer events** — started, stopped at timestamp X, resumed after Y seconds
+- **timer events** — started, stopped at timestamp X, resumed after Y seconds, reset to zero
+- **options** — the competitors' colours and which side each takes on the displays. Presentation
+  only: the engine ignores it, and it is in the log so it reaches every screen by the same path
 
 Nothing else. This is enough to reconstruct a match completely and to produce post-event statistics
 later without changing the schema.
@@ -460,8 +468,14 @@ which is exactly the ruleset's maximum for a single hit.
   than three minutes.
 - It is **not paused for scoring**, matching the ruleset. The timer control exists for the head
   referee's time-outs, not for ordinary exchanges.
+- **Selecting a point starts it** if it is not running. A point being awarded means fencing has been
+  happening, and a score keeper who forgot to press play is the commonest way a match clock ends up
+  wrong at a competition. Deselecting the point does not stop it again.
 - **One play/pause toggle**, generously sized. It is the only control that must be hit fast, so it is
   among the largest on the screen.
+- **A reset beside it**, small and behind a confirmation, puts the clock back to 00:00 for a clock
+  started by mistake. It is a correction appended to the log like any other, not a rewrite of the
+  start.
 - **The time readout is large too**, not just its button. The score keeper is watching the mat, so the
   clock must be readable at a glance rather than looked at directly — prominent, but **not
   oppressively so**. Giving the number half the screen starves the scoring controls, which matter just
@@ -520,7 +534,10 @@ a well-defined moment to ask and a well-defined timestamp to record.
 **Point cap.** Confirming an exchange that takes either competitor **to or past 8** raises a dialog
 announcing the result — *"Red wins 9–3"* — with **End match** or **Undo last exchange**.
 
-**Warning cap.** A warning that would take a competitor to the match-loss level raises the same dialog.
+**Warning cap.** A warning that would take a competitor to the match-loss level raises the same dialog
+— worded for the loser, not the winner: *"Ada loses the match on a third warning"*, *"Bo is
+disqualified"*, with the 8–0 as the second line. A match that ends on warnings is the one result the
+head referee will be asked to justify, and *"Bo wins 8–0"* was true and useless.
 
 The three share a shape but **not their second action** — build them as one component parameterised on
 it, not as one identical dialog:
@@ -538,6 +555,14 @@ conditions, **the cap takes precedence**.
 **Overshoot:** at 7, a 2-versus-nothing exchange gives 9. **Record the actual 9 rather than clamping to
 8** — point difference feeds two of the four ranking indices, so clamping would quietly distort the
 standings. That leaves forfeits (recorded 8–0) as the only place 8 is a hard number.
+
+### After the match
+
+**The result stays on screen until the score keeper presses *Next match*.** The clock controls give
+way to the outcome and the final score, and *Confirm exchange* becomes *Next match*. The mat does
+not move on by itself: when it did, the final score was replaced by the next two names the instant
+the end was written, before anyone had read it or read it back to the head referee. **Forfeits ask
+first**, for the same reason undo does — they end the match, and a menu tap should not.
 
 ### Corner controls — rare, destructive, out of the way
 
@@ -773,7 +798,9 @@ Deliberate, and listed so nobody is surprised on the day:
    match, or disqualification. Reached from the `…` overflow menu (§4) rather than more buttons on the
    main view, and **committed through *Confirm exchange* with no confirmation dialog of its own** —
    reaching into a buried menu is already deliberate, and the normal confirm is the second gate.
-   Cancelling one is a tap on the warning button, not a second trip into the menu.
+   Cancelling one is a tap on the warning button, not a second trip into the menu. *(Built. The
+   question of a dialog per level was settled §4's way: none on choosing; the end-of-match dialog that
+   a match loss raises is the same one a third ordinary warning raises, and it names the escalation.)*
 3. **Eliminations** — top 8 from the pools.
 4. **Server-assigned displays** — a device opens `/display` and the organizer chooses what it shows,
    reassigning on the fly and seeing which screens are live. Added *alongside* URL addressing, which
@@ -790,7 +817,9 @@ Deliberate, and listed so nobody is surprised on the day:
    competitors' colours away from the red/blue default, and swap which side each occupies — on the
    score keeper view and on the display **independently of each other**. Swapping sides risks
    cognitive dissonance against the physical corners, so changing colours is often the better answer
-   to the same problem.
+   to the same problem. *(Built. Colours and the display swap are an `options` record in the match
+   log — no effect on the score, read by every screen through the same path as the score, and
+   changeable with no server to talk to. The score keeper's own swap is per device.)*
 7. **Up to 4 mats, up to 8 pools** — 56 competitors per run. Mat assignment generalises to pool *N* on
    mat *((N−1) mod mats) + 1*.
 8. **Organizer override of mat assignment.**

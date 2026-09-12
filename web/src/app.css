@@ -32,6 +32,25 @@
   --blue-tint: #1b3f80;
   --blue-bright: #63a4ff;
 
+  /* The palette a competitor can be shown in, by name, when red and blue are the wrong
+     answer -- two red jackets, a colour-blind score keeper. Each has a tint for the panel
+     behind the competitor and a bright for their label, and every tint keeps --ink above
+     5:1. The names are what the match log records (web/src/lib/match/options.ts). */
+  --tint-red: var(--red-tint);
+  --bright-red: var(--red-bright);
+  --tint-blue: var(--blue-tint);
+  --bright-blue: var(--blue-bright);
+  --tint-green: #1f5e34;
+  --bright-green: #5ee08a;
+  --tint-yellow: #6b5a12;
+  --bright-yellow: #ffd94a;
+  --tint-orange: #7a3f12;
+  --bright-orange: #ffa24a;
+  --tint-purple: #4a2578;
+  --bright-purple: #c48cff;
+  --tint-white: #4a4f5c;
+  --bright-white: #ffffff;
+
   --amber: #d99311;
   --amber-bright: #f2b134;
 

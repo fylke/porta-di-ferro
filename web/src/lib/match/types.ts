@@ -6,11 +6,12 @@
 
 export type Side = 'red' | 'blue';
 
-export type EventType = 'exchange' | 'timer' | 'undo' | 'end';
+export type EventType = 'exchange' | 'timer' | 'undo' | 'end' | 'options';
 
 export type Reason = '' | 'time' | 'point_cap' | 'penalty' | 'forfeit';
 
-export type TimerAction = 'start' | 'stop' | 'resume';
+/** Reset puts the clock back to 00:00, stopped -- a correction for a clock started by mistake. */
+export type TimerAction = 'start' | 'stop' | 'resume' | 'reset';
 
 export type Pending = 'none' | 'final_exchange' | 'point_cap' | 'penalty_cap';
 
@@ -48,6 +49,18 @@ export interface End {
 }
 
 /**
+ * How a match is presented. `red` and `blue` are colour names from the palette and stay
+ * attached to the sides they name: the red side may be shown in green, but it is still the
+ * red side in every record. `swapDisplay` puts the blue side on the left of the
+ * scoreboards; the score keeper's own screen swaps independently, per device.
+ */
+export interface Options {
+  red: string;
+  blue: string;
+  swapDisplay: boolean;
+}
+
+/**
  * One line of a match log. The primary key is (match, seq), which is what makes a retried
  * push idempotent and needs no deduplication logic anywhere.
  *
@@ -64,6 +77,7 @@ export interface Event {
   timer?: Timer;
   undo?: Undo;
   end?: End;
+  options?: Options;
 }
 
 export interface Competitor {

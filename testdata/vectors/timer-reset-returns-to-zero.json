@@ -1,0 +1,42 @@
+{
+  "name": "timer-reset-returns-to-zero",
+  "description": "A reset puts the clock back to 00:00 and stops it, whatever time the event was stamped with.",
+  "events": [
+    {
+      "seq": 1,
+      "type": "timer",
+      "elapsedMs": 0,
+      "timer": {
+        "action": "start"
+      }
+    },
+    {
+      "seq": 2,
+      "type": "timer",
+      "elapsedMs": 7400,
+      "timer": {
+        "action": "reset"
+      }
+    }
+  ],
+  "expect": {
+    "red": {
+      "score": 0,
+      "penalty": 0
+    },
+    "blue": {
+      "score": 0,
+      "penalty": 0
+    },
+    "exchanges": 0,
+    "elapsedMs": 0,
+    "running": false,
+    "ended": false,
+    "noMatchPoints": false,
+    "endReason": "",
+    "winner": "",
+    "pending": "none",
+    "lastSeq": 2,
+    "undoableSeq": 0
+  }
+}

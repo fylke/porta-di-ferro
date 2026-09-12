@@ -46,6 +46,9 @@ func Replay(r Ruleset, events []Event) State {
 			s.Pending = PendingNone
 		case TypeEnd:
 			applyEnd(r, &s, e)
+		case TypeOptions:
+			// Presentation only. It is in the log so it reaches every screen; what it
+			// says is read by OptionsOf, never by the score.
 		}
 	}
 	if !s.Ended && len(applied) > 0 {
@@ -157,6 +160,12 @@ func applyTimer(s *State, e Event) {
 		s.Running = true
 	case TimerStop:
 		s.Running = false
+	case TimerReset:
+		// Zero regardless of what the event carries: a reset means 00:00 by definition,
+		// and a client that stamped it with the time it was pressed at must not leave the
+		// clock there.
+		s.Running = false
+		s.ElapsedMS = 0
 	}
 }
 

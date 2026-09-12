@@ -12,6 +12,11 @@ export function matchOn(snapshot: Snapshot | null, mat: number): MatchView | nul
   return snapshot?.pools.flatMap((p) => p.matches).find((m) => m.id === id) ?? null;
 }
 
+/** Every match on a mat, in the order the mat runs them: pool by pool, then by order. */
+export function matchesOn(snapshot: Snapshot | null, mat: number): MatchView[] {
+  return (snapshot?.pools ?? []).filter((p) => p.mat === mat).flatMap((p) => p.matches);
+}
+
 export function nextOn(snapshot: Snapshot | null, mat: number): MatchView | null {
   const current = matchOn(snapshot, mat);
   if (!current) return null;

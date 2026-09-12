@@ -48,7 +48,7 @@ flowchart TB
 
 ## 2. Match Engine State Machine & Scoring Logic
 
-Matches are driven by an append-only event log. State is pure and recomputed by replaying events. Points are differential (e.g., scoring $2$ vs $1$ awards $1$ net point to the higher scorer), capped at $8$ points or $3$ minutes ($180\,000\text{ ms}$).
+Matches are driven by an append-only event log. State is pure and recomputed by replaying events. Event types are `exchange`, `timer` (start / stop / resume / reset), `undo`, `end`, and `options` — the last carries the competitors' colours and the display side order, is ignored by replay, and is read separately by `OptionsOf` / `optionsOf` so presentation can never fail a scoring vector. Points are differential (e.g., scoring $2$ vs $1$ awards $1$ net point to the higher scorer), capped at $8$ points or $3$ minutes ($180\,000\text{ ms}$).
 
 ```mermaid
 stateDiagram-v2
@@ -57,11 +57,13 @@ stateDiagram-v2
     PendingMatch --> InProgress_Paused: First Interaction / Timer Start
     InProgress_Paused --> InProgress_Running: Timer Start / Resume
     InProgress_Running --> InProgress_Paused: Timer Stop / Pause
+    InProgress_Running --> InProgress_Paused: Timer Reset (clock to 00:00, scores kept)
+    InProgress_Paused --> InProgress_Paused: Timer Reset (clock to 00:00, scores kept)
 
     state InProgress_Running {
         [*] --> ScoreCheck
         ScoreCheck --> ExchangeConfirmed: Record Exchange (Differential 1-2 pts)
-        ExchangeConfirmed --> WarningIssued: Penalty Level 1 (Warning) / 2 (-1 pt)
+        ExchangeConfirmed --> WarningIssued: Penalty +1 (Warning) / +2 (Double, -1 pt) / +3 (Triple)
         WarningIssued --> ScoreCheck
         ExchangeConfirmed --> ScoreCheck
     }
@@ -107,7 +109,9 @@ sequenceDiagram
     alt Server accepts event
         Server->>Server: Replay & Validate via Go Engine
         Server->>Server: Append to Match JSON on Disk
-        Server-->>LocalEngine: 200 OK (Event Log)
+        Server-->>LocalEngine: 200 OK (written, server-derived state, lastSeq)
+        LocalEngine->>LocalEngine: Compare server state with own replay of the same log
+        Note over LocalEngine: A difference is a dual-engine bug: banner + console report.<br/>Score keeper may adopt the server's state for the rest of the match.
         Server-)Displays: Broadcast SSE (match_updated)
         Displays->>Displays: Re-render Scoreboard / Roster
     else Network offline or delayed
@@ -153,7 +157,7 @@ flowchart TD
 
 ## 5. Offline & Local-First Resilience
 
-Scorekeeper devices stay operational even during transient venue Wi-Fi dropouts by leveraging a Service Worker app shell and IndexedDB event spooling.
+Scorekeeper devices stay operational even during transient venue Wi-Fi dropouts by leveraging a Service Worker app shell and IndexedDB event spooling. The last snapshot is kept in `localStorage` too, so a client opens with the pool's schedule and names when the server is unreachable; the score keeper client keeps its own record of which matches it has finished, so it can move through a whole pool offline. On reconnect, every match log on the device that the server is missing is pushed — not only the match on screen.
 
 ```mermaid
 sequenceDiagram
@@ -187,6 +191,8 @@ sequenceDiagram
         Note over App,LAN: Wi-Fi Restored
         App->>LAN: Flush Pending Queue in Sequence
         LAN-->>App: 200 OK
+        App->>LAN: GET /api/matches/:id/events for every other match on the device
+        App->>LAN: POST whatever the server is missing (finished offline earlier)
         App->>IDB: Clear Synced Events
     end
 ```

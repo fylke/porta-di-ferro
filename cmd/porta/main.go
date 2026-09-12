@@ -98,7 +98,7 @@ func banner(addrs []lan.Address, dir string, port int) {
 		fmt.Println("  Join this PC to the venue wifi and restart.")
 	} else {
 		base := url(addrs[0], port)
-		fmt.Println("  Score keepers  " + base + "/score   (" + addrs[0].Interface + ")")
+		fmt.Println("  Score keepers  " + base + "/score   (" + describe(addrs[0]) + ")")
 		fmt.Println("  Displays       " + base + "/display/mats")
 		// Every other network this PC is on, named. An organizer whose PC is on both a
 		// wired office LAN and the hall wifi cannot be guessed at from here, and being
@@ -108,7 +108,7 @@ func banner(addrs []lan.Address, dir string, port int) {
 			fmt.Println()
 			fmt.Println("  Also reachable on:")
 			for _, a := range addrs[1:] {
-				fmt.Printf("                 %-24s (%s)\n", url(a, port), a.Interface)
+				fmt.Printf("                 %-24s (%s)\n", url(a, port), describe(a))
 			}
 		}
 	}
@@ -122,6 +122,15 @@ func banner(addrs []lan.Address, dir string, port int) {
 
 func url(a lan.Address, port int) string {
 	return fmt.Sprintf("http://%s:%d", a.IP, port)
+}
+
+// describe names a network the way an organizer would: by its wifi name when it has one,
+// and by the adapter otherwise.
+func describe(a lan.Address) string {
+	if a.SSID != "" {
+		return "Wi-Fi " + a.SSID
+	}
+	return a.Interface
 }
 
 // clientURL is the address the tray offers to copy: the best guess, or nothing at all

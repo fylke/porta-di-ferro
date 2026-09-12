@@ -179,6 +179,12 @@ retracts that reasoning, so the option is genuinely open and is being declined o
 
 ---
 
+**Drift is detected in the field as well as in CI.** Every push answers with the state the server
+derived from the same log, and the score keeper client compares it with its own replay. A difference
+is a bug in one engine that the vectors did not catch: it is reported in the console with both
+states, shown as a non-blocking banner, and the score keeper can choose to run the rest of the match
+under the server's numbers. The bug then earns a vector.
+
 ## 5. The client payload argument, corrected
 
 An earlier revision of the issue analysis called a 2–4 MB client payload "a lot to push to a tablet

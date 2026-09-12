@@ -6,14 +6,18 @@
  * selections until then -- the score does not move, the warning is not counted, and
  * nothing is written to the log (design §4).
  */
-import { MSL, replay, type Event, type Side, type State } from './match';
+import { MSL, optionsOf, replay, type Event, type Options, type Side, type State } from './match';
 import { reanchor } from './clock.svelte';
 import { MatchLog } from './sync.svelte';
 
 export interface Selection {
   /** The selected point value, or 0 for none. The two point buttons are exclusive. */
   value: number;
-  /** Penalty levels to apply. 0 or 1 in the MVP; escalation is Milestone 2. */
+  /**
+   * Penalty levels to apply: 0 none, 1 a warning, 2 straight to a point deduction, 3
+   * straight to a match loss. The warning button toggles between 0 and 1; the severe
+   * levels are chosen from the overflow menu and show on the same button.
+   */
   penalty: number;
 }
 
@@ -53,9 +57,32 @@ export class ScoreKeeperSession {
     return Math.max(0, Date.now() - at);
   }
 
-  /** Derived from the log every time it is read, never stored. */
+  /**
+   * Derived from the log every time it is read, never stored -- unless the score keeper
+   * has chosen the server's state after a disagreement, in which case the server's answer
+   * for the same log is shown instead. Once this device writes past what the server has
+   * answered for, its own replay is the only state there is until the next push.
+   */
   get state(): State {
-    return replay(MSL, this.log.events);
+    const local = replay(MSL, this.log.events);
+    const server = this.log.serverState;
+    if (this.log.aligned && server && server.lastSeq === local.lastSeq) return server;
+    return local;
+  }
+
+  /** How the match is shown -- colours and display sides -- also from the log. */
+  get options(): Options {
+    return optionsOf(this.log.events);
+  }
+
+  /**
+   * Changes how the match is shown. An options record rides the log like everything else,
+   * which is what gets it to the displays through the same path as the score and lets it
+   * work with no server to talk to.
+   */
+  async setOptions(patch: Partial<Options>, elapsedMs: number): Promise<void> {
+    const next = { ...this.options, ...patch };
+    await this.commit(this.event('options', elapsedMs, { options: next }));
   }
 
   selection(side: Side): Selection {
@@ -65,16 +92,39 @@ export class ScoreKeeperSession {
   /**
    * The point buttons are mutually exclusive, and pressing an already-selected one
    * deselects it -- so any mis-tap is undone by tapping it again.
+   *
+   * Selecting a point also starts the clock if it is not running. A point being awarded
+   * means fencing has been happening, and a score keeper who forgot to press play is the
+   * most common way a match clock ends up wrong at a competition. Deselecting does not
+   * stop it again: the clock is now right, and a mis-tap on the point is not a time-out.
    */
   togglePoint(side: Side, value: number): void {
     const sel = this.selection(side);
-    sel.value = sel.value === value ? 0 : value;
+    const selecting = sel.value !== value;
+    sel.value = selecting ? value : 0;
+    if (selecting && !this.state.running && !this.state.ended) void this.startClock();
   }
 
-  /** The warning toggles independently of the points. */
+  /**
+   * The warning toggles independently of the points, and it is also how a severe warning
+   * is cancelled: tapping a selected DOUBLE!! or TRIPLE!!! clears it back to nothing, and
+   * the next tap is an ordinary warning again. Cancelling a mis-picked escalation never
+   * means going back into the menu (design §4).
+   */
   toggleWarning(side: Side): void {
     const sel = this.selection(side);
     sel.penalty = sel.penalty > 0 ? 0 : 1;
+  }
+
+  /**
+   * Immediate escalation: the head referee has judged a violation severe enough to skip
+   * the ladder. It is a pending selection like any other and commits with Confirm
+   * exchange -- reaching into a buried menu is already deliberate, and the normal confirm
+   * is the second gate. What the engine does with it is the same as with an ordinary
+   * warning, applied two or three levels at once.
+   */
+  escalate(side: Side, levels: 2 | 3): void {
+    this.selection(side).penalty = levels;
   }
 
   get anythingSelected(): boolean {
@@ -130,12 +180,34 @@ export class ScoreKeeperSession {
 
   async toggleClock(elapsedMs: number): Promise<void> {
     if (this.state.ended) return;
-    const running = this.state.running;
-    const action = running ? 'stop' : this.state.elapsedMs > 0 ? 'resume' : 'start';
-    await this.commit(this.event('timer', elapsedMs, { timer: { action } }));
-    // The clock control is the one place the anchor is set outright rather than moved:
-    // starting or resuming is exactly the moment the base becomes now.
-    this.runningSince = running ? null : Date.now();
+    if (!this.state.running) {
+      await this.startClock();
+      return;
+    }
+    await this.commit(this.event('timer', elapsedMs, { timer: { action: 'stop' } }));
+    this.runningSince = null;
+  }
+
+  /**
+   * Starts a stopped clock: a first start from zero, or a resume after a time-out. The
+   * one place the anchor is set outright rather than moved, because starting is exactly
+   * the moment the base becomes now.
+   */
+  private async startClock(): Promise<void> {
+    const base = this.state.elapsedMs;
+    const action = base > 0 ? 'resume' : 'start';
+    await this.commit(this.event('timer', base, { timer: { action } }));
+    this.runningSince = Date.now();
+  }
+
+  /**
+   * Puts the clock back to 00:00, stopped. For a clock started by mistake -- and a
+   * correction appended like any other, so the log still shows that it happened.
+   */
+  async resetClock(elapsedMs: number): Promise<void> {
+    if (this.state.ended) return;
+    await this.commit(this.event('timer', elapsedMs, { timer: { action: 'reset' } }));
+    this.runningSince = null;
   }
 
   /** Undo of the last confirmed exchange. Appends a correction; never mutates history. */

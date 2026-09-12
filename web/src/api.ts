@@ -1,4 +1,4 @@
-import type { Event, Ruleset, State } from './lib/match';
+import type { Event, Options, Ruleset, State } from './lib/match';
 
 export interface Competitor {
   id: string;
@@ -16,6 +16,8 @@ export interface Address {
   ip: string;
   interface: string;
   private: boolean;
+  /** The wifi network's name, when the adapter is wireless and the platform can say. */
+  ssid?: string;
 }
 
 export interface MatchView {
@@ -33,6 +35,8 @@ export interface MatchView {
    * where the mat's actually is, instead of restarting from whenever the page loaded.
    */
   sinceMs?: number;
+  /** How the match is presented: colours and display sides, read from the log. */
+  options: Options;
 }
 
 export interface Standing {

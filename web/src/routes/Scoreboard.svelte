@@ -2,6 +2,7 @@
   import type { MatchView } from '../api';
   import WarningTriangle from './WarningTriangle.svelte';
   import { formatClock, isFlashing } from '../lib/clock.svelte';
+  import { defaultOptions, type Side } from '../lib/match';
 
   /**
    * One mat's scoreboard, in the same colour language as the score keeper view so a
@@ -27,6 +28,11 @@
   } = $props();
 
   const board = $derived(match?.state ?? null);
+  // Colours and sides come from the match log, so a scoreboard shows exactly what the
+  // score keeper chose. Red-left is the default; the swap is the match's, not this
+  // screen's, so every display in the hall agrees.
+  const options = $derived(match?.options ?? defaultOptions());
+  const order = $derived<[Side, Side]>(options.swapDisplay ? ['blue', 'red'] : ['red', 'blue']);
   const flashing = $derived(board ? isFlashing(elapsed, board.ended) : false);
   const decided = $derived(!!board?.ended);
   const winnerName = $derived(
@@ -41,13 +47,7 @@
       <span class="dim">No match up yet</span>
     </div>
   {:else}
-    <div class="side red">
-      <div class="name">{names.red}</div>
-      <div class="score mono">{board.red.score}</div>
-      <div class="warns">
-        {#each { length: board.red.penalty } as _, i (i)}<WarningTriangle />{/each}
-      </div>
-    </div>
+    {@render side(order[0])}
 
     <div class="centre">
       <div class="mat">Mat {mat}</div>
@@ -58,15 +58,21 @@
       {/if}
     </div>
 
-    <div class="side blue">
-      <div class="name">{names.blue}</div>
-      <div class="score mono">{board.blue.score}</div>
+    {@render side(order[1])}
+  {/if}
+</section>
+
+{#snippet side(which: Side)}
+  {#if board}
+    <div class="side" style="--side-tint: var(--tint-{options[which]})">
+      <div class="name">{names[which]}</div>
+      <div class="score mono">{board[which].score}</div>
       <div class="warns">
-        {#each { length: board.blue.penalty } as _, i (i)}<WarningTriangle />{/each}
+        {#each { length: board[which].penalty } as _, i (i)}<WarningTriangle />{/each}
       </div>
     </div>
   {/if}
-</section>
+{/snippet}
 
 <style>
   .board {
@@ -102,11 +108,8 @@
     border-radius: var(--radius);
     min-width: 0;
   }
-  .side.red {
-    background: var(--red-tint);
-  }
-  .side.blue {
-    background: var(--blue-tint);
+  .side {
+    background: var(--side-tint);
   }
   .name {
     font-size: clamp(1rem, 4vh, 3rem);

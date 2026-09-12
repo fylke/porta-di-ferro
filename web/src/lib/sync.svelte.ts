@@ -8,9 +8,43 @@
  */
 import { api } from '../api';
 import * as db from './db';
-import type { Event } from './match';
+import { differences } from './drift';
+import { MSL, replay, type Event, type State } from './match';
 
 export type SyncState = 'idle' | 'pushing' | 'offline';
+
+let flushingAll = false;
+
+/**
+ * Hands the server every match log on this device that it does not have yet, not only the
+ * one on screen.
+ *
+ * A pool run offline is several finished matches, and by the time the LAN is back only
+ * the last of them is open in a MatchLog. Without this, the earlier ones would sit in
+ * IndexedDB until somebody happened to reopen each on the same device -- which is to say
+ * never, and the whole point of running the pool offline was to report it afterwards.
+ * Outstanding is derived the same way load() derives it, by asking the server what it has,
+ * so nothing has to be flagged in storage.
+ */
+export async function flushAll(except = ''): Promise<void> {
+  if (flushingAll) return;
+  flushingAll = true;
+  try {
+    for (const id of await db.matches()) {
+      if (id === except) continue;
+      const local = await db.read(id);
+      if (local.length === 0) continue;
+      const remote = await api.events(id, 0);
+      const have = new Set(remote.map((e) => e.seq));
+      const missing = local.filter((e) => !have.has(e.seq));
+      if (missing.length > 0) await api.pushEvents(id, missing);
+    }
+  } catch {
+    // The LAN went again. The next successful flush of the open match tries the rest.
+  } finally {
+    flushingAll = false;
+  }
+}
 
 export class MatchLog {
   matchId = $state('');
@@ -19,6 +53,22 @@ export class MatchLog {
   pendingCount = $state(0);
   /** False when the log lives only in memory, so a refresh would lose it. */
   durable = $state(true);
+
+  /**
+   * The state the server derived from this log the last time it answered a push. The
+   * engine exists twice, and this is the one place a live match can show the two apart.
+   */
+  serverState = $state<State | null>(null);
+  /** Set when the server disagreed with this device about the same log. */
+  drift = $state<{ local: State; server: State; fields: string[] } | null>(null);
+  /**
+   * True once the score keeper has chosen the server's numbers over this device's. The
+   * session then shows the server's state whenever it has one for the current log, which
+   * is the fallback for a dual-engine bug found in a live match: the match goes on under
+   * the server's rules, and the bug earns a vector afterwards.
+   */
+  aligned = $state(false);
+  private driftDismissedAt = 0;
 
   /**
    * Sequence numbers the server has confirmed. Held here rather than as a flag in
@@ -64,6 +114,7 @@ export class MatchLog {
 
     this.durable = db.usable();
     await this.flush();
+    if (this.sync === 'idle') void flushAll(this.matchId);
     this.start();
   }
 
@@ -94,15 +145,56 @@ export class MatchLog {
     }
     this.sync = 'pushing';
     try {
-      await api.pushEvents(this.matchId, batch);
+      const res = await api.pushEvents(this.matchId, batch);
       for (const e of batch) this.pushed.add(e.seq);
+      this.check(res.state);
       this.pendingCount = 0;
       this.sync = 'idle';
+      // Reaching the server with this match's backlog means the LAN is back: the matches
+      // finished before it are waiting too.
+      void flushAll(this.matchId);
     } catch {
       // The LAN is down, or the server is. Neither stops the match: the log is already on
       // this device and the next flush will carry it.
       this.sync = 'offline';
     }
+  }
+
+  /**
+   * Compares what the server derived with what this device derived from the same log.
+   * Only when the two logs are the same length: a server that is ahead has another
+   * writer, which is a handover matter, not an engine one.
+   */
+  private check(server: State): void {
+    this.serverState = server;
+    const local = replay(MSL, this.events);
+    if (server.lastSeq !== local.lastSeq) return;
+    const fields = differences(local, server);
+    if (fields.length === 0) {
+      this.drift = null;
+      return;
+    }
+    if (this.driftDismissedAt === local.lastSeq) return;
+    this.drift = { local, server, fields };
+    // Loud in the console as well as on screen: this is the bug report.
+    console.error('porta: the server derived a different state from the same log', {
+      match: this.matchId,
+      fields,
+      local,
+      server,
+    });
+  }
+
+  /** The score keeper has seen the disagreement and is carrying on with this device's numbers. */
+  dismissDrift(): void {
+    this.driftDismissedAt = this.drift?.local.lastSeq ?? 0;
+    this.drift = null;
+  }
+
+  /** The score keeper has chosen the server's numbers. */
+  alignToServer(): void {
+    this.aligned = true;
+    this.drift = null;
   }
 
   private start(): void {
