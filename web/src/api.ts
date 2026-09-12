@@ -22,11 +22,18 @@ export interface Address {
 
 export interface MatchView {
   id: string;
+  /** 0 for a bracket match. */
   pool: number;
   order: number;
   mat: number;
+  /** Empty on a bracket match whose feeder has not been decided yet. */
   red: string;
   blue: string;
+  /** Set on a bracket match: which round, and the match's number within it. */
+  round?: 'quarter' | 'semi' | 'bronze' | 'final';
+  slot?: number;
+  feedRed?: string;
+  feedBlue?: string;
   state: State;
   status: 'pending' | 'running' | 'complete';
   /**
@@ -70,6 +77,18 @@ export interface PoolView {
   complete: boolean;
 }
 
+export interface Podium {
+  first: string;
+  second: string;
+  third: string;
+}
+
+export interface BracketView {
+  matches: MatchView[];
+  podium: Podium;
+  complete: boolean;
+}
+
 /** One device on the LAN, as the server sees it. */
 export interface Client {
   id: string;
@@ -99,6 +118,10 @@ export interface Presence {
 
 export interface Snapshot {
   competitors: Competitor[];
+  /** Everyone ranked across the pools by the pool chain: the seeding for the eliminations. */
+  overall: Standing[];
+  poolsComplete: boolean;
+  bracket?: BracketView;
   tournament: {
     mats: number;
     minPoolSize: number;
@@ -166,6 +189,7 @@ export const api = {
   saveTournament: (mats: number, minPoolSize: number, maxPoolSize: number) =>
     req<unknown>('PUT', '/api/tournament', { mats, minPoolSize, maxPoolSize }),
   generatePools: () => req<unknown>('POST', '/api/tournament/pools'),
+  drawBracket: () => req<unknown>('POST', '/api/tournament/bracket'),
   movePool: (number: number, mat: number) =>
     req<unknown>('PATCH', `/api/tournament/pools/${number}`, { mat }),
   reorderPool: (number: number, move: 'up' | 'down') =>

@@ -20,7 +20,9 @@ service, no account, no internet. Built by two members of
    if the PC is on more than one network it offers a picker so you can choose the one the
    tablets are on. Wi-Fi networks are listed by name, and the list follows the PC if you
    switch networks — no reload needed.
-4. Enter the competitors, pick the number of mats and the pool size, and draw the pools.
+4. Enter the competitors, pick the number of mats and the pool size, and draw the pools. When
+   every pool match is in, draw the eliminations from the same page; the mats pick the
+   quarter-finals up on their own.
 5. At each mat, open the address on a tablet or phone and pick the mat. That is the score
    keeper client.
 6. Put a spare screen on `/display` and choose what it shows from the organizer page — or go
@@ -56,7 +58,8 @@ day, a pool can be run on paper and entered afterwards.
 This is Milestone 1, scoped to run MSL's club event on 15 November 2026:
 
 - Up to 4 mats, up to 8 pools of up to 7 competitors — 56 per run
-- Pools only; eliminations are Milestone 2
+- Pools, then eliminations: top 8 by the overall ranking, single elimination with a bronze
+  match, sudden death instead of a draw
 - MSL's ruleset, hardcoded: 8 points or 3 minutes, differential scoring, the three-step
   warning ladder
 - Undo of the last confirmed exchange. Deeper correction is Milestone 2, and until then the

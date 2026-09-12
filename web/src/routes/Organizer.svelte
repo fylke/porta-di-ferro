@@ -5,6 +5,7 @@
   import Competitors from './Competitors.svelte';
   import Setup from './Setup.svelte';
   import Pools from './Pools.svelte';
+  import Eliminations from './Eliminations.svelte';
   import Screens from './Screens.svelte';
 
   /**
@@ -211,6 +212,7 @@
 
     <Screens presence={live.presence} {snapshot} />
 
+    <Eliminations {snapshot} onchange={refresh} />
     <Pools {snapshot} onchange={refresh} />
   {/if}
 </main>

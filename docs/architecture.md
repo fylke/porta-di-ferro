@@ -192,7 +192,12 @@ flowchart TD
         J5 --> J6["6. Deterministic Random Draw (FNV Seed)"]
     end
 
-    J6 --> K[Final Pool Standings & Promotion]
+    J6 --> K[Final Pool Standings]
+    K --> L{Every pool match in?}
+    L -- Yes --> M[Overall ranking across pools by the same chain]
+    M --> N[Bracket: top 8, 1v8 4v5 / 2v7 3v6, bronze and final]
+    N --> O[Later rounds filled from results on every snapshot; sudden death on the client when level at the final exchange]
+    O --> P[Podium]
 ```
 
 ---

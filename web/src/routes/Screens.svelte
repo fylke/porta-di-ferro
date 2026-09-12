@@ -1,6 +1,6 @@
 <script lang="ts">
   import { api, type Presence, type Snapshot } from '../api';
-  import { nameLookup } from './lib-display.svelte';
+  import { allMatches, nameLookup } from './lib-display.svelte';
 
   /**
    * Who is connected: the screens and what each shows, the score keepers and which mat
@@ -35,7 +35,7 @@
 
   function matchLabel(id: string | undefined): string {
     if (!id) return '';
-    const m = snapshot.pools.flatMap((p) => p.matches).find((x) => x.id === id);
+    const m = allMatches(snapshot).find((x) => x.id === id);
     return m ? `${name(m.red)} v ${name(m.blue)}` : id;
   }
 

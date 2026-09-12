@@ -647,7 +647,8 @@ MSL's SM ruleset. Longsword scoring is used for all weapons at this stage.
 | Pool match points | Win **9**, draw **6**, loss **3** |
 | Forfeit | Recorded 0–8; winner takes 9 match points, forfeiter 0 |
 | Withdrawal during pools | Treated as if the competitor never participated — results retroactively voided |
-| Red / blue assignment | Fixed at pool creation, for every match in the pool |
+| Red / blue assignment | Fixed at pool creation, for every match in the pool; the higher seed takes red in the bracket |
+| Eliminations | Top 8 by the overall ranking, single elimination with a third-place match; a level score at the final exchange goes to sudden death, first point wins |
 
 ### Exchange scoring is differential
 
@@ -807,7 +808,13 @@ Deliberate, and listed so nobody is surprised on the day:
    Cancelling one is a tap on the warning button, not a second trip into the menu. *(Built. The
    question of a dialog per level was settled §4's way: none on choosing; the end-of-match dialog that
    a match loss raises is the same one a third ordinary warning raises, and it names the escalation.)*
-3. **Eliminations** — top 8 from the pools.
+3. **Eliminations** — top 8 from the pools. *(Built. The cut is the overall ranking across every pool
+   by the full index chain, once every pool match is in. Single elimination, seeded the standard way
+   — 1 v 8 and 4 v 5 feed one semi-final, 2 v 7 and 3 v 6 the other — with a match for third place,
+   as the SM rules run it. A field under eight cuts at four, under four at two. Same 8 points and 3
+   minutes as the pools; a bracket match cannot be drawn, so a level score at the final exchange goes
+   to **sudden death**, first point wins. Later rounds are derived from results, never stored, so a
+   corrected quarter-final corrects the semi-final on its own. Best-of-three finals stay Milestone 3.)*
 4. **Server-assigned displays** — a device opens `/display` and the organizer chooses what it shows,
    reassigning on the fly and seeing which screens are live. Added *alongside* URL addressing, which
    remains supported. Cheap by this point, because the connected-client registry already exists for
