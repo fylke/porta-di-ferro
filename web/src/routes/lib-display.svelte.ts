@@ -5,6 +5,7 @@
 import { Live } from '../lib/live.svelte';
 import { Clock } from '../lib/clock.svelte';
 import type { MatchView, Snapshot } from '../api';
+import { t } from '../lib/i18n.svelte';
 
 /** Every match in the tournament: the pools in run order, then the bracket. */
 export function allMatches(snapshot: Snapshot | null): MatchView[] {
@@ -37,13 +38,13 @@ export function unfilledOn(snapshot: Snapshot | null, mat: number): MatchView[] 
 export function roundLabel(m: { round?: string; slot?: number }): string {
   switch (m.round) {
     case 'quarter':
-      return `Quarter-final ${m.slot ?? ''}`.trim();
+      return t('Quarter-final {n}', { n: m.slot ?? '' }).trim();
     case 'semi':
-      return `Semi-final ${m.slot ?? ''}`.trim();
+      return t('Semi-final {n}', { n: m.slot ?? '' }).trim();
     case 'bronze':
-      return 'Bronze match';
+      return t('Bronze match');
     case 'final':
-      return 'Final';
+      return t('Final');
     default:
       return '';
   }
@@ -82,7 +83,7 @@ export function namesFor(
   match: MatchView | null,
 ): { red: string; blue: string } {
   const name = nameLookup(snapshot);
-  return { red: match ? name(match.red) : 'Red', blue: match ? name(match.blue) : 'Blue' };
+  return { red: match ? name(match.red) : t('Red'), blue: match ? name(match.blue) : t('Blue') };
 }
 
 /**

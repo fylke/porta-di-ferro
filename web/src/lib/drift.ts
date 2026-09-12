@@ -7,6 +7,7 @@
  * the server's derived state for the same log, and this says whether it matches.
  */
 import type { State } from './match';
+import { t } from './i18n.svelte';
 
 /** The fields of a State, in the order they are compared and named. */
 const FIELDS = [
@@ -45,5 +46,5 @@ export function differences(local: State, server: State): string[] {
 /** A short line for the banner: "here 5-3, server 4-3". */
 export function summarise(local: State, server: State): string {
   const score = (s: State) => `${s.red.score}\u2013${s.blue.score}`;
-  return `here ${score(local)}, server ${score(server)}`;
+  return t('here {local}, server {server}', { local: score(local), server: score(server) });
 }

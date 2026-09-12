@@ -3,6 +3,7 @@
   import { keepAwake } from '../lib/wakelock';
   import Scoreboard from './Scoreboard.svelte';
   import { Clock, Live, liveElapsed, matchOn, namesFor, nextOn } from './lib-display.svelte';
+  import { t } from '../lib/i18n.svelte';
 
   let { mat }: { mat: number } = $props();
 
@@ -34,19 +35,19 @@
   {#if match?.state.ended || !match}
     <footer>
       {#if upcoming}
-        <span class="label">Next on mat {mat}</span>
+        <span class="label">{t('Next on mat {n}', { n: mat })}</span>
         <span class="up">
           <span style="color: var(--bright-{upcoming.options.red})">{upcomingNames.red}</span>
-          v
+          {t('v')}
           <span style="color: var(--bright-{upcoming.options.blue})">{upcomingNames.blue}</span>
         </span>
       {:else}
-        <span class="label">No more matches on mat {mat}</span>
+        <span class="label">{t('No more matches on mat {n}', { n: mat })}</span>
       {/if}
     </footer>
   {/if}
   {#if !live.connected}
-    <div class="stale">Reconnecting&hellip;</div>
+    <div class="stale">{t('Reconnecting…')}</div>
   {/if}
 </main>
 

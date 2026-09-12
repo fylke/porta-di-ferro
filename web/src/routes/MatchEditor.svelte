@@ -3,6 +3,7 @@
   import { api, type MatchView } from '../api';
   import { MSL, replay, type Event, type Reason, type TimerAction } from '../lib/match';
   import { formatClock } from '../lib/clock.svelte';
+  import { t } from '../lib/i18n.svelte';
 
   /**
    * Full history editing (design §7 item 1): the organizer corrects any entry in a match
@@ -117,22 +118,22 @@
   const hasEnd = $derived(rows.some((r) => r.type === 'end'));
 </script>
 
-<div class="scrim" role="dialog" aria-modal="true" aria-label="Edit the match log">
+<div class="scrim" role="dialog" aria-modal="true" aria-label={t('Edit the match log')}>
   <div class="card">
     <header>
-      <h2>Edit the log &middot; <span class="red">{names.red}</span> v <span class="blue">{names.blue}</span></h2>
-      <button class="close" onclick={onClose} aria-label="Close">&times;</button>
+      <h2>{t('Edit the log')} &middot; <span class="red">{names.red}</span> {t('v')} <span class="blue">{names.blue}</span></h2>
+      <button class="close" onclick={onClose} aria-label={t('Close')}>&times;</button>
     </header>
 
     {#if loading}
-      <p class="dim">Loading&hellip;</p>
+      <p class="dim">{t('Loading…')}</p>
     {:else}
       <table>
         <thead>
           <tr>
             <th>#</th>
-            <th>Type</th>
-            <th>Clock (s)</th>
+            <th>{t('Type')}</th>
+            <th>{t('Clock (s)')}</th>
             <th class="red">{names.red}</th>
             <th class="blue">{names.blue}</th>
             <th></th>
@@ -143,8 +144,8 @@
             <tr class={row.type}>
               <td class="mono dim">{i + 1}</td>
               <td>
-                {row.type}
-                {#if row.type === 'undo' && row.undo}<span class="dim">of #{row.undo.seq}</span>{/if}
+                {t(row.type)}
+                {#if row.type === 'undo' && row.undo}<span class="dim">{t('of #{n}', { n: row.undo.seq })}</span>{/if}
               </td>
               <td>
                 <input
@@ -158,40 +159,40 @@
               </td>
               {#if row.type === 'exchange' && row.exchange}
                 <td>
-                  <label>pts <input type="number" min="0" max={MSL.maxValue} bind:value={row.exchange.red.value} oninput={touch} /></label>
-                  <label>warn <input type="number" min="0" max="3" bind:value={row.exchange.red.penalty} oninput={touch} /></label>
+                  <label>{t('pts')} <input type="number" min="0" max={MSL.maxValue} bind:value={row.exchange.red.value} oninput={touch} /></label>
+                  <label>{t('warn')} <input type="number" min="0" max="3" bind:value={row.exchange.red.penalty} oninput={touch} /></label>
                 </td>
                 <td>
-                  <label>pts <input type="number" min="0" max={MSL.maxValue} bind:value={row.exchange.blue.value} oninput={touch} /></label>
-                  <label>warn <input type="number" min="0" max="3" bind:value={row.exchange.blue.penalty} oninput={touch} /></label>
+                  <label>{t('pts')} <input type="number" min="0" max={MSL.maxValue} bind:value={row.exchange.blue.value} oninput={touch} /></label>
+                  <label>{t('warn')} <input type="number" min="0" max="3" bind:value={row.exchange.blue.penalty} oninput={touch} /></label>
                 </td>
               {:else if row.type === 'timer' && row.timer}
                 <td colspan="2">
                   <select bind:value={row.timer.action} onchange={touch}>
-                    {#each timerActions as a (a)}<option value={a}>{a}</option>{/each}
+                    {#each timerActions as a (a)}<option value={a}>{t(a)}</option>{/each}
                   </select>
                 </td>
               {:else if row.type === 'end' && row.end}
                 <td colspan="2">
                   <select bind:value={row.end.reason} onchange={touch}>
-                    {#each reasons as r (r)}<option value={r}>{r.replace('_', ' ')}</option>{/each}
+                    {#each reasons as r (r)}<option value={r}>{t(r.replace('_', ' '))}</option>{/each}
                   </select>
                   {#if row.end.reason === 'forfeit'}
                     <select bind:value={row.end.forfeiter} onchange={touch}>
-                      <option value="red">{names.red} forfeits</option>
-                      <option value="blue">{names.blue} forfeits</option>
+                      <option value="red">{t('{name} forfeits', { name: names.red })}</option>
+                      <option value="blue">{t('{name} forfeits', { name: names.blue })}</option>
                     </select>
                   {/if}
                 </td>
               {:else if row.type === 'options' && row.options}
-                <td colspan="2" class="dim">{row.options.red} / {row.options.blue}{row.options.swapDisplay ? ' · display swapped' : ''}</td>
+                <td colspan="2" class="dim">{t(row.options.red)} / {t(row.options.blue)}{row.options.swapDisplay ? ' · ' + t('display swapped') : ''}</td>
               {:else}
                 <td colspan="2"></td>
               {/if}
               <td class="actions">
-                <button title="Earlier" aria-label="Move up" onclick={() => move(i, -1)}>&uarr;</button>
-                <button title="Later" aria-label="Move down" onclick={() => move(i, 1)}>&darr;</button>
-                <button title="Delete this event" aria-label="Delete" onclick={() => remove(i)}>&times;</button>
+                <button title={t('Earlier')} aria-label={t('Move up')} onclick={() => move(i, -1)}>&uarr;</button>
+                <button title={t('Later')} aria-label={t('Move down')} onclick={() => move(i, 1)}>&darr;</button>
+                <button title={t('Delete this event')} aria-label={t('Delete')} onclick={() => remove(i)}>&times;</button>
               </td>
             </tr>
           {/each}
@@ -199,34 +200,32 @@
       </table>
 
       <p class="add">
-        <button onclick={addExchange}>Add an exchange</button>
-        {#if !hasEnd}<button onclick={addEnd}>Add the end</button>{/if}
+        <button onclick={addExchange}>{t('Add an exchange')}</button>
+        {#if !hasEnd}<button onclick={addEnd}>{t('Add the end')}</button>{/if}
       </p>
 
       <div class="preview">
-        <span class="label">Replays to</span>
+        <span class="label">{t('Replays to')}</span>
         <span class="mono score">{preview.red.score}&ndash;{preview.blue.score}</span>
         <span class="dim">
           {#if preview.ended}
-            ended &middot; {preview.winner ? `${preview.winner === 'red' ? names.red : names.blue} wins` : 'draw'}
-            {#if preview.endReason}({preview.endReason.replace('_', ' ')}){/if}
+            {t('ended')} &middot; {preview.winner ? t('{name} wins', { name: preview.winner === 'red' ? names.red : names.blue }) : t('draw')}
+            {#if preview.endReason}({t(preview.endReason.replace('_', ' '))}){/if}
           {:else}
-            not ended{#if preview.pending !== 'none'} &middot; pending {preview.pending.replace('_', ' ')}{/if}
+            {t('not ended')}{#if preview.pending !== 'none'} &middot; {t('pending')} {t(preview.pending.replace('_', ' '))}{/if}
           {/if}
-          &middot; warnings {preview.red.penalty}/{preview.blue.penalty}
+          &middot; {t('warnings')} {preview.red.penalty}/{preview.blue.penalty}
         </span>
       </div>
 
       <p class="warn">
-        Saving rewrites this match's log. The version being replaced is kept as a backup beside
-        it{backups.length > 0 ? ` (${backups.length} so far)` : ''}. A score keeper holding the match
-        reloads it.
+        {t("Saving rewrites this match's log. The version being replaced is kept as a backup beside it")}{backups.length > 0 ? ' ' + t('({n} so far)', { n: backups.length }) : ''}. {t('A score keeper holding the match reloads it.')}
       </p>
       {#if error}<p class="err">{error}</p>{/if}
 
       <div class="buttons">
-        <button class="save" disabled={saving || !dirty} onclick={save}>Save the edited log</button>
-        <button onclick={onClose}>Cancel</button>
+        <button class="save" disabled={saving || !dirty} onclick={save}>{t('Save the edited log')}</button>
+        <button onclick={onClose}>{t('Cancel')}</button>
       </div>
     {/if}
   </div>

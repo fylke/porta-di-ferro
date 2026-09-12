@@ -8,6 +8,7 @@
  * (design §7 items 4 and 10).
  */
 import { api, type Client } from '../api';
+import { t } from './i18n.svelte';
 
 const ID_KEY = 'porta.clientId';
 
@@ -33,12 +34,12 @@ export function clientId(): string {
 export function deviceName(): string {
   const ua = navigator.userAgent;
   const kind = /iPad|Tablet/i.test(ua)
-    ? 'Tablet'
+    ? t('Tablet')
     : /iPhone|Android.*Mobile/i.test(ua)
-      ? 'Phone'
+      ? t('Phone')
       : /Android/i.test(ua)
-        ? 'Tablet'
-        : 'Screen';
+        ? t('Tablet')
+        : t('Screen');
   return `${kind} ${clientId().slice(0, 4).toUpperCase()}`;
 }
 

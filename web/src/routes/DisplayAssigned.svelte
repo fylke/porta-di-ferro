@@ -5,6 +5,8 @@
   import DisplayMats from './DisplayMats.svelte';
   import DisplayRoster from './DisplayRoster.svelte';
   import Audience from './Audience.svelte';
+  import LangToggle from './LangToggle.svelte';
+  import { t } from '../lib/i18n.svelte';
 
   /**
    * A server-assigned display (design §7 item 4). Open /display on any screen: it
@@ -47,15 +49,16 @@
 {:else}
   <main class="waiting">
     <p class="name">{deviceName()}</p>
-    <h1>Waiting for the organizer</h1>
+    <h1>{t('Waiting for the organizer')}</h1>
     <p class="dim">
       {#if beat.online}
-        This screen is registered. The organizer picks what it shows from the organizer
-        page, under Screens.
+        {t('This screen is registered. The organizer picks what it shows from the organizer page, under Screens.')}
       {:else}
-        Cannot reach the server. This screen will register itself as soon as it can.
+        {t('Cannot reach the server. This screen will register itself as soon as it can.')}
       {/if}
     </p>
+    <!-- The one control a waiting screen has: set once, before it is assigned and left. -->
+    <LangToggle />
   </main>
 {/if}
 

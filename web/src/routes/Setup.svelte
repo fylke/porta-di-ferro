@@ -1,6 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { api, type Snapshot } from '../api';
+  import { t } from '../lib/i18n.svelte';
 
   /**
    * Tournament setup: mats, the pool size range, and the draw. Name, logo and discipline
@@ -50,11 +51,11 @@
 </script>
 
 <section>
-  <h2>Tournament</h2>
+  <h2>{t('Tournament')}</h2>
 
   <div class="fields">
     <label>
-      Mats
+      {t('Mats')}
       <select bind:value={mats} onchange={save}>
         <option value={1}>1</option>
         <option value={2}>2</option>
@@ -63,24 +64,21 @@
       </select>
     </label>
     <label>
-      Smallest pool
+      {t('Smallest pool')}
       <input type="number" min="2" max="7" bind:value={minPoolSize} onchange={save} />
     </label>
     <label>
-      Largest pool
+      {t('Largest pool')}
       <input type="number" min="2" max="7" bind:value={maxPoolSize} onchange={save} />
     </label>
   </div>
 
   <button class="draw" disabled={busy} onclick={draw}>
-    {drawn ? 'Draw the pools again' : 'Draw the pools'}
+    {drawn ? t('Draw the pools again') : t('Draw the pools')}
   </button>
 
   {#if scored}
-    <p class="warn">
-      Matches have already been scored. Drawing again replaces the pools and the results
-      stop lining up with them.
-    </p>
+    <p class="warn">{t('Matches have already been scored. Drawing again replaces the pools and the results stop lining up with them.')}</p>
   {/if}
   {#if error}<p class="err">{error}</p>{/if}
   {#each snapshot.tournament.violations ?? [] as v (v)}
@@ -88,11 +86,11 @@
   {/each}
 
   <dl>
-    <dt>Ruleset</dt>
-    <dd>MSL, hardcoded &middot; 8 points &middot; 3 minutes &middot; differential scoring</dd>
-    <dt>Ceiling</dt>
-    <dd>4 mats, 8 pools of up to 7 &mdash; 56 competitors</dd>
-    <dt>Data</dt>
+    <dt>{t('Ruleset')}</dt>
+    <dd>{t('MSL, hardcoded · 8 points · 3 minutes · differential scoring')}</dd>
+    <dt>{t('Ceiling')}</dt>
+    <dd>{t('4 mats, 8 pools of up to 7 — 56 competitors')}</dd>
+    <dt>{t('Data')}</dt>
     <dd class="path">{snapshot.dir}</dd>
   </dl>
 </section>

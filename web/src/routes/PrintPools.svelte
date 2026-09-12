@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { Live, nameLookup } from './lib-display.svelte';
+  import { t } from '../lib/i18n.svelte';
+  import LangToggle from './LangToggle.svelte';
 
   /**
    * Printable pool sheets: the paper fallback, and what tier 2 and tier 3 of the fallback
@@ -49,21 +51,22 @@
 
 <div class="sheets">
   <p class="noprint">
-    <button class:chosen={paper === 'A4'} onclick={() => printOn('A4')}>Print A4</button>
-    <button class:chosen={paper === 'letter'} onclick={() => printOn('letter')}>Print letter</button>
-    One sheet per pool. Turn background graphics off in the print dialog.
+    <button class:chosen={paper === 'A4'} onclick={() => printOn('A4')}>{t('Print A4')}</button>
+    <button class:chosen={paper === 'letter'} onclick={() => printOn('letter')}>{t('Print letter')}</button>
+    {t('One sheet per pool. Turn background graphics off in the print dialog.')}
+    <LangToggle compact />
   </p>
 
   {#each live.snapshot?.pools ?? [] as pool (pool.number)}
     <article>
       <header>
-        <h1>Pool {pool.number}</h1>
-        <span>Mat {pool.mat} &middot; 8 points or 3 minutes &middot; differential scoring</span>
+        <h1>{t('Pool {n}', { n: pool.number })}</h1>
+        <span>{t('Mat {n}', { n: pool.mat })} &middot; {t('8 points or 3 minutes · differential scoring')}</span>
       </header>
 
       <table class="people">
         <thead>
-          <tr><th>#</th><th>Competitor</th><th>Club</th></tr>
+          <tr><th>#</th><th>{t('Competitor')}</th><th>{t('Club')}</th></tr>
         </thead>
         <tbody>
           {#each pool.competitors as id, i (id)}
@@ -76,12 +79,12 @@
         <thead>
           <tr>
             <th>#</th>
-            <th class="red">Red</th>
-            <th class="s">Score</th>
-            <th class="w">Warnings</th>
-            <th class="blue group">Blue</th>
-            <th class="s">Score</th>
-            <th class="w">Warnings</th>
+            <th class="red">{t('Red')}</th>
+            <th class="s">{t('Score')}</th>
+            <th class="w">{t('Warnings')}</th>
+            <th class="blue group">{t('Blue')}</th>
+            <th class="s">{t('Score')}</th>
+            <th class="w">{t('Warnings')}</th>
           </tr>
         </thead>
         <tbody>
@@ -99,15 +102,12 @@
         </tbody>
       </table>
 
-      <footer>
-        Match points: win 9, draw 6, loss 3. A penalty loss or a forfeit is recorded 0&ndash;8
-        and earns none. Second warning deducts a point; third loses the match.
-      </footer>
+      <footer>{t('Match points: win 9, draw 6, loss 3. A penalty loss or a forfeit is recorded 0–8 and earns none. Second warning deducts a point; third loses the match.')}</footer>
     </article>
   {/each}
 
   {#if (live.snapshot?.pools ?? []).length === 0}
-    <p class="noprint">Pools have not been drawn yet.</p>
+    <p class="noprint">{t('Pools have not been drawn yet.')}</p>
   {/if}
 </div>
 

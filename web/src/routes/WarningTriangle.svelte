@@ -10,10 +10,12 @@
    * Amber comes from `currentColor`, so it stays whatever the surrounding text is -- the
    * one colour in the language that belongs to neither competitor (design §4).
    */
-  let { label = 'Warning' }: { label?: string } = $props();
+  import { t } from '../lib/i18n.svelte';
+
+  let { label = '' }: { label?: string } = $props();
 </script>
 
-<svg class="warning-triangle" viewBox="0 0 24 22" role="img" aria-label={label}>
+<svg class="warning-triangle" viewBox="0 0 24 22" role="img" aria-label={label || t('Warning')}>
   <!-- Stroked as well as filled, with a round join: the corners of a printed or projected
        triangle at this size are the first thing to look ragged, and rounding them is what
        makes it read as a sign rather than an artefact. -->

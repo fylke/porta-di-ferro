@@ -3,6 +3,7 @@
   import { keepAwake } from '../lib/wakelock';
   import Scoreboard from './Scoreboard.svelte';
   import { Clock, Live, liveElapsed, matchOn, nameLookup, namesFor, upcomingOn } from './lib-display.svelte';
+  import { t } from '../lib/i18n.svelte';
 
   /**
    * The audience display (design §7 item 5): the mat's scoreboard, the winner and final
@@ -49,24 +50,24 @@
     </div>
     <div class="next">
       {#if next}
-        <span class="label">Next on mat {mat}</span>
+        <span class="label">{t('Next on mat {n}', { n: mat })}</span>
         <span class="pair">
           <span class="who" style="background: var(--tint-{next.options.red}); color: var(--bright-{next.options.red})">{name(next.red)}</span>
-          <span class="v">v</span>
+          <span class="v">{t('v')}</span>
           <span class="who" style="background: var(--tint-{next.options.blue}); color: var(--bright-{next.options.blue})">{name(next.blue)}</span>
         </span>
       {:else if match}
-        <span class="label">Last match on mat {mat}</span>
+        <span class="label">{t('Last match on mat {n}', { n: mat })}</span>
       {:else}
-        <span class="label">Mat {mat}</span>
+        <span class="label">{t('Mat {n}', { n: mat })}</span>
       {/if}
     </div>
   </section>
 
   <aside class="deck">
-    <h2>On deck</h2>
+    <h2>{t('On deck')}</h2>
     {#if deck.length === 0}
-      <p class="dim">{next ? 'Nothing after the next match.' : 'Nothing more on this mat.'}</p>
+      <p class="dim">{next ? t('Nothing after the next match.') : t('Nothing more on this mat.')}</p>
     {:else}
       <ol>
         {#each deck as m (m.id)}
@@ -81,7 +82,7 @@
   </aside>
 
   {#if !live.connected}
-    <div class="stale">Reconnecting&hellip;</div>
+    <div class="stale">{t('Reconnecting…')}</div>
   {/if}
 </main>
 

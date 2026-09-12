@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Pending } from '../lib/match';
+  import { t } from '../lib/i18n.svelte';
 
   /**
    * The three match-ending dialogs. One component parameterised on its second action --
@@ -28,7 +29,7 @@
   } = $props();
 
   const secondLabel = $derived(
-    second || (pending === 'final_exchange' ? 'Continue one more exchange' : 'Undo last exchange'),
+    second || (pending === 'final_exchange' ? t('Continue one more exchange') : t('Undo last exchange')),
   );
 </script>
 
@@ -36,7 +37,7 @@
   <div class="card">
     <p class="headline">{headline}</p>
     {#if detail}<p class="detail">{detail}</p>{/if}
-    <button class="end" onclick={onEnd}>End match</button>
+    <button class="end" onclick={onEnd}>{t('End match')}</button>
     <button class="second" onclick={onSecond}>{secondLabel}</button>
   </div>
 </div>

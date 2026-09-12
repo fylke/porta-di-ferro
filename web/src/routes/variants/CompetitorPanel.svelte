@@ -1,5 +1,6 @@
 <script lang="ts">
   import WarningTriangle from '../WarningTriangle.svelte';
+  import { t } from '../../lib/i18n.svelte';
   import type { Side } from '../../lib/match';
   import type { Selection } from '../../lib/scorekeeper.svelte';
 
@@ -38,7 +39,7 @@
   // The punctuation encodes severity, so the label reads as more alarming exactly as the
   // consequence gets worse -- a third cue alongside colour and size (design §4).
   const warningLabel = $derived(
-    selection.penalty >= 3 ? 'TRIPLE!!!' : selection.penalty === 2 ? 'DOUBLE!!' : 'WARNING!',
+    selection.penalty >= 3 ? t('TRIPLE!!!') : selection.penalty === 2 ? t('DOUBLE!!') : t('WARNING!'),
   );
 </script>
 
@@ -47,17 +48,17 @@
 <section
   class="panel v-{variant}"
   style="--side-tint: var(--tint-{colour}); --side-bright: var(--bright-{colour})"
-  aria-label="{side} competitor, shown in {colour}"
+  aria-label={t('{side} competitor, shown in {colour}', { side: t(side), colour: t(colour) })}
 >
   <header>
-    <span class="label">{colour.toUpperCase()}</span>
+    <span class="label">{t(colour).toUpperCase()}</span>
     <span class="name">{name}</span>
   </header>
 
-  <div class="score mono" aria-label="score">
+  <div class="score mono" aria-label={t('score')}>
     {score}
     {#if warnings > 0}
-      <span class="warnings" aria-label="{warnings} warnings">
+      <span class="warnings" aria-label={t('{n} warnings', { n: warnings })}>
         {#each { length: warnings } as _, i (i)}<WarningTriangle />{/each}
       </span>
     {/if}

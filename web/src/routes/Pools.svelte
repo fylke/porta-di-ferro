@@ -2,6 +2,7 @@
   import { api, type MatchView, type Snapshot } from '../api';
   import { nameLookup } from './lib-display.svelte';
   import MatchEditor from './MatchEditor.svelte';
+  import { t } from '../lib/i18n.svelte';
 
   /**
    * The organizer's screen for a running tournament: matches, status, live standings --
@@ -33,25 +34,25 @@
 
 {#each snapshot.pools as pool, i (pool.number)}
   {#if i === 0 || snapshot.pools[i - 1].mat !== pool.mat}
-    <h3 class="mat-head">Mat {pool.mat}</h3>
+    <h3 class="mat-head">{t('Mat {n}', { n: pool.mat })}</h3>
   {/if}
   <section>
     <h2>
-      Pool {pool.number}
-      <span class="meta">{pool.complete ? 'complete' : 'in progress'}</span>
+      {t('Pool {n}', { n: pool.number })}
+      <span class="meta">{pool.complete ? t('complete') : t('in progress')}</span>
       {#if pool.overridden}
         <!-- Visible as an override, so nobody has to wonder why mat 2 is running pool 3. -->
-        <span class="tag override" title="Moved by the organizer from where the draw put it">moved</span>
+        <span class="tag override" title={t('Moved by the organizer from where the draw put it')}>{t('moved')}</span>
       {/if}
       <span class="controls">
         <label>
-          Mat
+          {t('Mat')}
           <select value={pool.mat} onchange={(e) => void override(() => api.movePool(pool.number, Number(e.currentTarget.value)))}>
             {#each mats as m (m)}<option value={m}>{m}</option>{/each}
           </select>
         </label>
-        <button title="Run this pool earlier on its mat" aria-label="Move pool {pool.number} up" onclick={() => void override(() => api.reorderPool(pool.number, 'up'))}>&uarr;</button>
-        <button title="Run this pool later on its mat" aria-label="Move pool {pool.number} down" onclick={() => void override(() => api.reorderPool(pool.number, 'down'))}>&darr;</button>
+        <button title={t('Run this pool earlier on its mat')} aria-label={t('Move pool {n} up', { n: pool.number })} onclick={() => void override(() => api.reorderPool(pool.number, 'up'))}>&uarr;</button>
+        <button title={t('Run this pool later on its mat')} aria-label={t('Move pool {n} down', { n: pool.number })} onclick={() => void override(() => api.reorderPool(pool.number, 'down'))}>&darr;</button>
       </span>
     </h2>
 
@@ -65,9 +66,9 @@
               {#if m.status === 'pending'}v{:else}{m.state.red.score}–{m.state.blue.score}{/if}
             </span>
             <span class="blue">{name(m.blue)}</span>
-            {#if m.state.endReason === 'forfeit'}<span class="tag">forfeit</span>{/if}
-            {#if m.state.endReason === 'penalty'}<span class="tag">penalty</span>{/if}
-            <button class="edit" title="Edit this match's log" aria-label="Edit the log of match {m.order}" onclick={() => (editing = m)}>&#9998;</button>
+            {#if m.state.endReason === 'forfeit'}<span class="tag">{t('forfeit')}</span>{/if}
+            {#if m.state.endReason === 'penalty'}<span class="tag">{t('penalty')}</span>{/if}
+            <button class="edit" title={t("Edit this match's log")} aria-label={t('Edit the log of match {n}', { n: m.order })} onclick={() => (editing = m)}>&#9998;</button>
           </li>
         {/each}
       </ol>
@@ -76,12 +77,12 @@
         <thead>
           <tr>
             <th></th>
-            <th class="l">Competitor</th>
-            <th title="Matches completed">M</th>
-            <th title="Match point index">MPI</th>
-            <th title="Victory index">VI</th>
-            <th title="Score index">SI</th>
-            <th title="Reception index, lowest wins">RI</th>
+            <th class="l">{t('Competitor')}</th>
+            <th title={t('Matches completed')}>M</th>
+            <th title={t('Match point index')}>MPI</th>
+            <th title={t('Victory index')}>VI</th>
+            <th title={t('Score index')}>SI</th>
+            <th title={t('Reception index, lowest wins')}>RI</th>
           </tr>
         </thead>
         <tbody>
@@ -103,7 +104,7 @@
 {/each}
 
 {#if snapshot.pools.length === 0}
-  <p class="empty">Draw the pools to get started.</p>
+  <p class="empty">{t('Draw the pools to get started.')}</p>
 {/if}
 
 {#if editing}

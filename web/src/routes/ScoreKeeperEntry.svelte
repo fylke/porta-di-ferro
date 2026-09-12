@@ -3,6 +3,8 @@
   import { navigate } from '../router.svelte';
   import { Live } from '../lib/live.svelte';
   import { matchOn, namesFor } from './lib-display.svelte';
+  import { t } from '../lib/i18n.svelte';
+  import LangToggle from './LangToggle.svelte';
 
   /**
    * The screen a score keeper lands on after scanning the QR code: pick a mat, once.
@@ -39,37 +41,35 @@
 </script>
 
 <main>
-  <h1>Which mat?</h1>
+  <div class="top"><LangToggle /></div>
+  <h1>{t('Which mat?')}</h1>
   {#if live.snapshot?.instance.name}
     <p class="discipline">{live.snapshot.instance.name}</p>
   {/if}
   {#if live.error && !live.snapshot}
-    <p class="err">Cannot reach the server: {live.error}</p>
+    <p class="err">{t('Cannot reach the server:')} {live.error}</p>
   {:else if live.stale}
-    <p class="err">The server is out of reach. This is the schedule from the last time it was seen; scoring still works.</p>
+    <p class="err">{t('The server is out of reach. This is the schedule from the last time it was seen; scoring still works.')}</p>
   {/if}
   <div class="mats">
     {#each mats as mat (mat)}
       {@const up = upNext(mat)}
       <button onclick={() => navigate(`/score/${mat}`)}>
-        <span class="n">Mat {mat}</span>
+        <span class="n">{t('Mat {n}', { n: mat })}</span>
         <span class="up">
           {#if up}
-            Pool {up.pool} &middot; {up.red} v {up.blue}
+            {t('Pool {n}', { n: up.pool })} &middot; {up.red} {t('v')} {up.blue}
           {:else}
-            Nothing up yet
+            {t('Nothing up yet')}
           {/if}
         </span>
       </button>
     {/each}
   </div>
   {#if mats.length === 0 && !live.error}
-    <p class="hint">Waiting for the organizer to set up the mats.</p>
+    <p class="hint">{t('Waiting for the organizer to set up the mats.')}</p>
   {/if}
-  <p class="hint">
-    Pick the mat this device is sitting at. It stays on that mat for the whole event, and
-    follows whichever match is up next there.
-  </p>
+  <p class="hint">{t('Pick the mat this device is sitting at. It stays on that mat for the whole event, and follows whichever match is up next there.')}</p>
 </main>
 
 <style>
@@ -77,6 +77,11 @@
     max-width: 32rem;
     margin: 0 auto;
     padding: 3rem 1.5rem;
+  }
+  .top {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 0.5rem;
   }
   h1 {
     font-size: 2rem;

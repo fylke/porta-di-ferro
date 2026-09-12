@@ -1,5 +1,6 @@
 <script lang="ts">
   import { COLOURS, type Options, type Side } from '../lib/match';
+  import { t } from '../lib/i18n.svelte';
 
   /**
    * Colours and sides, reached from the overflow menu (design §7 item 6).
@@ -30,13 +31,13 @@
   const otherOf = (side: Side): Side => (side === 'red' ? 'blue' : 'red');
 </script>
 
-<div class="scrim" role="dialog" aria-modal="true" aria-label="Colours and sides">
+<div class="scrim" role="dialog" aria-modal="true" aria-label={t('Colours and sides')}>
   <div class="card">
-    <h2>Colours and sides</h2>
+    <h2>{t('Colours and sides')}</h2>
 
     {#each ['red', 'blue'] as const as side (side)}
       <section>
-        <h3>{names[side]} <span class="dim">&middot; the {side} side</span></h3>
+        <h3>{names[side]} <span class="dim">&middot; {t('the {side} side', { side: t(side) })}</span></h3>
         <!-- Selection is fill and border, never hue: a chosen swatch has a ring of ink,
              so a non-default colour cannot start reading as a selected control. -->
         <div class="swatches">
@@ -47,7 +48,7 @@
               style="--tint: var(--tint-{colour}); --bright: var(--bright-{colour})"
               aria-pressed={options[side] === colour}
               disabled={options[otherOf(side)] === colour}
-              onclick={() => onColour(side, colour)}>{colour}</button
+              onclick={() => onColour(side, colour)}>{t(colour)}</button
             >
           {/each}
         </div>
@@ -55,14 +56,11 @@
     {/each}
 
     <section>
-      <h3>Sides</h3>
-      <p class="dim">
-        Swapping sides risks a screen that disagrees with the corners of the mat. A different
-        colour is usually the better fix.
-      </p>
+      <h3>{t('Sides')}</h3>
+      <p class="dim">{t('Swapping sides risks a screen that disagrees with the corners of the mat. A different colour is usually the better fix.')}</p>
       <label>
         <input type="checkbox" checked={swapHere} onchange={(e) => onSwapHere(e.currentTarget.checked)} />
-        Swap sides on this screen
+        {t('Swap sides on this screen')}
       </label>
       <label>
         <input
@@ -70,11 +68,11 @@
           checked={options.swapDisplay}
           onchange={(e) => onSwapDisplay(e.currentTarget.checked)}
         />
-        Swap sides on the displays
+        {t('Swap sides on the displays')}
       </label>
     </section>
 
-    <button class="done" onclick={onClose}>Done</button>
+    <button class="done" onclick={onClose}>{t('Done')}</button>
   </div>
 </div>
 

@@ -6,6 +6,7 @@
  * can be tested without a screen.
  */
 import type { Event, Ruleset, Side, State } from './match';
+import { t } from './i18n.svelte';
 
 export interface Names {
   red: string;
@@ -43,22 +44,22 @@ export function penaltyLoss(r: Ruleset, state: State, names: Names, events: Even
   const last = lastStandingExchange(events);
   const how = (side: Side): string => {
     const levels = last?.exchange?.[side].penalty ?? 1;
-    if (levels >= 3) return 'is disqualified';
-    if (levels === 2) return 'loses the match on a double warning';
-    return 'loses the match on a third warning';
+    if (levels >= 3) return t('{name} is disqualified', { name: names[side] });
+    if (levels === 2) return t('{name} loses the match on a double warning', { name: names[side] });
+    return t('{name} loses the match on a third warning', { name: names[side] });
   };
 
   if (out('red') && out('blue')) {
     return {
-      headline: 'Both lose the match on warnings',
-      detail: 'Recorded 0–0. Neither earns match points.',
+      headline: t('Both lose the match on warnings'),
+      detail: t('Recorded 0–0. Neither earns match points.'),
     };
   }
   const loser: Side = out('red') ? 'red' : 'blue';
   const winner: Side = loser === 'red' ? 'blue' : 'red';
   return {
-    headline: `${names[loser]} ${how(loser)}`,
-    detail: `${names[winner]} wins ${state[winner].score}–${state[loser].score}`,
+    headline: how(loser),
+    detail: t('{name} wins {score}', { name: names[winner], score: `${state[winner].score}–${state[loser].score}` }),
   };
 }
 
@@ -68,8 +69,8 @@ export function ended(r: Ruleset, state: State, names: Names, events: Event[]): 
   if (state.endReason === 'penalty') return penaltyLoss(r, state, names, events);
   if (state.endReason === 'forfeit') {
     const loser: Side = state.winner === 'red' ? 'blue' : 'red';
-    return { headline: `${names[loser]} forfeits`, detail: score };
+    return { headline: t('{name} forfeits', { name: names[loser] }), detail: score };
   }
-  if (!state.winner) return { headline: 'Draw', detail: score };
-  return { headline: `${names[state.winner]} wins`, detail: score };
+  if (!state.winner) return { headline: t('Draw'), detail: score };
+  return { headline: t('{name} wins', { name: names[state.winner] }), detail: score };
 }
