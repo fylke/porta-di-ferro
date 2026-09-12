@@ -8,6 +8,8 @@
   import Eliminations from './Eliminations.svelte';
   import Screens from './Screens.svelte';
   import Disciplines from './Disciplines.svelte';
+  import LangToggle from './LangToggle.svelte';
+  import { t, lang } from '../lib/i18n.svelte';
 
   /**
    * The first screen an organizer sees. It carries the LAN address and a QR code large
@@ -142,71 +144,61 @@
       {#if snapshot?.instance.name}<span class="discipline">{snapshot.instance.name}</span>{/if}
     </h1>
     <nav>
-      <a href="/display/mats" target="_blank" rel="noreferrer">Displays</a>
-      <a href="/display/roster" target="_blank" rel="noreferrer">Roster</a>
-      <a href="/print/pools" target="_blank" rel="noreferrer">Pool sheets</a>
-      <a href="/api/export.json">Export JSON</a>
-      <a href="/api/export.pdf">Export PDF</a>
+      <a href="/display/mats" target="_blank" rel="noreferrer">{t('Displays')}</a>
+      <a href="/display/roster" target="_blank" rel="noreferrer">{t('Roster')}</a>
+      <a href="/print/pools" target="_blank" rel="noreferrer">{t('Pool sheets')}</a>
+      <a href="/api/export.json">{t('Export JSON')}</a>
+      <a href="/api/export.pdf?lang={lang.current}">{t('Export PDF')}</a>
+      <LangToggle />
     </nav>
   </header>
 
   {#if !snapshot}
-    <p class="loading">{live.error || 'Loading…'}</p>
+    <p class="loading">{live.error || t('Loading…')}</p>
   {:else}
     <section class="join">
       <div>
-        <h2>Join from a tablet or phone</h2>
+        <h2>{t('Join from a tablet or phone')}</h2>
         {#if clientURL}
           <p class="url">{scoreURL}</p>
           {#if chosen}
-            <p class="on">on {describe(chosen)}</p>
+            <p class="on">{t('on {network}', { network: describe(chosen) })}</p>
           {/if}
           {#if addresses.length > 1}
             <label class="network">
-              Network
+              {t('Network')}
               <select value={chosenIP} onchange={(e) => choose(e.currentTarget.value)}>
                 {#each addresses as a (a.ip)}
                   <option value={a.ip}>{describe(a)}: {a.ip}</option>
                 {/each}
               </select>
             </label>
-            <p class="hint">
-              This PC is on more than one network. Pick the one the tablets are on; the
-              address and the code above follow the choice, and it is remembered.
-            </p>
+            <p class="hint">{t('This PC is on more than one network. Pick the one the tablets are on; the address and the code above follow the choice, and it is remembered.')}</p>
           {:else}
-            <p class="hint">
-              Point a score keeper's device at that address, or let them scan the code. It
-              opens straight on the mat picker.
-            </p>
+            <p class="hint">{t("Point a score keeper's device at that address, or let them scan the code. It opens straight on the mat picker.")}</p>
           {/if}
         {:else}
-          <p class="url none">No network</p>
-          <p class="hint warn">
-            This PC is not on a network another device could reach, so there is no address
-            to hand out. Join it to the venue wifi and reload this page. Scoring on this PC
-            still works.
-          </p>
+          <p class="url none">{t('No network')}</p>
+          <p class="hint warn">{t('This PC is not on a network another device could reach, so there is no address to hand out. Join it to the venue wifi and reload this page. Scoring on this PC still works.')}</p>
         {/if}
         {#if clientURL}
           <p class="hint">
-            Spare screens open <span class="mono">{clientURL}/display</span> and are told
-            what to show from here, under Screens &mdash; or go straight to
+            {t('Spare screens open')} <span class="mono">{clientURL}/display</span>
+            {t('and are told what to show from here, under Screens — or go straight to')}
             <span class="mono">{clientURL}/display/mats</span>,
-            <span class="mono">{clientURL}/display/audience/1</span> or
-            <span class="mono">{clientURL}/display/roster</span>. Any device on the venue
-            wifi can reach them.
+            <span class="mono">{clientURL}/display/audience/1</span> {t('or')}
+            <span class="mono">{clientURL}/display/roster</span>. {t('Any device on the venue wifi can reach them.')}
           </p>
         {/if}
         <p class="links">
-          <a href="/score">Score keeper</a>
+          <a href="/score">{t('Score keeper')}</a>
           {#each { length: snapshot.tournament.mats } as _, i (i)}
-            <a href="/display/mat/{i + 1}">Mat {i + 1}</a>
+            <a href="/display/mat/{i + 1}">{t('Mat {n}', { n: i + 1 })}</a>
           {/each}
         </p>
       </div>
       {#if scoreURL}
-        <img class="qr" alt="QR code for {scoreURL}" src="/api/qr.png?url={encodeURIComponent(scoreURL)}" />
+        <img class="qr" alt={t('QR code for {url}', { url: scoreURL })} src="/api/qr.png?url={encodeURIComponent(scoreURL)}" />
       {/if}
     </section>
 

@@ -26,7 +26,7 @@ func (s *Server) exportPDF(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
-	doc := buildPDF(snap)
+	doc := buildPDF(snap, r.URL.Query().Get("lang") == "sv")
 	w.Header().Set("Content-Type", "application/pdf")
 	w.Header().Set("Content-Disposition", `attachment; filename="porta-di-ferro.pdf"`)
 	if err := doc.Output(w); err != nil {
@@ -34,11 +34,54 @@ func (s *Server) exportPDF(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// pdfSwedish is the export's own dictionary, keyed by the English it replaces, the same
+// way the web client's is (design §7 item 11). Small enough to live here.
+var pdfSwedish = map[string]string{
+	"Pool %d":                          "Pool %d",
+	"Mat %d  ·  %d competitors  ·  %s": "Matta %d  ·  %d fäktare  ·  %s",
+	"in progress":                      "pågår",
+	"complete":                         "klar",
+	"Standings":                        "Tabell",
+	"Matches":                          "Matcher",
+	"#":                                "#",
+	"Competitor":                       "Fäktare",
+	"Club":                             "Klubb",
+	"M":                                "M",
+	"W-D-L":                            "V-O-F",
+	"Red":                              "Röd",
+	"Blue":                             "Blå",
+	"Result":                           "Resultat",
+	"Round":                            "Omgång",
+	" (forfeit)":                       " (uppgiven)",
+	" (penalty)":                       " (bestraffning)",
+	"MPI match point index, VI victory index, SI score index, RI reception index (lowest wins); all per match completed.": "MPI matchpoängindex, VI segerindex, SI punktindex, RI mottaget index (lägst vinner); alla per utkämpad match.",
+	"Overall ranking": "Sammanlagd ranking",
+	"Everyone across the pools, by the same chain as the pool tables. The seeding for the eliminations.": "Alla fäktare över poolerna, efter samma kedja som pooltabellerna. Seedningen till elimineringarna.",
+	"Eliminations":                       "Elimineringar",
+	"Quarter-final":                      "Kvartsfinal",
+	"Semi-final":                         "Semifinal",
+	"Bronze match":                       "Bronsmatch",
+	"Final":                              "Final",
+	"Podium":                             "Pallen",
+	"The pools have not been drawn yet.": "Poolerna är inte lottade ännu.",
+	"page %d":                            "sida %d",
+}
+
 // buildPDF lays the snapshot out on A4. The core fonts cover Latin-1, which covers
 // Swedish; a name from further afield loses its accents rather than breaking the page.
-func buildPDF(snap Snapshot) *fpdf.Fpdf {
+func buildPDF(snap Snapshot, swedish bool) *fpdf.Fpdf {
 	pdf := fpdf.New("P", "mm", "A4", "")
 	tr := pdf.UnicodeTranslatorFromDescriptor("")
+	// Translation happens before the Latin-1 pass, so the Swedish comes out with its
+	// letters intact. A key with no entry comes out in English.
+	t := func(key string) string {
+		if swedish {
+			if v, ok := pdfSwedish[key]; ok {
+				return v
+			}
+		}
+		return key
+	}
 	pdf.SetMargins(15, 15, 15)
 	pdf.SetAutoPageBreak(true, 15)
 
@@ -50,7 +93,7 @@ func buildPDF(snap Snapshot) *fpdf.Fpdf {
 		pdf.SetY(-10)
 		pdf.SetFont("Helvetica", "", 8)
 		pdf.SetTextColor(120, 120, 120)
-		pdf.CellFormat(0, 5, tr(fmt.Sprintf("%s  ·  %s  ·  page %d", title, time.Now().Format("2006-01-02 15:04"), pdf.PageNo())), "", 0, "C", false, 0, "")
+		pdf.CellFormat(0, 5, tr(fmt.Sprintf("%s  ·  %s  ·  "+t("page %d"), title, time.Now().Format("2006-01-02 15:04"), pdf.PageNo())), "", 0, "C", false, 0, "")
 	})
 
 	name := func(id string) string {
@@ -122,27 +165,27 @@ func buildPDF(snap Snapshot) *fpdf.Fpdf {
 		note := ""
 		switch m.State.Reason {
 		case match.ReasonForfeit:
-			note = " (forfeit)"
+			note = t(" (forfeit)")
 		case match.ReasonPenalty:
-			note = " (penalty)"
+			note = t(" (penalty)")
 		}
 		return fmt.Sprintf("%d-%d%s", m.State.Red.Score, m.State.Blue.Score, note)
 	}
 
 	standingsWidths := []float64{8, 52, 38, 10, 22, 12, 12, 12, 12}
-	standingsCols := []string{"#", "Competitor", "Club", "M", "W-D-L", "MPI", "VI", "SI", "RI"}
+	standingsCols := []string{"#", t("Competitor"), t("Club"), t("M"), t("W-D-L"), "MPI", "VI", "SI", "RI"}
 	matchWidths := []float64{8, 56, 56, 40}
 
 	for _, p := range snap.Pools {
 		pdf.AddPage()
-		h1(fmt.Sprintf("Pool %d", p.Number))
-		status := "in progress"
+		h1(fmt.Sprintf(t("Pool %d"), p.Number))
+		status := t("in progress")
 		if p.Complete {
-			status = "complete"
+			status = t("complete")
 		}
-		small(fmt.Sprintf("Mat %d  ·  %d competitors  ·  %s", p.Mat, len(p.Competitors), status))
+		small(fmt.Sprintf(t("Mat %d  ·  %d competitors  ·  %s"), p.Mat, len(p.Competitors), status))
 
-		h2("Standings")
+		h2(t("Standings"))
 		head(standingsCols, standingsWidths)
 		for _, st := range p.Standings {
 			row([]string{
@@ -151,10 +194,10 @@ func buildPDF(snap Snapshot) *fpdf.Fpdf {
 				fmtIdx(st.MatchPointIndex), fmtIdx(st.VictoryIndex), fmtIdx(st.ScoreIndex), fmtIdx(st.ReceptionIndex),
 			}, standingsWidths, st.Rank == 1)
 		}
-		small("MPI match point index, VI victory index, SI score index, RI reception index (lowest wins); all per match completed.")
+		small(t("MPI match point index, VI victory index, SI score index, RI reception index (lowest wins); all per match completed."))
 
-		h2("Matches")
-		head([]string{"#", "Red", "Blue", "Result"}, matchWidths)
+		h2(t("Matches"))
+		head([]string{"#", t("Red"), t("Blue"), t("Result")}, matchWidths)
 		for _, m := range p.Matches {
 			row([]string{fmt.Sprint(m.Order), name(m.Red), name(m.Blue), score(m)}, matchWidths, false)
 		}
@@ -162,8 +205,8 @@ func buildPDF(snap Snapshot) *fpdf.Fpdf {
 
 	if snap.PoolsComplete && len(snap.Overall) > 0 {
 		pdf.AddPage()
-		h1("Overall ranking")
-		small("Everyone across the pools, by the same chain as the pool tables. The seeding for the eliminations.")
+		h1(t("Overall ranking"))
+		small(t("Everyone across the pools, by the same chain as the pool tables. The seeding for the eliminations."))
 		pdf.Ln(2)
 		head(standingsCols, standingsWidths)
 		for _, st := range snap.Overall {
@@ -177,13 +220,13 @@ func buildPDF(snap Snapshot) *fpdf.Fpdf {
 
 	if snap.Bracket != nil {
 		pdf.AddPage()
-		h1("Eliminations")
+		h1(t("Eliminations"))
 		roundName := map[string]string{
-			tournament.RoundQuarter: "Quarter-final", tournament.RoundSemi: "Semi-final",
-			tournament.RoundBronze: "Bronze match", tournament.RoundFinal: "Final",
+			tournament.RoundQuarter: t("Quarter-final"), tournament.RoundSemi: t("Semi-final"),
+			tournament.RoundBronze: t("Bronze match"), tournament.RoundFinal: t("Final"),
 		}
 		bracketWidths := []float64{34, 52, 52, 40}
-		head([]string{"Round", "Red", "Blue", "Result"}, bracketWidths)
+		head([]string{t("Round"), t("Red"), t("Blue"), t("Result")}, bracketWidths)
 		or := func(id string) string {
 			if id == "" {
 				return "-"
@@ -198,7 +241,7 @@ func buildPDF(snap Snapshot) *fpdf.Fpdf {
 			row([]string{label, or(m.Red), or(m.Blue), score(m)}, bracketWidths, false)
 		}
 		if snap.Bracket.Podium.First != "" {
-			h2("Podium")
+			h2(t("Podium"))
 			pdf.SetFont("Helvetica", "", 11)
 			pdf.SetTextColor(0, 0, 0)
 			for i, id := range []string{snap.Bracket.Podium.First, snap.Bracket.Podium.Second, snap.Bracket.Podium.Third} {
@@ -213,7 +256,7 @@ func buildPDF(snap Snapshot) *fpdf.Fpdf {
 	if len(snap.Pools) == 0 {
 		pdf.AddPage()
 		h1(title)
-		small("The pools have not been drawn yet.")
+		small(t("The pools have not been drawn yet."))
 	}
 	return pdf
 }

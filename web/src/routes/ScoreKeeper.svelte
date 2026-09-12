@@ -16,6 +16,8 @@
   import { inSuddenDeath, suddenDeathDecided as decidedOnSuddenDeath } from '../lib/knockout';
   import { Heartbeat } from '../lib/presence.svelte';
   import { navigate } from '../router.svelte';
+  import { t, locale } from '../lib/i18n.svelte';
+  import LangToggle from './LangToggle.svelte';
 
   let { mat, variant = 'panels' }: { mat: number; variant?: string } = $props();
 
@@ -176,8 +178,8 @@
   const names = $derived.by(() => {
     const byId = new Map((live.snapshot?.competitors ?? []).map((c) => [c.id, c.name]));
     return {
-      red: view ? (byId.get(view.red) ?? 'Red') : 'Red',
-      blue: view ? (byId.get(view.blue) ?? 'Blue') : 'Blue',
+      red: view ? (byId.get(view.red) ?? t('Red')) : t('Red'),
+      blue: view ? (byId.get(view.blue) ?? t('Blue')) : t('Blue'),
     };
   });
 
@@ -241,21 +243,21 @@
     if (!matchState || !sk) return { headline: '', detail: '' };
     if (matchState.pending === 'final_exchange' && suddenDeathDecided) {
       const leader = matchState.red.score > matchState.blue.score ? names.red : names.blue;
-      return { headline: `${leader} wins on sudden death`, detail: `${matchState.red.score}–${matchState.blue.score}` };
+      return { headline: t('{name} wins on sudden death', { name: leader }), detail: `${matchState.red.score}–${matchState.blue.score}` };
     }
     if (matchState.pending === 'final_exchange') {
-      return { headline: 'Was that the final exchange?', detail: '' };
+      return { headline: t('Was that the final exchange?'), detail: '' };
     }
     if (matchState.pending === 'penalty_cap') {
       return penaltyLoss(MSL, matchState, names, sk.log.events);
     }
     if (matchState.red.score === matchState.blue.score) {
-      return { headline: `Draw ${matchState.red.score}–${matchState.blue.score}`, detail: '' };
+      return { headline: t('Draw {score}', { score: `${matchState.red.score}–${matchState.blue.score}` }), detail: '' };
     }
     const leader = matchState.red.score > matchState.blue.score ? names.red : names.blue;
     const high = Math.max(matchState.red.score, matchState.blue.score);
     const low = Math.min(matchState.red.score, matchState.blue.score);
-    return { headline: `${leader} wins ${high}–${low}`, detail: '' };
+    return { headline: t('{name} wins {score}', { name: leader, score: `${high}–${low}` }), detail: '' };
   });
 
   async function endMatch() {
@@ -311,7 +313,7 @@
     <button
       class="corner-btn"
       disabled={!matchState || matchState.undoableSeq === 0}
-      onclick={() => (askUndo = true)}>UNDO</button
+      onclick={() => (askUndo = true)}>{t('UNDO')}</button
     >
   </div>
   <div class="corner right">
@@ -331,34 +333,35 @@
             disabled={!matchState || matchState.ended}
             onclick={() => escalate(side, 2)}
           >
-            <span>Double warning</span><span class="why">loses a point</span>
+            <span>{t('Double warning')}</span><span class="why">{t('loses a point')}</span>
           </button>
           <button
             role="menuitem"
             disabled={!matchState || matchState.ended}
             onclick={() => escalate(side, 3)}
           >
-            <span>Triple warning</span><span class="why">loses the match</span>
+            <span>{t('Triple warning')}</span><span class="why">{t('loses the match')}</span>
           </button>
           <button
             role="menuitem"
             disabled={!matchState || matchState.ended}
             onclick={() => askToForfeit(side)}
           >
-            <span>Forfeits</span><span class="why">recorded 0&ndash;8</span>
+            <span>{t('Forfeits')}</span><span class="why">{t('recorded 0–8')}</span>
           </button>
         {/each}
-        <div class="menu-head">Match</div>
+        <div class="menu-head">{t('Match')}</div>
         <button role="menuitem" disabled={!matchState} onclick={openOptions}>
-          <span>Colours and sides&hellip;</span>
+          <span>{t('Colours and sides…')}</span>
         </button>
-        <div class="menu-head">This screen</div>
+        <div class="menu-head">{t('This screen')}</div>
         <button role="menuitem" onclick={() => void handOver()}>
-          <span>Hand over this mat</span><span class="why">to another device</span>
+          <span>{t('Hand over this mat')}</span><span class="why">{t('to another device')}</span>
         </button>
         <a role="menuitem" href="/score/{mat}?variant={variant === 'panels' ? 'edge' : 'panels'}">
-          Try the other layout
+          {t('Try the other layout')}
         </a>
+        <div class="menu-lang"><span>{t('Language')}</span><LangToggle compact /></div>
       </div>
     {/if}
   </div>
@@ -370,7 +373,7 @@
       <div class="centre" class:flashing>
         <div class="time mono">{formatClock(elapsed)}</div>
         {#if suddenDeath}
-          <div class="sudden" role="status">SUDDEN DEATH<span>first point wins</span></div>
+          <div class="sudden" role="status">{t('SUDDEN DEATH')}<span>{t('first point wins')}</span></div>
         {/if}
         {#if matchState.ended}
           <!-- The result holds the centre until Next match is pressed, so it can actually be
@@ -382,14 +385,14 @@
         {:else}
           <div class="clock-row">
             <button class="clock" onclick={() => void sk?.toggleClock(elapsed)}>
-              {matchState.running ? 'PAUSE' : 'PLAY'}
+              {matchState.running ? t('PAUSE') : t('PLAY')}
             </button>
             <!-- For a clock started by mistake. Small, because it is rare; confirmed, because
                  it is a correction to the record rather than a pause. -->
             <button
               class="reset"
-              aria-label="Reset the clock to zero"
-              title="Reset the clock to zero"
+              aria-label={t('Reset the clock to zero')}
+              title={t('Reset the clock to zero')}
               disabled={elapsed === 0 && !matchState.running}
               onclick={() => (askReset = true)}>&#8634;</button
             >
@@ -397,15 +400,15 @@
         {/if}
         <div class="sync" class:offline={sk.log.sync === 'offline' || live.stale}>
           {#if sk.log.sync === 'offline'}
-            Offline &middot; {sk.log.pendingCount} to send
+            {t('Offline · {n} to send', { n: sk.log.pendingCount })}
           {:else if sk.log.aligned}
-            Mat {mat} &middot; showing the server&rsquo;s scoring
+            {t('Mat {n}', { n: mat })} &middot; {t("showing the server's scoring")}
           {:else if live.stale}
-            Offline &middot; schedule from {new Date(live.cachedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            {t('Offline · schedule from {time}', { time: new Date(live.cachedAt).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' }) })}
           {:else if view.round}
-            Mat {mat} &middot; {roundLabel(view)}
+            {t('Mat {n}', { n: mat })} &middot; {roundLabel(view)}
           {:else}
-            {#if live.snapshot?.instance.name}{live.snapshot.instance.name} &middot; {/if}Mat {mat} &middot; pool {view.pool}
+            {#if live.snapshot?.instance.name}{live.snapshot.instance.name} &middot; {/if}{t('Mat {n}', { n: mat })} &middot; {t('pool {n}', { n: view.pool })}
           {/if}
         </div>
       </div>
@@ -418,14 +421,15 @@
            exchanges are with the organizer, and nothing it writes now would be kept. -->
       <div class="drift stale" role="alert">
         <span>
-          Another device has taken over this match.
+          {t('Another device has taken over this match.')}
           {#if sk.log.quarantined > 0}
-            {sk.log.quarantined} exchange{sk.log.quarantined === 1 ? '' : 's'} from this device
-            {sk.log.quarantined === 1 ? 'was' : 'were'} set aside for the organizer.
+            {sk.log.quarantined === 1
+              ? t('1 exchange from this device was set aside for the organizer.')
+              : t('{n} exchanges from this device were set aside for the organizer.', { n: sk.log.quarantined })}
           {/if}
         </span>
         <span class="drift-actions">
-          <button onclick={() => void handOver()}>Leave the mat</button>
+          <button onclick={() => void handOver()}>{t('Leave the mat')}</button>
         </span>
       </div>
     {/if}
@@ -435,20 +439,20 @@
            console has the full report. -->
       <div class="drift" role="alert">
         <span>
-          The server scores this match differently ({sk.log.drift.fields.join(', ')}):
+          {t('The server scores this match differently ({fields}):', { fields: sk.log.drift.fields.join(', ') })}
           {summarise(sk.log.drift.local, sk.log.drift.server)}.
         </span>
         <span class="drift-actions">
-          <button onclick={() => sk?.log.alignToServer()}>Use the server's</button>
-          <button onclick={() => sk?.log.dismissDrift()}>Keep this one</button>
+          <button onclick={() => sk?.log.alignToServer()}>{t("Use the server's")}</button>
+          <button onclick={() => sk?.log.dismissDrift()}>{t('Keep this one')}</button>
         </span>
       </div>
     {/if}
     {#if matchState.ended}
-      <button class="confirm next" onclick={nextMatch}>NEXT MATCH</button>
+      <button class="confirm next" onclick={nextMatch}>{t('NEXT MATCH')}</button>
     {:else}
       <button class="confirm" disabled={sk.log.sync === 'stale'} onclick={() => void sk?.confirm(elapsed)}>
-        CONFIRM EXCHANGE
+        {t('CONFIRM EXCHANGE')}
       </button>
     {/if}
   {:else}
@@ -456,14 +460,14 @@
       {#if live.error && queue.length === 0}
         <p>{live.error}</p>
       {:else if unfilledOn(live.snapshot, mat).length > 0}
-        <p>Waiting for the {roundLabel(unfilledOn(live.snapshot, mat)[0]).toLowerCase()}.</p>
-        <p class="dim">Its competitors come from matches still running on the other mats.</p>
+        <p>{t('Waiting for the {round}.', { round: roundLabel(unfilledOn(live.snapshot, mat)[0]).toLowerCase() })}</p>
+        <p class="dim">{t('Its competitors come from matches still running on the other mats.')}</p>
       {:else if exhausted || (queue.length > 0 && !firstOpen())}
-        <p>Every match on mat {mat} is done.</p>
-        <p class="dim">Nothing more is scheduled here. Check with the organizer.</p>
+        <p>{t('Every match on mat {n} is done.', { n: mat })}</p>
+        <p class="dim">{t('Nothing more is scheduled here. Check with the organizer.')}</p>
       {:else}
-        <p>Waiting for a match on mat {mat}.</p>
-        <p class="dim">This screen follows the mat. It fills in when a match is up.</p>
+        <p>{t('Waiting for a match on mat {n}.', { n: mat })}</p>
+        <p class="dim">{t('This screen follows the mat. It fills in when a match is up.')}</p>
       {/if}
     </div>
   {/if}
@@ -472,9 +476,9 @@
     <!-- Another live device holds this match. Taking over is deliberate: whatever that
          device still has unsent will be set aside for the organizer, not merged. -->
     <ConfirmDialog
-      headline="Mat {mat} is being scored by {sk.log.contested.name}"
-      detail="Take it over on this device? Anything the other device has not yet sent will be set aside for the organizer rather than counted."
-      confirmLabel="Take over on this device"
+      headline={t('Mat {n} is being scored by {device}', { n: mat, device: sk.log.contested.name })}
+      detail={t('Take it over on this device? Anything the other device has not yet sent will be set aside for the organizer rather than counted.')}
+      confirmLabel={t('Take over on this device')}
       onConfirm={() => void sk?.log.takeOver()}
       onCancel={() => navigate('/score')}
     />
@@ -497,7 +501,7 @@
       pending={matchState.pending}
       headline={capText.headline}
       detail={capText.detail}
-      second={suddenDeathDecided ? 'Undo last exchange' : ''}
+      second={suddenDeathDecided ? t('Undo last exchange') : ''}
       onEnd={() => void endMatch()}
       onSecond={() => void secondAction()}
     />
@@ -505,8 +509,8 @@
 
   {#if askUndo}
     <ConfirmDialog
-      headline="Undo the last exchange?"
-      detail="It is recorded as a correction, so nothing is lost from the log."
+      headline={t('Undo the last exchange?')}
+      detail={t('It is recorded as a correction, so nothing is lost from the log.')}
       onConfirm={() => {
         askUndo = false;
         void sk?.undo(elapsed);
@@ -517,9 +521,9 @@
 
   {#if askForfeit}
     <ConfirmDialog
-      headline="{nameOf(askForfeit)} forfeits?"
-      detail="Recorded 0–8. {nameOf(askForfeit === 'red' ? 'blue' : 'red')} takes the win and the match points; {nameOf(askForfeit)} earns none."
-      confirmLabel="Yes, {nameOf(askForfeit)} forfeits"
+      headline={t('{name} forfeits?', { name: nameOf(askForfeit) })}
+      detail={t('Recorded 0–8. {winner} takes the win and the match points; {loser} earns none.', { winner: nameOf(askForfeit === 'red' ? 'blue' : 'red'), loser: nameOf(askForfeit) })}
+      confirmLabel={t('Yes, {name} forfeits', { name: nameOf(askForfeit) })}
       onConfirm={() => forfeit(askForfeit!)}
       onCancel={() => (askForfeit = null)}
     />
@@ -527,9 +531,9 @@
 
   {#if askReset}
     <ConfirmDialog
-      headline="Reset the clock to 00:00?"
-      detail="For a clock that was started by mistake. The scores stay as they are, and the reset is recorded in the log."
-      confirmLabel="Yes, reset it"
+      headline={t('Reset the clock to 00:00?')}
+      detail={t('For a clock that was started by mistake. The scores stay as they are, and the reset is recorded in the log.')}
+      confirmLabel={t('Yes, reset it')}
       onConfirm={() => {
         askReset = false;
         void sk?.resetClock(elapsed);
@@ -805,6 +809,14 @@
   }
   .menu button:disabled {
     opacity: 0.4;
+  }
+  .menu-lang {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.6rem 1rem 0.75rem;
+    font-size: 0.85rem;
+    color: var(--ink-dim);
   }
   .menu .why {
     color: var(--ink-dim);

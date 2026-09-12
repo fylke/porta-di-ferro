@@ -2,6 +2,7 @@
   import { api, type MatchView, type Snapshot } from '../api';
   import { nameLookup, roundLabel } from './lib-display.svelte';
   import MatchEditor from './MatchEditor.svelte';
+  import { t } from '../lib/i18n.svelte';
 
   /**
    * The cut and the bracket (design §7 item 3). Drawn once every pool match is in, from
@@ -48,7 +49,7 @@
       .filter((g) => g.matches.length > 0);
   });
   const heading = (round: string) =>
-    round === 'quarter' ? 'Quarter-finals' : round === 'semi' ? 'Semi-finals' : round === 'bronze' ? 'Bronze match' : 'Final';
+    round === 'quarter' ? t('Quarter-finals') : round === 'semi' ? t('Semi-finals') : round === 'bronze' ? t('Bronze match') : t('Final');
 </script>
 
 {#if editing}
@@ -62,25 +63,26 @@
 
 {#if snapshot.pools.length > 0}
   <section>
-    <h2>Eliminations <span class="meta">top {cut}, single elimination, sudden death</span></h2>
+    <h2>{t('Eliminations')} <span class="meta">{t('top {n}, single elimination, sudden death', { n: cut })}</span></h2>
 
     {#if !snapshot.poolsComplete && !bracket}
       <p class="dim">
-        Drawn from finished pools. {toGo} pool match{toGo === 1 ? '' : 'es'} still to score.
+        {t('Drawn from finished pools.')}
+        {toGo === 1 ? t('1 pool match still to score.') : t('{n} pool matches still to score.', { n: toGo })}
       </p>
     {:else}
       {#if !bracket || !scored}
         <div class="seeds">
-          <h3>Seeding &middot; overall ranking across the pools</h3>
+          <h3>{t('Seeding · overall ranking across the pools')}</h3>
           <table>
             <thead>
               <tr>
                 <th></th>
-                <th class="l">Competitor</th>
-                <th title="Match point index">MPI</th>
-                <th title="Victory index">VI</th>
-                <th title="Score index">SI</th>
-                <th title="Reception index, lowest wins">RI</th>
+                <th class="l">{t('Competitor')}</th>
+                <th title={t('Match point index')}>MPI</th>
+                <th title={t('Victory index')}>VI</th>
+                <th title={t('Score index')}>SI</th>
+                <th title={t('Reception index, lowest wins')}>RI</th>
               </tr>
             </thead>
             <tbody>
@@ -100,13 +102,10 @@
       {/if}
 
       <button class="draw" disabled={busy || !snapshot.poolsComplete} onclick={draw}>
-        {bracket ? 'Draw the eliminations again' : 'Draw the eliminations'}
+        {bracket ? t('Draw the eliminations again') : t('Draw the eliminations')}
       </button>
       {#if scored}
-        <p class="warn">
-          Bracket matches have been scored. Drawing again replaces the bracket and the
-          results stop lining up with it.
-        </p>
+        <p class="warn">{t('Bracket matches have been scored. Drawing again replaces the bracket and the results stop lining up with it.')}</p>
       {/if}
       {#if error}<p class="err">{error}</p>{/if}
     {/if}
@@ -119,14 +118,14 @@
             <ol>
               {#each g.matches as m (m.id)}
                 <li class={m.status}>
-                  <span class="n">{roundLabel(m)} &middot; mat {m.mat}</span>
+                  <span class="n">{roundLabel(m)} &middot; {t('mat {n}', { n: m.mat })}</span>
                   <span class="red">{m.red ? name(m.red) : '—'}</span>
                   <span class="score mono">
                     {#if m.status === 'pending'}v{:else}{m.state.red.score}–{m.state.blue.score}{/if}
                   </span>
                   <span class="blue">{m.blue ? name(m.blue) : '—'}</span>
                   {#if m.red && m.blue}
-                    <button class="edit" title="Edit this match's log" aria-label="Edit the log of {roundLabel(m)}" onclick={() => (editing = m)}>&#9998;</button>
+                    <button class="edit" title={t("Edit this match's log")} aria-label={t('Edit the log of {match}', { match: roundLabel(m) })} onclick={() => (editing = m)}>&#9998;</button>
                   {/if}
                 </li>
               {/each}

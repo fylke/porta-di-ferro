@@ -870,7 +870,12 @@ Deliberate, and listed so nobody is surprised on the day:
    explicitly; a claim on a dead device goes through without asking. The graceful case is *Hand over
    this mat* in the `…` menu, and *Next match* releases the finished match on the way out. It needed
    no round trip: heartbeats are `POST`s and the registry comes back over SSE.)*
-11. **Swedish localisation** alongside English.
+11. **Swedish localisation** alongside English. *(Built. The English text is the key and the Swedish is
+    one dictionary; a test fails the build if any string on any screen has no entry. The choice is per
+    device — a toggle on the organizer page, the mat picker, the score keeper's `…` menu and a waiting
+    screen, or `?lang=sv` on any address — and the PDF follows it. Where the SM rules have a word it
+    is used: sekretariat, ringdomare, utväxling, sista utväxlingen, the warning ladder's own terms.
+    Internal identifiers stay English on the wire and on disk.)*
 12. **PDF export** alongside JSON. *(Built, at `/api/export.pdf`: a page per pool with the standings
     and the indices that produced them and every match with its result, made on the server so it
     comes out the same from a curl as from a click, with the overall ranking and the eliminations

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api, type Instance } from '../api';
+  import { t } from '../lib/i18n.svelte';
 
   /**
    * Concurrent disciplines (design §7 item 9). Several at once are several runs of the
@@ -73,29 +74,25 @@
 </script>
 
 <section>
-  <h2>Disciplines</h2>
-  <p class="dim">
-    Each discipline is its own run of the application, on its own port with its own data
-    folder. Score keepers and screens join one discipline by its address; the name shows on
-    every page so nobody has to guess which one they are on.
-  </p>
+  <h2>{t('Disciplines')}</h2>
+  <p class="dim">{t('Each discipline is its own run of the application, on its own port with its own data folder. Score keepers and screens join one discipline by its address; the name shows on every page so nobody has to guess which one they are on.')}</p>
 
   <ul>
     {#each instances as i (i.port)}
       <li class:self={i.self}>
-        <span class="who">{i.name || 'Unnamed'}</span>
+        <span class="who">{i.name || t('Unnamed')}</span>
         {#if i.self}
-          <span class="meta">this one &middot; port {i.port}</span>
+          <span class="meta">{t('this one · port {n}', { n: i.port })}</span>
         {:else}
           <a href={i.url} target="_blank" rel="noreferrer">{i.url}</a>
-          <button onclick={() => void stop(i.port)}>Stop</button>
+          <button onclick={() => void stop(i.port)}>{t('Stop')}</button>
         {/if}
       </li>
     {/each}
   </ul>
 
   {#if self.parent}
-    <p class="dim">Started from <a href={self.parent}>{self.parent}</a>.</p>
+    <p class="dim">{t('Started from')} <a href={self.parent}>{self.parent}</a>.</p>
   {:else}
     <form
       onsubmit={(e) => {
@@ -103,8 +100,8 @@
         void start();
       }}
     >
-      <input placeholder="Sabre, Rapier and dagger, …" bind:value={name} required />
-      <button type="submit" disabled={busy || !name.trim()}>Start another discipline</button>
+      <input placeholder={t('Sabre, Rapier and dagger, …')} bind:value={name} required />
+      <button type="submit" disabled={busy || !name.trim()}>{t('Start another discipline')}</button>
     </form>
   {/if}
   {#if error}<p class="err">{error}</p>{/if}

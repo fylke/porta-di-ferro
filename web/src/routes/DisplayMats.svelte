@@ -3,6 +3,7 @@
   import { keepAwake } from '../lib/wakelock';
   import Scoreboard from './Scoreboard.svelte';
   import { Clock, Live, liveElapsed, matchOn, namesFor } from './lib-display.svelte';
+  import { t } from '../lib/i18n.svelte';
 
   /**
    * Every active mat on a single screen, or a chosen subset via ?ids=1,2.
@@ -58,7 +59,7 @@
     />
   {/each}
   {#if mats.length === 0}
-    <p class="empty">No mats are set up yet.</p>
+    <p class="empty">{t('No mats are set up yet.')}</p>
   {/if}
 </main>
 

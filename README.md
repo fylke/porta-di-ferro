@@ -68,7 +68,8 @@ This is Milestone 1, scoped to run MSL's club event on 15 November 2026:
   version beside it as a backup
 - Score keeper handover, graceful or not, with a writer epoch per match so a lost tablet can
   never write over its replacement
-- English only
+- English and Swedish, chosen per device — a toggle on every surface, or `?lang=sv` on an
+  address — with the SM rules' own vocabulary
 - Several disciplines run at once, each its own run of the application on its own port and
   data folder, started from the organizer page and named on every page
 

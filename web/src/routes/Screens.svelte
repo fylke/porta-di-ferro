@@ -1,6 +1,7 @@
 <script lang="ts">
   import { api, type Presence, type Snapshot } from '../api';
   import { allMatches, nameLookup } from './lib-display.svelte';
+  import { t } from '../lib/i18n.svelte';
 
   /**
    * Who is connected: the screens and what each shows, the score keepers and which mat
@@ -16,17 +17,14 @@
 
   // What a screen can be told to show. Short paths, the same ones the URLs use.
   const targets = $derived([
-    { value: '', label: 'Nothing yet' },
-    ...mats.map((m) => ({ value: `mat/${m}`, label: `Mat ${m} scoreboard` })),
-    ...mats.map((m) => ({ value: `audience/${m}`, label: `Mat ${m} audience display` })),
-    { value: 'mats', label: 'Every mat' },
-    ...(mats.length > 2
-      ? [
-          { value: 'mats/1,2', label: 'Mats 1 and 2' },
-          { value: `mats/${mats.slice(2).join(',')}`, label: `Mats ${mats.slice(2).join(' and ')}` },
-        ]
-      : []),
-    { value: 'roster', label: 'Match roster' },
+    { value: '', label: t('Nothing yet') },
+    ...mats.map((m) => ({ value: `mat/${m}`, label: t('Mat {n} scoreboard', { n: m }) })),
+    ...mats.map((m) => ({ value: `audience/${m}`, label: t('Mat {n} audience display', { n: m }) })),
+    { value: 'mats', label: t('Every mat') },
+    // A screen between two mats: the pairs, when there are pairs to make.
+    ...(mats.length >= 3 ? [{ value: 'mats/1,2', label: t('Mats {a} and {b}', { a: 1, b: 2 }) }] : []),
+    ...(mats.length === 4 ? [{ value: 'mats/3,4', label: t('Mats {a} and {b}', { a: 3, b: 4 }) }] : []),
+    { value: 'roster', label: t('Match roster') },
   ]);
 
   function label(target: string): string {
@@ -41,7 +39,7 @@
 
   function ago(iso: string): string {
     const s = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 1000));
-    return s < 60 ? `${s} s ago` : `${Math.round(s / 60)} min ago`;
+    return s < 60 ? t('{n} s ago', { n: s }) : t('{n} min ago', { n: Math.round(s / 60) });
   }
 
   let error = $state('');
@@ -68,43 +66,42 @@
 </script>
 
 <section>
-  <h2>Screens and score keepers</h2>
+  <h2>{t('Screens and score keepers')}</h2>
   {#if error}<p class="err">{error}</p>{/if}
 
-  <h3>Screens</h3>
+  <h3>{t('Screens')}</h3>
   {#if displays.length === 0}
     <p class="dim">
-      None yet. Open <span class="mono">/display</span> on a screen and it appears here,
-      waiting to be told what to show.
+      {t('None yet. Open')} <span class="mono">/display</span> {t('on a screen and it appears here, waiting to be told what to show.')}
     </p>
   {:else}
     <ul>
       {#each displays as d (d.id)}
         <li class:dead={!d.alive}>
-          <span class="dot" title={d.alive ? 'Alive' : 'Not seen for a while'}></span>
+          <span class="dot" title={d.alive ? t('Alive') : t('Not seen for a while')}></span>
           <span class="who">{d.name}</span>
           <select value={d.target ?? ''} onchange={(e) => void run(() => api.assignDisplay(d.id, e.currentTarget.value))}>
-            {#each targets as t (t.value)}<option value={t.value}>{t.label}</option>{/each}
+            {#each targets as opt (opt.value)}<option value={opt.value}>{opt.label}</option>{/each}
           </select>
-          <span class="meta">{d.alive ? label(d.target ?? '') : `last seen ${ago(d.lastSeen)}`}</span>
+          <span class="meta">{d.alive ? label(d.target ?? '') : t('last seen {when}', { when: ago(d.lastSeen) })}</span>
         </li>
       {/each}
     </ul>
   {/if}
 
-  <h3>Score keepers</h3>
+  <h3>{t('Score keepers')}</h3>
   {#if keepers.length === 0}
-    <p class="dim">None connected.</p>
+    <p class="dim">{t('None connected.')}</p>
   {:else}
     <ul>
       {#each keepers as k (k.id)}
         <li class:dead={!k.alive}>
-          <span class="dot" title={k.alive ? 'Alive' : 'Not seen for a while'}></span>
+          <span class="dot" title={k.alive ? t('Alive') : t('Not seen for a while')}></span>
           <span class="who">{k.name}</span>
           <span class="meta">
-            {#if k.mat}Mat {k.mat}{/if}
+            {#if k.mat}{t('Mat {n}', { n: k.mat })}{/if}
             {#if k.match}&middot; {matchLabel(k.match)}{/if}
-            {#if !k.alive}&middot; last seen {ago(k.lastSeen)}{/if}
+            {#if !k.alive}&middot; {t('last seen {when}', { when: ago(k.lastSeen) })}{/if}
           </span>
         </li>
       {/each}
@@ -112,17 +109,14 @@
   {/if}
 
   {#if setAside.length > 0}
-    <h3>Set aside</h3>
-    <p class="dim">
-      Exchanges a device sent after its match had been handed to another. Not counted.
-      Check the match log before discarding; a hand edit is the way to recover any of it.
-    </p>
+    <h3>{t('Set aside')}</h3>
+    <p class="dim">{t('Exchanges a device sent after its match had been handed to another. Not counted. Check the match log before discarding; a hand edit is the way to recover any of it.')}</p>
     <ul>
       {#each setAside as g (g.match)}
         <li>
-          <span class="who">{g.count} exchange{g.count === 1 ? '' : 's'}</span>
-          <span class="meta">from {g.clientName} on {matchLabel(g.match)}</span>
-          <button onclick={() => void run(() => api.discardQuarantine(g.match))}>Discard</button>
+          <span class="who">{g.count === 1 ? t('1 exchange') : t('{n} exchanges', { n: g.count })}</span>
+          <span class="meta">{t('from {device} on {match}', { device: g.clientName, match: matchLabel(g.match) })}</span>
+          <button onclick={() => void run(() => api.discardQuarantine(g.match))}>{t('Discard')}</button>
         </li>
       {/each}
     </ul>

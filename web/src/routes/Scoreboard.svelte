@@ -3,6 +3,7 @@
   import WarningTriangle from './WarningTriangle.svelte';
   import { formatClock, isFlashing } from '../lib/clock.svelte';
   import { defaultOptions, type Side } from '../lib/match';
+  import { t } from '../lib/i18n.svelte';
 
   /**
    * One mat's scoreboard, in the same colour language as the score keeper view so a
@@ -30,7 +31,7 @@
     discipline?: string;
   } = $props();
 
-  const matLabel = $derived(discipline ? `${discipline} · Mat ${mat}` : `Mat ${mat}`);
+  const matLabel = $derived(discipline ? `${discipline} · ${t('Mat {n}', { n: mat })}` : t('Mat {n}', { n: mat }));
 
   const board = $derived(match?.state ?? null);
   // Colours and sides come from the match log, so a scoreboard shows exactly what the
@@ -49,7 +50,7 @@
   {#if !match || !board}
     <div class="idle">
       <span class="mat">{matLabel}</span>
-      <span class="dim">No match up yet</span>
+      <span class="dim">{t('No match up yet')}</span>
     </div>
   {:else}
     {@render side(order[0])}
@@ -57,7 +58,7 @@
     <div class="centre">
       <div class="mat">{matLabel}</div>
       {#if decided}
-        <div class="result">{winnerName ? `${winnerName} wins` : 'Draw'}</div>
+        <div class="result">{winnerName ? t('{name} wins', { name: winnerName }) : t('Draw')}</div>
       {:else}
         <div class="time mono">{formatClock(elapsed)}</div>
       {/if}

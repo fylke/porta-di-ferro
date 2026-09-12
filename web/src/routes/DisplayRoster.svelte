@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { keepAwake } from '../lib/wakelock';
   import { Live, nameLookup, roundLabel } from './lib-display.svelte';
+  import { t } from '../lib/i18n.svelte';
 
   /** Every match in the event and where it stands. The screen competitors check. */
   const live = new Live();
@@ -19,13 +20,13 @@
 </script>
 
 <main>
-  <h1>Match roster{#if live.snapshot?.instance.name} &middot; {live.snapshot.instance.name}{/if}</h1>
+  <h1>{t('Match roster')}{#if live.snapshot?.instance.name} &middot; {live.snapshot.instance.name}{/if}</h1>
   <div class="pools">
     {#each live.snapshot?.pools ?? [] as pool (pool.number)}
       <section>
         <h2>
-          Pool {pool.number}
-          <span class="mat">Mat {pool.mat}{#if pool.overridden} &middot; moved{/if}</span>
+          {t('Pool {n}', { n: pool.number })}
+          <span class="mat">{t('Mat {n}', { n: pool.mat })}{#if pool.overridden} &middot; {t('moved')}{/if}</span>
         </h2>
         <ol>
           {#each pool.matches as m (m.id)}
@@ -43,7 +44,7 @@
     {/each}
     {#if live.snapshot?.bracket}
       <section class="bracket">
-        <h2>Eliminations</h2>
+        <h2>{t('Eliminations')}</h2>
         <ol>
           {#each live.snapshot.bracket.matches as m (m.id)}
             <li class={m.status}>
@@ -66,7 +67,7 @@
       </section>
     {/if}
     {#if (live.snapshot?.pools ?? []).length === 0}
-      <p class="empty">Pools have not been drawn yet.</p>
+      <p class="empty">{t('Pools have not been drawn yet.')}</p>
     {/if}
   </div>
 </main>
