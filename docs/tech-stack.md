@@ -254,8 +254,9 @@ does not: the client writes locally and pushes, and everything it needs *from* t
 notification it can receive on an event stream. One transport for all push is simpler than two.
 
 > [!NOTE]
-> **Revisit if** score keeper handover (design §7, item 10) turns out to need a genuine round trip.
-> That is the one candidate, and it is a Milestone 2 problem.
+> Score keeper handover (design §7, item 10) was the one candidate for reopening this, and it did
+> not need to: a claim is a `POST` that answers at once, heartbeats are `POST`s, and who is connected
+> comes back to the organizer over the same SSE stream as everything else. WebSocket stays out.
 
 ---
 

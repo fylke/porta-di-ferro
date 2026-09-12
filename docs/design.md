@@ -283,6 +283,12 @@ account of which matches it has finished, so *Next match* works with nobody to a
 back, it hands over every match log on the device the server is missing — not just the one on
 screen — because by then the earlier matches are closed and nobody would reopen them by hand.
 
+**One writer per match, made safe by an epoch.** A device claims a match before it writes and stamps
+every push with the epoch it was granted. A handover — graceful or not — moves the epoch on, and a
+push stamped with an older one is quarantined and shown to the organizer rather than appended or
+dropped (§7 item 10). A push with no stamp is the anonymous path — paper entry, the tests — and is
+accepted as it always was.
+
 Corrections are appended as new events rather than mutating history. MVP has no correction UI (§7),
 but building the log this way means adding one later is a UI change rather than a data migration.
 
@@ -831,7 +837,11 @@ Deliberate, and listed so nobody is surprised on the day:
 10. **Score keeper client handover** — graceful (planned: bathroom break, shift change) and ungraceful
    (device died). Graceful flushes before releasing so nothing is lost; ungraceful increments a
    writer epoch, and any late events from the old device are quarantined and shown to the organizer
-   rather than silently dropped.
+   rather than silently dropped. *(Built. A device claims a match before it writes and stamps every
+   push with its epoch; a contested claim is refused with who holds it and can be taken over
+   explicitly; a claim on a dead device goes through without asking. The graceful case is *Hand over
+   this mat* in the `…` menu, and *Next match* releases the finished match on the way out. It needed
+   no round trip: heartbeats are `POST`s and the registry comes back over SSE.)*
 11. **Swedish localisation** alongside English.
 12. **PDF export** alongside JSON.
 13. **Club balancing in pool generation** — distribute competitors from the same club as evenly as

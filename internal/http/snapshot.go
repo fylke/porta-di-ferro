@@ -136,9 +136,22 @@ func (s *Server) snapshot() (Snapshot, error) {
 	}
 
 	// A mat runs its pools in queue order, which is the order snap.Pools is already in:
-	// when one finishes, that mat picks up its next.
+	// when one finishes, that mat picks up its next. But a live score keeper registered on
+	// the mat knows better: it holds a finished match on screen until Next match is
+	// pressed, and the displays should show that result for exactly as long. So the
+	// score keeper's own match wins whenever there is one.
+	known := map[string]bool{}
+	for _, p := range snap.Pools {
+		for _, m := range p.Matches {
+			known[m.ID] = true
+		}
+	}
 	for mat := 1; mat <= t.Mats; mat++ {
 		snap.Mats[mat] = ""
+		if sk := s.presence.scorekeeperOn(mat); sk != nil && known[sk.Match] {
+			snap.Mats[mat] = sk.Match
+			continue
+		}
 		for _, p := range snap.Pools {
 			if p.Mat != mat {
 				continue
