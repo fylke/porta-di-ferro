@@ -5,6 +5,7 @@
   import Competitors from './Competitors.svelte';
   import Setup from './Setup.svelte';
   import Pools from './Pools.svelte';
+  import Screens from './Screens.svelte';
 
   /**
    * The first screen an organizer sees. It carries the LAN address and a QR code large
@@ -23,6 +24,13 @@
   onMount(() => {
     live.start();
     void pickAddress();
+    // Who is connected arrives over the stream from then on; this is the first copy.
+    api
+      .presence()
+      .then((p) => (live.presence = p))
+      .catch(() => {
+        // The stream brings it along.
+      });
     // The list follows the PC between networks without a reload. Joining the wrong wifi
     // first is a reasonable thing to have happen, and the organizer should see the right
     // one appear the moment the PC is on it. Only while this tab is visible: a background
@@ -176,8 +184,10 @@
         {/if}
         {#if clientURL}
           <p class="hint">
-            Spare screens and spectators&rsquo; phones open
-            <span class="mono">{clientURL}/display/mats</span> or
+            Spare screens open <span class="mono">{clientURL}/display</span> and are told
+            what to show from here, under Screens &mdash; or go straight to
+            <span class="mono">{clientURL}/display/mats</span>,
+            <span class="mono">{clientURL}/display/audience/1</span> or
             <span class="mono">{clientURL}/display/roster</span>. Any device on the venue
             wifi can reach them.
           </p>
@@ -198,6 +208,8 @@
       <Competitors competitors={snapshot.competitors} poolsDrawn={drawn} onchange={refresh} />
       <Setup {snapshot} onchange={refresh} />
     </div>
+
+    <Screens presence={live.presence} {snapshot} />
 
     <Pools {snapshot} onchange={refresh} />
   {/if}
