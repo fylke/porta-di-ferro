@@ -811,7 +811,8 @@ Deliberate, and listed so nobody is surprised on the day:
 4. **Server-assigned displays** — a device opens `/display` and the organizer chooses what it shows,
    reassigning on the fly and seeing which screens are live. Added *alongside* URL addressing, which
    remains supported. Cheap by this point, because the connected-client registry already exists for
-   handover (item 10).
+   handover (item 10). *(Built. A screen heartbeats and renders whatever the answer says; the
+   assignment is kept on disk so a hall of screens survives the organizer's laptop rebooting.)*
 5. **Audience display**, a richer variant of the mat display:
    - the **winner and final scores, prominently**, when a match is decided
    - the **upcoming match** — competitor names, colour-coded red and blue — in a smaller but still clearly

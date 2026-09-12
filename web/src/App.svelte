@@ -8,6 +8,7 @@
   import DisplayRoster from './routes/DisplayRoster.svelte';
   import PrintPools from './routes/PrintPools.svelte';
   import Audience from './routes/Audience.svelte';
+  import DisplayAssigned from './routes/DisplayAssigned.svelte';
 
   // One bundle, every surface. The route decides what renders; the Go server falls
   // through to index.html so each of these is reachable by typing it in.
@@ -26,6 +27,8 @@
   <DisplayMat mat={Number(matMatch.n)} />
 {:else if audienceMatch}
   <Audience mat={Number(audienceMatch.n)} />
+{:else if route('/display')}
+  <DisplayAssigned />
 {:else if route('/display/mats')}
   <DisplayMats ids={query().get('ids') ?? ''} />
 {:else if route('/display/roster')}
