@@ -819,6 +819,11 @@ Deliberate, and listed so nobody is surprised on the day:
    - an **"on deck" panel down the side** listing the next 3–5 matches, with red and blue background
      colour-coding per competitor. During pools this is what tells a competitor whether there is time
      to refill a water bottle or take a jacket off
+
+   *(Built, at `/display/audience/N`. The result stays up because **the mat follows its score
+   keeper**: the server points a mat at whatever match the live score keeper is holding, finished or
+   not, until *Next match* is pressed — so every display shows the winner for exactly as long as the
+   score keeper does, and none of them has to guess.)*
 6. **Competitor colour and side options**, reached from the `…` overflow menu (§4): change the
    competitors' colours away from the red/blue default, and swap which side each occupies — on the
    score keeper view and on the display **independently of each other**. Swapping sides risks
