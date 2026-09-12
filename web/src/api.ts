@@ -116,12 +116,23 @@ export interface Presence {
   quarantined: Quarantined[];
 }
 
+/** One running copy of the application: a discipline, its port and its data. */
+export interface Instance {
+  name: string;
+  port: number;
+  dir: string;
+  parent?: string;
+  self: boolean;
+  url: string;
+}
+
 export interface Snapshot {
   competitors: Competitor[];
   /** Everyone ranked across the pools by the pool chain: the seeding for the eliminations. */
   overall: Standing[];
   poolsComplete: boolean;
   bracket?: BracketView;
+  instance: Instance;
   tournament: {
     mats: number;
     minPoolSize: number;
@@ -181,6 +192,9 @@ async function req<T>(
 export const api = {
   state: () => req<Snapshot>('GET', '/api/state'),
   addresses: () => req<Address[]>('GET', '/api/addresses'),
+  instances: () => req<Instance[]>('GET', '/api/instances'),
+  startInstance: (name: string) => req<Instance>('POST', '/api/instances', { name }),
+  stopInstance: (port: number) => req<{ ok: boolean }>('DELETE', `/api/instances/${port}`),
   addCompetitor: (name: string, club: string) =>
     req<Competitor>('POST', '/api/competitors', { name, club }),
   updateCompetitor: (id: string, patch: Partial<Pick<Competitor, 'name' | 'club' | 'withdrawn'>>) =>

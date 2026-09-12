@@ -7,6 +7,7 @@
   import Pools from './Pools.svelte';
   import Eliminations from './Eliminations.svelte';
   import Screens from './Screens.svelte';
+  import Disciplines from './Disciplines.svelte';
 
   /**
    * The first screen an organizer sees. It carries the LAN address and a QR code large
@@ -136,12 +137,16 @@
 
 <main>
   <header>
-    <h1>Porta di Ferro</h1>
+    <h1>
+      Porta di Ferro
+      {#if snapshot?.instance.name}<span class="discipline">{snapshot.instance.name}</span>{/if}
+    </h1>
     <nav>
       <a href="/display/mats" target="_blank" rel="noreferrer">Displays</a>
       <a href="/display/roster" target="_blank" rel="noreferrer">Roster</a>
       <a href="/print/pools" target="_blank" rel="noreferrer">Pool sheets</a>
       <a href="/api/export.json">Export JSON</a>
+      <a href="/api/export.pdf">Export PDF</a>
     </nav>
   </header>
 
@@ -213,6 +218,9 @@
     <Screens presence={live.presence} {snapshot} />
 
     <Eliminations {snapshot} onchange={refresh} />
+
+    <Disciplines self={snapshot.instance} />
+
     <Pools {snapshot} onchange={refresh} />
   {/if}
 </main>
@@ -234,6 +242,16 @@
   h1 {
     margin: 0;
     font-size: 1.5rem;
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+  }
+  /* Which discipline this tab is. Amber, so two tabs of two disciplines cannot be told
+     apart only by reading the small print. */
+  .discipline {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--amber-bright);
   }
   nav {
     display: flex;

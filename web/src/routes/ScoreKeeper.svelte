@@ -405,7 +405,7 @@
           {:else if view.round}
             Mat {mat} &middot; {roundLabel(view)}
           {:else}
-            Mat {mat} &middot; pool {view.pool}
+            {#if live.snapshot?.instance.name}{live.snapshot.instance.name} &middot; {/if}Mat {mat} &middot; pool {view.pool}
           {/if}
         </div>
       </div>

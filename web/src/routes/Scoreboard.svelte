@@ -19,13 +19,18 @@
     names,
     elapsed,
     compact = false,
+    discipline = '',
   }: {
     mat: number;
     match: MatchView | null;
     names: { red: string; blue: string };
     elapsed: number;
     compact?: boolean;
+    /** Which discipline, when there is more than one running: a screen must never be silently on the wrong one. */
+    discipline?: string;
   } = $props();
+
+  const matLabel = $derived(discipline ? `${discipline} · Mat ${mat}` : `Mat ${mat}`);
 
   const board = $derived(match?.state ?? null);
   // Colours and sides come from the match log, so a scoreboard shows exactly what the
@@ -43,14 +48,14 @@
 <section class="board" class:compact class:flashing>
   {#if !match || !board}
     <div class="idle">
-      <span class="mat">Mat {mat}</span>
+      <span class="mat">{matLabel}</span>
       <span class="dim">No match up yet</span>
     </div>
   {:else}
     {@render side(order[0])}
 
     <div class="centre">
-      <div class="mat">Mat {mat}</div>
+      <div class="mat">{matLabel}</div>
       {#if decided}
         <div class="result">{winnerName ? `${winnerName} wins` : 'Draw'}</div>
       {:else}

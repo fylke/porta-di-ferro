@@ -72,6 +72,9 @@ type Snapshot struct {
 	// Mats maps a mat number to the match it is currently running, or the next one due.
 	Mats map[int]string `json:"mats"`
 	Dir  string         `json:"dir"`
+	// Instance is which run of the application this is, so every page can say which
+	// discipline it belongs to when there is more than one.
+	Instance Instance `json:"instance"`
 }
 
 // snapshot builds the whole derived picture. It is deliberately recomputed rather than
@@ -104,6 +107,7 @@ func (s *Server) snapshot() (Snapshot, error) {
 		Pools:       make([]PoolView, 0, len(t.Pools)),
 		Mats:        map[int]string{},
 		Dir:         s.store.Dir(),
+		Instance:    s.instances.self,
 	}
 
 	// Every match's state, pools and bracket alike, replayed once and shared.

@@ -45,7 +45,7 @@
 <main>
   <section class="stage">
     <div class="board">
-      <Scoreboard {mat} {match} {names} {elapsed} />
+      <Scoreboard {mat} {match} {names} {elapsed} discipline={live.snapshot?.instance.name ?? ''} />
     </div>
     <div class="next">
       {#if next}

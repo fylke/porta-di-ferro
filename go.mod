@@ -4,6 +4,7 @@ go 1.23
 
 require (
 	fyne.io/systray v1.12.2
+	github.com/go-pdf/fpdf v0.9.0
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	pgregory.net/rapid v1.3.0
 )

@@ -857,7 +857,11 @@ Deliberate, and listed so nobody is surprised on the day:
    or step it up or down its mat's queue. Every screen reads pools in run order, so all of them follow;
    the organizer view and the roster mark a moved pool as moved.)*
 9. **Concurrent disciplines** — several runs at once, which requires a distinct port and data
-   directory per instance.
+   directory per instance. *(Built. The first instance starts the others from its organizer page:
+   each is the same executable on the next free port, with a data folder beside the first named for
+   the discipline, and each shows its name on every page — organizer, mat picker, score keeper,
+   scoreboards, roster — so a screen or a tab is never silently on the wrong one. Closing the first
+   closes the ones it started; each also has its own tray Quit.)*
 10. **Score keeper client handover** — graceful (planned: bathroom break, shift change) and ungraceful
    (device died). Graceful flushes before releasing so nothing is lost; ungraceful increments a
    writer epoch, and any late events from the old device are quarantined and shown to the organizer
@@ -867,7 +871,10 @@ Deliberate, and listed so nobody is surprised on the day:
    this mat* in the `…` menu, and *Next match* releases the finished match on the way out. It needed
    no round trip: heartbeats are `POST`s and the registry comes back over SSE.)*
 11. **Swedish localisation** alongside English.
-12. **PDF export** alongside JSON.
+12. **PDF export** alongside JSON. *(Built, at `/api/export.pdf`: a page per pool with the standings
+    and the indices that produced them and every match with its result, made on the server so it
+    comes out the same from a curl as from a click, with the overall ranking and the eliminations
+    once they exist.)*
 13. **Club balancing in pool generation** — distribute competitors from the same club as evenly as
     possible (issue #3). No effect at a club-internal event, so it needs synthetic testing. *(Built.
     The objectives give way in this order: pool sizes within one of each other, never traded; club

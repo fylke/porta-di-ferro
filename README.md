@@ -52,6 +52,7 @@ day, a pool can be run on paper and entered afterwards.
 | `/display/roster` | The match roster |
 | `/print/pools` | Printable pool sheets |
 | `/api/export.json` | The whole tournament as JSON |
+| `/api/export.pdf` | Standings with their indices and every result, one page per pool, then the overall ranking and the eliminations, to print and pin up |
 
 ## What it does today
 
@@ -68,7 +69,8 @@ This is Milestone 1, scoped to run MSL's club event on 15 November 2026:
 - Score keeper handover, graceful or not, with a writer epoch per match so a lost tablet can
   never write over its replacement
 - English only
-- Several disciplines are run one after another, as separate runs of the application
+- Several disciplines run at once, each its own run of the application on its own port and
+  data folder, started from the organizer page and named on every page
 
 The full picture is in [`docs/design.md`](docs/design.md); the engineering decisions and
 what was ruled out are in [`docs/tech-stack.md`](docs/tech-stack.md).

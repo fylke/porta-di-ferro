@@ -19,7 +19,7 @@
 </script>
 
 <main>
-  <h1>Match roster</h1>
+  <h1>Match roster{#if live.snapshot?.instance.name} &middot; {live.snapshot.instance.name}{/if}</h1>
   <div class="pools">
     {#each live.snapshot?.pools ?? [] as pool (pool.number)}
       <section>
