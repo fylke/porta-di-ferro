@@ -12,18 +12,38 @@ import { t } from './i18n.svelte';
 
 const ID_KEY = 'porta.clientId';
 
+/**
+ * Sixteen hex characters of randomness.
+ *
+ * Not crypto.randomUUID(): browsers only expose that in a secure context, which means
+ * HTTPS or localhost -- and every client but the organizer's own browser opens this
+ * application over plain HTTP on a LAN address. It was the first thing a score keeper
+ * client did on mount, so on a tablet the mat picker's buttons led to a component that
+ * threw before it drew, and the taps looked dead (issue #81). getRandomValues works
+ * everywhere; Math.random is the fallback for a browser without even that.
+ */
+export function randomId(): string {
+  const bytes = new Uint8Array(8);
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+  }
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 /** A stable id for this browser, made once and kept. */
 export function clientId(): string {
   try {
     const have = localStorage.getItem(ID_KEY);
     if (have) return have;
-    const fresh = crypto.randomUUID().replace(/-/g, '').slice(0, 16);
+    const fresh = randomId();
     localStorage.setItem(ID_KEY, fresh);
     return fresh;
   } catch {
     // No storage: a fresh id per load. Handover still works; the device just cannot be
     // recognised as the same one after a reload.
-    return crypto.randomUUID().replace(/-/g, '').slice(0, 16);
+    return randomId();
   }
 }
 

@@ -238,6 +238,14 @@ because it applies weekly for months to the screen everything else depends on.
 
 ---
 
+**The clients are on an insecure origin.** The organizer's browser is on `localhost`, which browsers
+treat as secure; every tablet and screen is on `http://<LAN address>`, which they do not. Anything
+gated to a secure context — `crypto.randomUUID`, the wake lock, the service worker, the clipboard — is
+absent there, and code that assumes it works on the developer's machine and fails at the venue.
+The wake lock and the service worker are already guarded and degrade; random ids use
+`crypto.getRandomValues`. Serving HTTPS on a LAN would need a certificate every tablet trusts, which
+is a worse install than living without those APIs.
+
 ## 7. Transports
 
 **Writes go over `POST`. Server-to-client push is SSE. WebSocket is not used.**
