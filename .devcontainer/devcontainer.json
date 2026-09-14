@@ -1,0 +1,27 @@
+{
+  "name": "Porta di Ferro",
+  "image": "mcr.microsoft.com/devcontainers/go:1-1.23-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "20"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "go.toolsManagement.checkForUpdates": "local",
+        "go.useLanguageServer": true,
+        "editor.formatOnSave": true
+      },
+      "extensions": [
+        "golang.go",
+        "svelte.svelte-vscode",
+        "dbaeumer.vscode-eslint",
+        "ms-playwright.playwright"
+      ]
+    }
+  },
+  "forwardPorts": [8080],
+  "postCreateCommand": "cd web && npm install && npx playwright install --with-deps chromium",
+  "remoteUser": "vscode"
+}
