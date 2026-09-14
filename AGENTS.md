@@ -9,6 +9,8 @@
 
 - **Go Backend & Engine Tests**: Run `go test ./...`
 - **Frontend / Client Tests**: Run `npm test` inside `web/`
+- **Playwright Browser E2E Tests**: Run `npm run test:e2e` inside `web/` (or `go test -v -race -count=1 ./e2e/...` for Go backend E2E suite).
+- **Nightly CI Pipeline**: Defined in `.github/workflows/nightly-e2e.yml` running daily at 02:00 UTC and on manual dispatch.
 - **Shared Test Vectors**: Verify scoring and rules changes against vector tests in `testdata/vectors/` and both engine implementations (`internal/match/` and `web/src/lib/match/`).
 
 ## Key Conventions
