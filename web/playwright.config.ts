@@ -22,7 +22,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'go run ../cmd/porta -port 8080 -no-browser',
+    command: 'go run ./cmd/porta -port 8080 -no-browser',
     url: 'http://127.0.0.1:8080/api/state',
     reuseExistingServer: !process.env.CI,
     cwd: '..',

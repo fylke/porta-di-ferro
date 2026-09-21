@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { keepAwake } from '../lib/wakelock';
-  import { Live, nameLookup } from './lib-display.svelte';
+  import { onMount } from "svelte";
+  import { keepAwake } from "../lib/wakelock";
+  import { Live, nameLookup } from "./lib-display.svelte";
 
   /** Every match in the event and where it stands. The screen competitors check. */
   const live = new Live();
@@ -19,7 +19,7 @@
 </script>
 
 <main>
-  <h1>Match roster</h1>
+  <h1>Roster</h1>
   <div class="pools">
     {#each live.snapshot?.pools ?? [] as pool (pool.number)}
       <section>
@@ -30,7 +30,8 @@
               <span class="n mono">{m.order}</span>
               <span class="red">{name(m.red)}</span>
               <span class="score mono">
-                {#if m.status === 'pending'}v{:else}{m.state.red.score}–{m.state.blue.score}{/if}
+                {#if m.status === "pending"}v{:else}{m.state.red.score}–{m.state
+                    .blue.score}{/if}
               </span>
               <span class="blue">{name(m.blue)}</span>
             </li>
