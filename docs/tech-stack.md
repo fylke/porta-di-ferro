@@ -179,6 +179,12 @@ retracts that reasoning, so the option is genuinely open and is being declined o
 
 ---
 
+**Drift is detected in the field as well as in CI.** Every push answers with the state the server
+derived from the same log, and the score keeper client compares it with its own replay. A difference
+is a bug in one engine that the vectors did not catch: it is reported in the console with both
+states, shown as a non-blocking banner, and the score keeper can choose to run the rest of the match
+under the server's numbers. The bug then earns a vector.
+
 ## 5. The client payload argument, corrected
 
 An earlier revision of the issue analysis called a 2–4 MB client payload "a lot to push to a tablet
@@ -232,6 +238,14 @@ because it applies weekly for months to the screen everything else depends on.
 
 ---
 
+**The clients are on an insecure origin.** The organizer's browser is on `localhost`, which browsers
+treat as secure; every tablet and screen is on `http://<LAN address>`, which they do not. Anything
+gated to a secure context — `crypto.randomUUID`, the wake lock, the service worker, the clipboard — is
+absent there, and code that assumes it works on the developer's machine and fails at the venue.
+The wake lock and the service worker are already guarded and degrade; random ids use
+`crypto.getRandomValues`. Serving HTTPS on a LAN would need a certificate every tablet trusts, which
+is a worse install than living without those APIs.
+
 ## 7. Transports
 
 **Writes go over `POST`. Server-to-client push is SSE. WebSocket is not used.**
@@ -248,8 +262,9 @@ does not: the client writes locally and pushes, and everything it needs *from* t
 notification it can receive on an event stream. One transport for all push is simpler than two.
 
 > [!NOTE]
-> **Revisit if** score keeper handover (design §7, item 10) turns out to need a genuine round trip.
-> That is the one candidate, and it is a Milestone 2 problem.
+> Score keeper handover (design §7, item 10) was the one candidate for reopening this, and it did
+> not need to: a claim is a `POST` that answers at once, heartbeats are `POST`s, and who is connected
+> comes back to the organizer over the same SSE stream as everything else. WebSocket stays out.
 
 ---
 

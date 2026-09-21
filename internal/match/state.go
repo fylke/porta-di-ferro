@@ -54,6 +54,10 @@ type State struct {
 
 // Flashing reports whether the clock should be flashing: ten seconds remain, and the
 // match has not ended. Live views pass the wall-clock-adjusted elapsed time.
+//
+// It shares its threshold with the final-exchange dialog rather than merely sitting near
+// it. The flash is what tells the mat the next exchange is the last, so the moment it
+// starts is the moment a confirmation has to offer to end the match.
 func (r Ruleset) Flashing(elapsedMS int64, ended bool) bool {
-	return !ended && elapsedMS >= r.FinalWarningMS
+	return !ended && elapsedMS >= r.FinalExchangeMS
 }

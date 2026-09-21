@@ -23,21 +23,36 @@ type Competitor struct {
 	Withdrawn bool `json:"withdrawn"`
 }
 
-// Match is one competitor against another, fixed at pool creation along with the colours.
+// Match is one competitor against another, fixed at pool creation along with the colours
+// -- or, in the eliminations, fixed by the results that feed it.
 type Match struct {
-	ID   string `json:"id"`
-	Pool int    `json:"pool"`
-	// Order is the position within the pool's running order.
+	ID string `json:"id"`
+	// Pool is 0 for a bracket match.
+	Pool int `json:"pool"`
+	// Order is the position within the pool's running order, or the bracket's.
 	Order int    `json:"order"`
 	Mat   int    `json:"mat"`
 	Red   string `json:"red"`
 	Blue  string `json:"blue"`
+	// Round and Slot place a bracket match: "quarter", "semi", "bronze" or "final", and
+	// the match's number within its round. FeedRed and FeedBlue name the matches whose
+	// results fill Red and Blue -- "winner:e-qf1", "loser:e-sf2" -- so a later round's
+	// competitors are derived from the log rather than stored, and a corrected
+	// quarter-final corrects the semi-final for free.
+	Round    string `json:"round,omitempty"`
+	Slot     int    `json:"slot,omitempty"`
+	FeedRed  string `json:"feedRed,omitempty"`
+	FeedBlue string `json:"feedBlue,omitempty"`
 }
 
 // Pool is a group of competitors who each fence all the others once.
 type Pool struct {
-	Number      int      `json:"number"`
-	Mat         int      `json:"mat"`
+	Number int `json:"number"`
+	Mat    int `json:"mat"`
+	// Sequence is the pool's place in its mat's queue. The generator sets it to the pool
+	// number, so the default order is by number; the organizer's override moves it. A
+	// file from before the field existed has zeros throughout, which reads the same way.
+	Sequence    int      `json:"sequence,omitempty"`
 	Competitors []string `json:"competitors"`
 	Matches     []Match  `json:"matches"`
 }
@@ -57,6 +72,10 @@ type Tournament struct {
 	// Violations are the ordering constraints the generator could not satisfy. Reported
 	// rather than guaranteed away (design §6 item 9).
 	Violations []string `json:"violations,omitempty"`
+	// Bracket is the eliminations, in playing order, drawn once the pools are done.
+	// First-round competitors are stored; later rounds are filled from results.
+	Bracket   []Match `json:"bracket,omitempty"`
+	BracketAt string  `json:"bracketAt,omitempty"`
 }
 
 // Defaults returns the MVP tournament setup: two mats, pools of four to seven.

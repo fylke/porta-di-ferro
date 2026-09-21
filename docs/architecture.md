@@ -6,7 +6,7 @@ This document provides architectural diagrams for Porta di Ferro, illustrating c
 
 ## 1. System & Deployment Architecture
 
-Porta di Ferro runs as a single Go binary on the organizer's PC, embedding the Svelte 5 SPA via `//go:embed`. Devices connect locally across the venue LAN without requiring an external internet connection.
+Porta di Ferro runs as a single Go binary on the organizer's PC, embedding the Svelte 5 SPA via `//go:embed`. Devices connect locally across the venue LAN without requiring an external internet connection. Several disciplines at once are several processes: the first can spawn siblings (`POST /api/instances`) on the next free ports, each with its own data directory, and stops them when it exits.
 
 ```mermaid
 flowchart TB
@@ -24,10 +24,10 @@ flowchart TB
     end
 
     subgraph Clients["Venue LAN Clients (Browsers)"]
-        OrgUI["Organizer Web Client\n(/organizer)"]
-        ScoreUI["Score Keeper Client\n(/match/:id)"]
-        DisplaySingle["Mat Display\n(/display/mat/:id)"]
-        DisplayMulti["Multi-Mat / Roster Display\n(/display/mats, /display/roster)"]
+        OrgUI["Organizer Web Client\n(/)"]
+        ScoreUI["Score Keeper Client\n(/score/:mat)"]
+        DisplaySingle["Mat / Audience Display\n(/display/mat/:n, /display/audience/:n)"]
+        DisplayMulti["Multi-Mat / Roster / Assigned\n(/display/mats, /display/roster, /display)"]
     end
 
     subgraph CloudTarget["Milestone 3 (Optional)"]
@@ -48,7 +48,7 @@ flowchart TB
 
 ## 2. Match Engine State Machine & Scoring Logic
 
-Matches are driven by an append-only event log. State is pure and recomputed by replaying events. Points are differential (e.g., scoring $2$ vs $1$ awards $1$ net point to the higher scorer), capped at $8$ points or $3$ minutes ($180\,000\text{ ms}$).
+Matches are driven by an append-only event log. State is pure and recomputed by replaying events. The one exception to append-only is the organizer's editor (`PUT /api/matches/{id}/events`), which rewrites a log wholesale and keeps the previous version as `matches/<id>.ndjson.<timestamp>.bak`; a `log-replaced` SSE update tells a score keeper holding the match to reload it. Event types are `exchange`, `timer` (start / stop / resume / reset), `undo`, `end`, and `options` — the last carries the competitors' colours and the display side order, is ignored by replay, and is read separately by `OptionsOf` / `optionsOf` so presentation can never fail a scoring vector. Points are differential (e.g., scoring $2$ vs $1$ awards $1$ net point to the higher scorer), capped at $8$ points or $3$ minutes ($180\,000\text{ ms}$).
 
 ```mermaid
 stateDiagram-v2
@@ -57,11 +57,13 @@ stateDiagram-v2
     PendingMatch --> InProgress_Paused: First Interaction / Timer Start
     InProgress_Paused --> InProgress_Running: Timer Start / Resume
     InProgress_Running --> InProgress_Paused: Timer Stop / Pause
+    InProgress_Running --> InProgress_Paused: Timer Reset (clock to 00:00, scores kept)
+    InProgress_Paused --> InProgress_Paused: Timer Reset (clock to 00:00, scores kept)
 
     state InProgress_Running {
         [*] --> ScoreCheck
         ScoreCheck --> ExchangeConfirmed: Record Exchange (Differential 1-2 pts)
-        ExchangeConfirmed --> WarningIssued: Penalty Level 1 (Warning) / 2 (-1 pt)
+        ExchangeConfirmed --> WarningIssued: Penalty +1 (Warning) / +2 (Double, -1 pt) / +3 (Triple)
         WarningIssued --> ScoreCheck
         ExchangeConfirmed --> ScoreCheck
     }
@@ -107,7 +109,9 @@ sequenceDiagram
     alt Server accepts event
         Server->>Server: Replay & Validate via Go Engine
         Server->>Server: Append to Match JSON on Disk
-        Server-->>LocalEngine: 200 OK (Event Log)
+        Server-->>LocalEngine: 200 OK (written, server-derived state, lastSeq)
+        LocalEngine->>LocalEngine: Compare server state with own replay of the same log
+        Note over LocalEngine: A difference is a dual-engine bug: banner + console report.<br/>Score keeper may adopt the server's state for the rest of the match.
         Server-)Displays: Broadcast SSE (match_updated)
         Displays->>Displays: Re-render Scoreboard / Roster
     else Network offline or delayed
@@ -119,15 +123,57 @@ sequenceDiagram
 
 ---
 
+## 3b. Connected Clients, Handover and Server-Assigned Displays
+
+Every score keeper client and every `/display` screen announces itself with a stable id and heartbeats every five seconds (`POST /api/clients/{id}`); the registry lives in memory and is pushed to the organizer over SSE as `presence`. A score keeper claims its match before writing (`POST /api/matches/{id}/claim`) and stamps every push with the granted epoch; the claims live in `writers.json` so they survive a restart. The mat's own idea of which match is up follows the live score keeper on it, so displays show a finished match's result for exactly as long as the score keeper holds it.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant A as Device A (score keeper)
+    participant S as Go Server
+    participant B as Device B (score keeper)
+    participant O as Organizer UI
+
+    A->>S: POST /api/clients/A (heartbeat: mat 1, match M)
+    A->>S: POST /api/matches/M/claim {client A}
+    S-->>A: {epoch 1}
+    A->>S: POST /api/matches/M/events (X-Porta-Epoch: 1)
+    S-->>A: 200
+
+    Note over A: A dies, or B wants the mat while A is alive
+    B->>S: POST /api/matches/M/claim {client B}
+    alt A alive
+        S-->>B: 409 {holder: A}
+        B->>S: POST claim {client B, force: true}
+    else A silent for 15 s, or A released
+        Note over S: no contest
+    end
+    S-->>B: {epoch 2, tookOverFrom A}
+
+    A->>S: POST events (X-Porta-Epoch: 1)
+    S->>S: quarantine to matches/M.quarantine.ndjson
+    S-->>A: 409 {quarantined: n}
+    S-)O: SSE presence (set aside: n events from A on M)
+    O->>S: DELETE /api/quarantine/M (after looking)
+```
+
+Displays: a screen opens `/display`, heartbeats with role `display`, and renders whatever `target` comes back (`mat/1`, `audience/2`, `mats`, `mats/1,2`, `roster`). The organizer sets it with `PUT /api/clients/{id}/target`; assignments are kept in `displays.json`.
+
+---
+
 ## 4. Tournament Lifecycle & Ranking Pipeline
 
 Tournaments progress through competitor intake, pool generation, schedule assignment across mats, match execution, and multi-tier index ranking.
 
 ```mermaid
 flowchart TD
-    A[Add / Register Competitors] --> B[Generate Pools]
+    A[Add / Register Competitors] --> B[Generate Pools: sizes within one, clubs spread by a greedy deal plus a swap pass, remainder reported]
     B --> C[Generate Schedule & Assign Mats]
-    C --> D[Execute Matches at Mats]
+    C --> C2{Organizer override?}
+    C2 -- Move / reorder pool --> C3[Pool.Sequence updated; snapshot serves pools in run order]
+    C2 -- No --> D
+    C3 --> D[Execute Matches at Mats]
     D --> E{Competitor Withdrawn?}
 
     E -- Yes --> F[Void All Matches for Withdrawn Competitor]
@@ -146,14 +192,19 @@ flowchart TD
         J5 --> J6["6. Deterministic Random Draw (FNV Seed)"]
     end
 
-    J6 --> K[Final Pool Standings & Promotion]
+    J6 --> K[Final Pool Standings]
+    K --> L{Every pool match in?}
+    L -- Yes --> M[Overall ranking across pools by the same chain]
+    M --> N[Bracket: top 8, 1v8 4v5 / 2v7 3v6, bronze and final]
+    N --> O[Later rounds filled from results on every snapshot; sudden death on the client when level at the final exchange]
+    O --> P[Podium]
 ```
 
 ---
 
 ## 5. Offline & Local-First Resilience
 
-Scorekeeper devices stay operational even during transient venue Wi-Fi dropouts by leveraging a Service Worker app shell and IndexedDB event spooling.
+Scorekeeper devices stay operational even during transient venue Wi-Fi dropouts by leveraging a Service Worker app shell and IndexedDB event spooling. The last snapshot is kept in `localStorage` too, so a client opens with the pool's schedule and names when the server is unreachable; the score keeper client keeps its own record of which matches it has finished, so it can move through a whole pool offline. On reconnect, every match log on the device that the server is missing is pushed — not only the match on screen.
 
 ```mermaid
 sequenceDiagram
@@ -187,6 +238,8 @@ sequenceDiagram
         Note over App,LAN: Wi-Fi Restored
         App->>LAN: Flush Pending Queue in Sequence
         LAN-->>App: 200 OK
+        App->>LAN: GET /api/matches/:id/events for every other match on the device
+        App->>LAN: POST whatever the server is missing (finished offline earlier)
         App->>IDB: Clear Synced Events
     end
 ```

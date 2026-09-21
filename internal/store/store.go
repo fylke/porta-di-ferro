@@ -174,6 +174,29 @@ func (s *Store) Events(id string, after int) ([]match.Event, error) {
 	return out, sc.Err()
 }
 
+// LastEventAt is when this server last appended to a match log, from the file's
+// modification time. The second return is false when the match has no log yet.
+//
+// It exists so a display that opens mid-match can put its clock in the right place. The
+// log records the elapsed time at each event and, deliberately, nothing about when that
+// was in wall-clock terms -- that is what keeps replay deterministic (design decision 5).
+// So the "how long ago was that" a live clock needs has to come from outside the log, and
+// the mtime is exactly it: the file is only ever appended to, by this process, so its
+// modification time is when the last event landed.
+func (s *Store) LastEventAt(id string) (time.Time, bool) {
+	rel, err := matchFile(id)
+	if err != nil {
+		return time.Time{}, false
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	info, err := os.Stat(s.path(rel))
+	if err != nil {
+		return time.Time{}, false
+	}
+	return info.ModTime(), true
+}
+
 // Append writes events to a match log, skipping any sequence number already there.
 // Returns the events actually written, so a caller can push exactly those to subscribers.
 func (s *Store) Append(id string, events []match.Event) ([]match.Event, error) {

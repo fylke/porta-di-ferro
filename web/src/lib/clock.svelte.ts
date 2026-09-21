@@ -40,5 +40,27 @@ export function formatClock(ms: number): string {
 }
 
 export function isFlashing(ms: number, ended: boolean): boolean {
-  return !ended && ms >= MSL.finalWarningMs;
+  return !ended && ms >= MSL.finalExchangeMs;
+}
+
+/**
+ * Where the clock's anchor moves when a written event changes the base elapsed time.
+ *
+ * The live readout is `base + (now - anchor)`, and every event carries its own elapsedMs,
+ * so writing one moves the base. Leaving the anchor where it was then counts the whole
+ * stretch between anchor and now for a second time -- which is why the match timer jumped
+ * forward by the elapsed time on every Confirm exchange.
+ *
+ * The correction is algebraic rather than a fresh clock reading: holding the displayed
+ * time still across the write means `base + (now - anchor)` must come out the same before
+ * and after, which gives `anchor += base_after - base_before` exactly. Re-reading the
+ * clock instead would shed a fraction of a second on every exchange, and a match is
+ * thirty of them.
+ *
+ * It runs backwards as readily as forwards: an undo drops the voided exchange's elapsedMs
+ * out of the replay, so the base falls back to the event before it and the anchor follows.
+ */
+export function reanchor(anchor: number | null, before: number, after: number): number | null {
+  if (anchor === null) return null;
+  return anchor + (after - before);
 }

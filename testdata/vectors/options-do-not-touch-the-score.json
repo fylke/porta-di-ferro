@@ -1,0 +1,51 @@
+{
+  "name": "options-do-not-touch-the-score",
+  "description": "An options record changes how the match is shown and nothing about its score; both engines carry it and ignore it.",
+  "events": [
+    {
+      "seq": 1,
+      "type": "exchange",
+      "elapsedMs": 4000,
+      "exchange": {
+        "red": {
+          "value": 2,
+          "penalty": 0
+        },
+        "blue": {
+          "value": 1,
+          "penalty": 1
+        }
+      }
+    },
+    {
+      "seq": 2,
+      "type": "options",
+      "elapsedMs": 5000,
+      "options": {
+        "red": "green",
+        "blue": "yellow",
+        "swapDisplay": true
+      }
+    }
+  ],
+  "expect": {
+    "red": {
+      "score": 1,
+      "penalty": 0
+    },
+    "blue": {
+      "score": 0,
+      "penalty": 1
+    },
+    "exchanges": 1,
+    "elapsedMs": 4000,
+    "running": false,
+    "ended": false,
+    "noMatchPoints": false,
+    "endReason": "",
+    "winner": "",
+    "pending": "none",
+    "lastSeq": 2,
+    "undoableSeq": 1
+  }
+}

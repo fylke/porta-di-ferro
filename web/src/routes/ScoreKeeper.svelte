@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { Live } from '../lib/live.svelte';
   import { ScoreKeeperSession } from '../lib/scorekeeper.svelte';
   import { Clock, formatClock, isFlashing } from '../lib/clock.svelte';
@@ -7,6 +7,17 @@
   import CompetitorPanel from './variants/CompetitorPanel.svelte';
   import EndDialog from './EndDialog.svelte';
   import ConfirmDialog from './ConfirmDialog.svelte';
+  import OptionsSheet from './OptionsSheet.svelte';
+  import { matchesOn, roundLabel, unfilledOn } from './lib-display.svelte';
+  import { MSL, replay, type Side } from '../lib/match';
+  import * as db from '../lib/db';
+  import { ended, penaltyLoss } from '../lib/outcome';
+  import { summarise } from '../lib/drift';
+  import { inSuddenDeath, suddenDeathDecided as decidedOnSuddenDeath } from '../lib/knockout';
+  import { Heartbeat } from '../lib/presence.svelte';
+  import { navigate } from '../router.svelte';
+  import { t, locale } from '../lib/i18n.svelte';
+  import LangToggle from './LangToggle.svelte';
 
   let { mat, variant = 'panels' }: { mat: number; variant?: string } = $props();
 
@@ -15,32 +26,160 @@
   let sk = $state<ScoreKeeperSession | null>(null);
   let loadedMatch = $state('');
   let askUndo = $state(false);
+  let askReset = $state(false);
+  let askForfeit = $state<'red' | 'blue' | null>(null);
   let menuOpen = $state(false);
+  let optionsOpen = $state(false);
   // Which final-exchange dialog the head referee has already answered "continue" to.
   let dismissedFinal = $state(0);
+
+  // This device's heartbeat: which mat it sits at and which match it is on. The server
+  // uses it for two things -- letting another device take over when this one dies, and
+  // pointing the displays at the match this one is holding, finished or not.
+  const beat = new Heartbeat('scorekeeper');
 
   onMount(() => {
     live.start();
     clock.start();
+    beat.start({ mat });
     const release = keepAwake();
     return () => {
       clock.stop();
       live.stop();
+      beat.stop();
       sk?.log.stop();
       release();
     };
   });
 
-  // The mat follows whichever match is up next there: when one finishes, the next appears.
-  const matchId = $derived(live.snapshot?.mats?.[String(mat)] ?? '');
-  const view = $derived(
-    live.snapshot?.pools.flatMap((p) => p.matches).find((m) => m.id === matchId) ?? null,
-  );
+  $effect(() => {
+    beat.update({ mat, match: matchId });
+  });
+
+  /**
+   * Hand over this mat: everything this device holds goes to the server, the match is
+   * let go, and the device leaves the mat -- so the next one claims without having to
+   * take anything over (design §7 item 10, the graceful case).
+   */
+  async function handOver() {
+    menuOpen = false;
+    await sk?.log.release();
+    await beat.release();
+    navigate('/score');
+  }
+
+  // Every match on this mat, in running order. The server's own idea of which one is up
+  // is the first of these that is not complete -- but this device does not follow that
+  // blindly. A finished match stays on screen, with its result, until the score keeper
+  // presses Next match: the server moving the mat on the instant the end was written
+  // meant the final score was replaced by the next two names before anyone had read it.
+  const queue = $derived(matchesOn(live.snapshot, mat));
+  let matchId = $state('');
+  // Every match on the mat is done and the score keeper has said so.
+  let exhausted = $state(false);
+  const rememberedKey = $derived(`porta.mat.${mat}.current`);
+
+  // Matches this device has finished that the server may not know about yet -- the
+  // whole point of running a pool offline. Found by replaying the logs on this device, so
+  // they survive a reload, and kept up to date as matches end here.
+  let localDone = $state(new Set<string>());
+  const queueKey = $derived(queue.map((m) => m.id).join(','));
+  $effect(() => {
+    const ids = queueKey ? queueKey.split(',') : [];
+    if (ids.length === 0) return;
+    void (async () => {
+      const done = new Set<string>();
+      for (const id of ids) {
+        const events = await db.read(id);
+        if (events.length > 0 && replay(MSL, events).ended) done.add(id);
+      }
+      // Merged rather than replaced, so a match that ended here since the scan began is
+      // not forgotten; untracked, so the merge does not re-run the scan.
+      localDone = new Set([...untrack(() => localDone), ...done]);
+    })();
+  });
+
+  /** Open means neither the server nor this device has seen it end. */
+  function isOpen(m: { id: string; status: string }): boolean {
+    return m.status !== 'complete' && !localDone.has(m.id);
+  }
+
+  function firstOpen(): string {
+    return queue.find(isOpen)?.id ?? '';
+  }
+
+  $effect(() => {
+    if (queue.length === 0) return;
+    // Still on a match the mat still has: stay there, finished or not.
+    if (matchId && queue.some((m) => m.id === matchId)) return;
+    // Otherwise pick up where this device left off, or where the mat is.
+    let remembered = '';
+    try {
+      remembered = localStorage.getItem(rememberedKey) ?? '';
+    } catch {
+      // No memory on this browser; the mat's own position is the fallback.
+    }
+    const open = queue.find((m) => m.id === remembered && isOpen(m));
+    matchId = open?.id ?? firstOpen();
+  });
+
+  $effect(() => {
+    if (!matchId) return;
+    try {
+      localStorage.setItem(rememberedKey, matchId);
+    } catch {
+      // Fine without it.
+    }
+  });
+
+  /** The score keeper has read the result and is ready for the next two. */
+  function nextMatch() {
+    // Let go of the finished match on the way out, so the log is flushed and the claim
+    // released before the next device could want it.
+    void sk?.log.release();
+    const i = queue.findIndex((m) => m.id === matchId);
+    const after = queue.slice(i + 1).find(isOpen);
+    const elsewhere = queue.find((m) => isOpen(m) && m.id !== matchId);
+    matchId = after?.id ?? elsewhere?.id ?? '';
+    if (!matchId) {
+      exhausted = true;
+      try {
+        localStorage.removeItem(rememberedKey);
+      } catch {
+        // Fine without it.
+      }
+    }
+  }
+
+  const view = $derived(queue.find((m) => m.id === matchId) ?? null);
+
+  // Which side of this screen each competitor is on. This device's own choice, kept per
+  // mat, and independent of the displays' -- so a score keeper who sits facing the mat
+  // from the far side can mirror their screen without turning every scoreboard round.
+  const swapKey = $derived(`porta.mat.${mat}.swap`);
+  let swapHere = $state(false);
+  $effect(() => {
+    try {
+      swapHere = localStorage.getItem(swapKey) === '1';
+    } catch {
+      swapHere = false;
+    }
+  });
+  function setSwapHere(swap: boolean) {
+    swapHere = swap;
+    try {
+      localStorage.setItem(swapKey, swap ? '1' : '0');
+    } catch {
+      // Fine without it.
+    }
+  }
+  const order = $derived<[Side, Side]>(swapHere ? ['blue', 'red'] : ['red', 'blue']);
+  const options = $derived(sk ? sk.options : { red: 'red', blue: 'blue', swapDisplay: false });
   const names = $derived.by(() => {
     const byId = new Map((live.snapshot?.competitors ?? []).map((c) => [c.id, c.name]));
     return {
-      red: view ? (byId.get(view.red) ?? 'Red') : 'Red',
-      blue: view ? (byId.get(view.blue) ?? 'Blue') : 'Blue',
+      red: view ? (byId.get(view.red) ?? t('Red')) : t('Red'),
+      blue: view ? (byId.get(view.blue) ?? t('Blue')) : t('Blue'),
     };
   });
 
@@ -55,25 +194,70 @@
     }
   });
 
+  // The organizer rewrote the log of the match on this screen: take the server's copy.
+  $effect(() => {
+    const r = live.replaced;
+    if (r && r.match === matchId && sk) void sk.log.reload();
+  });
+
   const matchState = $derived(sk ? sk.state : null);
+  $effect(() => {
+    if (matchState?.ended && matchId && !localDone.has(matchId)) {
+      localDone = new Set([...localDone, matchId]);
+    }
+  });
   const elapsed = $derived(sk && matchState ? clock.elapsed(matchState, sk.runningSince) : 0);
   const flashing = $derived(matchState ? isFlashing(elapsed, matchState.ended) : false);
+
+  /**
+   * Sudden death (design §7 item 3, MSL's SM rules): a bracket match cannot be drawn.
+   * When the final exchange leaves the scores level, the match goes on -- the clock keeps
+   * running, no dialog -- and the first point wins. The engine still raises the
+   * final-exchange question on every confirmation past the threshold; this is the client
+   * declining to ask it while the scores are level, and asking a different one once they
+   * are not.
+   */
+  const knockout = $derived(!!view?.round);
+  const suddenDeath = $derived(inSuddenDeath(matchState, knockout));
+  // Whether this match reached the final-exchange threshold with the scores level, which
+  // is what makes the next decisive exchange sudden death rather than an ordinary final
+  // exchange the referee may continue from.
+  let wasLevelAtTime = $state(false);
+  $effect(() => {
+    if (suddenDeath) wasLevelAtTime = true;
+    if (!matchId || matchState?.ended) wasLevelAtTime = false;
+  });
+  const suddenDeathDecided = $derived(decidedOnSuddenDeath(matchState, knockout, wasLevelAtTime));
 
   const showEndDialog = $derived(
     !!matchState &&
       !matchState.ended &&
       matchState.pending !== 'none' &&
-      !(matchState.pending === 'final_exchange' && dismissedFinal === matchState.lastSeq),
+      !suddenDeath &&
+      !(matchState.pending === 'final_exchange' && !suddenDeathDecided && dismissedFinal === matchState.lastSeq),
   );
 
-  const capHeadline = $derived.by(() => {
-    if (!matchState) return '';
-    if (matchState.pending === 'final_exchange') return 'Time is up. Was that the final exchange?';
-    if (matchState.red.score === matchState.blue.score) return `Draw ${matchState.red.score}–${matchState.blue.score}`;
+  // The end dialog's wording. A penalty loss names the loser and why, because that is
+  // the one result a head referee will be asked to justify; the others name the winner.
+  const capText = $derived.by((): { headline: string; detail: string } => {
+    if (!matchState || !sk) return { headline: '', detail: '' };
+    if (matchState.pending === 'final_exchange' && suddenDeathDecided) {
+      const leader = matchState.red.score > matchState.blue.score ? names.red : names.blue;
+      return { headline: t('{name} wins on sudden death', { name: leader }), detail: `${matchState.red.score}–${matchState.blue.score}` };
+    }
+    if (matchState.pending === 'final_exchange') {
+      return { headline: t('Was that the final exchange?'), detail: '' };
+    }
+    if (matchState.pending === 'penalty_cap') {
+      return penaltyLoss(MSL, matchState, names, sk.log.events);
+    }
+    if (matchState.red.score === matchState.blue.score) {
+      return { headline: t('Draw {score}', { score: `${matchState.red.score}–${matchState.blue.score}` }), detail: '' };
+    }
     const leader = matchState.red.score > matchState.blue.score ? names.red : names.blue;
     const high = Math.max(matchState.red.score, matchState.blue.score);
     const low = Math.min(matchState.red.score, matchState.blue.score);
-    return `${leader} wins ${high}–${low}`;
+    return { headline: t('{name} wins {score}', { name: leader, score: `${high}–${low}` }), detail: '' };
   });
 
   async function endMatch() {
@@ -85,7 +269,7 @@
 
   async function secondAction() {
     if (!matchState) return;
-    if (matchState.pending === 'final_exchange') {
+    if (matchState.pending === 'final_exchange' && !suddenDeathDecided) {
       // Play continues, and the dialog comes back after the next confirmation. Nothing is
       // written: "we carried on" is not an event, and a record of it would only be noise.
       dismissedFinal = matchState.lastSeq;
@@ -94,10 +278,34 @@
     await sk?.undo(elapsed);
   }
 
-  function forfeit(side: 'red' | 'blue') {
+  function askToForfeit(side: 'red' | 'blue') {
     menuOpen = false;
+    askForfeit = side;
+  }
+
+  function escalate(side: 'red' | 'blue', levels: 2 | 3) {
+    menuOpen = false;
+    sk?.escalate(side, levels);
+  }
+
+  function openOptions() {
+    menuOpen = false;
+    optionsOpen = true;
+  }
+
+  function forfeit(side: 'red' | 'blue') {
+    askForfeit = null;
     void sk?.forfeit(side);
   }
+
+  function nameOf(side: 'red' | 'blue'): string {
+    return side === 'red' ? names.red : names.blue;
+  }
+
+  // What the centre column says once the match is over, in place of the clock controls.
+  const result = $derived(
+    matchState?.ended && sk ? ended(MSL, matchState, names, sk.log.events) : null,
+  );
 </script>
 
 <main class="sk">
@@ -105,7 +313,7 @@
     <button
       class="corner-btn"
       disabled={!matchState || matchState.undoableSeq === 0}
-      onclick={() => (askUndo = true)}>UNDO</button
+      onclick={() => (askUndo = true)}>{t('UNDO')}</button
     >
   </div>
   <div class="corner right">
@@ -113,74 +321,187 @@
       >&hellip;</button
     >
     {#if menuOpen}
-      <!-- The home for rare per-match controls. It holds forfeits now; Milestone 2 adds
-           immediate penalty escalation and the colour and side options. Establishing the
-           slot now avoids reopening a deliberately full grid to make room later. -->
+      <!-- The home for rare per-match controls: immediate penalty escalation and forfeits,
+           grouped by competitor so the name is read before the consequence. An escalation
+           is a pending selection that commits with Confirm exchange and has no dialog of
+           its own; a forfeit ends the match on the spot, so it asks. -->
       <div class="menu" role="menu">
-        <button role="menuitem" onclick={() => forfeit('red')}>{names.red} forfeits</button>
-        <button role="menuitem" onclick={() => forfeit('blue')}>{names.blue} forfeits</button>
+        {#each ['red', 'blue'] as const as side (side)}
+          <div class="menu-head {side}">{nameOf(side)}</div>
+          <button
+            role="menuitem"
+            disabled={!matchState || matchState.ended}
+            onclick={() => escalate(side, 2)}
+          >
+            <span>{t('Double warning')}</span><span class="why">{t('loses a point')}</span>
+          </button>
+          <button
+            role="menuitem"
+            disabled={!matchState || matchState.ended}
+            onclick={() => escalate(side, 3)}
+          >
+            <span>{t('Triple warning')}</span><span class="why">{t('loses the match')}</span>
+          </button>
+          <button
+            role="menuitem"
+            disabled={!matchState || matchState.ended}
+            onclick={() => askToForfeit(side)}
+          >
+            <span>{t('Forfeits')}</span><span class="why">{t('recorded 0–8')}</span>
+          </button>
+        {/each}
+        <div class="menu-head">{t('Match')}</div>
+        <button role="menuitem" disabled={!matchState} onclick={openOptions}>
+          <span>{t('Colours and sides…')}</span>
+        </button>
+        <div class="menu-head">{t('This screen')}</div>
+        <button role="menuitem" onclick={() => void handOver()}>
+          <span>{t('Hand over this mat')}</span><span class="why">{t('to another device')}</span>
+        </button>
         <a role="menuitem" href="/score/{mat}?variant={variant === 'panels' ? 'edge' : 'panels'}">
-          Try the other layout
+          {t('Try the other layout')}
         </a>
+        <div class="menu-lang"><span>{t('Language')}</span><LangToggle compact /></div>
       </div>
     {/if}
   </div>
 
   {#if view && sk && matchState}
     <div class="grid">
-      <CompetitorPanel
-        side="red"
-        name={names.red}
-        score={matchState.red.score}
-        warnings={matchState.red.penalty}
-        selection={sk.red}
-        {variant}
-        disabled={matchState.ended}
-        onPoint={(v) => sk?.togglePoint('red', v)}
-        onWarning={() => sk?.toggleWarning('red')}
-      />
+      {@render panel(order[0])}
 
       <div class="centre" class:flashing>
         <div class="time mono">{formatClock(elapsed)}</div>
-        <button class="clock" disabled={matchState.ended} onclick={() => void sk?.toggleClock(elapsed)}>
-          {matchState.running ? 'PAUSE' : 'PLAY'}
-        </button>
-        <div class="sync" class:offline={sk.log.sync === 'offline'}>
+        {#if suddenDeath}
+          <div class="sudden" role="status">{t('SUDDEN DEATH')}<span>{t('first point wins')}</span></div>
+        {/if}
+        {#if matchState.ended}
+          <!-- The result holds the centre until Next match is pressed, so it can actually be
+               read, and read back to the head referee, before the next two names appear. -->
+          <div class="result" aria-live="polite">
+            <span class="outcome">{result?.headline}</span>
+            <span class="final mono">{result?.detail}</span>
+          </div>
+        {:else}
+          <div class="clock-row">
+            <button class="clock" onclick={() => void sk?.toggleClock(elapsed)}>
+              {matchState.running ? t('PAUSE') : t('PLAY')}
+            </button>
+            <!-- For a clock started by mistake. Small, because it is rare; confirmed, because
+                 it is a correction to the record rather than a pause. -->
+            <button
+              class="reset"
+              aria-label={t('Reset the clock to zero')}
+              title={t('Reset the clock to zero')}
+              disabled={elapsed === 0 && !matchState.running}
+              onclick={() => (askReset = true)}>&#8634;</button
+            >
+          </div>
+        {/if}
+        <div class="sync" class:offline={sk.log.sync === 'offline' || live.stale}>
           {#if sk.log.sync === 'offline'}
-            Offline &middot; {sk.log.pendingCount} to send
+            {t('Offline · {n} to send', { n: sk.log.pendingCount })}
+          {:else if sk.log.aligned}
+            {t('Mat {n}', { n: mat })} &middot; {t("showing the server's scoring")}
+          {:else if live.stale}
+            {t('Offline · schedule from {time}', { time: new Date(live.cachedAt).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' }) })}
+          {:else if view.round}
+            {t('Mat {n}', { n: mat })} &middot; {roundLabel(view)}
           {:else}
-            Mat {mat} &middot; pool {view.pool}
+            {#if live.snapshot?.instance.name}{live.snapshot.instance.name} &middot; {/if}{t('Mat {n}', { n: mat })} &middot; {t('pool {n}', { n: view.pool })}
           {/if}
         </div>
       </div>
 
-      <CompetitorPanel
-        side="blue"
-        name={names.blue}
-        score={matchState.blue.score}
-        warnings={matchState.blue.penalty}
-        selection={sk.blue}
-        {variant}
-        disabled={matchState.ended}
-        onPoint={(v) => sk?.togglePoint('blue', v)}
-        onWarning={() => sk?.toggleWarning('blue')}
-      />
+      {@render panel(order[1])}
     </div>
 
-    <button class="confirm" disabled={matchState.ended} onclick={() => void sk?.confirm(elapsed)}>
-      {matchState.ended ? 'MATCH OVER' : 'CONFIRM EXCHANGE'}
-    </button>
+    {#if sk.log.sync === 'stale'}
+      <!-- Another device took this match over. This one is done with it: its unsent
+           exchanges are with the organizer, and nothing it writes now would be kept. -->
+      <div class="drift stale" role="alert">
+        <span>
+          {t('Another device has taken over this match.')}
+          {#if sk.log.quarantined > 0}
+            {sk.log.quarantined === 1
+              ? t('1 exchange from this device was set aside for the organizer.')
+              : t('{n} exchanges from this device were set aside for the organizer.', { n: sk.log.quarantined })}
+          {/if}
+        </span>
+        <span class="drift-actions">
+          <button onclick={() => void handOver()}>{t('Leave the mat')}</button>
+        </span>
+      </div>
+    {/if}
+    {#if sk.log.drift}
+      <!-- The two engines disagree about the same log. Non-blocking: the match goes on,
+           and the score keeper decides whose numbers it goes on under. Either way the
+           console has the full report. -->
+      <div class="drift" role="alert">
+        <span>
+          {t('The server scores this match differently ({fields}):', { fields: sk.log.drift.fields.join(', ') })}
+          {summarise(sk.log.drift.local, sk.log.drift.server)}.
+        </span>
+        <span class="drift-actions">
+          <button onclick={() => sk?.log.alignToServer()}>{t("Use the server's")}</button>
+          <button onclick={() => sk?.log.dismissDrift()}>{t('Keep this one')}</button>
+        </span>
+      </div>
+    {/if}
+    {#if matchState.ended}
+      <button class="confirm next" onclick={nextMatch}>{t('NEXT MATCH')}</button>
+    {:else}
+      <button class="confirm" disabled={sk.log.sync === 'stale'} onclick={() => void sk?.confirm(elapsed)}>
+        {t('CONFIRM EXCHANGE')}
+      </button>
+    {/if}
   {:else}
     <div class="waiting">
-      <p>{live.error ? live.error : `Waiting for a match on mat ${mat}.`}</p>
-      <p class="dim">This screen follows the mat. It fills in when a match is up.</p>
+      {#if live.error && queue.length === 0}
+        <p>{live.error}</p>
+      {:else if unfilledOn(live.snapshot, mat).length > 0}
+        <p>{t('Waiting for the {round}.', { round: roundLabel(unfilledOn(live.snapshot, mat)[0]).toLowerCase() })}</p>
+        <p class="dim">{t('Its competitors come from matches still running on the other mats.')}</p>
+      {:else if exhausted || (queue.length > 0 && !firstOpen())}
+        <p>{t('Every match on mat {n} is done.', { n: mat })}</p>
+        <p class="dim">{t('Nothing more is scheduled here. Check with the organizer.')}</p>
+      {:else}
+        <p>{t('Waiting for a match on mat {n}.', { n: mat })}</p>
+        <p class="dim">{t('This screen follows the mat. It fills in when a match is up.')}</p>
+      {/if}
     </div>
+  {/if}
+
+  {#if sk?.log.contested}
+    <!-- Another live device holds this match. Taking over is deliberate: whatever that
+         device still has unsent will be set aside for the organizer, not merged. -->
+    <ConfirmDialog
+      headline={t('Mat {n} is being scored by {device}', { n: mat, device: sk.log.contested.name })}
+      detail={t('Take it over on this device? Anything the other device has not yet sent will be set aside for the organizer rather than counted.')}
+      confirmLabel={t('Take over on this device')}
+      onConfirm={() => void sk?.log.takeOver()}
+      onCancel={() => navigate('/score')}
+    />
+  {/if}
+
+  {#if optionsOpen && sk}
+    <OptionsSheet
+      {options}
+      {names}
+      {swapHere}
+      onColour={(side, colour) => void sk?.setOptions({ [side]: colour }, elapsed)}
+      onSwapHere={setSwapHere}
+      onSwapDisplay={(swap) => void sk?.setOptions({ swapDisplay: swap }, elapsed)}
+      onClose={() => (optionsOpen = false)}
+    />
   {/if}
 
   {#if showEndDialog && matchState}
     <EndDialog
       pending={matchState.pending}
-      headline={capHeadline}
+      headline={capText.headline}
+      detail={capText.detail}
+      second={suddenDeathDecided ? t('Undo last exchange') : ''}
       onEnd={() => void endMatch()}
       onSecond={() => void secondAction()}
     />
@@ -188,8 +509,8 @@
 
   {#if askUndo}
     <ConfirmDialog
-      headline="Undo the last exchange?"
-      detail="It is recorded as a correction, so nothing is lost from the log."
+      headline={t('Undo the last exchange?')}
+      detail={t('It is recorded as a correction, so nothing is lost from the log.')}
       onConfirm={() => {
         askUndo = false;
         void sk?.undo(elapsed);
@@ -197,7 +518,47 @@
       onCancel={() => (askUndo = false)}
     />
   {/if}
+
+  {#if askForfeit}
+    <ConfirmDialog
+      headline={t('{name} forfeits?', { name: nameOf(askForfeit) })}
+      detail={t('Recorded 0–8. {winner} takes the win and the match points; {loser} earns none.', { winner: nameOf(askForfeit === 'red' ? 'blue' : 'red'), loser: nameOf(askForfeit) })}
+      confirmLabel={t('Yes, {name} forfeits', { name: nameOf(askForfeit) })}
+      onConfirm={() => forfeit(askForfeit!)}
+      onCancel={() => (askForfeit = null)}
+    />
+  {/if}
+
+  {#if askReset}
+    <ConfirmDialog
+      headline={t('Reset the clock to 00:00?')}
+      detail={t('For a clock that was started by mistake. The scores stay as they are, and the reset is recorded in the log.')}
+      confirmLabel={t('Yes, reset it')}
+      onConfirm={() => {
+        askReset = false;
+        void sk?.resetClock(elapsed);
+      }}
+      onCancel={() => (askReset = false)}
+    />
+  {/if}
 </main>
+
+{#snippet panel(side: Side)}
+  {#if sk && matchState}
+    <CompetitorPanel
+      {side}
+      colour={options[side]}
+      name={names[side]}
+      score={matchState[side].score}
+      warnings={matchState[side].penalty}
+      selection={sk.selection(side)}
+      {variant}
+      disabled={matchState.ended}
+      onPoint={(v) => sk?.togglePoint(side, v)}
+      onWarning={() => sk?.toggleWarning(side)}
+    />
+  {/if}
+{/snippet}
 
 <style>
   .sk {
@@ -208,9 +569,10 @@
     overflow: hidden;
   }
 
-  /* Red stays on the left and blue on the right in every layout. That mapping mirrors the
-     mat and must never move, whatever the screen size: swapping sides is a deliberate
-     action, not something a device rotation does. */
+  /* Red stays on the left and blue on the right in every layout unless the score keeper
+     swaps them from the menu. That mapping mirrors the mat and must never move by itself,
+     whatever the screen size: swapping sides is a deliberate action, not something a
+     device rotation does. */
   .grid {
     display: grid;
     grid-template-columns: 1fr minmax(7rem, 0.55fr) 1fr;
@@ -252,17 +614,79 @@
     font-weight: 800;
     line-height: 1;
   }
-  /* Among the largest controls on the screen: the only one that must be hit fast. */
-  .clock {
+  /* Play/pause is among the largest controls on the screen: the only one that must be hit
+     fast. It cedes a narrow strip on its right to reset, which is rare and confirmed, so the
+     two cannot be confused by size alone. */
+  .clock-row {
     align-self: stretch;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0.4rem;
+    min-height: 0;
+  }
+  .clock {
     font-size: clamp(0.9rem, 2.6vh, 1.3rem);
     font-weight: 800;
     letter-spacing: 0.06em;
     background: var(--panel-2);
     border: 2px solid var(--line);
   }
-  .clock:active {
+  .reset {
+    width: clamp(2.6rem, 6vh, 3.4rem);
+    font-size: clamp(1.1rem, 3vh, 1.6rem);
+    line-height: 1;
+    background: var(--panel-2);
+    border: 2px solid var(--line);
+    color: var(--ink-dim);
+  }
+  .reset:disabled {
+    opacity: 0.35;
+  }
+  .clock:active,
+  .reset:active {
     filter: brightness(1.35);
+  }
+  /* The one time the centre says something other than the clock while the match is on.
+     Amber, not red: it is a state of the match, and red is the flash. */
+  .sudden {
+    display: grid;
+    gap: 0.15rem;
+    padding: 0.4rem 0.5rem;
+    border-radius: var(--radius);
+    background: var(--amber-bright);
+    color: #1a1200;
+    font-size: clamp(0.85rem, 2.2vh, 1.1rem);
+    font-weight: 800;
+    letter-spacing: 0.08em;
+  }
+  .sudden span {
+    font-size: 0.7em;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: lowercase;
+  }
+  .result {
+    align-self: stretch;
+    display: grid;
+    align-content: center;
+    gap: 0.3rem;
+    padding: 0.6rem 0.4rem;
+    border: 2px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--panel-2);
+  }
+  .outcome {
+    font-size: clamp(0.9rem, 2.4vh, 1.2rem);
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .final {
+    font-size: clamp(1.4rem, 5vh, 2.6rem);
+    font-weight: 800;
+    line-height: 1;
   }
   .sync {
     font-size: 0.75rem;
@@ -289,8 +713,47 @@
     background: var(--panel-2);
     color: var(--ink-dim);
   }
+  /* The same slot, a different job: the one press that moves the mat on. Neutral rather
+     than green, so a thumb that has been hitting Confirm all match notices the change. */
+  .confirm.next {
+    background: var(--ink);
+    color: #0d0f14;
+  }
   .confirm:active {
     filter: brightness(1.3);
+  }
+
+  .drift {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.6rem 0.9rem;
+    background: var(--amber);
+    color: #1a1200;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+  .drift.stale {
+    background: var(--red);
+    color: var(--ink);
+  }
+  .drift.stale button {
+    background: var(--ink);
+    color: #0d0f14;
+  }
+  .drift-actions {
+    display: flex;
+    gap: 0.5rem;
+  }
+  .drift button {
+    padding: 0.45rem 0.8rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    background: #1a1200;
+    color: var(--amber-bright);
+    border: none;
   }
 
   /* Rare and destructive, so they sit outside the main grid rather than competing for
@@ -326,12 +789,13 @@
     border: 1px solid var(--line);
     border-radius: var(--radius);
     display: grid;
-    min-width: 14rem;
-    overflow: hidden;
+    min-width: 17rem;
+    max-height: calc(100dvh - 3.5rem);
+    overflow: auto;
   }
   .menu button,
   .menu a {
-    padding: 0.85rem 1rem;
+    padding: 0.75rem 1rem;
     text-align: left;
     background: none;
     border: none;
@@ -339,6 +803,42 @@
     color: var(--ink);
     text-decoration: none;
     font-size: 0.95rem;
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+  .menu button:disabled {
+    opacity: 0.4;
+  }
+  .menu-lang {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.6rem 1rem 0.75rem;
+    font-size: 0.85rem;
+    color: var(--ink-dim);
+  }
+  .menu .why {
+    color: var(--ink-dim);
+    font-size: 0.8rem;
+  }
+  .menu-head {
+    padding: 0.55rem 1rem 0.2rem;
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    border-top: 1px solid var(--line);
+  }
+  .menu-head:first-child {
+    border-top: none;
+  }
+  .menu-head.red {
+    color: var(--red-bright);
+  }
+  .menu-head.blue {
+    color: var(--blue-bright);
   }
   .menu button:active,
   .menu a:active {
@@ -372,6 +872,9 @@
     }
     .clock {
       padding: 0.9rem;
+    }
+    .reset {
+      width: 3.2rem;
     }
   }
 </style>

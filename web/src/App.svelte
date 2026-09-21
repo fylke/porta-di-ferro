@@ -7,10 +7,14 @@
   import DisplayMats from './routes/DisplayMats.svelte';
   import DisplayRoster from './routes/DisplayRoster.svelte';
   import PrintPools from './routes/PrintPools.svelte';
+  import Audience from './routes/Audience.svelte';
+  import DisplayAssigned from './routes/DisplayAssigned.svelte';
+  import { t } from './lib/i18n.svelte';
 
   // One bundle, every surface. The route decides what renders; the Go server falls
   // through to index.html so each of these is reachable by typing it in.
   const matMatch = $derived(route('/display/mat/:n'));
+  const audienceMatch = $derived(route('/display/audience/:n'));
   const scoreMatch = $derived(route('/score/:mat'));
 </script>
 
@@ -22,6 +26,10 @@
   <ScoreKeeper mat={Number(scoreMatch.mat)} variant={query().get('variant') ?? 'panels'} />
 {:else if matMatch}
   <DisplayMat mat={Number(matMatch.n)} />
+{:else if audienceMatch}
+  <Audience mat={Number(audienceMatch.n)} />
+{:else if route('/display')}
+  <DisplayAssigned />
 {:else if route('/display/mats')}
   <DisplayMats ids={query().get('ids') ?? ''} />
 {:else if route('/display/roster')}
@@ -30,10 +38,10 @@
   <PrintPools />
 {:else}
   <main class="missing">
-    <h1>Nothing here</h1>
+    <h1>{t('Nothing here')}</h1>
     <p>
-      Try the <a href="/">organizer view</a>, a mat display such as
-      <code>/display/mat/1</code>, or the roster at <code>/display/roster</code>.
+      {t('Try the')} <a href="/">{t('organizer view')}</a>{t(', a mat display such as')}
+      <code>/display/mat/1</code>{t(', or the roster at')} <code>/display/roster</code>.
     </p>
   </main>
 {/if}

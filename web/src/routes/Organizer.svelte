@@ -1,10 +1,15 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { api } from '../api';
+  import { api, type Address } from '../api';
   import { Live } from '../lib/live.svelte';
   import Competitors from './Competitors.svelte';
   import Setup from './Setup.svelte';
   import Pools from './Pools.svelte';
+  import Eliminations from './Eliminations.svelte';
+  import Screens from './Screens.svelte';
+  import Disciplines from './Disciplines.svelte';
+  import LangToggle from './LangToggle.svelte';
+  import { t, lang } from '../lib/i18n.svelte';
 
   /**
    * The first screen an organizer sees. It carries the LAN address and a QR code large
@@ -13,15 +18,112 @@
    * (docs/tech-stack.md §2).
    */
   const live = new Live();
-  let clientURL = $state('');
+  let addresses = $state<Address[]>([]);
+  let chosenIP = $state('');
+
+  // Which network the QR code points at, remembered per PC. An organizer who had to pick
+  // once should not have to pick again after every restart.
+  const REMEMBERED = 'porta.clientAddress';
 
   onMount(() => {
     live.start();
-    // The address a tablet should open is this page's own origin -- which is exactly what
-    // the organizer's browser already knows, so there is nothing to configure.
-    clientURL = window.location.origin;
-    return () => live.stop();
+    void pickAddress();
+    // Who is connected arrives over the stream from then on; this is the first copy.
+    api
+      .presence()
+      .then((p) => (live.presence = p))
+      .catch(() => {
+        // The stream brings it along.
+      });
+    // The list follows the PC between networks without a reload. Joining the wrong wifi
+    // first is a reasonable thing to have happen, and the organizer should see the right
+    // one appear the moment the PC is on it. Only while this tab is visible: a background
+    // tab has nobody looking at it.
+    const poll = setInterval(() => {
+      if (document.visibilityState === 'visible') void refreshAddresses();
+    }, 5000);
+    return () => {
+      clearInterval(poll);
+      live.stop();
+    };
   });
+
+  /**
+   * The address a tablet should open. It is emphatically NOT this page's own origin: the
+   * organizer's browser is on http://localhost, which is the one address on this PC that
+   * no other device can reach. The server enumerates the real ones and this picks between
+   * them.
+   */
+  async function pickAddress() {
+    try {
+      addresses = await api.addresses();
+    } catch {
+      addresses = [];
+    }
+    choosePreferred();
+  }
+
+  function choosePreferred() {
+    // If this page was itself opened over the network, that address is not a guess -- it
+    // demonstrably works from at least one other device, which is more than the server's
+    // ranking can know.
+    const here = addresses.find((a) => a.ip === window.location.hostname);
+    const remembered = addresses.find((a) => a.ip === remembering());
+    chosenIP = (here ?? remembered ?? addresses[0])?.ip ?? '';
+  }
+
+  /** Re-reads the list, and re-picks only if the chosen address has gone. */
+  async function refreshAddresses() {
+    let next: Address[];
+    try {
+      next = await api.addresses();
+    } catch {
+      return;
+    }
+    if (JSON.stringify(next) === JSON.stringify(addresses)) return;
+    addresses = next;
+    if (!addresses.some((a) => a.ip === chosenIP)) choosePreferred();
+  }
+
+  /** "Wi-Fi Hall-Guest" when the network has a name; the adapter otherwise. */
+  function describe(a: Address): string {
+    return a.ssid ? `Wi-Fi ${a.ssid}` : a.interface;
+  }
+
+  const chosen = $derived(addresses.find((a) => a.ip === chosenIP) ?? null);
+
+  // Both sides of the memory are guarded: a browser with site data switched off throws on
+  // access rather than returning null, and that must not take the join panel down with it.
+  function remembering(): string {
+    try {
+      return localStorage.getItem(REMEMBERED) ?? '';
+    } catch {
+      return '';
+    }
+  }
+
+  function choose(ip: string) {
+    chosenIP = ip;
+    try {
+      localStorage.setItem(REMEMBERED, ip);
+    } catch {
+      // A browser with storage switched off still gets the choice, just not the memory.
+    }
+  }
+
+  // The port is this page's own: the clients connect to the same server on the same port,
+  // so it never has to be configured or passed through the API.
+  const port = $derived(window.location.port ? `:${window.location.port}` : '');
+  const clientURL = $derived(chosenIP ? `http://${chosenIP}${port}` : '');
+  /**
+   * What the QR code encodes, and what an organizer reads out: the score keeper's own
+   * page, not the front door.
+   *
+   * Scanning the code used to land a tablet on this very screen -- the competitor
+   * register, the setup, the pool tables -- with the mat picker somewhere below it. That
+   * is the organizer's page on the organizer's PC, and none of it is any use at a mat.
+   */
+  const scoreURL = $derived(clientURL ? `${clientURL}/score` : '');
 
   async function refresh() {
     try {
@@ -37,35 +139,66 @@
 
 <main>
   <header>
-    <h1>Porta di Ferro</h1>
+    <h1>
+      Porta di Ferro
+      {#if snapshot?.instance.name}<span class="discipline">{snapshot.instance.name}</span>{/if}
+    </h1>
     <nav>
-      <a href="/display/mats" target="_blank" rel="noreferrer">Displays</a>
-      <a href="/display/roster" target="_blank" rel="noreferrer">Roster</a>
-      <a href="/print/pools" target="_blank" rel="noreferrer">Pool sheets</a>
-      <a href="/api/export.json">Export JSON</a>
+      <a href="/display/mats" target="_blank" rel="noreferrer">{t('Displays')}</a>
+      <a href="/display/roster" target="_blank" rel="noreferrer">{t('Roster')}</a>
+      <a href="/print/pools" target="_blank" rel="noreferrer">{t('Pool sheets')}</a>
+      <a href="/api/export.json">{t('Export JSON')}</a>
+      <a href="/api/export.pdf?lang={lang.current}">{t('Export PDF')}</a>
+      <LangToggle />
     </nav>
   </header>
 
   {#if !snapshot}
-    <p class="loading">{live.error || 'Loading…'}</p>
+    <p class="loading">{live.error || t('Loading…')}</p>
   {:else}
     <section class="join">
       <div>
-        <h2>Join from a tablet or phone</h2>
-        <p class="url">{clientURL}</p>
-        <p class="hint">
-          Point a score keeper's device at that address, or let them scan the code. Every
-          device on the venue wifi can reach it &mdash; including a spectator's own phone,
-          for the roster and the mat scoreboards.
-        </p>
+        <h2>{t('Join from a tablet or phone')}</h2>
+        {#if clientURL}
+          <p class="url">{scoreURL}</p>
+          {#if chosen}
+            <p class="on">{t('on {network}', { network: describe(chosen) })}</p>
+          {/if}
+          {#if addresses.length > 1}
+            <label class="network">
+              {t('Network')}
+              <select value={chosenIP} onchange={(e) => choose(e.currentTarget.value)}>
+                {#each addresses as a (a.ip)}
+                  <option value={a.ip}>{describe(a)}: {a.ip}</option>
+                {/each}
+              </select>
+            </label>
+            <p class="hint">{t('This PC is on more than one network. Pick the one the tablets are on; the address and the code above follow the choice, and it is remembered.')}</p>
+          {:else}
+            <p class="hint">{t("Point a score keeper's device at that address, or let them scan the code. It opens straight on the mat picker.")}</p>
+          {/if}
+        {:else}
+          <p class="url none">{t('No network')}</p>
+          <p class="hint warn">{t('This PC is not on a network another device could reach, so there is no address to hand out. Join it to the venue wifi and reload this page. Scoring on this PC still works.')}</p>
+        {/if}
+        {#if clientURL}
+          <p class="hint">
+            {t('Spare screens open')} <span class="mono">{clientURL}/display</span>
+            {t('and are told what to show from here, under Screens — or go straight to')}
+            <span class="mono">{clientURL}/display/mats</span>,
+            <span class="mono">{clientURL}/display/audience/1</span> {t('or')}
+            <span class="mono">{clientURL}/display/roster</span>. {t('Any device on the venue wifi can reach them.')}
+          </p>
+        {/if}
         <p class="links">
-          <a href="/score">Score keeper</a>
-          <a href="/display/mat/1">Mat 1</a>
-          {#if snapshot.tournament.mats > 1}<a href="/display/mat/2">Mat 2</a>{/if}
+          <a href="/score">{t('Score keeper')}</a>
+          {#each { length: snapshot.tournament.mats } as _, i (i)}
+            <a href="/display/mat/{i + 1}">{t('Mat {n}', { n: i + 1 })}</a>
+          {/each}
         </p>
       </div>
-      {#if clientURL}
-        <img class="qr" alt="QR code for {clientURL}" src="/api/qr.png?url={encodeURIComponent(clientURL)}" />
+      {#if scoreURL}
+        <img class="qr" alt={t('QR code for {url}', { url: scoreURL })} src="/api/qr.png?url={encodeURIComponent(scoreURL)}" />
       {/if}
     </section>
 
@@ -74,7 +207,13 @@
       <Setup {snapshot} onchange={refresh} />
     </div>
 
-    <Pools {snapshot} />
+    <Screens presence={live.presence} {snapshot} />
+
+    <Eliminations {snapshot} onchange={refresh} />
+
+    <Disciplines self={snapshot.instance} />
+
+    <Pools {snapshot} onchange={refresh} />
   {/if}
 </main>
 
@@ -95,6 +234,16 @@
   h1 {
     margin: 0;
     font-size: 1.5rem;
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+  }
+  /* Which discipline this tab is. Amber, so two tabs of two disciplines cannot be told
+     apart only by reading the small print. */
+  .discipline {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--amber-bright);
   }
   nav {
     display: flex;
@@ -126,11 +275,33 @@
     font-weight: 700;
     font-variant-numeric: tabular-nums;
   }
+  .network {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 0.6rem;
+    font-size: 0.9rem;
+    color: var(--ink-dim);
+  }
+  .url.none {
+    color: var(--ink-dim);
+  }
+  .on {
+    margin: -0.3rem 0 0.6rem;
+    color: var(--ink-dim);
+    font-size: 0.95rem;
+  }
+  .hint.warn {
+    color: var(--amber-bright);
+  }
   .hint {
-    margin: 0;
+    margin: 0 0 0.4rem;
     color: var(--ink-dim);
     line-height: 1.55;
     max-width: 40rem;
+  }
+  .hint .mono {
+    color: var(--ink);
   }
   .links {
     display: flex;

@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Pending } from '../lib/match';
+  import { t } from '../lib/i18n.svelte';
 
   /**
    * The three match-ending dialogs. One component parameterised on its second action --
@@ -12,24 +13,31 @@
   let {
     pending,
     headline,
+    detail = '',
+    second = '',
     onEnd,
     onSecond,
   }: {
     pending: Pending;
     headline: string;
+    /** The score line, when the headline is about who lost rather than who won. */
+    detail?: string;
+    /** Overrides the second action's label; sudden death ends like a cap, not like time. */
+    second?: string;
     onEnd: () => void;
     onSecond: () => void;
   } = $props();
 
   const secondLabel = $derived(
-    pending === 'final_exchange' ? 'Continue one more exchange' : 'Undo last exchange',
+    second || (pending === 'final_exchange' ? t('Continue one more exchange') : t('Undo last exchange')),
   );
 </script>
 
 <div class="scrim" role="dialog" aria-modal="true" aria-label={headline}>
   <div class="card">
     <p class="headline">{headline}</p>
-    <button class="end" onclick={onEnd}>End match</button>
+    {#if detail}<p class="detail">{detail}</p>{/if}
+    <button class="end" onclick={onEnd}>{t('End match')}</button>
     <button class="second" onclick={onSecond}>{secondLabel}</button>
   </div>
 </div>
@@ -59,6 +67,13 @@
     font-weight: 700;
     text-align: center;
     line-height: 1.3;
+  }
+  .detail {
+    margin: -0.25rem 0 0.5rem;
+    font-size: clamp(1.05rem, 3vw, 1.4rem);
+    font-weight: 700;
+    text-align: center;
+    color: var(--ink-dim);
   }
   button {
     padding: 1.2rem;

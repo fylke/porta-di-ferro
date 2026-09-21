@@ -277,8 +277,27 @@ device that has no server to talk to; the result is then read out to the organiz
 hand. This is not a separate mode to build — it is what local-first writes already give — and it is
 what tier 2 of the fallback ladder (§12) actually rests on.
 
-Corrections are appended as new events rather than mutating history. MVP has no correction UI (§7),
-but building the log this way means adding one later is a UI change rather than a data migration.
+**A whole pool, not only a match.** The client keeps the last snapshot it saw, so it opens with the
+pool, the names and the running order even when the server is out of reach, and it keeps its own
+account of which matches it has finished, so *Next match* works with nobody to ask. When the LAN is
+back, it hands over every match log on the device the server is missing — not just the one on
+screen — because by then the earlier matches are closed and nobody would reopen them by hand.
+
+**One writer per match, made safe by an epoch.** A device claims a match before it writes and stamps
+every push with the epoch it was granted. A handover — graceful or not — moves the epoch on, and a
+push stamped with an older one is quarantined and shown to the organizer rather than appended or
+dropped (§7 item 10). A push with no stamp is the anonymous path — paper entry, the tests — and is
+accepted as it always was.
+
+Corrections made at the mat are appended as new events rather than mutating history: the score
+keeper's undo is a record that says "not that one", and the log still shows what was entered.
+
+**The organizer's editor is the one deliberate exception** (§7 item 1, decided September 2026). It
+rewrites the log rather than appending to it, because a log the organizer has corrected should read
+as the match that happened, not as the match plus a trail of what was thought to have happened —
+and a match log is what the standings, the bracket and the export are built from. What makes that
+safe is that nothing is lost: the version being replaced is kept beside the log as a dated backup,
+every time, and a score keeper holding the match is told to reload it.
 
 ### The exchange log
 
@@ -286,7 +305,9 @@ Recorded per match:
 
 - every confirmed exchange — timestamp, points awarded to each competitor
 - every warning — timestamp, competitor
-- **timer events** — started, stopped at timestamp X, resumed after Y seconds
+- **timer events** — started, stopped at timestamp X, resumed after Y seconds, reset to zero
+- **options** — the competitors' colours and which side each takes on the displays. Presentation
+  only: the engine ignores it, and it is in the log so it reaches every screen by the same path
 
 Nothing else. This is enough to reconstruct a match completely and to produce post-event statistics
 later without changing the schema.
@@ -451,13 +472,23 @@ which is exactly the ruleset's maximum for a single hit.
 - At **02:50 — ten seconds remaining — it flashes** to signal the final exchange. Flashing rather
   than a static colour change, to catch the eye of a score keeper who is watching the mat. Needs real
   testing.
+- **The flash is the final-exchange threshold, not a separate cue.** From 02:50 on, confirming an
+  exchange raises the final-exchange dialog. Holding the dialog back to 03:00 left ten seconds where
+  the clock was announcing the end of the match and a confirmation quietly carried on, which is the
+  one stretch of a match where the score keeper most needs to be asked.
 - **It does not stop at 03:00.** It keeps ticking past the limit until the **final exchange is
   confirmed**, which is what ends the match. A completed match's clock therefore routinely reads more
   than three minutes.
 - It is **not paused for scoring**, matching the ruleset. The timer control exists for the head
   referee's time-outs, not for ordinary exchanges.
+- **Selecting a point starts it** if it is not running. A point being awarded means fencing has been
+  happening, and a score keeper who forgot to press play is the commonest way a match clock ends up
+  wrong at a competition. Deselecting the point does not stop it again.
 - **One play/pause toggle**, generously sized. It is the only control that must be hit fast, so it is
   among the largest on the screen.
+- **A reset beside it**, small and behind a confirmation, puts the clock back to 00:00 for a clock
+  started by mistake. It is a correction appended to the log like any other, not a rewrite of the
+  start.
 - **The time readout is large too**, not just its button. The score keeper is watching the mat, so the
   clock must be readable at a glance rather than looked at directly — prominent, but **not
   oppressively so**. Giving the number half the screen starves the scoring controls, which matter just
@@ -499,8 +530,8 @@ screens doesn't have to relearn it.
 
 ### Match-ending dialogs
 
-**Final exchange.** Once the clock is past the final-exchange threshold, confirming an exchange raises
-a dialog:
+**Final exchange.** From the final-exchange threshold — 02:50, when the clock starts flashing —
+confirming an exchange raises a dialog:
 
 - **End match** — the match ends, and **the timestamp of that final confirmed exchange is the match end
   time**. The running clock is disregarded from that point.
@@ -516,14 +547,17 @@ a well-defined moment to ask and a well-defined timestamp to record.
 **Point cap.** Confirming an exchange that takes either competitor **to or past 8** raises a dialog
 announcing the result — *"Red wins 9–3"* — with **End match** or **Undo last exchange**.
 
-**Warning cap.** A warning that would take a competitor to the match-loss level raises the same dialog.
+**Warning cap.** A warning that would take a competitor to the match-loss level raises the same dialog
+— worded for the loser, not the winner: *"Ada loses the match on a third warning"*, *"Bo is
+disqualified"*, with the 8–0 as the second line. A match that ends on warnings is the one result the
+head referee will be asked to justify, and *"Bo wins 8–0"* was true and useless.
 
 The three share a shape but **not their second action** — build them as one component parameterised on
 it, not as one identical dialog:
 
 | Trigger | Choices | Why |
 |---|---|---|
-| Final exchange (past time) | **End match** / **Continue one more exchange** | Play may legitimately continue; the head referee decides |
+| Final exchange (02:50 on) | **End match** / **Continue one more exchange** | Play may legitimately continue; the head referee decides |
 | Point cap reached | **End match** / **Undo last exchange** | The rules end it, so the only alternative is that the entry was a mistake |
 | Warning cap reached | **End match** / **Undo last exchange** | Same |
 
@@ -534,6 +568,14 @@ conditions, **the cap takes precedence**.
 **Overshoot:** at 7, a 2-versus-nothing exchange gives 9. **Record the actual 9 rather than clamping to
 8** — point difference feeds two of the four ranking indices, so clamping would quietly distort the
 standings. That leaves forfeits (recorded 8–0) as the only place 8 is a hard number.
+
+### After the match
+
+**The result stays on screen until the score keeper presses *Next match*.** The clock controls give
+way to the outcome and the final score, and *Confirm exchange* becomes *Next match*. The mat does
+not move on by itself: when it did, the final score was replaced by the next two names the instant
+the end was written, before anyone had read it or read it back to the head referee. **Forfeits ask
+first**, for the same reason undo does — they end the match, and a menu tap should not.
 
 ### Corner controls — rare, destructive, out of the way
 
@@ -607,12 +649,13 @@ MSL's SM ruleset. Longsword scoring is used for all weapons at this stage.
 | Exchange scoring | **Differential** — the difference between the two assessments is awarded |
 | Point cap | 8 |
 | Match time | 3 minutes |
-| Final-exchange warning | 10 seconds remaining (02:50) |
+| Final-exchange threshold | 10 seconds remaining (02:50) — the clock flashes, and a confirmation from here raises the dialog |
 | Result types | Win / loss / **draw** (draws are possible in pools) |
 | Pool match points | Win **9**, draw **6**, loss **3** |
 | Forfeit | Recorded 0–8; winner takes 9 match points, forfeiter 0 |
 | Withdrawal during pools | Treated as if the competitor never participated — results retroactively voided |
-| Red / blue assignment | Fixed at pool creation, for every match in the pool |
+| Red / blue assignment | Fixed at pool creation, for every match in the pool; the higher seed takes red in the bracket |
+| Eliminations | Top 8 by the overall ranking, single elimination with a third-place match; a level score at the final exchange goes to sudden death, first point wins |
 
 ### Exchange scoring is differential
 
@@ -764,17 +807,30 @@ Deliberate, and listed so nobody is surprised on the day:
 ## 7. Milestone 2 — Club Event Stretch Goals
 
 1. **Full history editing** — correct any exchange in a finished or running match, not just the last
-   one. Undo of the last exchange is in MVP; this is the deeper version.
+   one. Undo of the last exchange is in MVP; this is the deeper version. *(Built, on the organizer
+   page: a pencil on every match opens its log; any event can be changed, moved or deleted and an
+   exchange or the end added, with the client engine replaying the edited log as it stands. Saving
+   rewrites the log and keeps the previous version as a backup — see §3, Sync. This is what retires
+   the hand-edit-the-JSON escape hatch.)*
 2. **Immediate penalty escalation** — the head referee may jump straight to a point deduction, a lost
    match, or disqualification. Reached from the `…` overflow menu (§4) rather than more buttons on the
    main view, and **committed through *Confirm exchange* with no confirmation dialog of its own** —
    reaching into a buried menu is already deliberate, and the normal confirm is the second gate.
-   Cancelling one is a tap on the warning button, not a second trip into the menu.
-3. **Eliminations** — top 8 from the pools.
+   Cancelling one is a tap on the warning button, not a second trip into the menu. *(Built. The
+   question of a dialog per level was settled §4's way: none on choosing; the end-of-match dialog that
+   a match loss raises is the same one a third ordinary warning raises, and it names the escalation.)*
+3. **Eliminations** — top 8 from the pools. *(Built. The cut is the overall ranking across every pool
+   by the full index chain, once every pool match is in. Single elimination, seeded the standard way
+   — 1 v 8 and 4 v 5 feed one semi-final, 2 v 7 and 3 v 6 the other — with a match for third place,
+   as the SM rules run it. A field under eight cuts at four, under four at two. Same 8 points and 3
+   minutes as the pools; a bracket match cannot be drawn, so a level score at the final exchange goes
+   to **sudden death**, first point wins. Later rounds are derived from results, never stored, so a
+   corrected quarter-final corrects the semi-final on its own. Best-of-three finals stay Milestone 3.)*
 4. **Server-assigned displays** — a device opens `/display` and the organizer chooses what it shows,
    reassigning on the fly and seeing which screens are live. Added *alongside* URL addressing, which
    remains supported. Cheap by this point, because the connected-client registry already exists for
-   handover (item 10).
+   handover (item 10). *(Built. A screen heartbeats and renders whatever the answer says; the
+   assignment is kept on disk so a hall of screens survives the organizer's laptop rebooting.)*
 5. **Audience display**, a richer variant of the mat display:
    - the **winner and final scores, prominently**, when a match is decided
    - the **upcoming match** — competitor names, colour-coded red and blue — in a smaller but still clearly
@@ -782,24 +838,53 @@ Deliberate, and listed so nobody is surprised on the day:
    - an **"on deck" panel down the side** listing the next 3–5 matches, with red and blue background
      colour-coding per competitor. During pools this is what tells a competitor whether there is time
      to refill a water bottle or take a jacket off
+
+   *(Built, at `/display/audience/N`. The result stays up because **the mat follows its score
+   keeper**: the server points a mat at whatever match the live score keeper is holding, finished or
+   not, until *Next match* is pressed — so every display shows the winner for exactly as long as the
+   score keeper does, and none of them has to guess.)*
 6. **Competitor colour and side options**, reached from the `…` overflow menu (§4): change the
    competitors' colours away from the red/blue default, and swap which side each occupies — on the
    score keeper view and on the display **independently of each other**. Swapping sides risks
    cognitive dissonance against the physical corners, so changing colours is often the better answer
-   to the same problem.
+   to the same problem. *(Built. Colours and the display swap are an `options` record in the match
+   log — no effect on the score, read by every screen through the same path as the score, and
+   changeable with no server to talk to. The score keeper's own swap is per device.)*
 7. **Up to 4 mats, up to 8 pools** — 56 competitors per run. Mat assignment generalises to pool *N* on
-   mat *((N−1) mod mats) + 1*.
-8. **Organizer override of mat assignment.**
+   mat *((N−1) mod mats) + 1*. *(Built: the ceiling is a set of three numbers, and the assignment rule
+   was already the general one.)*
+8. **Organizer override of mat assignment.** *(Built: move a pool to another mat, where it queues last,
+   or step it up or down its mat's queue. Every screen reads pools in run order, so all of them follow;
+   the organizer view and the roster mark a moved pool as moved.)*
 9. **Concurrent disciplines** — several runs at once, which requires a distinct port and data
-   directory per instance.
+   directory per instance. *(Built. The first instance starts the others from its organizer page:
+   each is the same executable on the next free port, with a data folder beside the first named for
+   the discipline, and each shows its name on every page — organizer, mat picker, score keeper,
+   scoreboards, roster — so a screen or a tab is never silently on the wrong one. Closing the first
+   closes the ones it started; each also has its own tray Quit.)*
 10. **Score keeper client handover** — graceful (planned: bathroom break, shift change) and ungraceful
    (device died). Graceful flushes before releasing so nothing is lost; ungraceful increments a
    writer epoch, and any late events from the old device are quarantined and shown to the organizer
-   rather than silently dropped.
-11. **Swedish localisation** alongside English.
-12. **PDF export** alongside JSON.
+   rather than silently dropped. *(Built. A device claims a match before it writes and stamps every
+   push with its epoch; a contested claim is refused with who holds it and can be taken over
+   explicitly; a claim on a dead device goes through without asking. The graceful case is *Hand over
+   this mat* in the `…` menu, and *Next match* releases the finished match on the way out. It needed
+   no round trip: heartbeats are `POST`s and the registry comes back over SSE.)*
+11. **Swedish localisation** alongside English. *(Built. The English text is the key and the Swedish is
+    one dictionary; a test fails the build if any string on any screen has no entry. The choice is per
+    device — a toggle on the organizer page, the mat picker, the score keeper's `…` menu and a waiting
+    screen, or `?lang=sv` on any address — and the PDF follows it. Where the SM rules have a word it
+    is used: sekretariat, ringdomare, utväxling, sista utväxlingen, the warning ladder's own terms.
+    Internal identifiers stay English on the wire and on disk.)*
+12. **PDF export** alongside JSON. *(Built, at `/api/export.pdf`: a page per pool with the standings
+    and the indices that produced them and every match with its result, made on the server so it
+    comes out the same from a curl as from a click, with the overall ranking and the eliminations
+    once they exist.)*
 13. **Club balancing in pool generation** — distribute competitors from the same club as evenly as
-    possible (issue #3). No effect at a club-internal event, so it needs synthetic testing.
+    possible (issue #3). No effect at a club-internal event, so it needs synthetic testing. *(Built.
+    The objectives give way in this order: pool sizes within one of each other, never traded; club
+    spread, best-effort — a greedy deal, a swap pass, and what remains reported; then running order
+    and colours, decided per pool and unable to conflict with either.)*
 
 ---
 
@@ -984,7 +1069,7 @@ multi-tenancy, macOS — are listed in [`tech-stack.md`](tech-stack.md) rather t
 | Risk | Assessment |
 |---|---|
 | **Installability treated as a late chore** | Would forfeit the entire premise. Test the 5-minute install from the first week, on a machine that isn't the developer's |
-| **Correction is one step deep in MVP** | Undo covers the last confirmed exchange only. An error noticed later still needs hand-editing JSON, which keeps the paper fallback valuable and makes full history editing the first Milestone 2 item |
+| **Correction is one step deep in MVP** | Undo covers the last confirmed exchange only. An error noticed later still needs hand-editing JSON, which keeps the paper fallback valuable and makes full history editing the first Milestone 2 item. *Closed by the organizer's editor (§7 item 1).* |
 | **The score keeper view is unsettled** | Deliberately so — §4 gives a direction and a set of constraints, not a finished layout, and expects two or three prototypes. It is the most-used screen in the application, so leaving it open is a considered risk rather than an oversight. **Prototype early; it gates nothing else but everything depends on it being right** |
 | **Scope creep from Future** | Milestone 3 is an idea dump, not a queue. Nothing moves out of it without being cut down first |
 | **Code signing left until the first release** | An unsigned download triggers SmartScreen, and that dialog *is* the install wall. It sits directly on the 5-minute acceptance criterion, so pick a signing route early rather than in the week before an event |

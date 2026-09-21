@@ -17,39 +17,50 @@ func field(n int) []store.Competitor {
 }
 
 func TestPoolsHonourTheSizeRangeAndMatAssignment(t *testing.T) {
-	for _, n := range []int{4, 5, 7, 8, 12, 20, 28} {
-		setup := store.Tournament{Mats: 2, MinPoolSize: 4, MaxPoolSize: 7}
-		drawn, err := tournament.Generate(setup, field(n), tournament.MVPLimits())
-		if err != nil {
-			t.Fatalf("%d competitors: %v", n, err)
-		}
-		total := 0
-		for _, p := range drawn.Pools {
-			total += len(p.Competitors)
-			if len(p.Competitors) > 7 {
-				t.Errorf("%d competitors: pool %d has %d, over the MVP ceiling of 7",
-					n, p.Number, len(p.Competitors))
+	for _, mats := range []int{1, 2, 3, 4} {
+		for _, n := range []int{4, 5, 7, 8, 12, 20, 28, 41, 56} {
+			setup := store.Tournament{Mats: mats, MinPoolSize: 4, MaxPoolSize: 7}
+			drawn, err := tournament.Generate(setup, field(n), tournament.DefaultLimits())
+			if err != nil {
+				t.Fatalf("%d mats, %d competitors: %v", mats, n, err)
 			}
-			// Odd pools to mat 1, even to mat 2.
-			if want := ((p.Number - 1) % 2) + 1; p.Mat != want {
-				t.Errorf("%d competitors: pool %d is on mat %d, want %d", n, p.Number, p.Mat, want)
+			total := 0
+			for _, p := range drawn.Pools {
+				total += len(p.Competitors)
+				if len(p.Competitors) > 7 {
+					t.Errorf("%d mats, %d competitors: pool %d has %d, over the ceiling of 7",
+						mats, n, p.Number, len(p.Competitors))
+				}
+				// Pool N on mat ((N-1) mod mats)+1: with two mats, odd to 1 and even to 2.
+				if want := ((p.Number - 1) % mats) + 1; p.Mat != want {
+					t.Errorf("%d mats, %d competitors: pool %d is on mat %d, want %d",
+						mats, n, p.Number, p.Mat, want)
+				}
+				for _, m := range p.Matches {
+					if m.Mat != p.Mat {
+						t.Errorf("pool %d is on mat %d but match %s says mat %d", p.Number, p.Mat, m.ID, m.Mat)
+					}
+				}
+				// Everyone fences everyone else once.
+				size := len(p.Competitors)
+				if want := size * (size - 1) / 2; len(p.Matches) != want {
+					t.Errorf("%d competitors: pool %d has %d matches, want %d",
+						n, p.Number, len(p.Matches), want)
+				}
 			}
-			// Everyone fences everyone else once.
-			size := len(p.Competitors)
-			if want := size * (size - 1) / 2; len(p.Matches) != want {
-				t.Errorf("%d competitors: pool %d has %d matches, want %d",
-					n, p.Number, len(p.Matches), want)
+			if total != n {
+				t.Errorf("%d mats, %d competitors: %d were drawn into pools", mats, n, total)
 			}
-		}
-		if total != n {
-			t.Errorf("%d competitors: %d were drawn into pools", n, total)
+			if len(drawn.Pools) > 8 {
+				t.Errorf("%d competitors drew %d pools, over the ceiling of 8", n, len(drawn.Pools))
+			}
 		}
 	}
 }
 
 func TestEveryPairMeetsExactlyOnce(t *testing.T) {
 	setup := store.Tournament{Mats: 2, MinPoolSize: 4, MaxPoolSize: 7}
-	drawn, err := tournament.Generate(setup, field(13), tournament.MVPLimits())
+	drawn, err := tournament.Generate(setup, field(13), tournament.DefaultLimits())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +85,7 @@ func TestEveryPairMeetsExactlyOnce(t *testing.T) {
 // far more often than the other within their own pool.
 func TestColoursAreRoughlyEven(t *testing.T) {
 	setup := store.Tournament{Mats: 2, MinPoolSize: 4, MaxPoolSize: 7}
-	drawn, err := tournament.Generate(setup, field(24), tournament.MVPLimits())
+	drawn, err := tournament.Generate(setup, field(24), tournament.DefaultLimits())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +107,7 @@ func TestColoursAreRoughlyEven(t *testing.T) {
 // greedy pass at each seam should leave nothing to report at these sizes.
 func TestConsecutiveMatchesAreMinimised(t *testing.T) {
 	setup := store.Tournament{Mats: 2, MinPoolSize: 4, MaxPoolSize: 7}
-	drawn, err := tournament.Generate(setup, field(22), tournament.MVPLimits())
+	drawn, err := tournament.Generate(setup, field(22), tournament.DefaultLimits())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,8 +128,15 @@ func TestConsecutiveMatchesAreMinimised(t *testing.T) {
 }
 
 func TestPastTheCeilingIsRejected(t *testing.T) {
-	setup := store.Tournament{Mats: 2, MinPoolSize: 4, MaxPoolSize: 7}
-	if _, err := tournament.Generate(setup, field(29), tournament.MVPLimits()); err == nil {
-		t.Error("29 competitors is past the MVP ceiling of 28 and should be refused")
+	setup := store.Tournament{Mats: 4, MinPoolSize: 4, MaxPoolSize: 7}
+	if _, err := tournament.Generate(setup, field(56), tournament.DefaultLimits()); err != nil {
+		t.Errorf("56 competitors is exactly the ceiling and should draw: %v", err)
+	}
+	if _, err := tournament.Generate(setup, field(57), tournament.DefaultLimits()); err == nil {
+		t.Error("57 competitors is past the ceiling of 56 and should be refused")
+	}
+	five := store.Tournament{Mats: 5, MinPoolSize: 4, MaxPoolSize: 7}
+	if _, err := tournament.Generate(five, field(20), tournament.DefaultLimits()); err == nil {
+		t.Error("5 mats is past the ceiling of 4 and should be refused")
 	}
 }

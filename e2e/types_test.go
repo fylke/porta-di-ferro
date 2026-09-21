@@ -10,13 +10,16 @@ import (
 // package so the test is a client of the wire format, the way a browser is.
 type matchView struct {
 	store.Match
-	State  match.State `json:"state"`
-	Status string      `json:"status"`
+	State   match.State `json:"state"`
+	Status  string      `json:"status"`
+	SinceMS int64       `json:"sinceMs"`
 }
 
 type poolView struct {
 	Number      int                   `json:"number"`
 	Mat         int                   `json:"mat"`
+	Sequence    int                   `json:"sequence"`
+	Overridden  bool                  `json:"overridden"`
 	Competitors []string              `json:"competitors"`
 	Matches     []matchView           `json:"matches"`
 	Standings   []tournament.Standing `json:"standings"`

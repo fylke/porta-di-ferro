@@ -11,7 +11,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -20,6 +19,7 @@ import (
 	"time"
 
 	httpapi "github.com/fylke/porta-di-ferro/internal/http"
+	"github.com/fylke/porta-di-ferro/internal/lan"
 	"github.com/fylke/porta-di-ferro/internal/store"
 	"github.com/fylke/porta-di-ferro/web"
 )
@@ -31,6 +31,8 @@ var version = "dev"
 func main() {
 	dir := flag.String("dir", defaultDir(), "tournament data directory")
 	port := flag.Int("port", 8080, "port to listen on")
+	name := flag.String("name", "", "the discipline this run is for, shown on every page")
+	parent := flag.String("parent", "", "URL of the instance that started this one")
 	noBrowser := flag.Bool("no-browser", false, "do not open a browser on start")
 	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
@@ -45,7 +47,7 @@ func main() {
 		fatal("could not open the tournament directory %s: %v", *dir, err)
 	}
 
-	srv := httpapi.New(st, web.Assets())
+	srv := httpapi.New(st, web.Assets(), httpapi.Instance{Name: *name, Port: *port, Parent: *parent})
 	addr := fmt.Sprintf(":%d", *port)
 	httpServer := &http.Server{
 		Addr:    addr,
@@ -54,8 +56,9 @@ func main() {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
-	lan := lanURL(*port)
-	banner(lan, *dir, *port)
+	addrs := lan.Addresses()
+	clients := clientURL(addrs, *port)
+	banner(addrs, *dir, *port, *name)
 
 	go func() {
 		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -71,7 +74,7 @@ func main() {
 	}
 
 	quit := make(chan struct{})
-	go runTray(lan, fmt.Sprintf("http://localhost:%d/", *port), quit)
+	go runTray(clients, fmt.Sprintf("http://localhost:%d/", *port), quit)
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
@@ -80,55 +83,71 @@ func main() {
 	case <-quit:
 	}
 
+	// Closing the discipline the organizer started closes the ones it started.
+	srv.StopChildren()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	httpServer.Shutdown(ctx)
 	fmt.Println("\nStopped. Your tournament is saved in", *dir)
 }
 
-func banner(lan, dir string, port int) {
+func banner(addrs []lan.Address, dir string, port int, name string) {
 	fmt.Println()
-	fmt.Println("  Porta di Ferro", version)
-	fmt.Println()
-	fmt.Println("  Organizer      http://localhost:" + fmt.Sprint(port) + "/")
-	if lan != "" {
-		fmt.Println("  Score keepers  " + lan + "/score")
-		fmt.Println("  Displays       " + lan + "/display/mats")
+	if name != "" {
+		fmt.Println("  Porta di Ferro", version, "--", name)
 	} else {
+		fmt.Println("  Porta di Ferro", version)
+	}
+	fmt.Println()
+	fmt.Println("  Organizer      http://localhost:" + fmt.Sprint(port) + "/   (this PC only)")
+	if len(addrs) == 0 {
+		fmt.Println()
 		fmt.Println("  No network address found -- clients on other devices cannot reach this PC.")
+		fmt.Println("  Join this PC to the venue wifi and restart.")
+	} else {
+		base := url(addrs[0], port)
+		fmt.Println("  Score keepers  " + base + "/score   (" + describe(addrs[0]) + ")")
+		fmt.Println("  Displays       " + base + "/display/mats")
+		// Every other network this PC is on, named. An organizer whose PC is on both a
+		// wired office LAN and the hall wifi cannot be guessed at from here, and being
+		// able to see the alternatives is what makes the choice on the organizer page
+		// obvious rather than a shot in the dark.
+		if len(addrs) > 1 {
+			fmt.Println()
+			fmt.Println("  Also reachable on:")
+			for _, a := range addrs[1:] {
+				fmt.Printf("                 %-24s (%s)\n", url(a, port), describe(a))
+			}
+		}
 	}
 	fmt.Println("  Data           " + dir)
 	fmt.Println()
-	fmt.Println("  The organizer page shows a QR code for the clients. Leave this window open.")
+	fmt.Println("  The organizer page carries a QR code for the clients, and lets you switch")
+	fmt.Println("  network if the address above is not the one the tablets are on.")
+	fmt.Println("  Leave this window open.")
 	fmt.Println()
 }
 
-// lanURL finds the address a tablet on the venue LAN can actually reach. Preferring a
-// private range keeps it off virtual adapters where possible.
-func lanURL(port int) string {
-	addrs, err := net.InterfaceAddrs()
-	if err != nil {
+func url(a lan.Address, port int) string {
+	return fmt.Sprintf("http://%s:%d", a.IP, port)
+}
+
+// describe names a network the way an organizer would: by its wifi name when it has one,
+// and by the adapter otherwise.
+func describe(a lan.Address) string {
+	if a.SSID != "" {
+		return "Wi-Fi " + a.SSID
+	}
+	return a.Interface
+}
+
+// clientURL is the address the tray offers to copy: the best guess, or nothing at all
+// rather than a localhost URL that would not work on the device it was pasted into.
+func clientURL(addrs []lan.Address, port int) string {
+	if len(addrs) == 0 {
 		return ""
 	}
-	var fallback string
-	for _, a := range addrs {
-		ipnet, ok := a.(*net.IPNet)
-		if !ok || ipnet.IP.IsLoopback() {
-			continue
-		}
-		ip := ipnet.IP.To4()
-		if ip == nil {
-			continue
-		}
-		url := fmt.Sprintf("http://%s:%d", ip.String(), port)
-		if ip.IsPrivate() {
-			return url
-		}
-		if fallback == "" {
-			fallback = url
-		}
-	}
-	return fallback
+	return url(addrs[0], port)
 }
 
 func defaultDir() string {

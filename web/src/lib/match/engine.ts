@@ -41,6 +41,10 @@ export function replay(r: Ruleset, events: Event[]): State {
       case 'end':
         applyEnd(r, s, e);
         break;
+      case 'options':
+        // Presentation only. It is in the log so it reaches every screen; what it says
+        // is read by optionsOf, never by the score.
+        break;
     }
   }
   if (!s.ended && applied.length > 0) s.undoableSeq = applied[applied.length - 1];
@@ -99,7 +103,11 @@ function applyExchange(r: Ruleset, s: State, e: Event): boolean {
     s.pending = 'point_cap';
     return true;
   }
-  if (e.elapsedMs >= r.matchTimeMs) {
+  // From the final-exchange threshold on, the clock is flashing to tell the mat that the
+  // next exchange is the last one -- so every confirmation from there asks the head referee
+  // whether it was. Play may still legitimately continue past 03:00; that is the referee's
+  // call and the dialog is where it is made.
+  if (e.elapsedMs >= r.finalExchangeMs) {
     s.pending = 'final_exchange';
     return true;
   }
@@ -130,6 +138,11 @@ function applyTimer(s: State, e: Event): void {
   s.elapsedMs = e.elapsedMs;
   if (e.timer.action === 'start' || e.timer.action === 'resume') s.running = true;
   else if (e.timer.action === 'stop') s.running = false;
+  else if (e.timer.action === 'reset') {
+    // Zero regardless of what the event carries: a reset means 00:00 by definition.
+    s.running = false;
+    s.elapsedMs = 0;
+  }
 }
 
 function applyEnd(r: Ruleset, s: State, e: Event): void {

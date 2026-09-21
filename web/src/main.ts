@@ -1,6 +1,9 @@
 import './app.css';
 import { mount } from 'svelte';
 import App from './App.svelte';
+import { lang } from './lib/i18n.svelte';
+
+document.documentElement.lang = lang.current;
 
 // The app shell cache. Registered here rather than in index.html so a build without a
 // service worker is still a working application.

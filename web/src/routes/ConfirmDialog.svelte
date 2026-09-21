@@ -1,9 +1,11 @@
 <script lang="ts">
+  import { t } from '../lib/i18n.svelte';
+
   /** Undo is rare and destructive, so it asks before it applies (design §4). */
   let {
     headline,
     detail = '',
-    confirmLabel = 'Yes, undo it',
+    confirmLabel = '',
     onConfirm,
     onCancel,
   }: {
@@ -19,8 +21,8 @@
   <div class="card">
     <p class="headline">{headline}</p>
     {#if detail}<p class="detail">{detail}</p>{/if}
-    <button class="confirm" onclick={onConfirm}>{confirmLabel}</button>
-    <button onclick={onCancel}>Cancel</button>
+    <button class="confirm" onclick={onConfirm}>{confirmLabel || t('Yes, undo it')}</button>
+    <button onclick={onCancel}>{t('Cancel')}</button>
   </div>
 </div>
 

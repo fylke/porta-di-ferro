@@ -1,5 +1,6 @@
 <script lang="ts">
   import { api, type Competitor } from '../api';
+  import { t } from '../lib/i18n.svelte';
 
   /**
    * Registration and status. Name and club only -- picture, phone number and club crest
@@ -53,12 +54,12 @@
 </script>
 
 <section>
-  <h2>Competitors <span class="count">{active} entered</span></h2>
+  <h2>{t('Competitors')} <span class="count">{t('{n} entered', { n: active })}</span></h2>
 
   <form onsubmit={add}>
-    <input bind:value={name} placeholder="Name" required aria-label="Competitor name" />
-    <input bind:value={club} placeholder="Club" aria-label="Club" />
-    <button type="submit">Add</button>
+    <input bind:value={name} placeholder={t('Name')} required aria-label={t('Competitor name')} />
+    <input bind:value={club} placeholder={t('Club')} aria-label={t('Club')} />
+    <button type="submit">{t('Add')}</button>
   </form>
   {#if error}<p class="err">{error}</p>{/if}
 
@@ -68,21 +69,18 @@
         <span class="name">{c.name}</span>
         <span class="club">{c.club}</span>
         {#if c.withdrawn}
-          <span class="tag">Withdrawn</span>
-          <button class="link" onclick={() => setWithdrawn(c, false)}>Reinstate</button>
+          <span class="tag">{t('Withdrawn')}</span>
+          <button class="link" onclick={() => setWithdrawn(c, false)}>{t('Reinstate')}</button>
         {:else if poolsDrawn}
-          <button class="link" onclick={() => setWithdrawn(c, true)}>Withdraw</button>
+          <button class="link" onclick={() => setWithdrawn(c, true)}>{t('Withdraw')}</button>
         {:else}
-          <button class="link" onclick={() => remove(c)}>Remove</button>
+          <button class="link" onclick={() => remove(c)}>{t('Remove')}</button>
         {/if}
       </li>
     {/each}
   </ul>
   {#if poolsDrawn}
-    <p class="hint">
-      Pools are drawn, so competitors can only be withdrawn from here. A withdrawal voids
-      their results as though they never entered, and everyone else's standings recompute.
-    </p>
+    <p class="hint">{t("Pools are drawn, so competitors can only be withdrawn from here. A withdrawal voids their results as though they never entered, and everyone else's standings recompute.")}</p>
   {/if}
 </section>
 

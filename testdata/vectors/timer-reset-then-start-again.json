@@ -1,0 +1,65 @@
+{
+  "name": "timer-reset-then-start-again",
+  "description": "After a reset the next start is a fresh one from zero, and exchanges count from there.",
+  "events": [
+    {
+      "seq": 1,
+      "type": "timer",
+      "elapsedMs": 0,
+      "timer": {
+        "action": "start"
+      }
+    },
+    {
+      "seq": 2,
+      "type": "timer",
+      "elapsedMs": 12000,
+      "timer": {
+        "action": "reset"
+      }
+    },
+    {
+      "seq": 3,
+      "type": "timer",
+      "elapsedMs": 0,
+      "timer": {
+        "action": "start"
+      }
+    },
+    {
+      "seq": 4,
+      "type": "exchange",
+      "elapsedMs": 3000,
+      "exchange": {
+        "red": {
+          "value": 1,
+          "penalty": 0
+        },
+        "blue": {
+          "value": 0,
+          "penalty": 0
+        }
+      }
+    }
+  ],
+  "expect": {
+    "red": {
+      "score": 1,
+      "penalty": 0
+    },
+    "blue": {
+      "score": 0,
+      "penalty": 0
+    },
+    "exchanges": 1,
+    "elapsedMs": 3000,
+    "running": true,
+    "ended": false,
+    "noMatchPoints": false,
+    "endReason": "",
+    "winner": "",
+    "pending": "none",
+    "lastSeq": 4,
+    "undoableSeq": 4
+  }
+}

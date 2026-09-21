@@ -1,4 +1,6 @@
 <script lang="ts">
+  import WarningTriangle from '../WarningTriangle.svelte';
+  import { t } from '../../lib/i18n.svelte';
   import type { Side } from '../../lib/match';
   import type { Selection } from '../../lib/scorekeeper.svelte';
 
@@ -11,6 +13,7 @@
    */
   let {
     side,
+    colour = side,
     name,
     score,
     warnings,
@@ -21,6 +24,8 @@
     onWarning,
   }: {
     side: Side;
+    /** The palette colour this side is shown in. Defaults to the side's own. */
+    colour?: string;
     name: string;
     score: number;
     warnings: number;
@@ -30,19 +35,31 @@
     onPoint: (value: number) => void;
     onWarning: () => void;
   } = $props();
+
+  // The punctuation encodes severity, so the label reads as more alarming exactly as the
+  // consequence gets worse -- a third cue alongside colour and size (design §4).
+  const warningLabel = $derived(
+    selection.penalty >= 3 ? t('TRIPLE!!!') : selection.penalty === 2 ? t('DOUBLE!!') : t('WARNING!'),
+  );
 </script>
 
-<section class="panel {side} v-{variant}" aria-label="{side} competitor">
+<!-- The side is the identity in every record; the colour is only how it is shown. Both are
+     announced, because a score keeper told "green" by the referee needs to find green. -->
+<section
+  class="panel v-{variant}"
+  style="--side-tint: var(--tint-{colour}); --side-bright: var(--bright-{colour})"
+  aria-label={t('{side} competitor, shown in {colour}', { side: t(side), colour: t(colour) })}
+>
   <header>
-    <span class="label">{side.toUpperCase()}</span>
+    <span class="label">{t(colour).toUpperCase()}</span>
     <span class="name">{name}</span>
   </header>
 
-  <div class="score mono" aria-label="score">
+  <div class="score mono" aria-label={t('score')}>
     {score}
     {#if warnings > 0}
-      <span class="warnings" aria-label="{warnings} warnings">
-        {#each { length: warnings } as _, i (i)}<span class="triangle">&#9650;</span>{/each}
+      <span class="warnings" aria-label={t('{n} warnings', { n: warnings })}>
+        {#each { length: warnings } as _, i (i)}<WarningTriangle />{/each}
       </span>
     {/if}
   </div>
@@ -62,9 +79,10 @@
   <button
     class="warning"
     class:selected={selection.penalty > 0}
+    class:severe={selection.penalty > 1}
     {disabled}
     aria-pressed={selection.penalty > 0}
-    onclick={onWarning}>WARNING!</button
+    onclick={onWarning}>{warningLabel}</button
   >
 </section>
 
@@ -78,11 +96,8 @@
     padding: 0.75rem;
     min-height: 0;
   }
-  .panel.red {
-    background: var(--red-tint);
-  }
-  .panel.blue {
-    background: var(--blue-tint);
+  .panel {
+    background: var(--side-tint);
   }
 
   header {
@@ -96,11 +111,8 @@
     letter-spacing: 0.08em;
     font-size: 0.85rem;
   }
-  .red .label {
-    color: var(--red-bright);
-  }
-  .blue .label {
-    color: var(--blue-bright);
+  .label {
+    color: var(--side-bright);
   }
   .name {
     font-size: 1rem;
@@ -123,7 +135,8 @@
      whether the next one costs a point or ends the match. */
   .warnings {
     display: inline-flex;
-    gap: 0.15rem;
+    align-items: center;
+    gap: 0.2rem;
     font-size: 0.4em;
     color: var(--amber-bright);
   }
@@ -167,6 +180,15 @@
     background: var(--amber-bright);
     border-color: var(--amber-bright);
     color: #1a1200;
+  }
+  /* A pending escalation is the same amber -- hue is identity, and amber is warnings --
+     but heavier, because it is about to cost a point or the match. */
+  .warning.severe {
+    font-size: clamp(0.95rem, 2.5vh, 1.2rem);
+    letter-spacing: 0.08em;
+    box-shadow:
+      inset 0 0 0 4px var(--bg),
+      inset 0 0 0 6px var(--amber-bright);
   }
 
   button:active {

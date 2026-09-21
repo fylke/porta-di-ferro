@@ -2,7 +2,8 @@
   import { onMount } from 'svelte';
   import { keepAwake } from '../lib/wakelock';
   import Scoreboard from './Scoreboard.svelte';
-  import { Clock, Live, matchOn, namesFor, nextOn } from './lib-display.svelte';
+  import { Clock, Live, liveElapsed, matchOn, namesFor, nextOn } from './lib-display.svelte';
+  import { t } from '../lib/i18n.svelte';
 
   let { mat }: { mat: number } = $props();
 
@@ -24,39 +25,29 @@
   const names = $derived(namesFor(live.snapshot, match));
   const upcoming = $derived(nextOn(live.snapshot, mat));
   const upcomingNames = $derived(namesFor(live.snapshot, upcoming));
-  // A display has no writer of its own, so it anchors the clock to the moment it saw the
-  // match start running. Close enough for a scoreboard, and never wrong in a way anyone
-  // can see from across a hall.
-  let startedAt = $state(Date.now());
-  let wasRunning = $state(false);
-  $effect(() => {
-    const running = !!match?.state.running;
-    if (running && !wasRunning) startedAt = Date.now();
-    wasRunning = running;
-  });
-  const elapsed = $derived(
-    match?.state.running
-      ? match.state.elapsedMs + (clock.now - startedAt)
-      : (match?.state.elapsedMs ?? 0),
-  );
+  const elapsed = $derived(liveElapsed(match, live, clock.now));
 </script>
 
 <main>
   <div class="board">
-    <Scoreboard {mat} {match} {names} {elapsed} />
+    <Scoreboard {mat} {match} {names} {elapsed} discipline={live.snapshot?.instance.name ?? ''} />
   </div>
   {#if match?.state.ended || !match}
     <footer>
       {#if upcoming}
-        <span class="label">Next on mat {mat}</span>
-        <span class="up"><span class="red">{upcomingNames.red}</span> v <span class="blue">{upcomingNames.blue}</span></span>
+        <span class="label">{t('Next on mat {n}', { n: mat })}</span>
+        <span class="up">
+          <span style="color: var(--bright-{upcoming.options.red})">{upcomingNames.red}</span>
+          {t('v')}
+          <span style="color: var(--bright-{upcoming.options.blue})">{upcomingNames.blue}</span>
+        </span>
       {:else}
-        <span class="label">No more matches on mat {mat}</span>
+        <span class="label">{t('No more matches on mat {n}', { n: mat })}</span>
       {/if}
     </footer>
   {/if}
   {#if !live.connected}
-    <div class="stale">Reconnecting&hellip;</div>
+    <div class="stale">{t('Reconnecting…')}</div>
   {/if}
 </main>
 
@@ -89,12 +80,6 @@
   .up {
     font-size: clamp(1rem, 4vh, 2.4rem);
     font-weight: 700;
-  }
-  .red {
-    color: var(--red-bright);
-  }
-  .blue {
-    color: var(--blue-bright);
   }
   .stale {
     position: absolute;
