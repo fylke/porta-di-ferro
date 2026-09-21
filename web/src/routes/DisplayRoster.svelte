@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { keepAwake } from "../lib/wakelock";
-  import { Live, nameLookup } from "./lib-display.svelte";
+  import { t } from "../lib/i18n.svelte";
+  import { Live, nameLookup, roundLabel } from "./lib-display.svelte";
 
   /** Every match in the event and where it stands. The screen competitors check. */
   const live = new Live();
@@ -19,13 +20,16 @@
 </script>
 
 <main>
-  <h1>Roster</h1>
+  <h1>{t("Roster")}</h1>
   <div class="pools">
     {#each live.snapshot?.pools ?? [] as pool (pool.number)}
       <section>
         <h2>
-          {t('Pool {n}', { n: pool.number })}
-          <span class="mat">{t('Mat {n}', { n: pool.mat })}{#if pool.overridden} &middot; {t('moved')}{/if}</span>
+          {t("Pool {n}", { n: pool.number })}
+          <span class="mat"
+            >{t("Mat {n}", { n: pool.mat })}{#if pool.overridden}
+              &middot; {t("moved")}{/if}</span
+          >
         </h2>
         <ol>
           {#each pool.matches as m (m.id)}
@@ -44,30 +48,34 @@
     {/each}
     {#if live.snapshot?.bracket}
       <section class="bracket">
-        <h2>{t('Eliminations')}</h2>
+        <h2>{t("Eliminations")}</h2>
         <ol>
           {#each live.snapshot.bracket.matches as m (m.id)}
             <li class={m.status}>
               <span class="n">{roundLabel(m)}</span>
-              <span class="red">{m.red ? name(m.red) : '—'}</span>
+              <span class="red">{m.red ? name(m.red) : "—"}</span>
               <span class="score mono">
-                {#if m.status === 'pending'}v{:else}{m.state.red.score}–{m.state.blue.score}{/if}
+                {#if m.status === "pending"}v{:else}{m.state.red.score}–{m.state
+                    .blue.score}{/if}
               </span>
-              <span class="blue">{m.blue ? name(m.blue) : '—'}</span>
+              <span class="blue">{m.blue ? name(m.blue) : "—"}</span>
             </li>
           {/each}
         </ol>
         {#if live.snapshot.bracket.podium.first}
           <p class="podium">
-            <strong>1.</strong> {name(live.snapshot.bracket.podium.first)}
-            <strong>2.</strong> {name(live.snapshot.bracket.podium.second)}
-            {#if live.snapshot.bracket.podium.third}<strong>3.</strong> {name(live.snapshot.bracket.podium.third)}{/if}
+            <strong>1.</strong>
+            {name(live.snapshot.bracket.podium.first)}
+            <strong>2.</strong>
+            {name(live.snapshot.bracket.podium.second)}
+            {#if live.snapshot.bracket.podium.third}<strong>3.</strong>
+              {name(live.snapshot.bracket.podium.third)}{/if}
           </p>
         {/if}
       </section>
     {/if}
     {#if (live.snapshot?.pools ?? []).length === 0}
-      <p class="empty">{t('Pools have not been drawn yet.')}</p>
+      <p class="empty">{t("Pools have not been drawn yet.")}</p>
     {/if}
   </div>
 </main>
