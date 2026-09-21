@@ -78,6 +78,10 @@ target/
 # Jupyter Notebook
 .ipynb_checkpoints
 
+# Playwright reports and per-test artifacts
+web/playwright-report/
+web/test-results/
+
 # IPython
 profile_default/
 ipython_config.py
