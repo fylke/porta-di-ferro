@@ -166,10 +166,13 @@ Displays: a screen opens `/display`, heartbeats with role `display`, and renders
 
 Tournaments progress through competitor intake, pool generation, schedule assignment across mats, match execution, and multi-tier index ranking.
 
+Drawing the pools again is a restart rather than a relabelling. Match ids are positional — pool 1's first match is `p1m1` in every draw — so the logs of the draw being replaced are retired to dated `.bak` files first, the bracket with them. Without that, a redrawn pool keeps the previous pool's results under the new competitors' names (issue #93).
+
 ```mermaid
 flowchart TD
     A[Add / Register Competitors] --> B[Generate Pools: sizes within one, clubs spread by a greedy deal plus a swap pass, remainder reported]
-    B --> C[Generate Schedule & Assign Mats]
+    B --> B2[Redraw retires the logs of the draw it replaces as dated .bak files, bracket included: match ids are positional and would otherwise be inherited]
+    B2 --> C[Generate Schedule & Assign Mats]
     C --> C2{Organizer override?}
     C2 -- Move / reorder pool --> C3[Pool.Sequence updated; snapshot serves pools in run order]
     C2 -- No --> D
@@ -195,7 +198,10 @@ flowchart TD
     J6 --> K[Final Pool Standings]
     K --> L{Every pool match in?}
     L -- Yes --> M[Overall ranking across pools by the same chain]
-    M --> N[Bracket: top 8, 1v8 4v5 / 2v7 3v6, bronze and final]
+    M --> M2{Mats for the eliminations}
+    M2 -- Organizer set ElimMats --> N
+    M2 -- Unset --> M3[Fewest mats that finish the bracket in as many passes as the full set: 2 of 3, 4 of 4]
+    M3 --> N[Bracket: top 8, 1v8 4v5 / 2v7 3v6, bronze and final, spread over those mats]
     N --> O[Later rounds filled from results on every snapshot; sudden death on the client when level at the final exchange]
     O --> P[Podium]
 ```
