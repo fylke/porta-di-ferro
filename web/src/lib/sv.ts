@@ -129,6 +129,17 @@ export const sv: Record<string, string> = {
   'Seeding · overall ranking across the pools': 'Seedning · sammanlagd ranking över poolerna',
   'Draw the eliminations': 'Lotta elimineringarna',
   'Draw the eliminations again': 'Lotta om elimineringarna',
+  'Mats for the eliminations': 'Mattor för slutspelet',
+  'Suggested — {n}': 'Föreslaget — {n}',
+  '{n} of the {total} mats: more would not finish the bracket any sooner.':
+    '{n} av {total} mattor: fler skulle inte göra slutspelet klart snabbare.',
+  'Every mat is busy through the bracket.': 'Alla mattor är upptagna genom hela slutspelet.',
+  'More than the {n} the bracket needs. The extra mats wait between matches.':
+    'Fler än de {n} som slutspelet behöver. De extra mattorna står och väntar mellan matcherna.',
+  'Fewer than the {n} suggested, so the bracket takes longer. Fine if that is the trade you want.':
+    'Färre än de {n} som föreslås, så slutspelet tar längre tid. Helt i sin ordning om det är bytet du vill göra.',
+  'The bracket already drawn keeps the mats it was drawn with. Draw it again to move it.':
+    'Det redan lottade slutspelet behåller mattorna det lottades med. Lotta om för att flytta det.',
   'Bracket matches have been scored. Drawing again replaces the bracket and the results stop lining up with it.':
     'Elimineringsmatcher har redan protokollförts. Lottar du om ersätts slutspelsträdet och resultaten stämmer inte längre med det.',
   'Quarter-finals': 'Kvartsfinaler',
@@ -173,7 +184,11 @@ export const sv: Record<string, string> = {
   'this one · port {n}': 'den här · port {n}',
   Stop: 'Stoppa',
   'Started from': 'Startad från',
-  'Sabre, Rapier and dagger, …': 'Sabel, Rapir och dolk, …',
+  'Rapier and dagger, Sword and buckler, …': 'Rapir och dolk, Svärd och buckler, …',
+  'Start one of the usual': 'Starta en av de vanliga',
+  Rename: 'Byt namn',
+  Save: 'Spara',
+  'Name of this discipline': 'Namn på disciplinen',
   'Start another discipline': 'Starta en disciplin till',
 
   // --- match editor -------------------------------------------------------------------
@@ -188,10 +203,8 @@ export const sv: Record<string, string> = {
   warn: 'varn.',
   '{name} forfeits': '{name} ger upp',
   'display swapped': 'skärm speglad',
-  Earlier: 'Tidigare',
-  Later: 'Senare',
-  'Move up': 'Flytta upp',
-  'Move down': 'Flytta ned',
+  'The clock is what orders the log: change the time on an exchange and it moves to where it belongs.':
+    'Klockan bestämmer ordningen i loggen: ändra tiden på en utväxling så flyttas den dit den hör hemma.',
   'Delete this event': 'Ta bort händelsen',
   Delete: 'Ta bort',
   'Add an exchange': 'Lägg till en utväxling',
@@ -203,6 +216,9 @@ export const sv: Record<string, string> = {
   warnings: 'varningar',
   draw: 'oavgjort',
   Draw: 'Oavgjort',
+  WINNER: 'VINNARE',
+  BEATEN: 'BESEGRAD',
+  DRAW: 'OAVGJORT',
   "Saving rewrites this match's log. The version being replaced is kept as a backup beside it":
     'Att spara skriver om matchens logg. Versionen som ersätts sparas som säkerhetskopia bredvid den',
   '({n} so far)': '({n} hittills)',

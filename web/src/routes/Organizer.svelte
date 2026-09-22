@@ -211,7 +211,7 @@
 
     <Eliminations {snapshot} onchange={refresh} />
 
-    <Disciplines self={snapshot.instance} />
+    <Disciplines self={snapshot.instance} onrenamed={refresh} />
 
     <Pools {snapshot} onchange={refresh} />
   {/if}

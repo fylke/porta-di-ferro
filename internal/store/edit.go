@@ -131,3 +131,42 @@ func copyFile(from, to string) error {
 	}
 	return os.WriteFile(to, b, 0o644)
 }
+
+// RetireMatches takes match logs out of play, keeping each as a dated backup beside
+// where it was. A redraw reuses match ids -- pool 1's first match is p1m1 in any draw --
+// so a log left behind would be adopted by whoever the new draw puts in that slot, which
+// is how a redrawn pool came back with the previous pool's results in it (issue #93).
+//
+// The backups use the same <id>.ndjson.<timestamp>.bak name the history editor writes,
+// because they are the same promise: the organizer can always get the old log back by
+// hand. Ids with no log on disk are skipped, not an error -- a pool that was never
+// scored has nothing to retire.
+func (s *Store) RetireMatches(ids []string) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	stamp := time.Now().Format("20060102-150405.000")
+	var backups []string
+	for _, id := range ids {
+		rel, err := matchFile(id)
+		if err != nil {
+			return backups, err
+		}
+		final := s.path(rel)
+		if _, err := os.Stat(final); err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				continue
+			}
+			return backups, err
+		}
+		backup := filepath.Base(final) + "." + stamp + ".bak"
+		if err := os.Rename(final, filepath.Join(filepath.Dir(final), backup)); err != nil {
+			return backups, err
+		}
+		// The idempotency index described a log that is no longer there. Rebuilt from an
+		// empty file on the next append, which is what lets the new match start at 1.
+		delete(s.seen, id)
+		backups = append(backups, backup)
+	}
+	return backups, nil
+}

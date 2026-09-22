@@ -68,7 +68,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/addresses", s.addresses)
 	mux.HandleFunc("GET /api/instances", s.getInstances)
 	mux.HandleFunc("POST /api/instances", s.postInstance)
+	mux.HandleFunc("PATCH /api/instances/{port}", s.patchInstance)
 	mux.HandleFunc("DELETE /api/instances/{port}", s.deleteInstance)
+	mux.HandleFunc("GET /api/disciplines", s.getDisciplines)
 
 	mux.HandleFunc("POST /api/competitors", s.addCompetitor)
 	mux.HandleFunc("PATCH /api/competitors/{id}", s.patchCompetitor)

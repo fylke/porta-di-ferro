@@ -306,6 +306,24 @@
   const result = $derived(
     matchState?.ended && sk ? ended(MSL, matchState, names, sk.log.events) : null,
   );
+
+  /**
+   * How each side finished, for the panel that side is shown on (issue #86). Null while
+   * the match is running, which is what keeps the scoring buttons on screen.
+   *
+   * Two warnings out of both of them is the case a plain winner/loser reading gets wrong:
+   * the engine records no winner, and "draw" on both halves would be a lie about a match
+   * that neither of them won. Both are beaten, and that is what it says.
+   */
+  function outcomeFor(side: Side): 'won' | 'lost' | 'drew' | null {
+    if (!matchState?.ended) return null;
+    if (matchState.winner) return matchState.winner === side ? 'won' : 'lost';
+    const bothOut =
+      matchState.endReason === 'penalty' &&
+      matchState.red.penalty >= MSL.penaltyLoss &&
+      matchState.blue.penalty >= MSL.penaltyLoss;
+    return bothOut ? 'lost' : 'drew';
+  }
 </script>
 
 <main class="sk">
@@ -553,7 +571,7 @@
       warnings={matchState[side].penalty}
       selection={sk.selection(side)}
       {variant}
-      disabled={matchState.ended}
+      outcome={outcomeFor(side)}
       onPoint={(v) => sk?.togglePoint(side, v)}
       onWarning={() => sk?.toggleWarning(side)}
     />

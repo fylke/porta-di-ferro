@@ -22,6 +22,30 @@
   const seeds = $derived(snapshot.overall.slice(0, cut));
   const scored = $derived(!!bracket && bracket.matches.some((m) => m.status !== 'pending'));
 
+  // How many mats the eliminations run on (issue #94). A mat is a referee, a score keeper
+  // and a pair of screens, and by this point in the day those people have been at it for
+  // hours: four quarter-finals over three mats take two passes, and so do two, so the
+  // third is staffed for nothing. The server suggests the fewest that costs no pass; this
+  // is where the organizer says otherwise, because only they know who is still standing.
+  const mats = $derived(Array.from({ length: snapshot.tournament.mats }, (_, i) => i + 1));
+  const chosen = $derived(snapshot.tournament.elimMats ?? 0);
+  const suggested = $derived(snapshot.elimMatsSuggested);
+
+  async function setElimMats(value: number) {
+    error = '';
+    try {
+      await api.saveTournament(
+        snapshot.tournament.mats,
+        snapshot.tournament.minPoolSize,
+        snapshot.tournament.maxPoolSize,
+        value,
+      );
+      onchange();
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+    }
+  }
+
   // A bracket match's log is editable like any other; a corrected result re-fills the
   // rounds after it on its own.
   let editing = $state<MatchView | null>(null);
@@ -101,9 +125,33 @@
         </div>
       {/if}
 
+      <div class="elim-mats">
+        <label>
+          {t('Mats for the eliminations')}
+          <select value={chosen} onchange={(e) => void setElimMats(Number(e.currentTarget.value))}>
+            <option value={0}>{t('Suggested — {n}', { n: suggested })}</option>
+            {#each mats as m (m)}<option value={m}>{m}</option>{/each}
+          </select>
+        </label>
+        <span class="dim">
+          {#if chosen === 0 || chosen === suggested}
+            {suggested < snapshot.tournament.mats
+              ? t('{n} of the {total} mats: more would not finish the bracket any sooner.', { n: suggested, total: snapshot.tournament.mats })
+              : t('Every mat is busy through the bracket.')}
+          {:else if chosen > suggested}
+            {t('More than the {n} the bracket needs. The extra mats wait between matches.', { n: suggested })}
+          {:else}
+            {t('Fewer than the {n} suggested, so the bracket takes longer. Fine if that is the trade you want.', { n: suggested })}
+          {/if}
+        </span>
+      </div>
+
       <button class="draw" disabled={busy || !snapshot.poolsComplete} onclick={draw}>
         {bracket ? t('Draw the eliminations again') : t('Draw the eliminations')}
       </button>
+      {#if bracket}
+        <p class="dim small">{t('The bracket already drawn keeps the mats it was drawn with. Draw it again to move it.')}</p>
+      {/if}
       {#if scored}
         <p class="warn">{t('Bracket matches have been scored. Drawing again replaces the bracket and the results stop lining up with it.')}</p>
       {/if}
@@ -208,6 +256,32 @@
     display: block;
     font-size: 0.75rem;
     color: var(--ink-dim);
+  }
+  /* Above the draw button, because it is a decision that has to be made before the draw
+     rather than a setting to go looking for afterwards. */
+  .elim-mats {
+    display: grid;
+    gap: 0.3rem;
+    margin: 0.4rem 0 0.8rem;
+  }
+  .elim-mats label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--ink-dim);
+  }
+  .elim-mats select {
+    padding: 0.3rem 0.5rem;
+    font-size: 0.9rem;
+  }
+  .elim-mats .dim {
+    font-size: 0.82rem;
+    line-height: 1.45;
+  }
+  .small {
+    font-size: 0.82rem;
+    margin: 0.5rem 0 0;
   }
   .draw {
     width: 100%;

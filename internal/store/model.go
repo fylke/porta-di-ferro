@@ -61,9 +61,20 @@ type Pool struct {
 // Milestone 3 (design §9, issue #2): one run of the application is one tournament under
 // one hardcoded ruleset.
 type Tournament struct {
-	Mats        int `json:"mats"`
-	MinPoolSize int `json:"minPoolSize"`
-	MaxPoolSize int `json:"maxPoolSize"`
+	// Discipline is what this run is called -- "Open steel Longsword", "Open Sabre" --
+	// shown on every page so a hall with two runs going can tell them apart. Kept here
+	// rather than only in the -name flag, so renaming it from the organizer page sticks
+	// across a restart (issue #80).
+	Discipline  string `json:"discipline,omitempty"`
+	Mats        int    `json:"mats"`
+	MinPoolSize int    `json:"minPoolSize"`
+	MaxPoolSize int    `json:"maxPoolSize"`
+	// ElimMats is how many mats the organizer wants the eliminations run on, or 0 to
+	// take the suggestion. The pools spread over everything available because they run
+	// for hours; a bracket of seven matches often finishes no sooner on three mats than
+	// on two, and the third is a referee and a score keeper staffed for nothing
+	// (issue #94). tournament.EliminationMatsFor resolves the two.
+	ElimMats int `json:"elimMats,omitempty"`
 	// Seed makes the random-draw tie-break reproducible, so a standing can be explained
 	// after the fact rather than being a fresh coin toss on every page load.
 	Seed        int64  `json:"seed"`

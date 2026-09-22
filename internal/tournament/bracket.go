@@ -94,26 +94,101 @@ func PoolsComplete(t store.Tournament, competitors map[string]store.Competitor,
 	return len(t.Pools) > 0
 }
 
-// Bracket draws the knockout from the overall ranking, assigning mats round-robin so
-// the quarter-finals run in parallel, the bronze match and the final each on their own
-// mat where there are two. The higher seed takes red.
-func Bracket(t store.Tournament, ranked []Standing) ([]store.Match, error) {
-	size := 8
+// BracketSize is how many of the ranked make the cut: top 8, cut at 4 for a small field
+// and at 2 for a very small one. 0 means there are not enough to run eliminations.
+func BracketSize(ranked int) int {
 	switch {
-	case len(ranked) >= 8:
-		size = 8
-	case len(ranked) >= 4:
-		size = 4
-	case len(ranked) >= 2:
-		size = 2
+	case ranked >= 8:
+		return 8
+	case ranked >= 4:
+		return 4
+	case ranked >= 2:
+		return 2
 	default:
-		return nil, fmt.Errorf("need at least 2 ranked competitors for eliminations, have %d", len(ranked))
+		return 0
 	}
-	seed := func(n int) string { return ranked[n-1].Competitor }
+}
+
+// waves is the bracket as the groups of matches that can run at once: four
+// quarter-finals, then two semi-finals, then the bronze match beside the final. How long
+// the eliminations take is the sum over these of how many passes each needs.
+func waves(size int) []int {
+	switch size {
+	case 8:
+		return []int{4, 2, 2}
+	case 4:
+		return []int{2, 2}
+	default:
+		return []int{1}
+	}
+}
+
+// EliminationRounds is how many passes a bracket of this size takes on this many mats.
+func EliminationRounds(mats, size int) int {
+	if mats < 1 {
+		mats = 1
+	}
+	rounds := 0
+	for _, w := range waves(size) {
+		rounds += (w + mats - 1) / mats
+	}
+	return rounds
+}
+
+// EliminationMats suggests how many mats to dedicate to the eliminations: the fewest
+// that finish them in as many passes as the tournament's full set of mats would.
+//
+// A mat is not free. It is a referee, a score keeper and a pair of screens, and by the
+// eliminations those people have been at it all day. Three mats through four
+// quarter-finals takes two passes, and so does two -- the third mat is staffed for
+// nothing (issue #94). The pools have a reason to spread across everything available,
+// because they run for hours; a bracket of seven matches does not.
+//
+// This is a suggestion. The organizer can say otherwise, and Tournament.ElimMats is
+// where that answer lives.
+func EliminationMats(mats, size int) int {
+	if mats < 1 {
+		mats = 1
+	}
+	target := EliminationRounds(mats, size)
+	for m := 1; m < mats; m++ {
+		if EliminationRounds(m, size) == target {
+			return m
+		}
+	}
+	return mats
+}
+
+// EliminationMatsFor resolves what a tournament actually runs the eliminations on: the
+// organizer's answer when they gave one, and the suggestion otherwise. An answer past
+// the tournament's mats is clamped -- there is no fifth mat to send anyone to.
+func EliminationMatsFor(t store.Tournament, size int) int {
 	mats := t.Mats
 	if mats < 1 {
 		mats = 1
 	}
+	if t.ElimMats <= 0 {
+		return EliminationMats(mats, size)
+	}
+	if t.ElimMats > mats {
+		return mats
+	}
+	return t.ElimMats
+}
+
+// Bracket draws the knockout from the overall ranking, assigning mats round-robin so
+// the quarter-finals run in parallel, the bronze match and the final each on their own
+// mat where there are two. The higher seed takes red.
+//
+// How many mats it spreads over is EliminationMatsFor: fewest that costs no extra pass,
+// unless the organizer said otherwise.
+func Bracket(t store.Tournament, ranked []Standing) ([]store.Match, error) {
+	size := BracketSize(len(ranked))
+	if size == 0 {
+		return nil, fmt.Errorf("need at least 2 ranked competitors for eliminations, have %d", len(ranked))
+	}
+	seed := func(n int) string { return ranked[n-1].Competitor }
+	mats := EliminationMatsFor(t, size)
 	mat := func(i int) int { return (i % mats) + 1 }
 
 	var out []store.Match

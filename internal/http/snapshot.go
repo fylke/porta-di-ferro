@@ -66,6 +66,13 @@ type Snapshot struct {
 	// the eliminations, and meaningful once PoolsComplete.
 	Overall       []tournament.Standing `json:"overall"`
 	PoolsComplete bool                  `json:"poolsComplete"`
+	// ElimMats is how many mats the eliminations will be drawn across as things stand,
+	// and ElimMatsSuggested is what the rule picks when the organizer has not said --
+	// the fewest that costs the bracket no extra pass (issue #94). The organizer view
+	// shows both, so an override reads as a departure from a suggestion rather than as
+	// a number out of nowhere.
+	ElimMats          int `json:"elimMats"`
+	ElimMatsSuggested int `json:"elimMatsSuggested"`
 	// Bracket is the eliminations, once drawn.
 	Bracket *BracketView  `json:"bracket,omitempty"`
 	Ruleset match.Ruleset `json:"ruleset"`
@@ -107,7 +114,7 @@ func (s *Server) snapshot() (Snapshot, error) {
 		Pools:       make([]PoolView, 0, len(t.Pools)),
 		Mats:        map[int]string{},
 		Dir:         s.store.Dir(),
-		Instance:    s.instances.self,
+		Instance:    s.self(),
 	}
 
 	// Every match's state, pools and bracket alike, replayed once and shared.
@@ -166,6 +173,13 @@ func (s *Server) snapshot() (Snapshot, error) {
 
 	snap.Overall = tournament.Overall(s.rules, t, byID, all)
 	snap.PoolsComplete = tournament.PoolsComplete(t, byID, all)
+
+	// Sized from the field as it stands, so the organizer sees the answer for the cut
+	// they are actually going to make rather than for a full eight.
+	if size := tournament.BracketSize(len(snap.Overall)); size > 0 {
+		snap.ElimMats = tournament.EliminationMatsFor(t, size)
+		snap.ElimMatsSuggested = tournament.EliminationMats(t.Mats, size)
+	}
 
 	// The eliminations: later rounds filled from the results that feed them, then
 	// replayed like any other match. A slot that is not filled yet is not a match a mat
