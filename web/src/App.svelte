@@ -9,6 +9,7 @@
   import PrintPools from './routes/PrintPools.svelte';
   import Audience from './routes/Audience.svelte';
   import DisplayAssigned from './routes/DisplayAssigned.svelte';
+  import Brand from './routes/Brand.svelte';
   import { t } from './lib/i18n.svelte';
 
   // One bundle, every surface. The route decides what renders; the Go server falls
@@ -36,6 +37,9 @@
   <DisplayRoster />
 {:else if route('/print/pools')}
   <PrintPools />
+{:else if route('/brand')}
+  <!-- The graphical profile, for looking at rather than for running an event on. -->
+  <Brand />
 {:else}
   <main class="missing">
     <h1>{t('Nothing here')}</h1>

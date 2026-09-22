@@ -4,6 +4,7 @@
 
 - **Keep [docs/architecture.md](docs/architecture.md) in sync**: Whenever modifying system components, match scoring rules, state machine transitions, event flow, synchronization logic, offline persistence, or tournament ranking pipelines, update the corresponding Mermaid diagrams and documentation in [docs/architecture.md](docs/architecture.md).
 - **Product and Stack References**: Refer to [docs/design.md](docs/design.md) for product rules and [docs/tech-stack.md](docs/tech-stack.md) for architectural constraints.
+- **Graphical profile**: The mark, the weapon marks and the icon files are set out in [docs/brand.md](docs/brand.md), and the running application shows them at their real sizes at `/brand`. The rasters are generated from the SVGs by hand; regenerate them when a drawing changes.
 
 ## Build and Test
 
