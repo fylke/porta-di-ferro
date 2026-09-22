@@ -92,12 +92,41 @@ type Snapshot struct {
 // number. Every consumer that filters pools by mat then has the mat's running order for
 // free, which is what keeps the score keeper, the displays and the roster agreeing on
 // which pool a mat picks up next.
+// Source is the stored state a snapshot is built from. *store.Store is one, and the
+// browser demo's in-memory tournament is the other: the demo has no filesystem and no
+// server, so the only way it can show the same standings and the same bracket as a real
+// event is to run this same code over a different source (docs/demo.md).
+type Source interface {
+	Competitors() ([]store.Competitor, error)
+	Tournament() (store.Tournament, error)
+	Events(id string, after int) ([]match.Event, error)
+	LastEventAt(id string) (time.Time, bool)
+	Dir() string
+}
+
+// snapshot builds this server's picture. The work is in BuildSnapshot; what the server
+// adds is where the state comes from and who is connected.
 func (s *Server) snapshot() (Snapshot, error) {
-	competitors, err := s.store.Competitors()
+	return BuildSnapshot(s.store, s.rules, s.self(), func(mat int) string {
+		if sk := s.presence.scorekeeperOn(mat); sk != nil {
+			return sk.Match
+		}
+		return ""
+	})
+}
+
+// BuildSnapshot assembles the whole derived picture from stored state.
+//
+// scorekeeperOn names the match a live score keeper is holding on a mat, or "" -- a
+// server reads that from the presence registry, and the demo has nobody connected.
+func BuildSnapshot(src Source, rules match.Ruleset, self Instance,
+	scorekeeperOn func(mat int) string) (Snapshot, error) {
+
+	competitors, err := src.Competitors()
 	if err != nil {
 		return Snapshot{}, err
 	}
-	t, err := s.store.Tournament()
+	t, err := src.Tournament()
 	if err != nil {
 		return Snapshot{}, err
 	}
@@ -110,21 +139,21 @@ func (s *Server) snapshot() (Snapshot, error) {
 	snap := Snapshot{
 		Competitors: competitors,
 		Tournament:  t,
-		Ruleset:     s.rules,
+		Ruleset:     rules,
 		Pools:       make([]PoolView, 0, len(t.Pools)),
 		Mats:        map[int]string{},
-		Dir:         s.store.Dir(),
-		Instance:    s.self(),
+		Dir:         src.Dir(),
+		Instance:    self,
 	}
 
 	// Every match's state, pools and bracket alike, replayed once and shared.
 	all := map[string]match.State{}
 	view := func(m store.Match) (MatchView, error) {
-		events, err := s.store.Events(m.ID, 0)
+		events, err := src.Events(m.ID, 0)
 		if err != nil {
 			return MatchView{}, err
 		}
-		st := match.Replay(s.rules, events)
+		st := match.Replay(rules, events)
 		all[m.ID] = st
 		status := "pending"
 		switch {
@@ -135,7 +164,7 @@ func (s *Server) snapshot() (Snapshot, error) {
 		}
 		v := MatchView{Match: m, State: st, Status: status, Options: match.OptionsOf(events)}
 		if st.Running {
-			if at, ok := s.store.LastEventAt(m.ID); ok {
+			if at, ok := src.LastEventAt(m.ID); ok {
 				if since := time.Since(at).Milliseconds(); since > 0 {
 					v.SinceMS = since
 				}
@@ -166,12 +195,12 @@ func (s *Server) snapshot() (Snapshot, error) {
 			Overridden:  tournament.Overridden(t, p.Number),
 			Competitors: p.Competitors,
 			Matches:     views,
-			Standings:   tournament.Rank(s.rules, p, byID, states, t.Seed),
+			Standings:   tournament.Rank(rules, p, byID, states, t.Seed),
 			Complete:    complete,
 		})
 	}
 
-	snap.Overall = tournament.Overall(s.rules, t, byID, all)
+	snap.Overall = tournament.Overall(rules, t, byID, all)
 	snap.PoolsComplete = tournament.PoolsComplete(t, byID, all)
 
 	// Sized from the field as it stands, so the organizer sees the answer for the cut
@@ -228,8 +257,8 @@ func (s *Server) snapshot() (Snapshot, error) {
 	}
 	for mat := 1; mat <= t.Mats; mat++ {
 		snap.Mats[mat] = ""
-		if sk := s.presence.scorekeeperOn(mat); sk != nil && known[sk.Match] {
-			snap.Mats[mat] = sk.Match
+		if held := scorekeeperOn(mat); held != "" && known[held] {
+			snap.Mats[mat] = held
 			continue
 		}
 		for _, p := range snap.Pools {
