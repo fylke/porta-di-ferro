@@ -3,6 +3,7 @@
 ## Architecture & Documentation Maintenance
 
 - **Keep [docs/architecture.md](docs/architecture.md) in sync**: Whenever modifying system components, match scoring rules, state machine transitions, event flow, synchronization logic, offline persistence, or tournament ranking pipelines, update the corresponding Mermaid diagrams and documentation in [docs/architecture.md](docs/architecture.md).
+- **The public demo**: `internal/demo` and `cmd/demo-wasm` are the application running in a browser with no server, deployed to GitHub Pages from `main` ([docs/demo.md](docs/demo.md)). It reuses `internal/tournament`, `internal/match` and `httpapi.BuildSnapshot` rather than reimplementing them, and that is the point: do not add a second implementation of ranking, pools or the bracket for it. `internal/demo` is portable Go and is covered by `go test ./...`.
 - **Product and Stack References**: Refer to [docs/design.md](docs/design.md) for product rules and [docs/tech-stack.md](docs/tech-stack.md) for architectural constraints.
 
 ## Build and Test

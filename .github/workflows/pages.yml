@@ -1,0 +1,123 @@
+name: Demo
+
+# The public demo (issue #88): https://fylke.github.io/porta-di-ferro/
+#
+# Deployed from main so the demo is always the current application rather than whatever
+# was released last. It is the same Svelte bundle the organizer's PC serves, built with
+# `--mode demo`, with cmd/demo-wasm compiled to WebAssembly standing in for the Go server.
+#
+# Nothing here ships to an event. The real artifact is the single binary the release
+# workflow builds, and the production architecture is untouched by any of this.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - 'internal/**'
+      - 'cmd/demo-wasm/**'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time, and a newer push wins rather than queueing behind an older
+# one. Cancelling a half-finished deploy is safe: the site keeps serving the last good
+# one until a new one is published whole.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      # The demo is the tournament logic, not a mock of it, so the same tests that guard
+      # a real event guard the demo. A broken fixture should fail here rather than in
+      # front of whoever the link was sent to.
+      - name: Test the demo tournament
+        run: go test ./internal/demo/...
+
+      - name: Build the WebAssembly module
+        env:
+          GOOS: js
+          GOARCH: wasm
+        run: go build -ldflags="-s -w" -o web/public/demo.wasm ./cmd/demo-wasm
+
+      # The Go runtime shim that loads the module. It has to come from the toolchain that
+      # built the module -- a mismatched copy fails at instantiation with an import error
+      # that says nothing useful -- so it is copied here rather than committed. Go moved
+      # it from misc/ to lib/ in 1.24, hence both.
+      - name: Copy the Go WebAssembly runtime
+        run: |
+          root="$(go env GOROOT)"
+          if [ -f "$root/lib/wasm/wasm_exec.js" ]; then
+            cp "$root/lib/wasm/wasm_exec.js" web/public/wasm_exec.js
+          elif [ -f "$root/misc/wasm/wasm_exec.js" ]; then
+            cp "$root/misc/wasm/wasm_exec.js" web/public/wasm_exec.js
+          else
+            echo "wasm_exec.js is not where either Go layout puts it, under $root"
+            exit 1
+          fi
+
+      - name: Install web dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Build the demo
+        working-directory: web
+        run: npm run build:demo
+
+      - name: Check the build is complete
+        working-directory: web
+        run: |
+          for f in dist/index.html dist/404.html dist/demo.wasm dist/wasm_exec.js; do
+            [ -s "$f" ] || { echo "missing or empty: $f"; exit 1; }
+          done
+          # The bundle must reference the project path, or every asset 404s once it is
+          # served from https://fylke.github.io/porta-di-ferro/ rather than a root.
+          grep -q '/porta-di-ferro/assets/' dist/index.html \
+            || { echo "dist/index.html was not built with the project base path"; exit 1; }
+          {
+            echo "### Demo payload"
+            echo '```'
+            printf '%-22s %10s B  %10s B gzipped\n' demo.wasm \
+              "$(wc -c < dist/demo.wasm)" "$(gzip -9 -c dist/demo.wasm | wc -c)"
+            for f in dist/assets/*; do
+              printf '%-22s %10s B  %10s B gzipped\n' "$(basename "$f")" \
+                "$(wc -c < "$f")" "$(gzip -9 -c "$f" | wc -c)"
+            done
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -19,6 +19,10 @@
    */
   const live = new Live();
   let addresses = $state<Address[]>([]);
+  // Substituted at build time, so this is a constant the normal build evaluates to
+  // false and Rollup removes along with the branch it guards.
+  const demo = import.meta.env.VITE_DEMO === 'true';
+
   let chosenIP = $state('');
 
   // Which network the QR code points at, remembered per PC. An organizer who had to pick
@@ -177,6 +181,15 @@
           {:else}
             <p class="hint">{t("Point a score keeper's device at that address, or let them scan the code. It opens straight on the mat picker.")}</p>
           {/if}
+        {:else if demo}
+          <!-- The one place the application is told it is a demo (issue #88).
+               A browser tab is on no LAN, which is true and which the panel below would
+               otherwise report as an orange warning about the venue wifi -- the first
+               thing a visitor sees, about a problem they do not have. What is true here
+               is that every client opens in this same tab, so it says that instead, and
+               keeps the links, which are the part worth clicking. -->
+          <p class="url none">{t('One tab, every screen')}</p>
+          <p class="hint">{t('At an event these open on the score keepers\' tablets and the hall screens, over the venue wifi. Here they open in this tab, off the same tournament. Try one:')}</p>
         {:else}
           <p class="url none">{t('No network')}</p>
           <p class="hint warn">{t('This PC is not on a network another device could reach, so there is no address to hand out. Join it to the venue wifi and reload this page. Scoring on this PC still works.')}</p>
@@ -195,6 +208,7 @@
           {#each { length: snapshot.tournament.mats } as _, i (i)}
             <a href="/display/mat/{i + 1}">{t('Mat {n}', { n: i + 1 })}</a>
           {/each}
+          {#if demo}<a href="/display/audience/1">{t('Audience')}</a>{/if}
         </p>
       </div>
       {#if scoreURL}

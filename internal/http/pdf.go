@@ -26,7 +26,7 @@ func (s *Server) exportPDF(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
-	doc := buildPDF(snap, r.URL.Query().Get("lang") == "sv")
+	doc := BuildPDF(snap, r.URL.Query().Get("lang") == "sv")
 	w.Header().Set("Content-Type", "application/pdf")
 	w.Header().Set("Content-Disposition", `attachment; filename="porta-di-ferro.pdf"`)
 	if err := doc.Output(w); err != nil {
@@ -67,9 +67,9 @@ var pdfSwedish = map[string]string{
 	"page %d":                            "sida %d",
 }
 
-// buildPDF lays the snapshot out on A4. The core fonts cover Latin-1, which covers
+// BuildPDF lays the snapshot out on A4. The core fonts cover Latin-1, which covers
 // Swedish; a name from further afield loses its accents rather than breaking the page.
-func buildPDF(snap Snapshot, swedish bool) *fpdf.Fpdf {
+func BuildPDF(snap Snapshot, swedish bool) *fpdf.Fpdf {
 	pdf := fpdf.New("P", "mm", "A4", "")
 	tr := pdf.UnicodeTranslatorFromDescriptor("")
 	// Translation happens before the Latin-1 pass, so the Swedish comes out with its

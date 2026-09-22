@@ -356,4 +356,15 @@ export const sv: Record<string, string> = {
   'organizer view': 'arrangörssidan',
   ', a mat display such as': ', en mattskärm som',
   ', or the roster at': ', eller matchlistan på',
+  // --- the demo (issue #88) -----------------------------------------------------------
+  Demo: 'Demo',
+  'A real tournament, running entirely in this tab. Nothing is saved and no other device can see it.':
+    'En riktig tävling som körs helt i den här fliken. Ingenting sparas och ingen annan enhet kan se den.',
+  'Play the rest': 'Spela klart resten',
+  'Start over': 'Börja om',
+  'The project': 'Projektet',
+  'One tab, every screen': 'En flik, alla skärmar',
+  "At an event these open on the score keepers' tablets and the hall screens, over the venue wifi. Here they open in this tab, off the same tournament. Try one:":
+    'På ett stevne öppnas de här på sekretariatens surfplattor och hallens skärmar, över lokalens wifi. Här öppnas de i den här fliken, mot samma tävling. Prova en:',
+  Audience: 'Publik',
 };

@@ -6,12 +6,33 @@
  * The Go server falls through to index.html for anything it does not recognise, so every
  * route below is reachable by typing it in -- which is the whole point of the display
  * URLs being addressable (design §3).
+ *
+ * Everything here works in terms of application paths -- `/score/1` -- and not of the
+ * URLs the browser shows. The two are the same thing when the application is served from
+ * the root of a host, which is how an organizer's PC serves it and will always be the
+ * deployment that matters. They are not the same on GitHub Pages, where the demo lives
+ * under a project path (issue #88), so the base is stripped on the way in and put back on
+ * the way out, in one place, rather than every route being written twice.
  */
 
-let current = $state(window.location.pathname + window.location.search);
+/** "/" for the real application, "/porta-di-ferro/" for the demo on GitHub Pages. */
+const base = import.meta.env.BASE_URL.replace(/\/+$/, '');
+
+/** Strips the base, so a route pattern never has to know where the app is mounted. */
+function appPath(url: string): string {
+  if (base && url.startsWith(base)) return url.slice(base.length) || '/';
+  return url;
+}
+
+/** Puts it back, for anything handed to the History API or to an href. */
+export function href(to: string): string {
+  return base && to.startsWith('/') ? base + to : to;
+}
+
+let current = $state(appPath(window.location.pathname) + window.location.search);
 
 window.addEventListener('popstate', () => {
-  current = window.location.pathname + window.location.search;
+  current = appPath(window.location.pathname) + window.location.search;
 });
 
 export function path(): string {
@@ -25,7 +46,7 @@ export function query(): URLSearchParams {
 
 export function navigate(to: string): void {
   if (to === current) return;
-  window.history.pushState({}, '', to);
+  window.history.pushState({}, '', href(to));
   current = to;
 }
 

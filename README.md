@@ -6,6 +6,18 @@ A HEMA tournament application: score matches at the mat, run pools, show results
 service, no account, no internet. Built by two members of
 [MSL — Medeltida Stridsteknik Linköping IF](https://msl.nu).
 
+## Try it without installing anything
+
+**[fylke.github.io/porta-di-ferro](https://fylke.github.io/porta-di-ferro/)** — a
+tournament already half fenced, in a browser tab. Score a match, watch the standings
+move, draw the eliminations, print the pool sheets.
+
+It is the real application: the same screens, and the same Go tournament code compiled to
+WebAssembly where the server would be, so the standings and the tie-breaks are the ones a
+real event would produce. What it is not is a hosted product — there is no server behind
+it, nothing is saved, and no other device can see it. To run an actual event you want the
+installer below. [How the demo works](docs/demo.md).
+
 ## For organizers
 
 1. Download the installer from [Releases](https://github.com/fylke/porta-di-ferro/releases)
