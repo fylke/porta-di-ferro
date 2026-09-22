@@ -46,6 +46,21 @@ DisableProgramGroupPage=yes
 ; way: the five minutes are for running a tournament, not for reading dialogs.
 DisableReadyPage=yes
 DisableDirPage=yes
+; Upgrading over a running copy is the normal case: an organizer installs the new version
+; on the morning of the event, with yesterday's still in the tray.
+;
+; The default asks whether to close it and then cannot. Restart Manager closes an
+; application by asking its windows to close, and this one has none to ask: the server is
+; a console process whose only interface is a notification-area icon on a message-only
+; window. So Setup reported success, the file stayed locked, and the install failed until
+; the organizer found Task Manager themselves (issue #84). force skips the question and
+; ends the process, which is what the honest answer to that question would have been.
+CloseApplications=force
+CloseApplicationsFilter=*.exe
+; And Setup does not put it back afterwards: the [Run] entry below starts the new version,
+; and Restart Manager reviving the old one as well would leave two servers fighting over
+; the same port.
+RestartApplications=no
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -66,6 +81,64 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 ; Starting it straight away is the point: the server opens the organizer's browser itself,
 ; and that page shows the LAN address and a QR code for the score keepers' devices.
 Filename: "{app}\{#MyAppExeName}"; Description: "Start Porta di Ferro"; Flags: nowait postinstall skipifsilent
+
+[Code]
+// Belt and braces for the same problem. CloseApplications=force covers the copy Restart
+// Manager can see -- the one holding {app}\porta.exe open. It does not cover a second
+// discipline started from the organizer page: that is another porta.exe from the same
+// file, and whether Restart Manager enumerates it depends on what it has open at the
+// moment Setup looks.
+//
+// An install that half-succeeds because one of two servers survived is worse than one
+// that says what is wrong, so this ends every copy the organizer is running and waits to
+// see it gone before any file is replaced. Per-user, so only this account's processes are
+// in reach, which is the same account the shortcut starts them under.
+
+const
+  ExeName = '{#MyAppExeName}';
+  KillTimeoutMS = 10000;
+
+function RunHidden(Exe, Params: String; var Code: Integer): Boolean;
+begin
+  Result := Exec(Exe, Params, '', SW_HIDE, ewWaitUntilTerminated, Code);
+end;
+
+// find sets ERRORLEVEL 1 when it matches nothing, which is the whole test.
+function StillRunning(): Boolean;
+var
+  Code: Integer;
+begin
+  Result := False;
+  if RunHidden(ExpandConstant('{cmd}'),
+       '/C tasklist /FI "IMAGENAME eq ' + ExeName + '" /NH | find /I "' + ExeName + '" > nul',
+       Code) then
+    Result := (Code = 0);
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  Code, Waited: Integer;
+begin
+  Result := '';
+  NeedsRestart := False;
+  if not StillRunning() then
+    Exit;
+
+  // /T takes any process it started with it, which is how the sibling disciplines go.
+  RunHidden(ExpandConstant('{sys}\taskkill.exe'), '/F /T /IM ' + ExeName, Code);
+
+  Waited := 0;
+  while (Waited < KillTimeoutMS) and StillRunning() do
+  begin
+    Sleep(250);
+    Waited := Waited + 250;
+  end;
+
+  if StillRunning() then
+    Result := 'Porta di Ferro is still running and Setup could not close it.'#13#10#13#10 +
+              'Quit it from its icon in the notification area, or end porta.exe in Task '#13#10 +
+              'Manager, and then run this installer again.';
+end;
 
 [UninstallDelete]
 ; Tournament data lives in the organizer's own folder and is deliberately left behind:
