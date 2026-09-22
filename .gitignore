@@ -239,3 +239,9 @@ web/dist/*
 !web/dist/.gitkeep
 
 node_modules/
+
+# The demo's WebAssembly module and the Go runtime that loads it (issue #88). Both are
+# built artifacts: the workflow compiles cmd/demo-wasm and copies wasm_exec.js out of the
+# Go toolchain it used, so a committed copy could only go stale against the Go version.
+web/public/demo.wasm
+web/public/wasm_exec.js

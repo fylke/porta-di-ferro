@@ -5,7 +5,11 @@ import { svelte } from '@sveltejs/vite-plugin-svelte';
 // /display/* -- with the route deciding what renders. No SvelteKit: there is no
 // server-side rendering here, and a Node runtime in the shipped artifact is not
 // acceptable while one at build time is (docs/tech-stack.md §6).
-export default defineConfig({
+// The demo build (issue #88) is the same bundle under a project path on GitHub Pages,
+// with VITE_DEMO switching in the wasm adapter. `base` is what makes the assets resolve
+// under /porta-di-ferro/; the router strips it back off so no route has to know.
+export default defineConfig(({ mode }) => ({
+  base: mode === 'demo' ? '/porta-di-ferro/' : '/',
   plugins: [svelte()],
   build: {
     outDir: 'dist',
@@ -24,4 +28,4 @@ export default defineConfig({
     environment: 'node',
     include: ['src/**/*.test.ts'],
   },
-});
+}));

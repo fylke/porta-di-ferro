@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build && node -e \"require('node:fs').writeFileSync('dist/.gitkeep', '')\"",
+    "build:demo": "vite build --mode demo && node -e \"require('node:fs').copyFileSync('dist/index.html','dist/404.html')\"",
     "preview": "vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "test": "vitest run",
