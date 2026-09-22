@@ -201,6 +201,9 @@ export const sv: Record<string, string> = {
   warnings: 'varningar',
   draw: 'oavgjort',
   Draw: 'Oavgjort',
+  WINNER: 'VINNARE',
+  BEATEN: 'BESEGRAD',
+  DRAW: 'OAVGJORT',
   "Saving rewrites this match's log. The version being replaced is kept as a backup beside it":
     'Att spara skriver om matchens logg. Versionen som ersätts sparas som säkerhetskopia bredvid den',
   '({n} so far)': '({n} hittills)',

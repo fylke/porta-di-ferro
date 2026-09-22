@@ -19,7 +19,7 @@
     warnings,
     selection,
     variant,
-    disabled = false,
+    outcome = null,
     onPoint,
     onWarning,
   }: {
@@ -31,10 +31,20 @@
     warnings: number;
     selection: Selection;
     variant: string;
-    disabled?: boolean;
+    /**
+     * How this side finished, once the match has. Null while it is still running, which
+     * is when the scoring controls are on screen; anything else replaces them with the
+     * result (issue #86).
+     */
+    outcome?: 'won' | 'lost' | 'drew' | null;
     onPoint: (value: number) => void;
     onWarning: () => void;
   } = $props();
+
+  const over = $derived(outcome !== null);
+  const verdict = $derived(
+    outcome === 'won' ? t('WINNER') : outcome === 'lost' ? t('BEATEN') : t('DRAW'),
+  );
 
   // The punctuation encodes severity, so the label reads as more alarming exactly as the
   // consequence gets worse -- a third cue alongside colour and size (design §4).
@@ -64,26 +74,34 @@
     {/if}
   </div>
 
-  <div class="points">
-    {#each [2, 1] as value (value)}
-      <button
-        class="point"
-        class:selected={selection.value === value}
-        {disabled}
-        aria-pressed={selection.value === value}
-        onclick={() => onPoint(value)}>{value}</button
-      >
-    {/each}
-  </div>
+  <!-- Once the match is over there is nothing on this half to press, so the buttons go
+       rather than sitting there greyed out. They were not only useless: the warning
+       button and the lower point button were laying over each other on a short screen,
+       and a dead control the thumb can still reach is worse than no control (issue #86).
+       The verdict takes the same two rows they had, so the panel does not resize under
+       a score keeper who is reading the score back to the head referee. -->
+  {#if over}
+    <div class="verdict" class:won={outcome === 'won'} role="status">{verdict}</div>
+  {:else}
+    <div class="points">
+      {#each [2, 1] as value (value)}
+        <button
+          class="point"
+          class:selected={selection.value === value}
+          aria-pressed={selection.value === value}
+          onclick={() => onPoint(value)}>{value}</button
+        >
+      {/each}
+    </div>
 
-  <button
-    class="warning"
-    class:selected={selection.penalty > 0}
-    class:severe={selection.penalty > 1}
-    {disabled}
-    aria-pressed={selection.penalty > 0}
-    onclick={onWarning}>{warningLabel}</button
-  >
+    <button
+      class="warning"
+      class:selected={selection.penalty > 0}
+      class:severe={selection.penalty > 1}
+      aria-pressed={selection.penalty > 0}
+      onclick={onWarning}>{warningLabel}</button
+    >
+  {/if}
 </section>
 
 <style>
@@ -191,11 +209,30 @@
       inset 0 0 0 6px var(--amber-bright);
   }
 
+  /* Spans the two rows the points and the warning button had, so the panel keeps its
+     shape when the match ends. Quiet for the side that lost, because the eye should go
+     to the winner without having to compare two labels. */
+  .verdict {
+    grid-row: span 2;
+    display: grid;
+    place-items: center;
+    padding: 0.5rem;
+    border-radius: var(--radius);
+    font-size: clamp(1.1rem, 4vh, 2rem);
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    color: var(--ink-dim);
+    background: rgba(255, 255, 255, 0.04);
+    min-height: 0;
+  }
+  .verdict.won {
+    color: var(--side-bright);
+    background: rgba(255, 255, 255, 0.1);
+    box-shadow: inset 0 0 0 3px var(--side-bright);
+  }
+
   button:active {
     filter: brightness(1.35);
-  }
-  button:disabled {
-    opacity: 0.4;
   }
 
   /* The edge-to-edge variant: no dead space, every region clickable, and the buttons
@@ -216,6 +253,9 @@
     border: none;
     border-radius: 0;
     background: rgba(255, 255, 255, 0.06);
+  }
+  .v-edge .verdict {
+    border-radius: 0;
   }
   .v-edge .point.selected,
   .v-edge .warning.selected {
