@@ -188,10 +188,8 @@ export const sv: Record<string, string> = {
   warn: 'varn.',
   '{name} forfeits': '{name} ger upp',
   'display swapped': 'skärm speglad',
-  Earlier: 'Tidigare',
-  Later: 'Senare',
-  'Move up': 'Flytta upp',
-  'Move down': 'Flytta ned',
+  'The clock is what orders the log: change the time on an exchange and it moves to where it belongs.':
+    'Klockan bestämmer ordningen i loggen: ändra tiden på en utväxling så flyttas den dit den hör hemma.',
   'Delete this event': 'Ta bort händelsen',
   Delete: 'Ta bort',
   'Add an exchange': 'Lägg till en utväxling',

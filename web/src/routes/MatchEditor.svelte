@@ -63,13 +63,26 @@
     touch();
   }
 
-  function move(i: number, by: -1 | 1) {
-    const j = i + by;
-    if (j < 0 || j >= rows.length) return;
-    const next = [...rows];
-    [next[i], next[j]] = [next[j], next[i]];
-    rows = next;
-    touch();
+  /**
+   * The clock decides the order (issue #85).
+   *
+   * There were arrows here for moving an exchange up and down the list, and they moved
+   * the row without moving its timestamp -- so a log could come out reading 0:412, 0:38,
+   * 1:05, which is not a match that happened. An exchange's place in a match is the
+   * moment it happened, and there is exactly one field for that, so the order follows it:
+   * correct the clock and the row goes where the clock says.
+   *
+   * Stable, so events sharing a timestamp -- an exchange and the stop that followed it --
+   * keep the order they had. The end stays last whatever its clock reads, because
+   * everything after it is ignored on replay and a row hidden behind the end is not an
+   * edit anyone meant to make.
+   */
+  function reorder() {
+    const at = (r: Event) => (r.type === 'end' ? Number.POSITIVE_INFINITY : r.elapsedMs);
+    rows = rows
+      .map((row, i) => ({ row, i }))
+      .sort((a, b) => at(a.row) - at(b.row) || a.i - b.i)
+      .map(({ row }) => row);
   }
 
   function addExchange() {
@@ -96,6 +109,7 @@
   function setSeconds(row: Event, value: string) {
     const s = Number(value);
     if (Number.isFinite(s) && s >= 0) row.elapsedMs = Math.round(s * 1000);
+    reorder();
     touch();
   }
 
@@ -190,14 +204,14 @@
                 <td colspan="2"></td>
               {/if}
               <td class="actions">
-                <button title={t('Earlier')} aria-label={t('Move up')} onclick={() => move(i, -1)}>&uarr;</button>
-                <button title={t('Later')} aria-label={t('Move down')} onclick={() => move(i, 1)}>&darr;</button>
                 <button title={t('Delete this event')} aria-label={t('Delete')} onclick={() => remove(i)}>&times;</button>
               </td>
             </tr>
           {/each}
         </tbody>
       </table>
+
+      <p class="hint">{t('The clock is what orders the log: change the time on an exchange and it moves to where it belongs.')}</p>
 
       <p class="add">
         <button onclick={addExchange}>{t('Add an exchange')}</button>
@@ -321,6 +335,11 @@
     margin: 0;
     display: flex;
     gap: 0.5rem;
+  }
+  .hint {
+    margin: -0.4rem 0 0;
+    font-size: 0.8rem;
+    color: var(--ink-dim);
   }
   .add button,
   .buttons button {
