@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/fylke/porta-di-ferro/internal/match"
+	"github.com/fylke/porta-di-ferro/internal/store"
 	"github.com/fylke/porta-di-ferro/internal/tournament"
 )
 
@@ -36,6 +37,23 @@ func (s *Server) putTournament(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, t)
 }
 
+// retireDraw takes the logs of a draw that is being replaced out of play, keeping each as
+// a dated backup. Called before the pools or the bracket are drawn again, because both
+// number their matches by position and would otherwise inherit the last draw's results.
+func (s *Server) retireDraw(t store.Tournament) error {
+	var ids []string
+	for _, p := range t.Pools {
+		for _, m := range p.Matches {
+			ids = append(ids, m.ID)
+		}
+	}
+	for _, m := range t.Bracket {
+		ids = append(ids, m.ID)
+	}
+	_, err := s.store.RetireMatches(ids)
+	return err
+}
+
 func (s *Server) generatePools(w http.ResponseWriter, r *http.Request) {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
@@ -49,10 +67,23 @@ func (s *Server) generatePools(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
+	// Drawing again is a restart, not a reshuffle of the labels. Match ids are positional
+	// -- pool 1's first match is p1m1 in every draw -- so a log left on disk would be
+	// adopted by whoever the new draw puts in that slot, and an unfinished pool would come
+	// back carrying the previous pool's results under new names (issue #93). The logs go
+	// with the pools they belong to, kept as dated backups.
+	//
+	// The bracket goes too: it was seeded from the ranking of pools that no longer exist.
+	if err := s.retireDraw(t); err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
 	// Clearing the seed makes regenerating a genuinely new shuffle rather than the same
 	// one again. Once drawn, the seed is kept so the tie-breaks stay explainable.
 	t.Seed = 0
 	t.Pools = nil
+	t.Bracket = nil
+	t.BracketAt = ""
 	drawn, err := tournament.Generate(t, competitors, s.limits)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
@@ -86,6 +117,14 @@ func (s *Server) drawBracket(w http.ResponseWriter, r *http.Request) {
 	bracket, err := tournament.Bracket(t, snap.Overall)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	// The bracket numbers its matches by position too -- e-qf1 is the first quarter-final
+	// in any draw -- so the logs of the bracket being replaced go out of play with it,
+	// kept as dated backups. Without that, a redrawn quarter-final would start with the
+	// previous pairing's score already in it (issue #93, the same defect one round up).
+	if err := s.retireDraw(store.Tournament{Bracket: t.Bracket}); err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
 	t.Bracket = bracket
