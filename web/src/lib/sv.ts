@@ -356,4 +356,44 @@ export const sv: Record<string, string> = {
   'organizer view': 'arrangörssidan',
   ', a mat display such as': ', en mattskärm som',
   ', or the roster at': ', eller matchlistan på',
+  // --- graphical profile (issue #89) ---------------------------------------------------
+  'Graphical profile': 'Grafisk profil',
+  'The mark, the weapons and the sizes they have to survive.':
+    'Märket, vapnen och storlekarna de måste klara av.',
+  'The mark': 'Märket',
+  'Porta di ferro is a guard, not a building, so the mark is the guard: a longsword held low with the point forward and down. The diagonal is what carries the small sizes — it is the one angle no interface furniture sits at, so the tab is findable in a row of them.':
+    'Porta di ferro är en garde, inte en byggnad, så märket är garden: ett långsvärd hållet lågt med spetsen framåt och nedåt. Diagonalen är det som bär de små storlekarna — det är den enda vinkel som inget annat i gränssnittet ligger i, så fliken går att hitta i en rad av dem.',
+  'The mark at {n} pixels': 'Märket i {n} bildpunkter',
+  'on light chrome': 'mot ljus webbläsarram',
+  'The weapons': 'Vapnen',
+  'One per discipline, drawn as one family: the same steel, the same blade, and all of them in the posture the application is named after. They take the colour and size of the text beside them, so there is no variant per screen.':
+    'Ett per disciplin, ritade som en familj: samma stål, samma klinga, och alla i den ställning som programmet är uppkallat efter. De tar färg och storlek från texten bredvid, så det behövs ingen variant per skärm.',
+  Longsword: 'Långsvärd',
+  Sabre: 'Sabel',
+  Rapier: 'Rapir',
+  'Foam longsword': 'Skumlångsvärd',
+  'Straight, double edged, blade to grip about three to one.':
+    'Rak, tveeggad, klinga mot grepp ungefär tre mot ett.',
+  'One edge and a curve. The curve is the whole difference, and it is enough.':
+    'En egg och en kurva. Kurvan är hela skillnaden, och den räcker.',
+  'Half the blade width of the longsword, and the ring of a swept hilt.':
+    'Halva långsvärdets klingbredd, och ringen från ett svept fäste.',
+  'The same sword, ending in a round instead of a point.':
+    'Samma svärd, som slutar i en rundning i stället för en spets.',
+  'In a list:': 'I en lista:',
+  'Why steel and nothing else': 'Varför bara stål',
+  'Hue means identity in this application and never state: red is the red competitor, blue is the blue one, and amber belongs to neither because it is warnings. A mark that borrowed one of those would be the first thing to break the rule, on every screen at once. So the profile is steel: the two greys the interface already uses for ink.':
+    'Kulör betyder identitet i det här programmet och aldrig tillstånd: rött är den röda fäktaren, blått den blå, och gult hör till ingen av dem eftersom det är varningar. Ett märke som lånade någon av dem vore det första som bröt regeln, på alla skärmar samtidigt. Därför är profilen stål: de två gråtoner som gränssnittet redan använder för text.',
+  'The files': 'Filerna',
+  'the mark, and the favicon every current browser uses':
+    'märket, och den favicon alla nutida webbläsare använder',
+  'the same mark inside the safe circle an Android launcher crops to':
+    'samma märke innanför den säkra cirkel en Android-startskärm beskär till',
+  '16, 32 and 48, each drawn at its own size rather than resampled':
+    '16, 32 och 48, var och en ritad i sin egen storlek i stället för omsamplad',
+  'what Apple asks for, since it ignores the manifest':
+    'det Apple vill ha, eftersom de struntar i manifestet',
+  'the manifest': 'manifestet',
+  'The weapon marks are a component, not a file: they are inline SVG so they cost no request and inherit their colour.':
+    'Vapenmärkena är en komponent, inte en fil: de är inbäddad SVG, så de kostar ingen förfrågan och ärver sin färg.',
 };
