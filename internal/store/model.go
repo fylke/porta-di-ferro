@@ -64,6 +64,12 @@ type Tournament struct {
 	Mats        int `json:"mats"`
 	MinPoolSize int `json:"minPoolSize"`
 	MaxPoolSize int `json:"maxPoolSize"`
+	// ElimMats is how many mats the organizer wants the eliminations run on, or 0 to
+	// take the suggestion. The pools spread over everything available because they run
+	// for hours; a bracket of seven matches often finishes no sooner on three mats than
+	// on two, and the third is a referee and a score keeper staffed for nothing
+	// (issue #94). tournament.EliminationMatsFor resolves the two.
+	ElimMats int `json:"elimMats,omitempty"`
 	// Seed makes the random-draw tie-break reproducible, so a standing can be explained
 	// after the fact rather than being a fresh coin toss on every page load.
 	Seed        int64  `json:"seed"`

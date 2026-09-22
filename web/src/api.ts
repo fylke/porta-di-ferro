@@ -131,12 +131,18 @@ export interface Snapshot {
   /** Everyone ranked across the pools by the pool chain: the seeding for the eliminations. */
   overall: Standing[];
   poolsComplete: boolean;
+  /** How many mats the eliminations will be drawn across as things stand. */
+  elimMats: number;
+  /** What the rule would pick on its own: the fewest that costs the bracket no extra pass. */
+  elimMatsSuggested: number;
   bracket?: BracketView;
   instance: Instance;
   tournament: {
     mats: number;
     minPoolSize: number;
     maxPoolSize: number;
+    /** The organizer's answer for the eliminations, or 0 to take the suggestion. */
+    elimMats?: number;
     seed: number;
     pools: unknown[];
     generatedAt?: string;
@@ -200,8 +206,17 @@ export const api = {
   updateCompetitor: (id: string, patch: Partial<Pick<Competitor, 'name' | 'club' | 'withdrawn'>>) =>
     req<{ ok: boolean }>('PATCH', `/api/competitors/${id}`, patch),
   removeCompetitor: (id: string) => req<{ ok: boolean }>('DELETE', `/api/competitors/${id}`),
-  saveTournament: (mats: number, minPoolSize: number, maxPoolSize: number) =>
-    req<unknown>('PUT', '/api/tournament', { mats, minPoolSize, maxPoolSize }),
+  /**
+   * Left out rather than sent as 0 when the caller has no opinion on it: the setup screen
+   * saves mats and pool sizes without touching what the eliminations were set to.
+   */
+  saveTournament: (mats: number, minPoolSize: number, maxPoolSize: number, elimMats?: number) =>
+    req<unknown>('PUT', '/api/tournament', {
+      mats,
+      minPoolSize,
+      maxPoolSize,
+      ...(elimMats === undefined ? {} : { elimMats }),
+    }),
   generatePools: () => req<unknown>('POST', '/api/tournament/pools'),
   drawBracket: () => req<unknown>('POST', '/api/tournament/bracket'),
   movePool: (number: number, mat: number) =>

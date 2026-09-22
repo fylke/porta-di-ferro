@@ -129,6 +129,17 @@ export const sv: Record<string, string> = {
   'Seeding · overall ranking across the pools': 'Seedning · sammanlagd ranking över poolerna',
   'Draw the eliminations': 'Lotta elimineringarna',
   'Draw the eliminations again': 'Lotta om elimineringarna',
+  'Mats for the eliminations': 'Mattor för slutspelet',
+  'Suggested — {n}': 'Föreslaget — {n}',
+  '{n} of the {total} mats: more would not finish the bracket any sooner.':
+    '{n} av {total} mattor: fler skulle inte göra slutspelet klart snabbare.',
+  'Every mat is busy through the bracket.': 'Alla mattor är upptagna genom hela slutspelet.',
+  'More than the {n} the bracket needs. The extra mats wait between matches.':
+    'Fler än de {n} som slutspelet behöver. De extra mattorna står och väntar mellan matcherna.',
+  'Fewer than the {n} suggested, so the bracket takes longer. Fine if that is the trade you want.':
+    'Färre än de {n} som föreslås, så slutspelet tar längre tid. Helt i sin ordning om det är bytet du vill göra.',
+  'The bracket already drawn keeps the mats it was drawn with. Draw it again to move it.':
+    'Det redan lottade slutspelet behåller mattorna det lottades med. Lotta om för att flytta det.',
   'Bracket matches have been scored. Drawing again replaces the bracket and the results stop lining up with it.':
     'Elimineringsmatcher har redan protokollförts. Lottar du om ersätts slutspelsträdet och resultaten stämmer inte längre med det.',
   'Quarter-finals': 'Kvartsfinaler',

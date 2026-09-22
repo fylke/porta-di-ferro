@@ -16,6 +16,9 @@ func (s *Server) putTournament(w http.ResponseWriter, r *http.Request) {
 		Mats        int `json:"mats"`
 		MinPoolSize int `json:"minPoolSize"`
 		MaxPoolSize int `json:"maxPoolSize"`
+		// A pointer, so a client that does not know about the field cannot wipe the
+		// organizer's answer by leaving it out. Sent as 0 it means "take the suggestion".
+		ElimMats *int `json:"elimMats"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		writeErr(w, http.StatusBadRequest, err)
@@ -29,6 +32,12 @@ func (s *Server) putTournament(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	t.Mats, t.MinPoolSize, t.MaxPoolSize = in.Mats, in.MinPoolSize, in.MaxPoolSize
+	if in.ElimMats != nil {
+		t.ElimMats = *in.ElimMats
+		if t.ElimMats < 0 {
+			t.ElimMats = 0
+		}
+	}
 	if err := s.store.SaveTournament(t); err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
