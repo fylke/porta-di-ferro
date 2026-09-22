@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Porta di Ferro">
+  <title>Porta di Ferro</title>
+  <!--
+    Porta di ferro is a guard, not a building, so the mark is the guard: a longsword held
+    low with the point forward and down. Nothing else is in the square.
+
+    Two earlier drawings put the sword inside a literal gate. Both failed at the size that
+    decides an icon: a gate frame with a sword through it reads at 16px as a window with a
+    cross in it, which is the wrong thing to say twice over.
+
+    Steel only: no red, no blue, no amber. Hue means identity in this application. Red is
+    the red competitor, blue the blue one, amber is warnings, and a brand mark borrowing
+    one of them would be the first thing to break that rule (web/src/app.css).
+
+    The diagonal is what carries the small sizes. It is the one angle no interface
+    furniture sits at, so the tab is findable in a row of them, and it keeps the blade off
+    the pixel grid that flattened the upright versions into a plus sign.
+
+    Blade to grip is about three to one, which is what makes it a longsword rather than
+    the dagger a shorter blade drew.
+  -->
+  <rect width="64" height="64" rx="14" fill="#12141a" />
+  <g transform="rotate(-35 32 32)">
+    <path
+      d="M32 2.5a4.25 4.25 0 1 1 0 8.5 4.25 4.25 0 0 1 0-8.5Z
+         M29.25 10h5.5v10h-5.5Z
+         M22 19h20a2.75 2.75 0 0 1 0 5.5H22a2.75 2.75 0 0 1 0-5.5Z
+         M28.1 24.5h7.8L34.3 55 32 61.5 29.7 55Z"
+      fill="#eef1f7"
+    />
+  </g>
+</svg>

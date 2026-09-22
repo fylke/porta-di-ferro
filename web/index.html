@@ -5,6 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="color-scheme" content="dark" />
     <meta name="theme-color" content="#12141a" />
+    <!--
+      The SVG is the icon; the rest are for what cannot take it. favicon.ico is the file a
+      browser asks for without being told to, and an .ico that is not there comes back as
+      this page, because the server falls through to index.html for anything it does not
+      recognise. Apple ignores the manifest and wants its own link.
+    -->
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48" />
+    <link rel="apple-touch-icon" href="/icon-180.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>Porta di Ferro</title>
   </head>

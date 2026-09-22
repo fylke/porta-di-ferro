@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/fylke/porta-di-ferro/internal/store"
@@ -67,7 +68,7 @@ func TestMissingFilesAre404WhileClientRoutesFallThrough(t *testing.T) {
 		"/assets/index-DOESNOTEXIST.js",
 		"/assets/index-DOESNOTEXIST.css",
 		"/nope.js",
-		"/favicon.ico",
+		"/not-a-favicon.ico",
 	} {
 		res, err := http.Get(s.base + path)
 		if err != nil {
@@ -79,8 +80,35 @@ func TestMissingFilesAre404WhileClientRoutesFallThrough(t *testing.T) {
 		}
 	}
 
+	// The graphical profile ships in the binary like the bundle does, and a browser asks
+	// for /favicon.ico without being told to. Answering that with a page of HTML is what
+	// the 404 above is there to prevent, so the icons are checked for rather than assumed.
+	for path, want := range map[string]string{
+		"/icon.svg":              "image/svg+xml",
+		"/icon-maskable.svg":     "image/svg+xml",
+		"/favicon.ico":           "image/x-icon",
+		"/icon-180.png":          "image/png",
+		"/icon-192.png":          "image/png",
+		"/icon-512.png":          "image/png",
+		"/icon-maskable-512.png": "image/png",
+		"/manifest.webmanifest":  "",
+	} {
+		res, err := http.Get(s.base + path)
+		if err != nil {
+			t.Fatalf("GET %s: %v", path, err)
+		}
+		res.Body.Close()
+		if res.StatusCode != http.StatusOK {
+			t.Errorf("GET %s returned %d, want 200", path, res.StatusCode)
+			continue
+		}
+		if want != "" && !strings.HasPrefix(res.Header.Get("Content-Type"), want) {
+			t.Errorf("GET %s served %s, want %s", path, res.Header.Get("Content-Type"), want)
+		}
+	}
+
 	// Client-side routes have no extension and must still reach the app.
-	for _, path := range []string{"/", "/score", "/score/1", "/display/mats", "/display/mat/1", "/print/pools"} {
+	for _, path := range []string{"/", "/score", "/score/1", "/display/mats", "/display/mat/1", "/print/pools", "/brand"} {
 		res, err := http.Get(s.base + path)
 		if err != nil {
 			t.Fatalf("GET %s: %v", path, err)

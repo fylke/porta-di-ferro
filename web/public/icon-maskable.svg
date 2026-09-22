@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Porta di Ferro">
+  <title>Porta di Ferro</title>
+  <!--
+    The maskable variant. Android crops a launcher icon to whatever shape the device
+    prefers, and only the centre circle of 80% diameter is guaranteed to survive, so the
+    background runs edge to edge with no corner radius of its own and the sword is scaled
+    to sit inside that circle. icon.svg has the mark at full size for everywhere the
+    square is kept as drawn.
+  -->
+  <rect width="64" height="64" fill="#12141a" />
+  <g transform="translate(32 32) rotate(-35) scale(0.62) translate(-32 -32)">
+    <path
+      d="M32 2.5a4.25 4.25 0 1 1 0 8.5 4.25 4.25 0 0 1 0-8.5Z
+         M29.25 10h5.5v10h-5.5Z
+         M22 19h20a2.75 2.75 0 0 1 0 5.5H22a2.75 2.75 0 0 1 0-5.5Z
+         M28.1 24.5h7.8L34.3 55 32 61.5 29.7 55Z"
+      fill="#eef1f7"
+    />
+  </g>
+</svg>
