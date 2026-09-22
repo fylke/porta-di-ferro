@@ -114,7 +114,7 @@ func (s *Server) snapshot() (Snapshot, error) {
 		Pools:       make([]PoolView, 0, len(t.Pools)),
 		Mats:        map[int]string{},
 		Dir:         s.store.Dir(),
-		Instance:    s.instances.self,
+		Instance:    s.self(),
 	}
 
 	// Every match's state, pools and bracket alike, replayed once and shared.

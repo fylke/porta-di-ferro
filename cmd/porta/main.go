@@ -47,7 +47,17 @@ func main() {
 		fatal("could not open the tournament directory %s: %v", *dir, err)
 	}
 
-	srv := httpapi.New(st, web.Assets(), httpapi.Instance{Name: *name, Port: *port, Parent: *parent})
+	// A sibling is told its discipline on the command line; the first run is started by a
+	// shortcut and has to remember its own. Renaming it from the organizer page writes it
+	// into the tournament, and this is where it comes back (issue #80).
+	discipline := *name
+	if discipline == "" {
+		if t, err := st.Tournament(); err == nil {
+			discipline = t.Discipline
+		}
+	}
+
+	srv := httpapi.New(st, web.Assets(), httpapi.Instance{Name: discipline, Port: *port, Parent: *parent})
 	addr := fmt.Sprintf(":%d", *port)
 	httpServer := &http.Server{
 		Addr:    addr,
@@ -58,7 +68,7 @@ func main() {
 
 	addrs := lan.Addresses()
 	clients := clientURL(addrs, *port)
-	banner(addrs, *dir, *port, *name)
+	banner(addrs, *dir, *port, discipline)
 
 	go func() {
 		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {

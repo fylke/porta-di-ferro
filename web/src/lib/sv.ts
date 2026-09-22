@@ -184,7 +184,11 @@ export const sv: Record<string, string> = {
   'this one · port {n}': 'den här · port {n}',
   Stop: 'Stoppa',
   'Started from': 'Startad från',
-  'Sabre, Rapier and dagger, …': 'Sabel, Rapir och dolk, …',
+  'Rapier and dagger, Sword and buckler, …': 'Rapir och dolk, Svärd och buckler, …',
+  'Start one of the usual': 'Starta en av de vanliga',
+  Rename: 'Byt namn',
+  Save: 'Spara',
+  'Name of this discipline': 'Namn på disciplinen',
   'Start another discipline': 'Starta en disciplin till',
 
   // --- match editor -------------------------------------------------------------------

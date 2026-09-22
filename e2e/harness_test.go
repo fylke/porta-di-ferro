@@ -19,6 +19,7 @@ import (
 type server struct {
 	base string
 	dir  string
+	bin  string
 	cmd  *exec.Cmd
 }
 
@@ -45,13 +46,37 @@ func start(t *testing.T) *server {
 		t.Fatalf("starting the binary: %v", err)
 	}
 
-	s := &server{base: fmt.Sprintf("http://127.0.0.1:%d", port), dir: dir, cmd: cmd}
+	s := &server{base: fmt.Sprintf("http://127.0.0.1:%d", port), dir: dir, bin: bin, cmd: cmd}
 	t.Cleanup(func() {
 		_ = cmd.Process.Kill()
 		_, _ = cmd.Process.Wait()
 	})
 	s.waitReady(t)
 	return s
+}
+
+// restart stops a server and brings another up on the same tournament directory, which
+// is what a reboot mid-event is. Anything the application is supposed to remember across
+// one has to come off disk rather than out of the process it was set in.
+func restart(t *testing.T, s *server) *server {
+	t.Helper()
+	_ = s.cmd.Process.Kill()
+	_, _ = s.cmd.Process.Wait()
+
+	port := freePort(t)
+	cmd := exec.Command(s.bin, "-dir", s.dir, "-port", fmt.Sprint(port), "-no-browser")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("starting the binary again: %v", err)
+	}
+	next := &server{base: fmt.Sprintf("http://127.0.0.1:%d", port), dir: s.dir, bin: s.bin, cmd: cmd}
+	t.Cleanup(func() {
+		_ = cmd.Process.Kill()
+		_, _ = cmd.Process.Wait()
+	})
+	next.waitReady(t)
+	return next
 }
 
 func freePort(t *testing.T) int {

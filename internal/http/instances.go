@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Concurrent disciplines (design §7 item 9). Several disciplines at once are several
@@ -62,22 +64,133 @@ func newInstances(self Instance) *instances {
 
 var badName = regexp.MustCompile(`[^\p{L}\p{N} _-]+`)
 
-// spawn starts a sibling on the next free port, with a data directory beside this one.
-func (s *Server) spawn(name string) (Instance, error) {
+// Disciplines is the list an organizer picks from rather than types out (issue #80). The
+// first one is what a run that has not been named yet is offered.
+//
+// Preloaded rather than configurable: these are the four MSL runs, they are spelled the
+// same way on every entry list, and a volunteer typing "Womens longsword" at one event
+// and "Women's and underrepresented genders Longsword" at the next makes two disciplines
+// out of one. Nothing stops them typing their own -- the list is a starting point, not a
+// closed set.
+var Disciplines = []string{
+	"Open steel Longsword",
+	"Women's and underrepresented genders Longsword",
+	"Open Sabre",
+	"Open foam Longsword",
+}
+
+// cleanName is the shared check on a discipline's name: something readable, and short
+// enough to sit in a page header beside the mat number.
+func cleanName(name string) (string, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
-		return Instance{}, errors.New("a discipline needs a name")
+		return "", errors.New("a discipline needs a name")
+	}
+	if len([]rune(name)) > 60 {
+		return "", errors.New("that name is too long to fit on the screens")
+	}
+	if strings.TrimSpace(badName.ReplaceAllString(name, "")) == "" {
+		return "", errors.New("the name needs some letters or digits in it")
+	}
+	return name, nil
+}
+
+// rename changes what this run of the application is called.
+//
+// The name reaches a run as a flag, which is fine for a sibling the organizer started
+// from here and useless for the first one: it was started by a shortcut, so it had no
+// name and every page said "Unnamed" with nowhere to change it (issue #80). So the name
+// is kept with the tournament it belongs to, and this writes it there as well as into
+// the live instance, which is what makes it survive a restart.
+func (s *Server) rename(name string) error {
+	name, err := cleanName(name)
+	if err != nil {
+		return err
+	}
+	s.writeMu.Lock()
+	t, err := s.store.Tournament()
+	if err != nil {
+		s.writeMu.Unlock()
+		return err
+	}
+	t.Discipline = name
+	err = s.store.SaveTournament(t)
+	s.writeMu.Unlock()
+	if err != nil {
+		return err
+	}
+	s.instances.mu.Lock()
+	s.instances.self.Name = name
+	s.instances.mu.Unlock()
+	// Every page carries the name, so every page has to hear about it.
+	s.publishState()
+	return nil
+}
+
+// renameChild passes a rename on to a sibling this instance started, then records it, so
+// the organizer can name all of their disciplines from the one page they are already on.
+// A sibling is a separate process with its own tournament directory; it is the one that
+// has to write the name down.
+func (s *Server) renameChild(port int, name string) error {
+	name, err := cleanName(name)
+	if err != nil {
+		return err
+	}
+	s.instances.mu.Lock()
+	c, ok := s.instances.children[port]
+	url := ""
+	if ok {
+		url = c.URL
+	}
+	s.instances.mu.Unlock()
+	if !ok {
+		return fmt.Errorf("no discipline on port %d was started from here", port)
+	}
+
+	body, err := json.Marshal(map[string]string{"name": name})
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequest(http.MethodPatch,
+		fmt.Sprintf("%sapi/instances/%d", url, port), bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{Timeout: 5 * time.Second}
+	res, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("%s did not answer: %w", url, err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode < 200 || res.StatusCode > 299 {
+		return fmt.Errorf("%s refused the rename with %d", url, res.StatusCode)
+	}
+
+	s.instances.mu.Lock()
+	if c, ok := s.instances.children[port]; ok {
+		c.Name = name
+	}
+	s.instances.mu.Unlock()
+	return nil
+}
+
+// spawn starts a sibling on the next free port, with a data directory beside this one.
+func (s *Server) spawn(name string) (Instance, error) {
+	name, err := cleanName(name)
+	if err != nil {
+		return Instance{}, err
 	}
 	folder := strings.TrimSpace(badName.ReplaceAllString(name, ""))
-	if folder == "" {
-		return Instance{}, errors.New("the name needs some letters or digits in it")
-	}
 	exe, err := os.Executable()
 	if err != nil {
 		return Instance{}, err
 	}
 	s.instances.mu.Lock()
 	defer s.instances.mu.Unlock()
+	if strings.EqualFold(s.instances.self.Name, name) {
+		return Instance{}, fmt.Errorf("%s is this one", s.instances.self.Name)
+	}
 	for _, c := range s.instances.children {
 		if strings.EqualFold(c.Name, name) {
 			return Instance{}, fmt.Errorf("%s is already running on port %d", c.Name, c.Port)
@@ -134,6 +247,14 @@ func (s *Server) StopChildren() {
 	}
 }
 
+// self is this run, read under the lock. It is no longer fixed at startup: renaming a
+// discipline writes to it while the snapshot builder is reading (issue #80).
+func (s *Server) self() Instance {
+	s.instances.mu.Lock()
+	defer s.instances.mu.Unlock()
+	return s.instances.self
+}
+
 func (s *Server) listInstances() []Instance {
 	s.instances.mu.Lock()
 	defer s.instances.mu.Unlock()
@@ -178,6 +299,40 @@ func (s *Server) postInstance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, inst)
+}
+
+// patchInstance renames a discipline: this one, or a sibling this one started.
+func (s *Server) patchInstance(w http.ResponseWriter, r *http.Request) {
+	port, err := strconv.Atoi(r.PathValue("port"))
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	var in struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	s.instances.mu.Lock()
+	self := s.instances.self.Port == port
+	s.instances.mu.Unlock()
+	if self {
+		err = s.rename(in.Name)
+	} else {
+		err = s.renameChild(port, in.Name)
+	}
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, s.listInstances())
+}
+
+// getDisciplines is the preloaded list the organizer picks from.
+func (s *Server) getDisciplines(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, Disciplines)
 }
 
 func (s *Server) deleteInstance(w http.ResponseWriter, r *http.Request) {

@@ -200,6 +200,10 @@ export const api = {
   addresses: () => req<Address[]>('GET', '/api/addresses'),
   instances: () => req<Instance[]>('GET', '/api/instances'),
   startInstance: (name: string) => req<Instance>('POST', '/api/instances', { name }),
+  /** The preloaded list of disciplines the organizer picks from rather than types out. */
+  disciplines: () => req<string[]>('GET', '/api/disciplines'),
+  renameInstance: (port: number, name: string) =>
+    req<Instance[]>('PATCH', `/api/instances/${port}`, { name }),
   stopInstance: (port: number) => req<{ ok: boolean }>('DELETE', `/api/instances/${port}`),
   addCompetitor: (name: string, club: string) =>
     req<Competitor>('POST', '/api/competitors', { name, club }),
