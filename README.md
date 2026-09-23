@@ -26,7 +26,9 @@ installer below. [How the demo works](docs/demo.md).
    get a blue box saying *"Windows protected your PC"*. Click **More info**, then **Run
    anyway**. Nothing is wrong; it is what Windows does with any download it has not seen
    before.
-3. It opens your browser at the organizer page. That page shows a web address and a QR
+3. It opens your browser at the organizer page, which is at **`/admin`** — that is the
+   only page that can change anything. The front page, `/`, is what competitors and
+   spectators get, and `/info` is the sheet you print and put on the door. That page shows a web address and a QR
    code. **Do not hand out the `localhost` address in the console** — that one only works
    on the PC itself. The organizer page shows an address on the venue network instead, and
    if the PC is on more than one network it offers a picker so you can choose the one the
