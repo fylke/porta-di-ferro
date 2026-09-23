@@ -57,6 +57,49 @@ type Pool struct {
 	Matches     []Match  `json:"matches"`
 }
 
+// Event is the day the tournament sits inside, as the people who turn up experience it
+// (issue #98). None of it affects a single result: it is what the participant view, the
+// printed info sheet and the hall put around the fencing.
+//
+// It lives with the tournament because that is the file an organizer already owns and
+// can hand-edit. An event running several disciplines at once is several runs of the
+// application, and each carries its own copy for now -- one welcome message typed twice
+// is a smaller problem than a shared file two processes both write.
+type Event struct {
+	// Welcome is what the info sheet and the landing page open with: a few lines about
+	// the event in general terms, written by the organizer.
+	Welcome  string         `json:"welcome,omitempty"`
+	Schedule []ScheduleItem `json:"schedule,omitempty"`
+	Wifi     Wifi           `json:"wifi,omitempty"`
+}
+
+// ScheduleItem is one line of the day's agenda: gear check, the pools, lunch, the
+// eliminations. Deliberately free text with a time beside it rather than anything the
+// application derives -- the application does not know when lunch is, and an organizer
+// who has to make the schedule fit a data model will keep the real one on paper.
+type ScheduleItem struct {
+	// At is a time of day as the organizer wrote it, "09:00". Not parsed: a schedule
+	// that says "after the pools" is a legitimate schedule.
+	At    string `json:"at,omitempty"`
+	Label string `json:"label"`
+	// Kind is "discipline", "break" or "" -- only ever used to style the row.
+	Kind string `json:"kind,omitempty"`
+}
+
+// Wifi is the venue network, for the QR code on the printed info sheet. A spectator who
+// cannot get on the wifi cannot reach any of this.
+//
+// The password is stored in the clear in the organizer's own file, which is the same
+// place it would be on the poster they would otherwise print. It is a guest network
+// password written on a wall, not a credential.
+type Wifi struct {
+	SSID     string `json:"ssid,omitempty"`
+	Password string `json:"password,omitempty"`
+	// Security is "WPA", "WEP" or "nopass", as the Wi-Fi QR format spells it.
+	Security string `json:"security,omitempty"`
+	Hidden   bool   `json:"hidden,omitempty"`
+}
+
 // Tournament is the setup and the generated draw. Name, logo and discipline linkage are
 // Milestone 3 (design §9, issue #2): one run of the application is one tournament under
 // one hardcoded ruleset.
@@ -69,6 +112,9 @@ type Tournament struct {
 	Mats        int    `json:"mats"`
 	MinPoolSize int    `json:"minPoolSize"`
 	MaxPoolSize int    `json:"maxPoolSize"`
+	// Event is the day around the tournament: the welcome message, the agenda and the
+	// venue wifi (issue #98). Nothing here reaches a result.
+	Event Event `json:"event,omitempty"`
 	// ElimMats is how many mats the organizer wants the eliminations run on, or 0 to
 	// take the suggestion. The pools spread over everything available because they run
 	// for hours; a bracket of seven matches often finishes no sooner on three mats than

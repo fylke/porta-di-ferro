@@ -76,6 +76,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PATCH /api/competitors/{id}", s.patchCompetitor)
 	mux.HandleFunc("DELETE /api/competitors/{id}", s.deleteCompetitor)
 
+	mux.HandleFunc("PUT /api/event", s.putEvent)
+	mux.HandleFunc("GET /api/info.pdf", s.exportInfoPDF)
+
 	mux.HandleFunc("PUT /api/tournament", s.putTournament)
 	mux.HandleFunc("POST /api/tournament/pools", s.generatePools)
 	mux.HandleFunc("PATCH /api/tournament/pools/{number}", s.patchPool)
