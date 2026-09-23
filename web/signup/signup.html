@@ -1,0 +1,535 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <title>Sign up</title>
+    <!--
+      The participant's half of offline signup (issue #91).
+
+      Deliberately one file of plain HTML, CSS and JavaScript, and deliberately not part
+      of the Svelte bundle. It is emailed to people, or copied onto a memory stick, and
+      opened from their downloads folder — so it has to work from a file:// URL with no
+      server anywhere, no build step and nothing to install. A framework would buy
+      nothing and would cost the one property that matters here.
+
+      Nothing needs a secure context. No service worker, no crypto.randomUUID, no
+      clipboard API, no fetch of anything. The organizer's copy of this carries the event
+      baked in; a bare copy asks for the definition file instead.
+
+      It saves nothing anywhere except the file the participant downloads at the end, and
+      a draft in localStorage so a closed tab does not lose a half-filled form.
+    -->
+    <style>
+      :root {
+        --bg: #12141a;
+        --panel: #1a1d26;
+        --panel-2: #222633;
+        --line: #333949;
+        --ink: #eef1f7;
+        --ink-dim: #98a0b4;
+        --ok: #3f9e5a;
+        --amber: #f2b134;
+        --radius: 10px;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        line-height: 1.5;
+      }
+      main {
+        max-width: 42rem;
+        margin: 0 auto;
+        padding: 1.25rem 1rem 4rem;
+      }
+      h1 {
+        margin: 0 0 0.2rem;
+        font-size: clamp(1.5rem, 6vw, 2.2rem);
+        overflow-wrap: anywhere;
+      }
+      .where {
+        margin: 0 0 1.5rem;
+        color: var(--ink-dim);
+      }
+      h2 {
+        margin: 0 0 0.7rem;
+        font-size: 0.75rem;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--ink-dim);
+      }
+      section {
+        background: var(--panel);
+        border-radius: var(--radius);
+        padding: 1rem 1.1rem;
+        margin-bottom: 0.8rem;
+      }
+      label.field {
+        display: block;
+        margin-bottom: 0.8rem;
+      }
+      label.field span {
+        display: block;
+        font-size: 0.8rem;
+        color: var(--ink-dim);
+        margin-bottom: 0.25rem;
+      }
+      input[type='text'],
+      input[type='file'] {
+        width: 100%;
+        font: inherit;
+        color: var(--ink);
+        background: var(--panel-2);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 0.6rem 0.7rem;
+      }
+      /* Each discipline is a whole row you can tap, not a 13px box beside some text:
+         this gets filled in on a phone as often as at a desk. */
+      .pick {
+        display: flex;
+        gap: 0.75rem;
+        align-items: flex-start;
+        padding: 0.7rem 0.8rem;
+        margin-bottom: 0.4rem;
+        background: var(--panel-2);
+        border: 2px solid var(--line);
+        border-radius: var(--radius);
+        cursor: pointer;
+      }
+      .pick.on {
+        border-color: var(--ok);
+      }
+      .pick input {
+        width: 1.2rem;
+        height: 1.2rem;
+        margin: 0.15rem 0 0;
+        flex: none;
+      }
+      .pick .label {
+        font-weight: 700;
+      }
+      .pick .when {
+        display: block;
+        font-weight: 400;
+        font-size: 0.85rem;
+        color: var(--ink-dim);
+      }
+      ol.programme {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      ol.programme li {
+        display: grid;
+        grid-template-columns: minmax(3.5rem, auto) 1fr;
+        gap: 0.7rem;
+        padding: 0.3rem 0;
+      }
+      ol.programme .at {
+        color: var(--ink-dim);
+        font-size: 0.9rem;
+        white-space: nowrap;
+      }
+      ol.programme li.discipline .what {
+        font-weight: 700;
+      }
+      ol.programme li.break .what,
+      ol.programme li.break .at {
+        color: var(--ink-dim);
+      }
+      button {
+        font: inherit;
+        font-weight: 700;
+        color: #0d0f14;
+        background: var(--ink);
+        border: none;
+        border-radius: var(--radius);
+        padding: 0.8rem 1.1rem;
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.45;
+        cursor: default;
+      }
+      button.quiet {
+        background: var(--panel-2);
+        color: var(--ink);
+        border: 1px solid var(--line);
+        font-weight: 600;
+        padding: 0.5rem 0.8rem;
+      }
+      .done {
+        border: 2px solid var(--ok);
+      }
+      .done h2 {
+        color: var(--ok);
+      }
+      .hint {
+        color: var(--ink-dim);
+        font-size: 0.9rem;
+      }
+      .warn {
+        color: var(--amber);
+      }
+      code {
+        background: var(--panel-2);
+        padding: 0.1em 0.35em;
+        border-radius: 4px;
+        font-size: 0.9em;
+        overflow-wrap: anywhere;
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.6rem;
+        align-items: center;
+      }
+    </style>
+  </head>
+  <body>
+    <main id="app"></main>
+
+    <!-- The organizer's download replaces this line with the event itself, so what they
+         send out is one file. Left empty, the app asks for a definition file instead. -->
+    <script id="definition" type="application/json">null</script>
+
+    <script>
+      (function () {
+        'use strict';
+
+        var app = document.getElementById('app');
+        var DRAFT = 'porta.signup.draft';
+
+        /**
+         * An id that does not need a secure context.
+         *
+         * crypto.randomUUID is only exposed over HTTPS or localhost, and this file is
+         * opened from a downloads folder. The same trap took the score keeper client
+         * down on a LAN address once (issue #81); getRandomValues is available
+         * everywhere, and Math.random is the floor.
+         */
+        function randomId() {
+          var bytes = new Uint8Array(16);
+          if (window.crypto && typeof window.crypto.getRandomValues === 'function') {
+            window.crypto.getRandomValues(bytes);
+          } else {
+            for (var i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+          }
+          return Array.prototype.map
+            .call(bytes, function (b) {
+              return ('0' + b.toString(16)).slice(-2);
+            })
+            .join('');
+        }
+
+        function el(tag, attrs, children) {
+          var node = document.createElement(tag);
+          Object.keys(attrs || {}).forEach(function (k) {
+            if (k === 'class') node.className = attrs[k];
+            else if (k === 'text') node.textContent = attrs[k];
+            else if (k.slice(0, 2) === 'on') node.addEventListener(k.slice(2), attrs[k]);
+            else if (attrs[k] !== null && attrs[k] !== undefined) node.setAttribute(k, attrs[k]);
+          });
+          (children || []).forEach(function (c) {
+            if (c) node.appendChild(c);
+          });
+          return node;
+        }
+
+        function readDraft() {
+          try {
+            return JSON.parse(localStorage.getItem(DRAFT) || '{}');
+          } catch (e) {
+            return {};
+          }
+        }
+        function saveDraft(d) {
+          try {
+            localStorage.setItem(DRAFT, JSON.stringify(d));
+          } catch (e) {
+            // A browser with storage off still fills the form in; it just forgets.
+          }
+        }
+
+        var state = { definition: null, chosen: {}, draft: readDraft(), saved: null, error: '' };
+
+        function baked() {
+          try {
+            var raw = document.getElementById('definition').textContent;
+            var parsed = JSON.parse(raw);
+            return parsed && parsed.format === 'porta.signup' ? parsed : null;
+          } catch (e) {
+            return null;
+          }
+        }
+
+        function loadDefinition(text, then) {
+          var def;
+          try {
+            def = JSON.parse(text);
+          } catch (e) {
+            state.error = 'That file is not readable as JSON.';
+            return then();
+          }
+          if (!def || def.format !== 'porta.signup') {
+            state.error = 'That is not a signup file from an organizer.';
+            return then();
+          }
+          if (def.version > 1) {
+            state.error = 'That file was made by a newer version of this app.';
+            return then();
+          }
+          state.definition = def;
+          state.error = '';
+          then();
+        }
+
+        // --- the screens -------------------------------------------------------------
+
+        function needDefinition() {
+          var input = el('input', {
+            type: 'file',
+            accept: '.json,application/json',
+            onchange: function (ev) {
+              var file = ev.target.files && ev.target.files[0];
+              if (!file) return;
+              var reader = new FileReader();
+              reader.onload = function () {
+                loadDefinition(String(reader.result), render);
+              };
+              reader.readAsText(file);
+            },
+          });
+          return [
+            el('h1', { text: 'Sign up' }),
+            el('p', { class: 'where', text: 'For an event that is not on the internet.' }),
+            el('section', {}, [
+              el('h2', { text: 'Open the organizer’s file' }),
+              el('p', {
+                class: 'hint',
+                text:
+                  'The organizer sent a file ending in .json. Choose it here and this page ' +
+                  'fills in with the event, the programme and what you can enter.',
+              }),
+              input,
+              state.error ? el('p', { class: 'warn', text: state.error }) : null,
+            ]),
+          ];
+        }
+
+        function programme(def) {
+          if (!def.schedule || !def.schedule.length) return null;
+          var list = el('ol', { class: 'programme' });
+          def.schedule.forEach(function (row) {
+            var when = row.startsAt || '';
+            if (row.endsAt) when += '–' + row.endsAt;
+            list.appendChild(
+              el('li', { class: row.type || '' }, [
+                el('span', { class: 'at', text: when }),
+                el('span', { class: 'what', text: row.label || '' }),
+              ]),
+            );
+          });
+          return el('section', {}, [el('h2', { text: 'Programme' }), list]);
+        }
+
+        function form(def) {
+          var wants = def.fields || ['name', 'club'];
+          var draft = state.draft;
+
+          function field(key, label, hint) {
+            if (wants.indexOf(key) < 0) return null;
+            return el('label', { class: 'field' }, [
+              el('span', { text: label }),
+              el('input', {
+                type: 'text',
+                id: 'f-' + key,
+                value: draft[key] || '',
+                autocomplete: key === 'name' ? 'name' : 'off',
+                placeholder: hint || '',
+                oninput: function (ev) {
+                  draft[key] = ev.target.value;
+                  saveDraft(draft);
+                  refreshButton();
+                },
+              }),
+            ]);
+          }
+
+          var picks = el('div', {});
+          (def.tournaments || []).forEach(function (t) {
+            var when = '';
+            (def.schedule || []).forEach(function (row) {
+              if (row.tournamentId && row.tournamentId === t.id && row.startsAt) when = row.startsAt;
+            });
+            var box = el('input', {
+              type: 'checkbox',
+              id: 'pick-' + t.id,
+              onchange: function (ev) {
+                state.chosen[t.id] = ev.target.checked;
+                row.className = 'pick' + (ev.target.checked ? ' on' : '');
+                refreshButton();
+              },
+            });
+            if (state.chosen[t.id]) box.checked = true;
+            var row = el('label', { class: 'pick' + (state.chosen[t.id] ? ' on' : '') }, [
+              box,
+              el('span', {}, [
+                el('span', { class: 'label', text: t.label || t.id }),
+                el('span', {
+                  class: 'when',
+                  text:
+                    (when ? 'from ' + when : '') +
+                    (t.capacity ? (when ? ' · ' : '') + 'room for ' + t.capacity : ''),
+                }),
+              ]),
+            ]);
+            picks.appendChild(row);
+          });
+
+          var button = el('button', { text: 'Save my signup file', onclick: submit });
+
+          function refreshButton() {
+            var any = Object.keys(state.chosen).some(function (k) {
+              return state.chosen[k];
+            });
+            button.disabled = !(draft.name || '').trim() || !any;
+          }
+
+          function submit() {
+            var entries = Object.keys(state.chosen).filter(function (k) {
+              return state.chosen[k];
+            });
+            var response = {
+              format: 'porta.signup.response',
+              version: 1,
+              definitionId: def.definitionId || '',
+              submissionId: draft.submissionId || randomId(),
+              submittedAt: new Date().toISOString(),
+              participant: {
+                name: (draft.name || '').trim(),
+                club: (draft.club || '').trim(),
+                contact: (draft.contact || '').trim(),
+              },
+              entries: entries,
+            };
+            // Kept, so that somebody who fixes a typo and saves again replaces
+            // themselves on import rather than arriving twice.
+            draft.submissionId = response.submissionId;
+            saveDraft(draft);
+
+            var name = 'signup-' + slug(response.participant.name) + '.json';
+            download(name, JSON.stringify(response, null, 2));
+            state.saved = { name: name, response: response };
+            render();
+          }
+
+          setTimeout(refreshButton, 0);
+
+          return el('section', {}, [
+            el('h2', { text: 'You' }),
+            field('name', 'Name', 'Ada Example'),
+            field('club', 'Club', 'Example HEMA'),
+            field('contact', 'Contact', 'Email or phone'),
+            el('h2', { text: 'What you are entering' }),
+            (def.tournaments || []).length
+              ? picks
+              : el('p', { class: 'warn', text: 'This event has nothing to enter yet.' }),
+            el('p', { class: 'row' }, [button]),
+            el('p', {
+              class: 'hint',
+              text:
+                'This saves a file to your downloads. Send it back to the organizer the ' +
+                'same way you got this one. Nothing is sent anywhere by this page.',
+            }),
+          ]);
+        }
+
+        function saved() {
+          var s = state.saved;
+          return el('section', { class: 'done' }, [
+            el('h2', { text: 'Saved' }),
+            el('p', {}, [
+              document.createTextNode('Your file is in your downloads as '),
+              el('code', { text: s.name }),
+              document.createTextNode('. Send it to the organizer.'),
+            ]),
+            el('p', { class: 'row' }, [
+              el('button', {
+                class: 'quiet',
+                text: 'Change something and save again',
+                onclick: function () {
+                  state.saved = null;
+                  render();
+                },
+              }),
+              el('button', {
+                class: 'quiet',
+                text: 'Save it again',
+                onclick: function () {
+                  download(s.name, JSON.stringify(s.response, null, 2));
+                },
+              }),
+            ]),
+          ]);
+        }
+
+        function slug(s) {
+          return (
+            String(s)
+              .toLowerCase()
+              .replace(/[åäæ]/g, 'a')
+              .replace(/[öø]/g, 'o')
+              .replace(/[^a-z0-9]+/g, '-')
+              .replace(/^-+|-+$/g, '') || 'signup'
+          );
+        }
+
+        /** A download with no server and no secure-context API: a blob and a link. */
+        function download(name, text) {
+          var blob = new Blob([text], { type: 'application/json' });
+          var url = URL.createObjectURL(blob);
+          var a = el('a', { href: url, download: name });
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(function () {
+            URL.revokeObjectURL(url);
+          }, 1000);
+        }
+
+        function render() {
+          app.innerHTML = '';
+          var def = state.definition;
+          if (!def) {
+            needDefinition().forEach(function (n) {
+              if (n) app.appendChild(n);
+            });
+            return;
+          }
+          var ev = def.event || {};
+          var where = [ev.venue, ev.date].filter(Boolean).join(' · ');
+          [
+            el('h1', { text: ev.name || 'Sign up' }),
+            where ? el('p', { class: 'where', text: where }) : null,
+            state.saved ? saved() : form(def),
+            programme(def),
+          ].forEach(function (n) {
+            if (n) app.appendChild(n);
+          });
+        }
+
+        state.definition = baked();
+        render();
+      })();
+    </script>
+  </body>
+</html>
