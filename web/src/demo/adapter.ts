@@ -29,6 +29,8 @@ interface DemoResponse {
 declare global {
   interface Window {
     portaDemo?: { request: (method: string, path: string, body?: string) => string };
+    /** Set by the demo only. See portaQR below. */
+    portaQR?: (payload: string) => string;
     __portaDemoReady?: () => void;
     Go: new () => { importObject: WebAssembly.Imports; run: (i: WebAssembly.Instance) => void };
   }
@@ -218,6 +220,21 @@ export async function startDemo(navigate: (to: string) => void): Promise<void> {
   installFetch();
   window.EventSource = DemoEventSource as unknown as typeof EventSource;
   installLinks(navigate);
+
+  /**
+   * A QR code as a data URL.
+   *
+   * The info sheet asks for its codes with <img src="/api/qr.png?...">, and an image load
+   * does not go through fetch -- so the shim above never sees it and the demo showed two
+   * broken images on a page that is mostly two codes. A global rather than an import,
+   * because the page that wants it must not pull the demo into the real bundle: there it
+   * is undefined behind a constant Rollup removes.
+   */
+  window.portaQR = (payload: string) => {
+    const res = call('GET', `/api/qr.png?url=${encodeURIComponent(payload)}`);
+    if (res.status !== 200) return '';
+    return `data:${res.contentType};base64,${res.body}`;
+  };
 }
 
 /** The demo's own controls, for the banner. Both go through the module like anything else. */

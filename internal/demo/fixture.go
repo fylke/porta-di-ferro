@@ -49,6 +49,27 @@ func fixture(rules match.Ruleset, limits tournament.Limits) ([]store.Competitor,
 
 	t := store.Defaults()
 	t.Discipline = "Open steel Longsword"
+	// The day around the fencing (issue #98). The landing page and the info sheet are
+	// most of what a visitor to the demo sees first, and both are empty boxes without
+	// this -- which would show the views working and the product looking unfinished.
+	t.Event = store.Event{
+		Welcome: "Welcome to Stångebroslaget.\n\n" +
+			"Gear check opens at 08:30 by the entrance. Pools start at 09:30 on three " +
+			"mats. Results and the programme update themselves on this page all day — " +
+			"leave it open.",
+		Schedule: []store.ScheduleItem{
+			{At: "08:30", Label: "Gear check"},
+			{At: "09:00", Label: "Staff briefing"},
+			{At: "09:30", Label: "Longsword, pools", Kind: "discipline"},
+			{At: "12:00", Label: "Lunch", Kind: "break"},
+			{At: "13:00", Label: "Longsword, eliminations", Kind: "discipline"},
+			{At: "15:00", Label: "Sabre, pools", Kind: "discipline"},
+			{At: "17:00", Label: "Prize giving"},
+		},
+		// A password with a separator in it, because that is the case the QR escaping
+		// gets wrong and the demo is where anybody would notice.
+		Wifi: store.Wifi{SSID: "Hall-Guest", Password: "fencing;2026", Security: "WPA"},
+	}
 	t.Mats = 3
 	t.MinPoolSize = 5
 	t.MaxPoolSize = 6
