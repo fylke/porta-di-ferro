@@ -93,6 +93,24 @@ flowchart LR
 
 `Tournament.Event` — the welcome message, the programme and the venue wifi — is written only from `/admin` and read by the other two. None of it reaches a result.
 
+### 1d. Offline signup
+
+Registration without an internet-facing server (issue #91, [docs/proposals/offline-signup.md](proposals/offline-signup.md)). Two files and no network between them.
+
+```mermaid
+flowchart LR
+    A["/admin · Signup files"] -->|"one .html with the event baked in"| P[Participant, offline]
+    P -->|"one .json per person"| F[(A folder<br/>email or a stick)]
+    F -->|choose a folder| PR[POST /api/signup/preview<br/>writes nothing]
+    PR --> D{Organizer looks}
+    D -->|confirm| IM[POST /api/signup/import]
+    IM --> C[(competitors.json)]
+```
+
+`internal/signup` decides everything and touches nothing: formats, validation, duplicate detection and the preview are pure functions over data. The confirm re-runs the same check rather than trusting the preview posted back to it, so the competitor list moving between the two calls cannot break the duplicate rule.
+
+Importing the same folder twice adds nobody twice. Name and club are not an identity — two Anna Nilssons from the same club is a real thing — so the response carries a submission identifier made by the participant app, and the imported competitor remembers it in `Competitor.Signup`.
+
 ## 2. Match Engine State Machine & Scoring Logic
 
 Matches are driven by an append-only event log. State is pure and recomputed by replaying events. The one exception to append-only is the organizer's editor (`PUT /api/matches/{id}/events`), which rewrites a log wholesale and keeps the previous version as `matches/<id>.ndjson.<timestamp>.bak`; a `log-replaced` SSE update tells a score keeper holding the match to reload it. Event types are `exchange`, `timer` (start / stop / resume / reset), `undo`, `end`, and `options` — the last carries the competitors' colours and the display side order, is ignored by replay, and is read separately by `OptionsOf` / `optionsOf` so presentation can never fail a scoring vector. Points are differential (e.g., scoring $2$ vs $1$ awards $1$ net point to the higher scorer), capped at $8$ points or $3$ minutes ($180\,000\text{ ms}$).
