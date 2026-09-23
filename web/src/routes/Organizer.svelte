@@ -8,14 +8,22 @@
   import Eliminations from './Eliminations.svelte';
   import Screens from './Screens.svelte';
   import Disciplines from './Disciplines.svelte';
+  import EventEditor from './EventEditor.svelte';
   import LangToggle from './LangToggle.svelte';
   import { t, lang } from '../lib/i18n.svelte';
 
   /**
-   * The first screen an organizer sees. It carries the LAN address and a QR code large
-   * enough to read from across a table, because "now open your browser" is the cost of
-   * choosing a server over a desktop application and this is the mitigation
-   * (docs/tech-stack.md §2).
+   * The admin view, at /admin (issue #98): everything that changes the tournament, and
+   * nothing that does not.
+   *
+   * It used to be the landing page. It is not any more, because the address on the poster
+   * by the door reaches every phone in the hall and this page can withdraw a competitor
+   * and redraw the pools. The landing page is now the participants' and the spectators',
+   * and the only way here is to type /admin.
+   *
+   * It carries the LAN address and a QR code large enough to read from across a table,
+   * because "now open your browser" is the cost of choosing a server over a desktop
+   * application and this is the mitigation (docs/tech-stack.md §2).
    */
   const live = new Live();
   let addresses = $state<Address[]>([]);
@@ -145,9 +153,12 @@
   <header>
     <h1>
       Porta di Ferro
+      <span class="admintag">{t('admin')}</span>
       {#if snapshot?.instance.name}<span class="discipline">{snapshot.instance.name}</span>{/if}
     </h1>
     <nav>
+      <a href="/">{t('Landing page')}</a>
+      <a href="/info">{t('Info sheet')}</a>
       <a href="/display/mats" target="_blank" rel="noreferrer">{t('Displays')}</a>
       <a href="/display/roster" target="_blank" rel="noreferrer">{t('Roster')}</a>
       <a href="/print/pools" target="_blank" rel="noreferrer">{t('Pool sheets')}</a>
@@ -221,6 +232,8 @@
       <Setup {snapshot} onchange={refresh} />
     </div>
 
+    <EventEditor {snapshot} onchange={refresh} />
+
     <Screens presence={live.presence} {snapshot} />
 
     <Eliminations {snapshot} onchange={refresh} />
@@ -254,6 +267,18 @@
   }
   /* Which discipline this tab is. Amber, so two tabs of two disciplines cannot be told
      apart only by reading the small print. */
+  /* Says which of the three views this is, since they share a header. */
+  .admintag {
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #0d0f14;
+    background: var(--amber-bright);
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    vertical-align: 0.2em;
+  }
   .discipline {
     font-size: 1.1rem;
     font-weight: 600;
@@ -261,12 +286,13 @@
   }
   nav {
     display: flex;
-    gap: 1rem;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
     font-size: 0.9rem;
   }
   .join {
     display: grid;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: 1.5rem;
     align-items: center;
     background: var(--panel);
@@ -332,7 +358,7 @@
   }
   .columns {
     display: grid;
-    grid-template-columns: 1.3fr 1fr;
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
     gap: 1rem;
     margin-bottom: 1rem;
     align-items: start;
