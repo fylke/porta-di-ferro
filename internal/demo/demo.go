@@ -23,10 +23,13 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	qrcode "github.com/skip2/go-qrcode"
 
 	httpapi "github.com/fylke/porta-di-ferro/internal/http"
 	"github.com/fylke/porta-di-ferro/internal/match"
@@ -186,6 +189,12 @@ func (d *Demo) Request(method, path string, body []byte) Response {
 		// shows when a PC is on no network, which is the truth here.
 		return ok([]any{})
 
+	case method == "GET" && path == "/api/info.pdf":
+		return d.infoPDF(query)
+
+	case method == "GET" && path == "/api/qr.png":
+		return d.qr(query)
+
 	case method == "GET" && path == "/api/instances":
 		snap, _ := d.snapshot()
 		return ok([]httpapi.Instance{snap.Instance})
@@ -247,6 +256,61 @@ func (d *Demo) Request(method, path string, body []byte) Response {
 	}
 
 	return fail(404, fmt.Errorf("the demo does not answer %s %s", method, path))
+}
+
+// qr renders a code for whatever it is given -- the wifi payload and the landing address
+// on the info sheet. The server has an endpoint for this and the client asks for it with
+// an <img>, so without it here the demo's info sheet shows two broken images, which is
+// the first thing a visitor to the demo would see of a page that is mostly two codes.
+func (d *Demo) qr(query string) Response {
+	target := ""
+	for _, kv := range strings.Split(query, "&") {
+		if after, found := strings.CutPrefix(kv, "url="); found {
+			if decoded, err := url.QueryUnescape(after); err == nil {
+				target = decoded
+			}
+		}
+	}
+	if target == "" {
+		return fail(400, fmt.Errorf("a code needs something to encode"))
+	}
+	png, err := qrcode.Encode(target, qrcode.Medium, 512)
+	if err != nil {
+		return fail(500, err)
+	}
+	return Response{
+		Status:      200,
+		ContentType: "image/png",
+		Body:        base64.StdEncoding.EncodeToString(png),
+		Base64:      true,
+	}
+}
+
+// infoPDF is the sheet for the door. The demo has no LAN address to print on it, so the
+// adapter passes the page's own, which in the demo is where the landing page really is.
+func (d *Demo) infoPDF(query string) Response {
+	snap, err := d.snapshot()
+	if err != nil {
+		return fail(500, err)
+	}
+	landing := ""
+	for _, kv := range strings.Split(query, "&") {
+		if after, found := strings.CutPrefix(kv, "url="); found {
+			if decoded, err := url.QueryUnescape(after); err == nil {
+				landing = decoded
+			}
+		}
+	}
+	var buf bytes.Buffer
+	if err := httpapi.BuildInfoPDF(snap, landing, strings.Contains(query, "lang=sv")).Output(&buf); err != nil {
+		return fail(500, err)
+	}
+	return Response{
+		Status:      200,
+		ContentType: "application/pdf",
+		Body:        base64.StdEncoding.EncodeToString(buf.Bytes()),
+		Base64:      true,
+	}
 }
 
 func (d *Demo) exportPDF(swedish bool) Response {

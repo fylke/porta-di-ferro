@@ -353,7 +353,6 @@ export const sv: Record<string, string> = {
   // --- 404 ------------------------------------------------------------------------------------------------
   'Nothing here': 'Inget här',
   'Try the': 'Prova',
-  'organizer view': 'arrangörssidan',
   ', a mat display such as': ', en mattskärm som',
   ', or the roster at': ', eller matchlistan på',
   // --- the demo (issue #88) -----------------------------------------------------------
@@ -367,4 +366,89 @@ export const sv: Record<string, string> = {
   "At an event these open on the score keepers' tablets and the hall screens, over the venue wifi. Here they open in this tab, off the same tournament. Try one:":
     'På ett stevne öppnas de här på sekretariatens surfplattor och hallens skärmar, över lokalens wifi. Här öppnas de i den här fliken, mot samma tävling. Prova en:',
   Audience: 'Publik',
+  // --- the three views (issue #98) ------------------------------------------------------
+  // Landing page, info sheet and admin.
+  'Landing page': 'Startsida',
+  'landing page': 'startsidan',
+  'Info sheet': 'Infoblad',
+  Admin: 'Admin',
+  admin: 'admin',
+  Everyone: 'Alla',
+  Programme: 'Program',
+  'The programme has not been put up yet.': 'Programmet är inte uppsatt ännu.',
+  Results: 'Resultat',
+  Pools: 'Pooler',
+  'not started': 'inte startad',
+  'up next': 'näst på tur',
+  'Nothing on this mat just now.': 'Inget på den här mattan just nu.',
+  'Nobody is entered yet.': 'Ingen är anmäld ännu.',
+  'Tap a name for that person’s matches.': 'Tryck på ett namn för den personens matcher.',
+  withdrawn: 'avanmäld',
+  'The pools have not been drawn yet.': 'Poolerna är inte lottade ännu.',
+  'Welcome. The schedule and the results are on this page, and they update themselves.':
+    'Välkommen. Schemat och resultaten finns på den här sidan, och de uppdaterar sig själva.',
+
+  // One person's day.
+  'No such competitor': 'Ingen sådan fäktare',
+  'That name is not in this tournament. It may be in another discipline.':
+    'Det namnet finns inte i den här tävlingen. Det kan finnas i en annan disciplin.',
+  'This competitor has withdrawn. Their results are voided and do not count towards anyone else’s standing.':
+    'Den här fäktaren har avanmält sig. Resultaten är ogiltiga och räknas inte in i någon annans tabell.',
+  Rank: 'Placering',
+  Matches: 'Matcher',
+  'W-D-L': 'V-O-F',
+  'No matches yet. They appear here once the pools are drawn.':
+    'Inga matcher ännu. De dyker upp här när poolerna är lottade.',
+  'to come': 'kommer',
+  won: 'vann',
+  lost: 'förlorade',
+  drew: 'oavgjort',
+
+  // The info sheet.
+  'Results and schedule on your phone': 'Resultat och schema i mobilen',
+  'Join the wifi': 'Anslut till wifi',
+  'Then open': 'Öppna sedan',
+  'Open this on your phone': 'Öppna det här i mobilen',
+  'Scan, or type it in': 'Skanna, eller skriv in',
+  'Wifi code for {ssid}': 'Wifi-kod för {ssid}',
+  'Code for {url}': 'Kod för {url}',
+  'No welcome message has been written yet. The admin view is where it goes.':
+    'Inget välkomstmeddelande är skrivet ännu. Det skrivs i adminvyn.',
+  'This PC is not on a network another device could reach, so there is no address to print. Join it to the venue wifi and reload.':
+    'Den här datorn är inte på ett nätverk som någon annan enhet kan nå, så det finns ingen adress att skriva ut. Anslut den till lokalens wifi och ladda om.',
+
+  // The editor in the admin view.
+  'The day': 'Dagen',
+  'What goes on the info sheet by the door and on everyone’s phone. None of it touches a result.':
+    'Det som står på infobladet vid dörren och i allas mobiler. Inget av det påverkar ett resultat.',
+  'See the info sheet': 'Se infobladet',
+  'Welcome message': 'Välkomstmeddelande',
+  'Welcome to Stångebroslaget. Gear check from 08:30, first pools at 09:30.':
+    'Välkomna till Stångebroslaget. Utrustningskontroll från 08:30, första poolerna 09:30.',
+  '09:00': '09:00',
+  'Gear check': 'Utrustningskontroll',
+  Time: 'Tid',
+  'What happens': 'Vad som händer',
+  Kind: 'Typ',
+  item: 'punkt',
+  discipline: 'disciplin',
+  break: 'paus',
+  'Add a row': 'Lägg till en rad',
+  'Add a discipline': 'Lägg till en disciplin',
+  'Add a break': 'Lägg till en paus',
+  'Venue wifi': 'Lokalens wifi',
+  'Printed on the info sheet as a code to scan and as text to type. It is the guest network password, kept in your own tournament file.':
+    'Trycks på infobladet både som en kod att skanna och som text att skriva in. Det är gästnätverkets lösenord, sparat i din egen tävlingsfil.',
+  'Network name': 'Nätverksnamn',
+  // An example network name in a placeholder. The same in either language.
+  'Hall-Guest': 'Hall-Guest',
+  Password: 'Lösenord',
+  Security: 'Säkerhet',
+  open: 'öppet',
+  'Save the day': 'Spara dagen',
+  Saved: 'Sparat',
+  Earlier: 'Tidigare',
+  Later: 'Senare',
+  'Move up': 'Flytta upp',
+  'Move down': 'Flytta ned',
 };

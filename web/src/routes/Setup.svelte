@@ -105,11 +105,17 @@
     margin: 0 0 0.9rem;
     font-size: 1.15rem;
   }
+  /* Three across where there is room, and as many as fit where there is not: on a phone
+     the pool-size fields were half off the screen. */
   .fields {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
     gap: 0.6rem;
     margin-bottom: 0.9rem;
+  }
+  .fields select,
+  .fields input {
+    min-width: 0;
   }
   label {
     display: grid;

@@ -104,7 +104,7 @@
   }
   form {
     display: grid;
-    grid-template-columns: 1fr 1fr auto;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
     gap: 0.5rem;
     margin-bottom: 0.9rem;
   }
@@ -125,7 +125,7 @@
   }
   li {
     display: grid;
-    grid-template-columns: 1fr auto auto;
+    grid-template-columns: minmax(0, 1fr) auto auto;
     gap: 0.6rem;
     align-items: baseline;
     padding: 0.4rem 0.5rem;

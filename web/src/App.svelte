@@ -1,6 +1,9 @@
 <script lang="ts">
   import { route, query } from './router.svelte';
   import Organizer from './routes/Organizer.svelte';
+  import Participant from './routes/Participant.svelte';
+  import Person from './routes/Person.svelte';
+  import Info from './routes/Info.svelte';
   import ScoreKeeperEntry from './routes/ScoreKeeperEntry.svelte';
   import ScoreKeeper from './routes/ScoreKeeper.svelte';
   import DisplayMat from './routes/DisplayMat.svelte';
@@ -22,10 +25,20 @@
   const matMatch = $derived(route('/display/mat/:n'));
   const audienceMatch = $derived(route('/display/audience/:n'));
   const scoreMatch = $derived(route('/score/:mat'));
+  const personMatch = $derived(route('/who/:id'));
 </script>
 
 {#if route('/')}
+  <!-- The landing page is the competitors' and the spectators' (issue #98). What used to
+       be here is at /admin: the address in the hall is on a poster by the door, and
+       everyone who scans it lands somewhere they cannot break anything. -->
+  <Participant />
+{:else if route('/admin')}
   <Organizer />
+{:else if route('/info')}
+  <Info />
+{:else if personMatch}
+  <Person id={personMatch.id} />
 {:else if route('/score')}
   <ScoreKeeperEntry />
 {:else if scoreMatch}
@@ -46,7 +59,7 @@
   <main class="missing">
     <h1>{t('Nothing here')}</h1>
     <p>
-      {t('Try the')} <a href="/">{t('organizer view')}</a>{t(', a mat display such as')}
+      {t('Try the')} <a href="/">{t('landing page')}</a>{t(', a mat display such as')}
       <code>/display/mat/1</code>{t(', or the roster at')} <code>/display/roster</code>.
     </p>
   </main>

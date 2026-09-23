@@ -68,6 +68,31 @@ flowchart LR
 
 `BuildSnapshot` takes a `Source` — the four reads a snapshot needs — so `*store.Store` serves it off disk for an event and the demo serves it out of memory. Both sides reach the same tournament code, which is what stops the demo drifting into a second, subtly different implementation of the standings.
 
+### 1c. The three views
+
+Who each screen is for (issue #98). The address on the poster by the door reaches every phone in the hall, so what it lands on can change nothing.
+
+```mermaid
+flowchart LR
+    P[Poster by the door<br/>/info, or its PDF] -->|wifi QR| W((venue wifi))
+    P -->|landing QR| L
+    L["/ participant view<br/>welcome · programme · competitors · mats · results"]
+    L --> WHO["/who/:id<br/>one person's matches"]
+    L --> D["/display/mat/N<br/>the scoreboard"]
+    A["/admin<br/>every edit control"] -.->|writes the welcome,<br/>the programme, the wifi| L
+    A -.-> P
+    A --> SK["/score/N<br/>score keeper"]
+```
+
+| Route | For | Writes anything? |
+| --- | --- | --- |
+| `/` | competitors and spectators | no |
+| `/who/:id` | the same, one person at a time | no |
+| `/info` | the wall by the entrance, on screen or printed | no |
+| `/admin` | the organizer | everything |
+
+`Tournament.Event` — the welcome message, the programme and the venue wifi — is written only from `/admin` and read by the other two. None of it reaches a result.
+
 ## 2. Match Engine State Machine & Scoring Logic
 
 Matches are driven by an append-only event log. State is pure and recomputed by replaying events. The one exception to append-only is the organizer's editor (`PUT /api/matches/{id}/events`), which rewrites a log wholesale and keeps the previous version as `matches/<id>.ndjson.<timestamp>.bak`; a `log-replaced` SSE update tells a score keeper holding the match to reload it. Event types are `exchange`, `timer` (start / stop / resume / reset), `undo`, `end`, and `options` — the last carries the competitors' colours and the display side order, is ignored by replay, and is read separately by `OptionsOf` / `optionsOf` so presentation can never fail a scoring vector. Points are differential (e.g., scoring $2$ vs $1$ awards $1$ net point to the higher scorer), capped at $8$ points or $3$ minutes ($180\,000\text{ ms}$).
