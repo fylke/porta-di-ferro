@@ -18,6 +18,12 @@ type Competitor struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 	Club string `json:"club"`
+	// Signup is the submission identifier of the offline signup file this competitor was
+	// imported from, or empty when the organizer typed them in (issue #91). It is what
+	// makes importing the same folder twice a no-op: name and club are not an identity --
+	// two Anna Nilssons from the same club is a real thing at a club open -- so the file
+	// carries an id and the competitor remembers it.
+	Signup string `json:"signup,omitempty"`
 	// Withdrawn voids this competitor's results as though they never entered. The
 	// ranking divides by matches completed, which is what makes that work retroactively.
 	Withdrawn bool `json:"withdrawn"`
@@ -71,6 +77,31 @@ type Event struct {
 	Welcome  string         `json:"welcome,omitempty"`
 	Schedule []ScheduleItem `json:"schedule,omitempty"`
 	Wifi     Wifi           `json:"wifi,omitempty"`
+	Signup   Signup         `json:"signup,omitempty"`
+}
+
+// Signup is what the offline signup files carry about the event (issue #91,
+// docs/proposals/offline-signup.md).
+//
+// The programme above doubles as the signup definition's schedule: the organizer types
+// the day once, marks which rows are disciplines, and those rows are what a participant
+// can enter. One list to keep right rather than two that can disagree.
+type Signup struct {
+	// DefinitionID identifies the event across the files that go out and the files that
+	// come back, so a response from last year's open cannot be imported into this one.
+	DefinitionID string `json:"definitionId,omitempty"`
+	Name         string `json:"name,omitempty"`
+	Venue        string `json:"venue,omitempty"`
+	// Date as the organizer wrote it. Shown, never computed with.
+	Date string `json:"date,omitempty"`
+	// Tournament is which discipline *this* run of the application is, matching the
+	// Tournament of one of the schedule rows. An event with three disciplines is three
+	// runs, and each imports the entries naming its own: the organizer points all three
+	// at the same folder of responses and each takes its share.
+	Tournament string `json:"tournament,omitempty"`
+	// Contact turns on the optional contact field in the participant app. Name and club
+	// are always asked for; anything more is the organizer's choice to collect.
+	Contact bool `json:"contact,omitempty"`
 }
 
 // ScheduleItem is one line of the day's agenda: gear check, the pools, lunch, the
@@ -80,10 +111,25 @@ type Event struct {
 type ScheduleItem struct {
 	// At is a time of day as the organizer wrote it, "09:00". Not parsed: a schedule
 	// that says "after the pools" is a legitimate schedule.
-	At    string `json:"at,omitempty"`
+	At string `json:"at,omitempty"`
+	// Ends is when a break finishes, for the rows where that matters. Same rules.
+	Ends  string `json:"ends,omitempty"`
 	Label string `json:"label"`
-	// Kind is "discipline", "break" or "" -- only ever used to style the row.
+	// Kind is "discipline", "break" or "" -- used to style the row, and to decide which
+	// rows are things a participant can sign up for.
 	Kind string `json:"kind,omitempty"`
+	// Tournament is the stable identifier of the discipline this row runs, on a row of
+	// kind "discipline". It is what a signup file refers to, so it must not change once
+	// definitions have gone out: the response that comes back names it (issue #91).
+	//
+	// Stable identifiers rather than ports or paths is the point. A discipline is a
+	// separate run of the application on whichever port was free that morning, and a
+	// participant's file must survive the organizer restarting it.
+	Tournament string `json:"tournament,omitempty"`
+	// Capacity is how many the discipline can take, or 0 for no limit. Used to warn on
+	// import rather than to refuse it -- an organizer who wants a twenty-ninth in a pool
+	// of twenty-eight is allowed to have one, and should be told.
+	Capacity int `json:"capacity,omitempty"`
 }
 
 // Wifi is the venue network, for the QR code on the printed info sheet. A spectator who

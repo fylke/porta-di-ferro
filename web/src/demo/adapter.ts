@@ -158,7 +158,7 @@ function installLinks(navigate: (to: string) => void): void {
       const raw = anchor.getAttribute('href');
       if (!raw || !raw.startsWith('/')) return;
 
-      if (raw.startsWith('/api/export')) {
+      if (raw.startsWith('/api/export') || raw.startsWith('/api/signup/')) {
         ev.preventDefault();
         const res = call('GET', raw);
         if (res.status !== 200) return;
@@ -166,7 +166,7 @@ function installLinks(navigate: (to: string) => void): void {
         const href = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = href;
-        a.download = raw.includes('.pdf') ? 'porta-di-ferro.pdf' : 'porta-di-ferro.json';
+        a.download = downloadName(raw, res.contentType);
         a.click();
         URL.revokeObjectURL(href);
         return;
@@ -185,6 +185,14 @@ function installLinks(navigate: (to: string) => void): void {
     },
     true,
   );
+}
+
+/** What a downloaded file should be called, from the path that produced it. */
+function downloadName(path: string, contentType: string): string {
+  if (path.includes('/signup/')) {
+    return contentType.startsWith('text/html') ? 'signup-demo.html' : 'signup-demo.json';
+  }
+  return path.includes('.pdf') ? 'porta-di-ferro.pdf' : 'porta-di-ferro.json';
 }
 
 /** Loads cmd/demo-wasm and puts the shims in place. Resolves once it can answer. */

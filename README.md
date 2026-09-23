@@ -34,16 +34,19 @@ installer below. [How the demo works](docs/demo.md).
    if the PC is on more than one network it offers a picker so you can choose the one the
    tablets are on. Wi-Fi networks are listed by name, and the list follows the PC if you
    switch networks — no reload needed.
-4. Enter the competitors, pick the number of mats and the pool size, and draw the pools. When
+4. If people signed up in advance, send them the signup file from `/admin` — one HTML
+   file they open offline, fill in and send back — and import the responses by pointing at
+   the folder they are all in. Otherwise enter the competitors by hand.
+5. Pick the number of mats and the pool size, and draw the pools. When
    every pool match is in, draw the eliminations from the same page; the mats pick the
    quarter-finals up on their own.
-5. At each mat, open the address on a tablet or phone and pick the mat. That is the score
+6. At each mat, open the address on a tablet or phone and pick the mat. That is the score
    keeper client.
-6. Put a spare screen on `/display` and choose what it shows from the organizer page — or go
+7. Put a spare screen on `/display` and choose what it shows from the organizer page — or go
    straight to `/display/mats` for the scoreboards, `/display/audience/1` for the audience
    display with the on-deck list, or `/display/roster` for the match list. Any browser on the
    venue wifi can open them — a spectator's phone included.
-7. To hand a mat to another tablet, pick *Hand over this mat* in the `…` menu; the new tablet
+8. To hand a mat to another tablet, pick *Hand over this mat* in the `…` menu; the new tablet
    picks the mat and carries on. If a tablet dies mid-match, the new one takes over and
    anything the old one had not sent is set aside for you on the organizer page.
 
