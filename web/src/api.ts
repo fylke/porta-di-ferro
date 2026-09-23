@@ -126,6 +126,31 @@ export interface Instance {
   url: string;
 }
 
+/** One line of the day's agenda. `at` is free text: "after the pools" is a valid time. */
+export interface ScheduleItem {
+  at?: string;
+  label: string;
+  kind?: 'discipline' | 'break' | '';
+}
+
+/** The venue network, for the code on the printed info sheet. */
+export interface Wifi {
+  ssid?: string;
+  password?: string;
+  security?: 'WPA' | 'WEP' | 'nopass';
+  hidden?: boolean;
+}
+
+/**
+ * The day around the tournament (issue #98): what the participant view and the printed
+ * info sheet put around the fencing. None of it reaches a result.
+ */
+export interface EventInfo {
+  welcome?: string;
+  schedule?: ScheduleItem[];
+  wifi?: Wifi;
+}
+
 export interface Snapshot {
   competitors: Competitor[];
   /** Everyone ranked across the pools by the pool chain: the seeding for the eliminations. */
@@ -138,6 +163,7 @@ export interface Snapshot {
   bracket?: BracketView;
   instance: Instance;
   tournament: {
+    event?: EventInfo;
     mats: number;
     minPoolSize: number;
     maxPoolSize: number;
@@ -221,6 +247,8 @@ export const api = {
       maxPoolSize,
       ...(elimMats === undefined ? {} : { elimMats }),
     }),
+  /** The welcome message, the agenda and the wifi. Written from the admin view only. */
+  saveEvent: (event: EventInfo) => req<EventInfo>('PUT', '/api/event', event),
   generatePools: () => req<unknown>('POST', '/api/tournament/pools'),
   drawBracket: () => req<unknown>('POST', '/api/tournament/bracket'),
   movePool: (number: number, mat: number) =>
