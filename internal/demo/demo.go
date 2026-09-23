@@ -33,8 +33,10 @@ import (
 
 	httpapi "github.com/fylke/porta-di-ferro/internal/http"
 	"github.com/fylke/porta-di-ferro/internal/match"
+	"github.com/fylke/porta-di-ferro/internal/signup"
 	"github.com/fylke/porta-di-ferro/internal/store"
 	"github.com/fylke/porta-di-ferro/internal/tournament"
+	"github.com/fylke/porta-di-ferro/web"
 )
 
 // Demo is one visitor's tournament: the whole of it, in memory.
@@ -195,6 +197,19 @@ func (d *Demo) Request(method, path string, body []byte) Response {
 	case method == "GET" && path == "/api/qr.png":
 		return d.qr(query)
 
+	// Offline signup (issue #91). The demo can do all of it: the files never touch a
+	// network in the real thing either, so there is nothing here it has to pretend about.
+	case method == "GET" && path == "/api/signup/ready":
+		return d.signupReady()
+	case method == "GET" && path == "/api/signup/definition.json":
+		return ok(signup.BuildDefinition(d.tournament))
+	case method == "GET" && path == "/api/signup/app.html":
+		return d.signupApp()
+	case method == "POST" && path == "/api/signup/preview":
+		return d.signupImport(body, false)
+	case method == "POST" && path == "/api/signup/import":
+		return d.signupImport(body, true)
+
 	case method == "GET" && path == "/api/instances":
 		snap, _ := d.snapshot()
 		return ok([]httpapi.Instance{snap.Instance})
@@ -256,6 +271,64 @@ func (d *Demo) Request(method, path string, body []byte) Response {
 	}
 
 	return fail(404, fmt.Errorf("the demo does not answer %s %s", method, path))
+}
+
+// --- offline signup --------------------------------------------------------------------
+
+func (d *Demo) signupReady() Response {
+	def := signup.BuildDefinition(d.tournament)
+	return ok(map[string]any{
+		"missing":     signup.Ready(def),
+		"tournaments": def.Tournaments,
+		"filename":    "signup-demo.html",
+		"definition":  "signup-demo.json",
+	})
+}
+
+func (d *Demo) signupApp() Response {
+	page, err := web.SignupApp()
+	if err != nil {
+		return fail(500, err)
+	}
+	baked, err := httpapi.BakeSignupApp(page, signup.BuildDefinition(d.tournament))
+	if err != nil {
+		return fail(500, err)
+	}
+	return Response{Status: 200, ContentType: "text/html; charset=utf-8", Body: string(baked)}
+}
+
+// signupImport previews an import, and performs it when confirm is set. Two calls on the
+// real server, and two here, because the preview writing nothing is the whole design.
+func (d *Demo) signupImport(body []byte, confirm bool) Response {
+	var in struct {
+		Files []struct {
+			Source string `json:"source"`
+			Body   string `json:"body"`
+		} `json:"files"`
+	}
+	if err := json.Unmarshal(body, &in); err != nil {
+		return fail(400, err)
+	}
+	files := make([]signup.File, 0, len(in.Files))
+	for _, f := range in.Files {
+		files = append(files, signup.File{Source: f.Source, Body: []byte(f.Body)})
+	}
+
+	def := signup.BuildDefinition(d.tournament)
+	preview := signup.Check(def, d.tournament.Event.Signup.Tournament, files, d.competitors)
+	view := map[string]any{
+		"rows": preview.Rows, "adding": preview.Adding, "capacity": preview.Capacity,
+		"tournament": preview.Tournament, "poolsDrawn": len(d.tournament.Pools) > 0,
+	}
+	if !confirm {
+		return ok(view)
+	}
+
+	before := len(d.competitors)
+	d.competitors = signup.Import(preview, httpapi.NextCompetitorID, d.competitors)
+	return changed(map[string]any{
+		"added": len(d.competitors) - before, "preview": view,
+	})
 }
 
 // qr renders a code for whatever it is given -- the wifi payload and the landing address
