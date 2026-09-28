@@ -2,7 +2,7 @@
 // read (design decision 8). One directory per tournament.
 //
 //	competitors.json          registration and status
-//	tournament.json           mats, pool constraints, generated pools and assignments
+//	tournament.json           mats, pool constraints, generated pools and assignments, staff
 //	matches/<match_id>.ndjson the append-only exchange log, one event per line
 //
 // The two JSON files are written by atomic replace, never in place. The log is
@@ -179,6 +179,23 @@ type Tournament struct {
 	// First-round competitors are stored; later rounds are filled from results.
 	Bracket   []Match `json:"bracket,omitempty"`
 	BracketAt string  `json:"bracketAt,omitempty"`
+	// Staff is who has offered to work this discipline rather than fence in it: the
+	// people a head referee, an assistant or a score keeper is found among (issue #5).
+	// Offered, not assigned -- who stands where is a later step.
+	Staff []StaffMember `json:"staff,omitempty"`
+}
+
+// StaffMember is one person available to staff this discipline, and in which roles.
+type StaffMember struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Club string `json:"club,omitempty"`
+	// Roles are what they are willing to do: "head-ref", "assistant-ref", "score-keeper",
+	// "physician". Everything they did not untick, so an empty list is not a volunteer.
+	Roles []string `json:"roles"`
+	// Signup is the submission identifier they came in on, the same as a competitor's:
+	// importing the folder twice must not offer the same person twice.
+	Signup string `json:"signup,omitempty"`
 }
 
 // Defaults returns the MVP tournament setup: two mats, pools of four to seven.

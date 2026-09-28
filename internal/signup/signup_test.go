@@ -146,7 +146,7 @@ func TestPreviewSortsTheFolderOut(t *testing.T) {
 		responseFile(t, "Dag Example", "sub-4", "rapier-and-dagger"),
 	}
 
-	p := signup.Check(def, "longsword", files, existing)
+	p := signup.Check(def, "longsword", files, existing, nil)
 	if len(p.Rows) != len(files) {
 		t.Fatalf("every file gets a row; got %d for %d files", len(p.Rows), len(files))
 	}
@@ -194,7 +194,7 @@ func TestImportingTwiceAddsNobodyTwice(t *testing.T) {
 	}
 
 	var roster []store.Competitor
-	first := signup.Check(def, "longsword", files, roster)
+	first := signup.Check(def, "longsword", files, roster, nil)
 	roster = signup.Import(first, nextID, roster)
 	if len(roster) != 2 {
 		t.Fatalf("the first import should add two, got %d", len(roster))
@@ -203,7 +203,7 @@ func TestImportingTwiceAddsNobodyTwice(t *testing.T) {
 		t.Errorf("the competitor should remember where they came from: %+v", roster[0])
 	}
 
-	second := signup.Check(def, "longsword", files, roster)
+	second := signup.Check(def, "longsword", files, roster, nil)
 	if second.Adding != 0 {
 		t.Errorf("the second import should add nobody, it says %d", second.Adding)
 	}
@@ -227,7 +227,7 @@ func TestImportWritesOnlyWhatThePreviewCalledNew(t *testing.T) {
 		responseFile(t, "Cilla Example", "sub-3", "sabre"),
 		{Source: "bad.json", Body: []byte("{")},
 	}
-	p := signup.Check(def, "longsword", files, nil)
+	p := signup.Check(def, "longsword", files, nil, nil)
 	roster := signup.Import(p, func(e []store.Competitor) string {
 		return fmt.Sprintf("c%d", len(e)+1)
 	}, nil)
@@ -247,7 +247,7 @@ func TestASingleDisciplineEventNeedsNoIdentifier(t *testing.T) {
 	p := signup.Check(def, "", []signup.File{
 		responseFile(t, "Ada Example", "sub-1", "longsword"),
 		responseFile(t, "Cilla Example", "sub-3", "sabre"),
-	}, nil)
+	}, nil, nil)
 	if p.Adding != 2 {
 		t.Errorf("with no discipline set, both are importable; the preview says %d", p.Adding)
 	}
@@ -323,11 +323,151 @@ func TestEntriesAreNormalisedBeforeComparing(t *testing.T) {
 		Participant: signup.Participant{Name: "Ada"},
 		Entries:     []string{"Longsword", "longsword"},
 	})
-	p := signup.Check(def, "longsword", []signup.File{{Source: "a.json", Body: body}}, nil)
+	p := signup.Check(def, "longsword", []signup.File{{Source: "a.json", Body: body}}, nil, nil)
 	if p.Rows[0].Verdict != signup.New {
 		t.Fatalf("got %q: %s", p.Rows[0].Verdict, p.Rows[0].Problem)
 	}
 	if len(p.Rows[0].Entries) != 1 {
 		t.Errorf("the duplicate entry should have been folded away, got %v", p.Rows[0].Entries)
+	}
+}
+
+// --- staff (issue #5) -------------------------------------------------------------------
+
+func staffFile(t *testing.T, name, submission string, entries, staffing, roles []string) signup.File {
+	t.Helper()
+	body, err := json.Marshal(signup.Response{
+		Format:       signup.ResponseFormat,
+		Version:      signup.Version,
+		DefinitionID: "msl-open-2026",
+		SubmissionID: submission,
+		Participant:  signup.Participant{Name: name, Club: "Example HEMA"},
+		Entries:      entries,
+		Staff:        &signup.StaffOffer{Tournaments: staffing, Roles: roles},
+	})
+	if err != nil {
+		t.Fatalf("building a response: %v", err)
+	}
+	return signup.File{Source: name + ".json", Body: body}
+}
+
+// Every role is ticked for the participant except the one that is a qualification.
+func TestTheDefinitionPublishesTheStaffRoles(t *testing.T) {
+	def := signup.BuildDefinition(event())
+	offered := map[string]bool{}
+	for _, r := range def.StaffRoles {
+		offered[r.ID] = r.Offered
+	}
+	for _, id := range []string{"head-ref", "assistant-ref", "score-keeper"} {
+		if on, ok := offered[id]; !ok || !on {
+			t.Errorf("%s should be published and ticked by default; got %v", id, def.StaffRoles)
+		}
+	}
+	if on, ok := offered["physician"]; !ok || on {
+		t.Errorf("physician should be published and left for them to tick; got %v", def.StaffRoles)
+	}
+}
+
+// One file, two runs: fencing in the sabre and refereeing the longsword makes a
+// competitor of the sabre run and staff of the longsword run.
+func TestAStaffOfferLandsInTheDisciplineItNames(t *testing.T) {
+	def := signup.BuildDefinition(event())
+	files := []signup.File{
+		staffFile(t, "Eva Example", "sub-e", []string{"sabre"}, []string{"longsword"}, []string{"head-ref", "score-keeper"}),
+		// Staff only, no fencing at all.
+		staffFile(t, "Finn Example", "sub-f", nil, []string{"longsword", "sabre"}, []string{"score-keeper"}),
+		// Offering to work only the sabre: the longsword run has nothing to do with it.
+		staffFile(t, "Hanna Example", "sub-h", nil, []string{"sabre"}, []string{"assistant-ref"}),
+	}
+
+	long := signup.Check(def, "longsword", files, nil, nil)
+	want := []signup.Verdict{signup.Staff, signup.Staff, signup.NotHere}
+	for i, w := range want {
+		if long.Rows[i].Verdict != w {
+			t.Errorf("longsword: %s is %q, want %q", long.Rows[i].Source, long.Rows[i].Verdict, w)
+		}
+	}
+	if long.Adding != 0 || long.AddingStaff != 2 {
+		t.Errorf("longsword gets no competitors and two staff; got %d and %d", long.Adding, long.AddingStaff)
+	}
+
+	sabre := signup.Check(def, "sabre", files, nil, nil)
+	want = []signup.Verdict{signup.New, signup.Staff, signup.Staff}
+	for i, w := range want {
+		if sabre.Rows[i].Verdict != w {
+			t.Errorf("sabre: %s is %q, want %q", sabre.Rows[i].Source, sabre.Rows[i].Verdict, w)
+		}
+	}
+
+	staff := signup.ImportStaff(long, nil)
+	if len(staff) != 2 {
+		t.Fatalf("two staff should have been imported, got %+v", staff)
+	}
+	eva := staff[0]
+	if eva.ID != "s1" || eva.Name != "Eva Example" || eva.Signup != "sub-e" ||
+		strings.Join(eva.Roles, ",") != "head-ref,score-keeper" {
+		t.Errorf("Eva came in as %+v", eva)
+	}
+	// Staff are not competitors, and Import leaves them alone.
+	if roster := signup.Import(long, func([]store.Competitor) string { return "c1" }, nil); len(roster) != 0 {
+		t.Errorf("staff became competitors: %+v", roster)
+	}
+
+	// And the same folder again adds nobody to either list.
+	again := signup.Check(def, "longsword", files, nil, staff)
+	if again.AddingStaff != 0 || again.Rows[0].Verdict != signup.Already {
+		t.Errorf("the second import should find them already there; got %+v", again.Rows)
+	}
+}
+
+// A hand-edited file can say what the app never would. Nobody staffs the discipline they
+// are fencing in, roles this build does not know are dropped, and an offer with no roles
+// left is no offer.
+func TestAStaffOfferIsCleanedLikeEverythingElse(t *testing.T) {
+	parse := func(f signup.File) signup.Response {
+		t.Helper()
+		res, err := signup.ParseResponse(f.Body)
+		if err != nil {
+			t.Fatalf("%s: %v", f.Source, err)
+		}
+		return res
+	}
+
+	both := parse(staffFile(t, "Gus", "g", []string{"longsword"}, []string{"Longsword", "sabre"}, []string{"head-ref"}))
+	if both.Staff == nil || strings.Join(both.Staff.Tournaments, ",") != "sabre" {
+		t.Errorf("the longsword offer should be gone, the sabre kept; got %+v", both.Staff)
+	}
+
+	odd := parse(staffFile(t, "Ida", "i", []string{"longsword"}, []string{"sabre"}, []string{"Score keeper", "tea-lady"}))
+	if odd.Staff == nil || strings.Join(odd.Staff.Roles, ",") != "score-keeper" {
+		t.Errorf("the role should be normalised and the unknown one dropped; got %+v", odd.Staff)
+	}
+
+	noRoles := parse(staffFile(t, "Jon", "j", []string{"longsword"}, []string{"sabre"}, nil))
+	if noRoles.Staff != nil {
+		t.Errorf("an offer with no roles is not one; got %+v", noRoles.Staff)
+	}
+
+	// Staff only is a whole signup.
+	only := parse(staffFile(t, "Kim", "k", nil, []string{"sabre"}, []string{"physician"}))
+	if len(only.Entries) != 0 || only.Staff == nil {
+		t.Errorf("a staff-only response came out as %+v", only)
+	}
+
+	// Neither is nothing, and says so.
+	if _, err := signup.ParseResponse(staffFile(t, "Lo", "l", nil, []string{"sabre"}, nil).Body); err == nil ||
+		!strings.Contains(err.Error(), "no disciplines") {
+		t.Errorf("fencing in nothing and staffing nothing should be refused, got %v", err)
+	}
+}
+
+// Staff numbering follows the competitors' pattern with its own prefix, and survives a
+// removal in the middle.
+func TestStaffNumbering(t *testing.T) {
+	if id := signup.NextStaffID(nil); id != "s1" {
+		t.Errorf("the first is %q", id)
+	}
+	if id := signup.NextStaffID([]store.StaffMember{{ID: "s1"}, {ID: "s3"}}); id != "s4" {
+		t.Errorf("after s1 and s3 comes %q", id)
 	}
 }

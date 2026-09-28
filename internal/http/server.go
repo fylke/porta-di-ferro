@@ -82,6 +82,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/signup/ready", s.signupReady)
 	mux.HandleFunc("POST /api/signup/preview", s.previewImport)
 	mux.HandleFunc("POST /api/signup/import", s.confirmImport)
+	mux.HandleFunc("DELETE /api/staff/{id}", s.deleteStaff)
 	mux.HandleFunc("GET /api/info.pdf", s.exportInfoPDF)
 
 	mux.HandleFunc("PUT /api/tournament", s.putTournament)

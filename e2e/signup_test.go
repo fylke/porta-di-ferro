@@ -226,3 +226,93 @@ func TestSignupReadySaysWhatIsMissing(t *testing.T) {
 		t.Errorf("the download name is %q", ready.Filename)
 	}
 }
+
+// Staff come back in the same files (issue #5): somebody fencing the sabre offers to
+// referee the longsword, and the longsword run takes them as staff rather than as a
+// competitor. They survive a draw, and the organizer can take them off again.
+func TestOfflineSignupBringsStaffIn(t *testing.T) {
+	s := start(t)
+	configureEvent(t, s)
+
+	var def signup.Definition
+	s.mustDo(t, "GET", "/api/signup/definition.json", nil, &def)
+	if len(def.StaffRoles) == 0 {
+		t.Fatal("the definition publishes no staff roles, so the app can offer none")
+	}
+
+	offer := func(name, submission string, entries, staffing, roles []string) map[string]string {
+		body, err := json.Marshal(map[string]any{
+			"format": "porta.signup.response", "version": 1,
+			"definitionId": "msl-open-2026", "submissionId": submission,
+			"participant": map[string]string{"name": name, "club": "Example HEMA"},
+			"entries":     entries,
+			"staff":       map[string]any{"tournaments": staffing, "roles": roles},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return map[string]string{"source": name + ".json", "body": string(body)}
+	}
+	files := []map[string]string{
+		response(t, "Ada Example", "sub-1", "longsword"),
+		response(t, "Bo Example", "sub-2", "longsword"),
+		offer("Eva Example", "sub-e", []string{"sabre"}, []string{"longsword"}, []string{"assistant-ref", "score-keeper"}),
+		offer("Finn Example", "sub-f", nil, []string{"longsword"}, []string{"head-ref"}),
+	}
+
+	var preview struct {
+		Adding      int `json:"adding"`
+		AddingStaff int `json:"addingStaff"`
+	}
+	s.mustDo(t, "POST", "/api/signup/preview", map[string]any{"files": files}, &preview)
+	if preview.Adding != 2 || preview.AddingStaff != 2 {
+		t.Errorf("the preview says %d competitors and %d staff, want 2 and 2", preview.Adding, preview.AddingStaff)
+	}
+
+	var out struct {
+		Added      int `json:"added"`
+		AddedStaff int `json:"addedStaff"`
+	}
+	s.mustDo(t, "POST", "/api/signup/import", map[string]any{"files": files}, &out)
+	if out.Added != 2 || out.AddedStaff != 2 {
+		t.Fatalf("the import added %d competitors and %d staff", out.Added, out.AddedStaff)
+	}
+
+	var snap snapshot
+	s.mustDo(t, "GET", "/api/state", nil, &snap)
+	if len(snap.Competitors) != 2 {
+		t.Errorf("staff are not competitors; the register has %d", len(snap.Competitors))
+	}
+	if len(snap.Tournament.Staff) != 2 {
+		t.Fatalf("the staff list is %+v", snap.Tournament.Staff)
+	}
+	eva := snap.Tournament.Staff[0]
+	if eva.Name != "Eva Example" || strings.Join(eva.Roles, ",") != "assistant-ref,score-keeper" {
+		t.Errorf("Eva came in as %+v", eva)
+	}
+
+	// Again: nobody twice, on either list.
+	s.mustDo(t, "POST", "/api/signup/import", map[string]any{"files": files}, &out)
+	if out.Added != 0 || out.AddedStaff != 0 {
+		t.Errorf("the second import added %d and %d", out.Added, out.AddedStaff)
+	}
+
+	// Saving the event or the setup, and drawing the pools, all rewrite the tournament.
+	// None of them may lose the staff.
+	configureEvent(t, s)
+	s.mustDo(t, "POST", "/api/tournament/pools", nil, nil)
+	s.mustDo(t, "GET", "/api/state", nil, &snap)
+	if len(snap.Tournament.Staff) != 2 {
+		t.Fatalf("after saving the event and drawing, the staff list is %+v", snap.Tournament.Staff)
+	}
+
+	// Taking one off does not wait for the draw to be undone: staff are in no match.
+	s.mustDo(t, "DELETE", "/api/staff/"+eva.ID, nil, nil)
+	s.mustDo(t, "GET", "/api/state", nil, &snap)
+	if len(snap.Tournament.Staff) != 1 || snap.Tournament.Staff[0].Name != "Finn Example" {
+		t.Errorf("after removing Eva the staff list is %+v", snap.Tournament.Staff)
+	}
+	if code := s.do(t, "DELETE", "/api/staff/"+eva.ID, nil, nil); code != http.StatusNotFound {
+		t.Errorf("removing her twice returned %d, want 404", code)
+	}
+}

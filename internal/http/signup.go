@@ -166,7 +166,7 @@ func (s *Server) readImport(r *http.Request) (signup.Preview, store.Tournament, 
 	}
 	def := signup.BuildDefinition(t)
 	mine := strings.TrimSpace(t.Event.Signup.Tournament)
-	return signup.Check(def, mine, files, competitors), t, nil
+	return signup.Check(def, mine, files, competitors, t.Staff), t, nil
 }
 
 // previewImport says what would happen. It writes nothing, which is the whole point of
@@ -193,7 +193,8 @@ type previewView struct {
 	PoolsDrawn bool `json:"poolsDrawn"`
 }
 
-// confirmImport writes the rows the preview called new.
+// confirmImport writes the rows the preview called new: competitors to the register and
+// staff to the tournament.
 //
 // It runs the check again over the same files rather than trusting a preview posted back
 // to it: the competitor list may have moved between the two calls -- another import, a
@@ -213,15 +214,67 @@ func (s *Server) confirmImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	updated := signup.Import(preview, NextCompetitorID, competitors)
+	staff := signup.ImportStaff(preview, t.Staff)
+	addedStaff := len(staff) - len(t.Staff)
+	if addedStaff > 0 {
+		t.Staff = staff
+		if err := s.store.SaveTournament(t); err != nil {
+			writeErr(w, http.StatusInternalServerError, err)
+			return
+		}
+	}
 	if len(updated) != len(competitors) {
 		if err := s.store.SaveCompetitors(updated); err != nil {
 			writeErr(w, http.StatusInternalServerError, err)
 			return
 		}
+	}
+	if len(updated) != len(competitors) || addedStaff > 0 {
 		s.publishState()
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"added":   len(updated) - len(competitors),
-		"preview": previewView{Preview: preview, PoolsDrawn: len(t.Pools) > 0},
+		"added":      len(updated) - len(competitors),
+		"addedStaff": addedStaff,
+		"preview":    previewView{Preview: preview, PoolsDrawn: len(t.Pools) > 0},
 	})
+}
+
+// deleteStaff takes somebody off the staff: an import the organizer did not want, or a
+// volunteer who can no longer come. Unlike a competitor they are in no match, so nothing
+// else has to change and the draw does not stand in the way.
+func (s *Server) deleteStaff(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	t, err := s.store.Tournament()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	kept, found := WithoutStaff(t.Staff, id)
+	if !found {
+		writeErr(w, http.StatusNotFound, fmt.Errorf("no staff member %s", id))
+		return
+	}
+	t.Staff = kept
+	if err := s.store.SaveTournament(t); err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.publishState()
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// WithoutStaff is the staff list less one person, and whether they were in it.
+func WithoutStaff(staff []store.StaffMember, id string) ([]store.StaffMember, bool) {
+	out := make([]store.StaffMember, 0, len(staff))
+	found := false
+	for _, m := range staff {
+		if m.ID == id {
+			found = true
+			continue
+		}
+		out = append(out, m)
+	}
+	return out, found
 }

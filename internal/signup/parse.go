@@ -74,21 +74,50 @@ func ParseResponse(body []byte) (Response, error) {
 
 	// Entries are identifiers, and they reach a comparison against the definition's.
 	// Normalising here means a hand-edited file with "Open Sabre" in it still matches.
-	cleaned := make([]string, 0, len(res.Entries))
-	seen := map[string]bool{}
-	for _, e := range res.Entries {
+	entered := map[string]bool{}
+	res.Entries = identifiers(res.Entries, entered)
+
+	// The staff offer, cleaned the same way. A discipline they also entered is dropped
+	// from it -- nobody referees the pool they are fencing in, and the app never offers
+	// it -- and so is a role this build does not know. An offer with nothing left in it
+	// is no offer.
+	if res.Staff != nil {
+		skip := map[string]bool{}
+		for id := range entered {
+			skip[id] = true
+		}
+		tournaments := identifiers(res.Staff.Tournaments, skip)
+		var roles []string
+		for _, r := range identifiers(res.Staff.Roles, map[string]bool{}) {
+			if isRole(r) {
+				roles = append(roles, r)
+			}
+		}
+		res.Staff = &StaffOffer{Tournaments: tournaments, Roles: roles}
+		if len(tournaments) == 0 || len(roles) == 0 {
+			res.Staff = nil
+		}
+	}
+
+	if len(res.Entries) == 0 && res.Staff == nil {
+		return Response{}, fmt.Errorf("no disciplines chosen, to fence in or to staff")
+	}
+	return res, nil
+}
+
+// identifiers slugs and de-duplicates a list of identifiers, leaving out any already in
+// seen and adding the rest to it.
+func identifiers(in []string, seen map[string]bool) []string {
+	out := make([]string, 0, len(in))
+	for _, e := range in {
 		id := Slug(e)
 		if id == "" || seen[id] {
 			continue
 		}
 		seen[id] = true
-		cleaned = append(cleaned, id)
+		out = append(out, id)
 	}
-	res.Entries = cleaned
-	if len(res.Entries) == 0 {
-		return Response{}, fmt.Errorf("no disciplines chosen")
-	}
-	return res, nil
+	return out
 }
 
 // ParseDefinition reads a definition, for the participant app's sake and for a test.

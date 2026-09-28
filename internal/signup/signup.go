@@ -14,6 +14,7 @@ package signup
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -43,6 +44,37 @@ type Definition struct {
 	// Fields are what the participant is asked for. "name" and "club" always; "contact"
 	// when the organizer turned it on.
 	Fields []string `json:"fields"`
+	// StaffRoles are the jobs a participant can offer to do in the disciplines they are
+	// not fencing in (issue #5). Published rather than built into the app, so the list
+	// can change without every copy of the app already sent out going stale.
+	StaffRoles []StaffRole `json:"staffRoles"`
+}
+
+// StaffRole is one job on the floor.
+type StaffRole struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
+	// Offered is whether the app ticks it for them. Everyone is down for every role
+	// unless they untick it -- asking people to volunteer finds fewer staff than asking
+	// them to opt out -- except the one that is a qualification rather than a willingness.
+	Offered bool `json:"offered"`
+}
+
+// Roles are the staff roles of issue #5, in the order the app lists them.
+var Roles = []StaffRole{
+	{ID: "head-ref", Label: "Head referee", Offered: true},
+	{ID: "assistant-ref", Label: "Assistant referee", Offered: true},
+	{ID: "score-keeper", Label: "Score keeper", Offered: true},
+	{ID: "physician", Label: "Physician", Offered: false},
+}
+
+func isRole(id string) bool {
+	for _, r := range Roles {
+		if r.ID == id {
+			return true
+		}
+	}
+	return false
 }
 
 type DefinitionEvent struct {
@@ -70,7 +102,7 @@ type TournamentInfo struct {
 	Capacity int `json:"capacity,omitempty"`
 }
 
-// Response is what comes back: one participant, one or more entries.
+// Response is what comes back: one participant, what they enter and what they will work.
 type Response struct {
 	Format       string `json:"format"`
 	Version      int    `json:"version"`
@@ -83,6 +115,17 @@ type Response struct {
 	SubmittedAt  string      `json:"submittedAt,omitempty"`
 	Participant  Participant `json:"participant"`
 	Entries      []string    `json:"entries"`
+	// Staff is what they will work, in the disciplines they are not entering. Absent
+	// for somebody who unticked all of it.
+	Staff *StaffOffer `json:"staff,omitempty"`
+}
+
+// StaffOffer is one participant's offer to work: which disciplines, and in which roles.
+// One set of roles across all of them: a grid of disciplines by roles is a form nobody
+// finishes.
+type StaffOffer struct {
+	Tournaments []string `json:"tournaments"`
+	Roles       []string `json:"roles"`
 }
 
 type Participant struct {
@@ -107,7 +150,8 @@ func BuildDefinition(t store.Tournament) Definition {
 			Venue: strings.TrimSpace(ev.Signup.Venue),
 			Date:  strings.TrimSpace(ev.Signup.Date),
 		},
-		Fields: []string{"name", "club"},
+		Fields:     []string{"name", "club"},
+		StaffRoles: Roles,
 	}
 	if def.Event.Name == "" {
 		def.Event.Name = strings.TrimSpace(t.Discipline)
@@ -200,6 +244,9 @@ type Verdict string
 const (
 	// New: a competitor this import would add.
 	New Verdict = "new"
+	// Staff: somebody this import would add to the staff, because they offered to work
+	// this discipline rather than fence in it (issue #5).
+	Staff Verdict = "staff"
 	// Already: this submission has been imported before. Re-importing is a no-op, which
 	// is what lets an organizer point at the same folder twice without thinking.
 	Already Verdict = "already"
@@ -227,6 +274,9 @@ type Row struct {
 	SubmissionID string  `json:"submissionId,omitempty"`
 	// Entries are every discipline the response asked for, whether or not this run is one.
 	Entries []string `json:"entries,omitempty"`
+	// Staffing and Roles are the offer to work, likewise whole.
+	Staffing []string `json:"staffing,omitempty"`
+	Roles    []string `json:"roles,omitempty"`
 	// Problem says what is wrong, for the verdicts that are a refusal.
 	Problem string `json:"problem,omitempty"`
 }
@@ -236,6 +286,8 @@ type Preview struct {
 	Rows []Row `json:"rows"`
 	// Adding is how many competitors a confirmed import would create.
 	Adding int `json:"adding"`
+	// AddingStaff is how many people it would add to the staff.
+	AddingStaff int `json:"addingStaff"`
 	// Capacity is the warning for a discipline that would end up over its limit. A
 	// warning, not a refusal: the organizer decides.
 	Capacity []string `json:"capacity,omitempty"`
@@ -253,19 +305,21 @@ type File struct {
 // Check works out what an import would do, without doing any of it.
 //
 // It is the whole of the decision-making: the handler that confirms an import runs this
-// again and adds exactly the rows it returns as New, so what the organizer approved and
-// what gets written cannot come apart.
+// again and adds exactly the rows it returns as New or Staff, so what the organizer
+// approved and what gets written cannot come apart.
 //
 // mine is the tournament identifier this run of the application is, or "" for a single
 // discipline event that never set one. A response naming only other disciplines is
 // somebody else's to import, and says so rather than being an error.
-func Check(def Definition, mine string, files []File, existing []store.Competitor) Preview {
+func Check(def Definition, mine string, files []File, existing []store.Competitor, staff []store.StaffMember) Preview {
 	known := map[string]TournamentInfo{}
 	for _, t := range def.Tournaments {
 		known[t.ID] = t
 	}
 	mine = strings.TrimSpace(mine)
 
+	// One submission is one person in one run: a competitor here or staff here, never
+	// both, so either list having it means it is done.
 	imported := map[string]bool{}
 	entered := 0
 	for _, c := range existing {
@@ -274,6 +328,11 @@ func Check(def Definition, mine string, files []File, existing []store.Competito
 		}
 		if !c.Withdrawn {
 			entered++
+		}
+	}
+	for _, s := range staff {
+		if s.Signup != "" {
+			imported[s.Signup] = true
 		}
 	}
 
@@ -291,6 +350,9 @@ func Check(def Definition, mine string, files []File, existing []store.Competito
 
 		row.Name, row.Club, row.Contact = res.Participant.Name, res.Participant.Club, res.Participant.Contact
 		row.SubmissionID, row.Entries = res.SubmissionID, res.Entries
+		if res.Staff != nil {
+			row.Staffing, row.Roles = res.Staff.Tournaments, res.Staff.Roles
+		}
 
 		switch {
 		case def.DefinitionID != "" && res.DefinitionID != def.DefinitionID:
@@ -307,11 +369,15 @@ func Check(def Definition, mine string, files []File, existing []store.Competito
 			}
 		}
 
-		if row.Verdict == New || row.Verdict == NotHere {
+		switch row.Verdict {
+		case New, Staff, NotHere:
 			inThisImport[res.SubmissionID] = true
 		}
-		if row.Verdict == New {
+		switch row.Verdict {
+		case New:
 			out.Adding++
+		case Staff:
+			out.AddingStaff++
 		}
 		out.Rows = append(out.Rows, row)
 	}
@@ -325,33 +391,56 @@ func Check(def Definition, mine string, files []File, existing []store.Competito
 	return out
 }
 
+// verdictFor places a valid response. Fencing here beats working here: the app never
+// offers to staff a discipline the participant has entered, and ParseResponse drops such
+// an offer from a hand-edited file, so the two never meet in one run.
 func verdictFor(res Response, known map[string]TournamentInfo, mine string) Verdict {
-	any, forMe := false, false
-	for _, id := range res.Entries {
-		if _, ok := known[id]; ok {
-			any = true
-			if id == mine {
-				forMe = true
-			}
-		}
+	var staffing []string
+	if res.Staff != nil {
+		staffing = res.Staff.Tournaments
 	}
+	enters, entersMine := names(res.Entries, known, mine)
+	staffs, staffsMine := names(staffing, known, mine)
 	switch {
-	case !any:
+	case !enters && !staffs:
 		return Unknown
 	case mine == "":
 		// This run has not been told which discipline it is. Everything valid is
 		// importable, which is the sensible answer for a one-discipline event.
+		if enters {
+			return New
+		}
+		return Staff
+	case entersMine:
 		return New
-	case forMe:
-		return New
+	case staffsMine:
+		return Staff
 	default:
 		return NotHere
 	}
 }
 
+// names reports whether ids has any discipline the definition knows, and whether one of
+// them is mine.
+func names(ids []string, known map[string]TournamentInfo, mine string) (found, isMine bool) {
+	for _, id := range ids {
+		if _, ok := known[id]; ok {
+			found = true
+			if id == mine {
+				isMine = true
+			}
+		}
+	}
+	return found, isMine
+}
+
 func unknownEntries(res Response, known map[string]TournamentInfo) string {
+	ids := res.Entries
+	if res.Staff != nil {
+		ids = append(append([]string(nil), ids...), res.Staff.Tournaments...)
+	}
 	var bad []string
-	for _, id := range res.Entries {
+	for _, id := range ids {
 		if _, ok := known[id]; !ok {
 			bad = append(bad, id)
 		}
@@ -379,4 +468,34 @@ func Import(p Preview, nextID func([]store.Competitor) string, existing []store.
 		})
 	}
 	return out
+}
+
+// ImportStaff is Import for the rows a preview marked Staff.
+func ImportStaff(p Preview, existing []store.StaffMember) []store.StaffMember {
+	out := append([]store.StaffMember(nil), existing...)
+	for _, row := range p.Rows {
+		if row.Verdict != Staff {
+			continue
+		}
+		out = append(out, store.StaffMember{
+			ID:     NextStaffID(out),
+			Name:   row.Name,
+			Club:   row.Club,
+			Roles:  append([]string(nil), row.Roles...),
+			Signup: row.SubmissionID,
+		})
+	}
+	return out
+}
+
+// NextStaffID numbers staff the way competitors are numbered, with their own prefix so
+// the two can never be mistaken for each other in a file.
+func NextStaffID(existing []store.StaffMember) string {
+	highest := 0
+	for _, s := range existing {
+		if n, err := strconv.Atoi(strings.TrimPrefix(s.ID, "s")); err == nil && n > highest {
+			highest = n
+		}
+	}
+	return fmt.Sprintf("s%d", highest+1)
 }

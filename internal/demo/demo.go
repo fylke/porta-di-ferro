@@ -236,6 +236,13 @@ func (d *Demo) Request(method, path string, body []byte) Response {
 		return d.patchCompetitor(parts[2], body)
 	case method == "DELETE" && len(parts) == 3 && parts[1] == "competitors":
 		return d.deleteCompetitor(parts[2])
+	case method == "DELETE" && len(parts) == 3 && parts[1] == "staff":
+		kept, found := httpapi.WithoutStaff(d.tournament.Staff, parts[2])
+		if !found {
+			return fail(404, fmt.Errorf("no staff member %s", parts[2]))
+		}
+		d.tournament.Staff = kept
+		return changed(map[string]bool{"ok": true})
 
 	case method == "PUT" && path == "/api/tournament":
 		return d.putTournament(body)
@@ -315,19 +322,23 @@ func (d *Demo) signupImport(body []byte, confirm bool) Response {
 	}
 
 	def := signup.BuildDefinition(d.tournament)
-	preview := signup.Check(def, d.tournament.Event.Signup.Tournament, files, d.competitors)
+	preview := signup.Check(def, d.tournament.Event.Signup.Tournament, files, d.competitors, d.tournament.Staff)
 	view := map[string]any{
-		"rows": preview.Rows, "adding": preview.Adding, "capacity": preview.Capacity,
-		"tournament": preview.Tournament, "poolsDrawn": len(d.tournament.Pools) > 0,
+		"rows": preview.Rows, "adding": preview.Adding, "addingStaff": preview.AddingStaff,
+		"capacity": preview.Capacity, "tournament": preview.Tournament,
+		"poolsDrawn": len(d.tournament.Pools) > 0,
 	}
 	if !confirm {
 		return ok(view)
 	}
 
-	before := len(d.competitors)
+	before, staffBefore := len(d.competitors), len(d.tournament.Staff)
 	d.competitors = signup.Import(preview, httpapi.NextCompetitorID, d.competitors)
+	d.tournament.Staff = signup.ImportStaff(preview, d.tournament.Staff)
 	return changed(map[string]any{
-		"added": len(d.competitors) - before, "preview": view,
+		"added":      len(d.competitors) - before,
+		"addedStaff": len(d.tournament.Staff) - staffBefore,
+		"preview":    view,
 	})
 }
 
