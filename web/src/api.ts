@@ -163,21 +163,35 @@ export interface EventInfo {
   signup?: SignupInfo;
 }
 
+/** Somebody who offered to work this discipline rather than fence in it (issue #5). */
+export interface StaffMember {
+  id: string;
+  name: string;
+  club?: string;
+  /** "head-ref", "assistant-ref", "score-keeper", "physician". */
+  roles: string[];
+  signup?: string;
+}
+
 /** One response file as the organizer sees it before deciding. */
 export interface SignupRow {
   source: string;
-  verdict: 'new' | 'already' | 'repeat' | 'other-event' | 'not-here' | 'unknown' | 'invalid';
+  verdict: 'new' | 'staff' | 'already' | 'repeat' | 'other-event' | 'not-here' | 'unknown' | 'invalid';
   name?: string;
   club?: string;
   contact?: string;
   submissionId?: string;
   entries?: string[];
+  /** The offer to work (issue #5): which disciplines, in which roles. */
+  staffing?: string[];
+  roles?: string[];
   problem?: string;
 }
 
 export interface SignupPreview {
   rows: SignupRow[];
   adding: number;
+  addingStaff: number;
   capacity?: string[];
   tournament?: string;
   poolsDrawn: boolean;
@@ -212,6 +226,7 @@ export interface Snapshot {
     pools: unknown[];
     generatedAt?: string;
     violations?: string[];
+    staff?: StaffMember[];
   };
   pools: PoolView[];
   ruleset: Ruleset;
@@ -297,7 +312,11 @@ export const api = {
   previewSignups: (files: { source: string; body: string }[]) =>
     req<SignupPreview>('POST', '/api/signup/preview', { files }),
   importSignups: (files: { source: string; body: string }[]) =>
-    req<{ added: number; preview: SignupPreview }>('POST', '/api/signup/import', { files }),
+    req<{ added: number; addedStaff: number; preview: SignupPreview }>('POST', '/api/signup/import', {
+      files,
+    }),
+  /** Takes somebody off the staff. They are in no match, so the draw does not stop it. */
+  removeStaff: (id: string) => req<{ ok: boolean }>('DELETE', `/api/staff/${id}`),
   generatePools: () => req<unknown>('POST', '/api/tournament/pools'),
   drawBracket: () => req<unknown>('POST', '/api/tournament/bracket'),
   movePool: (number: number, mat: number) =>

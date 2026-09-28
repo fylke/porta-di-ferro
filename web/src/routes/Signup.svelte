@@ -1,6 +1,13 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
-  import { api, type Snapshot, type SignupInfo, type SignupPreview, type SignupReady } from '../api';
+  import {
+    api,
+    type Snapshot,
+    type SignupInfo,
+    type SignupPreview,
+    type SignupReady,
+    type StaffMember,
+  } from '../api';
   import { t } from '../lib/i18n.svelte';
 
   /**
@@ -36,7 +43,10 @@
   let files = $state<{ source: string; body: string }[]>([]);
   let preview = $state<SignupPreview | null>(null);
   let busy = $state(false);
-  let imported = $state<number | null>(null);
+  let imported = $state<{ competitors: number; staff: number } | null>(null);
+
+  // Who has offered to work this discipline rather than fence in it (issue #5).
+  const staff: StaffMember[] = $derived(snapshot.tournament.staff ?? []);
 
   async function refreshReady() {
     try {
@@ -112,13 +122,23 @@
     error = '';
     try {
       const res = await api.importSignups(files);
-      imported = res.added;
+      imported = { competitors: res.added, staff: res.addedStaff };
       preview = res.preview;
       onchange();
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
     } finally {
       busy = false;
+    }
+  }
+
+  async function removeStaff(id: string) {
+    error = '';
+    try {
+      await api.removeStaff(id);
+      onchange();
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
     }
   }
 
@@ -131,6 +151,7 @@
 
   const verdictLabel: Record<string, string> = $derived({
     new: t('will be added'),
+    staff: t('will be added as staff'),
     already: t('already imported'),
     repeat: t('the same file twice'),
     'other-event': t('another event'),
@@ -138,6 +159,29 @@
     unknown: t('unknown discipline'),
     invalid: t('not usable'),
   });
+
+  const roleLabel: Record<string, string> = $derived({
+    'head-ref': t('Head referee'),
+    'assistant-ref': t('Assistant referee'),
+    'score-keeper': t('Score keeper'),
+    physician: t('Physician'),
+  });
+
+  function rolesText(roles: string[] | undefined): string {
+    return (roles ?? []).map((r) => roleLabel[r] ?? r).join(', ');
+  }
+
+  /** "2 competitors and 1 staff member", leaving out whichever is none. */
+  function howMany(competitors: number, staffCount: number): string {
+    const parts: string[] = [];
+    if (competitors > 0 || staffCount === 0) {
+      parts.push(competitors === 1 ? t('1 competitor') : t('{n} competitors', { n: competitors }));
+    }
+    if (staffCount > 0) {
+      parts.push(staffCount === 1 ? t('1 staff member') : t('{n} staff', { n: staffCount }));
+    }
+    return parts.length === 2 ? t('{a} and {b}', { a: parts[0], b: parts[1] }) : parts[0];
+  }
 
   // Counted for the summary line, so the organizer is not made to read forty rows to
   // find out that thirty-eight are fine.
@@ -255,9 +299,7 @@
     {#if preview}
       {#if imported !== null}
         <p class="ok big">
-          {imported === 1
-            ? t('1 competitor imported.')
-            : t('{n} competitors imported.', { n: imported })}
+          {t('Imported: {what}.', { what: howMany(imported.competitors, imported.staff) })}
         </p>
       {/if}
 
@@ -296,6 +338,9 @@
                 <td class="l file">{row.source}</td>
                 <td class="l">
                   <span class="verdict {row.verdict}">{verdictLabel[row.verdict]}</span>
+                  {#if row.verdict === 'staff'}
+                    <span class="dim problem">{t('as {roles}', { roles: rolesText(row.roles) })}</span>
+                  {/if}
                   {#if row.problem}<span class="dim problem">{row.problem}</span>{/if}
                 </td>
               </tr>
@@ -306,18 +351,41 @@
 
       {#if imported === null}
         <div class="actions">
-          <button class="save" disabled={busy || preview.adding === 0} onclick={confirm}>
-            {preview.adding === 1
-              ? t('Import 1 competitor')
-              : t('Import {n} competitors', { n: preview.adding })}
+          <button
+            class="save"
+            disabled={busy || preview.adding + preview.addingStaff === 0}
+            onclick={confirm}
+          >
+            {t('Import {what}', { what: howMany(preview.adding, preview.addingStaff) })}
           </button>
-          {#if preview.adding === 0}
+          {#if preview.adding + preview.addingStaff === 0}
             <span class="dim">{t('Nothing in there to add.')}</span>
           {/if}
         </div>
       {/if}
     {/if}
   </div>
+
+  {#if staff.length > 0}
+    <div class="staff-list">
+      <h3>{t('Staff')}</h3>
+      <p class="dim small">
+        {t('Offered to work this discipline. Who stands where is still up to you.')}
+      </p>
+      <ul>
+        {#each staff as member (member.id)}
+          <li>
+            <span class="who">
+              <span class="strong">{member.name}</span>
+              {#if member.club}<span class="dim-inline">{member.club}</span>{/if}
+            </span>
+            <span class="roles">{rolesText(member.roles)}</span>
+            <button class="quiet" onclick={() => void removeStaff(member.id)}>{t('Remove')}</button>
+          </li>
+        {/each}
+      </ul>
+    </div>
+  {/if}
 </section>
 
 <style>
@@ -379,7 +447,8 @@
   }
 
   .send,
-  .import {
+  .import,
+  .staff-list {
     margin-top: 1.2rem;
     padding-top: 1rem;
     border-top: 1px solid var(--line);
@@ -462,7 +531,8 @@
     font-size: 0.85rem;
     color: var(--ink-dim);
   }
-  .count.new {
+  .count.new,
+  .count.staff {
     color: var(--ok);
     font-weight: 700;
   }
@@ -511,7 +581,8 @@
     display: block;
     font-size: 0.78rem;
   }
-  .verdict.new {
+  .verdict.new,
+  .verdict.staff {
     color: var(--ok);
     font-weight: 700;
   }
@@ -519,6 +590,32 @@
   .verdict.unknown,
   .verdict.other-event {
     color: var(--amber-bright);
+  }
+  .staff-list ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .staff-list li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem 0.8rem;
+    padding: 0.4rem 0;
+    border-bottom: 1px solid var(--line);
+    font-size: 0.9rem;
+  }
+  .staff-list .who {
+    flex: 1 1 10rem;
+    min-width: 0;
+  }
+  .staff-list .roles {
+    color: var(--ink-dim);
+    font-size: 0.82rem;
+  }
+  .dim-inline {
+    color: var(--ink-dim);
+    margin-left: 0.4rem;
   }
   .problem {
     display: block;

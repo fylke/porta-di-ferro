@@ -481,10 +481,13 @@ export const sv: Record<string, string> = {
   Clear: 'Rensa',
   'No .json files in there.': 'Inga .json-filer där.',
   'Reading…': 'Läser…',
-  '1 competitor imported.': '1 fäktare importerad.',
-  '{n} competitors imported.': '{n} fäktare importerade.',
-  'Import 1 competitor': 'Importera 1 fäktare',
-  'Import {n} competitors': 'Importera {n} fäktare',
+  'Imported: {what}.': 'Importerat: {what}.',
+  'Import {what}': 'Importera {what}',
+  '1 competitor': '1 fäktare',
+  '{n} competitors': '{n} fäktare',
+  '1 staff member': '1 funktionär',
+  '{n} staff': '{n} funktionärer',
+  '{a} and {b}': '{a} och {b}',
   'Nothing in there to add.': 'Inget där att lägga till.',
   'The pools are already drawn. Anyone imported now will not be in one until you draw again.':
     'Poolerna är redan lottade. Den som importeras nu hamnar inte i någon pool förrän du lottar om.',
@@ -497,4 +500,13 @@ export const sv: Record<string, string> = {
   'another discipline': 'en annan disciplin',
   'unknown discipline': 'okänd disciplin',
   'not usable': 'går inte att använda',
+  // --- staff, from the same files (issue #5) --------------------------------------------
+  'will be added as staff': 'läggs till som funktionär',
+  'as {roles}': 'som {roles}',
+  'Head referee': 'Ringdomare',
+  'Assistant referee': 'Sidodomare',
+  Physician: 'Läkare',
+  Staff: 'Funktionärer',
+  'Offered to work this discipline. Who stands where is still up to you.':
+    'Har erbjudit sig att arbeta i den här disciplinen. Vem som står var bestämmer du fortfarande.',
 };

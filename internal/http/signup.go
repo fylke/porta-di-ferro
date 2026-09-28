@@ -262,7 +262,7 @@ func (s *Server) deleteStaff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.publishState()
-	w.WriteHeader(http.StatusNoContent)
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 // WithoutStaff is the staff list less one person, and whether they were in it.
