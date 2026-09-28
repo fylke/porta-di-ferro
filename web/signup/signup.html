@@ -6,7 +6,8 @@
     <meta name="color-scheme" content="dark" />
     <title>Sign up</title>
     <!--
-      The participant's half of offline signup (issue #91).
+      The participant's half of offline signup (issue #91): what they enter, and what
+      they will help run in the disciplines they are not fencing in (issue #5).
 
       Deliberately one file of plain HTML, CSS and JavaScript, and deliberately not part
       of the Svelte bundle. It is emailed to people, or copied onto a memory stick, and
@@ -121,6 +122,30 @@
         font-weight: 400;
         font-size: 0.85rem;
         color: var(--ink-dim);
+      }
+      /* The roles sit side by side: four short words, and a column of them reads as four
+         more disciplines. */
+      .roles {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        margin-bottom: 0.4rem;
+      }
+      .roles .pick {
+        margin: 0;
+        padding: 0.5rem 0.7rem;
+        align-items: center;
+      }
+      .roles .pick input {
+        margin: 0;
+      }
+      .staff {
+        margin-top: 1.4rem;
+      }
+      h3 {
+        margin: 0.9rem 0 0.4rem;
+        font-size: 0.85rem;
+        font-weight: 700;
       }
       ol.programme {
         list-style: none;
@@ -259,7 +284,19 @@
           }
         }
 
-        var state = { definition: null, chosen: {}, draft: readDraft(), saved: null, error: '' };
+        // chosen: the disciplines they are fencing in. notStaffing: the ones they
+        // unticked in the staff list -- kept as the exceptions, because being down for
+        // every discipline they are not fencing in is the default. roles: which roles are
+        // ticked, starting from what the definition offers.
+        var state = {
+          definition: null,
+          chosen: {},
+          notStaffing: {},
+          roles: null,
+          draft: readDraft(),
+          saved: null,
+          error: '',
+        };
 
         function baked() {
           try {
@@ -341,9 +378,97 @@
           return el('section', {}, [el('h2', { text: 'Programme' }), list]);
         }
 
+        /** When a discipline starts, from its programme row. */
+        function startOf(def, id) {
+          var when = '';
+          (def.schedule || []).forEach(function (row) {
+            if (row.tournamentId && row.tournamentId === id && row.startsAt) when = row.startsAt;
+          });
+          return when;
+        }
+
+        /** A whole tappable row with a checkbox in it. */
+        function pick(id, label, detail, on, onchange) {
+          var box = el('input', {
+            type: 'checkbox',
+            id: id,
+            onchange: function (ev) {
+              row.className = 'pick' + (ev.target.checked ? ' on' : '');
+              onchange(ev.target.checked);
+            },
+          });
+          box.checked = !!on;
+          var row = el('label', { class: 'pick' + (on ? ' on' : '') }, [
+            box,
+            el('span', {}, [
+              el('span', { class: 'label', text: label }),
+              detail ? el('span', { class: 'when', text: detail }) : null,
+            ]),
+          ]);
+          return row;
+        }
+
+        /** The roles as the definition offers them, ticked the way it says to start. */
+        function startingRoles(def) {
+          var roles = {};
+          (def.staffRoles || []).forEach(function (r) {
+            roles[r.id] = !!r.offered;
+          });
+          return roles;
+        }
+
+        /**
+         * What they will work: every discipline they are not fencing in and did not
+         * untick, in every role they left ticked. Null when either list comes out empty,
+         * which is somebody who is not staffing at all.
+         */
+        function staffOffer(def) {
+          var tournaments = (def.tournaments || [])
+            .map(function (t) {
+              return t.id;
+            })
+            .filter(function (id) {
+              return !state.chosen[id] && !state.notStaffing[id];
+            });
+          var roles = (def.staffRoles || [])
+            .map(function (r) {
+              return r.id;
+            })
+            .filter(function (id) {
+              return state.roles && state.roles[id];
+            });
+          return tournaments.length && roles.length ? { tournaments: tournaments, roles: roles } : null;
+        }
+
+        /**
+         * The response file, from what is on the form. Pure, so the one thing this app
+         * produces is made in one place whichever way it is sent.
+         */
+        function buildResponse(def, draft) {
+          var response = {
+            format: 'porta.signup.response',
+            version: 1,
+            definitionId: def.definitionId || '',
+            submissionId: draft.submissionId || randomId(),
+            submittedAt: new Date().toISOString(),
+            participant: {
+              name: (draft.name || '').trim(),
+              club: (draft.club || '').trim(),
+              contact: (draft.contact || '').trim(),
+            },
+            entries: Object.keys(state.chosen).filter(function (k) {
+              return state.chosen[k];
+            }),
+          };
+          var staff = staffOffer(def);
+          if (staff) response.staff = staff;
+          return response;
+        }
+
         function form(def) {
           var wants = def.fields || ['name', 'club'];
           var draft = state.draft;
+          if (!state.roles) state.roles = startingRoles(def);
 
           function field(key, label, hint) {
             if (wants.indexOf(key) < 0) return null;
@@ -366,33 +491,72 @@
 
           var picks = el('div', {});
           (def.tournaments || []).forEach(function (t) {
-            var when = '';
-            (def.schedule || []).forEach(function (row) {
-              if (row.tournamentId && row.tournamentId === t.id && row.startsAt) when = row.startsAt;
+            var when = startOf(def, t.id);
+            picks.appendChild(
+              pick(
+                'pick-' + t.id,
+                t.label || t.id,
+                (when ? 'from ' + when : '') +
+                  (t.capacity ? (when ? ' · ' : '') + 'room for ' + t.capacity : ''),
+                state.chosen[t.id],
+                function (on) {
+                  state.chosen[t.id] = on;
+                  // Fencing in it takes it off the staff list, and unticking it puts it
+                  // back.
+                  drawStaff();
+                  refreshButton();
+                },
+              ),
+            );
+          });
+
+          // --- staff (issue #5) ------------------------------------------------------
+          //
+          // Everyone is down to help in every discipline they are not fencing in, in
+          // every role the organizer offers, unless they untick it. Asking people to
+          // volunteer finds fewer staff than letting them opt out.
+          var staffList = el('div', {});
+          var hasRoles = (def.staffRoles || []).length > 0;
+
+          function drawStaff() {
+            staffList.innerHTML = '';
+            var open = (def.tournaments || []).filter(function (t) {
+              return !state.chosen[t.id];
             });
-            var box = el('input', {
-              type: 'checkbox',
-              id: 'pick-' + t.id,
-              onchange: function (ev) {
-                state.chosen[t.id] = ev.target.checked;
-                row.className = 'pick' + (ev.target.checked ? ' on' : '');
-                refreshButton();
-              },
-            });
-            if (state.chosen[t.id]) box.checked = true;
-            var row = el('label', { class: 'pick' + (state.chosen[t.id] ? ' on' : '') }, [
-              box,
-              el('span', {}, [
-                el('span', { class: 'label', text: t.label || t.id }),
-                el('span', {
-                  class: 'when',
-                  text:
-                    (when ? 'from ' + when : '') +
-                    (t.capacity ? (when ? ' · ' : '') + 'room for ' + t.capacity : ''),
+            if (!open.length) {
+              staffList.appendChild(
+                el('p', {
+                  class: 'hint',
+                  text: 'You are fencing in everything, so there is nothing left to staff.',
                 }),
-              ]),
-            ]);
-            picks.appendChild(row);
+              );
+              return;
+            }
+            open.forEach(function (t) {
+              var when = startOf(def, t.id);
+              staffList.appendChild(
+                pick(
+                  'staff-' + t.id,
+                  t.label || t.id,
+                  when ? 'from ' + when : '',
+                  !state.notStaffing[t.id],
+                  function (on) {
+                    state.notStaffing[t.id] = !on;
+                    refreshButton();
+                  },
+                ),
+              );
+            });
+          }
+
+          var roles = el('div', { class: 'roles' });
+          (def.staffRoles || []).forEach(function (r) {
+            roles.appendChild(
+              pick('role-' + r.id, r.label || r.id, '', state.roles[r.id], function (on) {
+                state.roles[r.id] = on;
+                refreshButton();
+              }),
+            );
           });
 
           var button = el('button', { text: 'Save my signup file', onclick: submit });
@@ -401,37 +565,24 @@
             var any = Object.keys(state.chosen).some(function (k) {
               return state.chosen[k];
             });
-            button.disabled = !(draft.name || '').trim() || !any;
+            // Fencing in nothing is fine for somebody who is only coming to help.
+            button.disabled = !(draft.name || '').trim() || !(any || staffOffer(def));
           }
 
           function submit() {
-            var entries = Object.keys(state.chosen).filter(function (k) {
-              return state.chosen[k];
-            });
-            var response = {
-              format: 'porta.signup.response',
-              version: 1,
-              definitionId: def.definitionId || '',
-              submissionId: draft.submissionId || randomId(),
-              submittedAt: new Date().toISOString(),
-              participant: {
-                name: (draft.name || '').trim(),
-                club: (draft.club || '').trim(),
-                contact: (draft.contact || '').trim(),
-              },
-              entries: entries,
-            };
+            var response = buildResponse(def, draft);
             // Kept, so that somebody who fixes a typo and saves again replaces
             // themselves on import rather than arriving twice.
             draft.submissionId = response.submissionId;
             saveDraft(draft);
 
             var name = 'signup-' + slug(response.participant.name) + '.json';
-            download(name, JSON.stringify(response, null, 2));
+            deliver(name, response);
             state.saved = { name: name, response: response };
             render();
           }
 
+          drawStaff();
           setTimeout(refreshButton, 0);
 
           return el('section', {}, [
@@ -443,6 +594,21 @@
             (def.tournaments || []).length
               ? picks
               : el('p', { class: 'warn', text: 'This event has nothing to enter yet.' }),
+            hasRoles && (def.tournaments || []).length
+              ? el('div', { class: 'staff' }, [
+                  el('h2', { text: 'Helping out' }),
+                  el('p', {
+                    class: 'hint',
+                    text:
+                      'When you are not fencing you can help run the day. You are down for ' +
+                      'everything ticked here — untick what you would rather not do.',
+                  }),
+                  el('h3', { text: 'In these disciplines' }),
+                  staffList,
+                  el('h3', { text: 'In these roles' }),
+                  roles,
+                ])
+              : null,
             el('p', { class: 'row' }, [button]),
             el('p', {
               class: 'hint',
@@ -451,6 +617,20 @@
                 'same way you got this one. Nothing is sent anywhere by this page.',
             }),
           ]);
+        }
+
+        /**
+         * Getting the response to the organizer. Offline, it is a file in the downloads
+         * folder that they send back by hand.
+         *
+         * This is the only step an online signup would change. The same file served
+         * from a web page would send the same response to a server here instead, and
+         * the organizer's import would read it exactly as it reads a file today — see
+         * "Towards online signup" in docs/proposals/offline-signup.md. Everything above
+         * this point, and the offline way of sending, stays as it is.
+         */
+        function deliver(name, response) {
+          download(name, JSON.stringify(response, null, 2));
         }
 
         function saved() {
