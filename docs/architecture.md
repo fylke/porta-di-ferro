@@ -105,11 +105,14 @@ flowchart LR
     PR --> D{Organizer looks}
     D -->|confirm| IM[POST /api/signup/import]
     IM --> C[(competitors.json)]
+    IM --> T[(tournament.json · staff)]
 ```
 
 `internal/signup` decides everything and touches nothing: formats, validation, duplicate detection and the preview are pure functions over data. The confirm re-runs the same check rather than trusting the preview posted back to it, so the competitor list moving between the two calls cannot break the duplicate rule.
 
 Importing the same folder twice adds nobody twice. Name and club are not an identity — two Anna Nilssons from the same club is a real thing — so the response carries a submission identifier made by the participant app, and the imported competitor remembers it in `Competitor.Signup`.
+
+A response can also offer to staff the disciplines its author is not fencing in (issue #5), in the roles they left ticked. The run that response names takes them into `Tournament.Staff` rather than the register; they carry the submission identifier too, so the duplicate rule covers both lists. The participant app builds the response in one pure function and sends it through `deliver()`, which is the one step an online signup would change — see "Towards online signup" in the proposal.
 
 ## 2. Match Engine State Machine & Scoring Logic
 

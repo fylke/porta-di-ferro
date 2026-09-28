@@ -36,7 +36,9 @@ installer below. [How the demo works](docs/demo.md).
    switch networks — no reload needed.
 4. If people signed up in advance, send them the signup file from `/admin` — one HTML
    file they open offline, fill in and send back — and import the responses by pointing at
-   the folder they are all in. Otherwise enter the competitors by hand.
+   the folder they are all in. The same file asks them to help as referees and score
+   keepers in the disciplines they are not fencing in. Otherwise enter the competitors by
+   hand.
 5. Pick the number of mats and the pool size, and draw the pools. When
    every pool match is in, draw the eliminations from the same page; the mats pick the
    quarter-finals up on their own.
