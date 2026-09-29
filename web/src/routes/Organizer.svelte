@@ -9,6 +9,7 @@
   import Screens from './Screens.svelte';
   import Disciplines from './Disciplines.svelte';
   import EventEditor from './EventEditor.svelte';
+  import Signup from './Signup.svelte';
   import LangToggle from './LangToggle.svelte';
   import { t, lang } from '../lib/i18n.svelte';
 
@@ -233,6 +234,8 @@
     </div>
 
     <EventEditor {snapshot} onchange={refresh} />
+
+    <Signup {snapshot} onchange={refresh} />
 
     <Screens presence={live.presence} {snapshot} />
 

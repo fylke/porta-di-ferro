@@ -60,15 +60,26 @@ func fixture(rules match.Ruleset, limits tournament.Limits) ([]store.Competitor,
 		Schedule: []store.ScheduleItem{
 			{At: "08:30", Label: "Gear check"},
 			{At: "09:00", Label: "Staff briefing"},
-			{At: "09:30", Label: "Longsword, pools", Kind: "discipline"},
-			{At: "12:00", Label: "Lunch", Kind: "break"},
+			{At: "09:30", Label: "Longsword, pools", Kind: "discipline",
+				Tournament: "longsword-pools", Capacity: 32},
+			{At: "12:00", Ends: "13:00", Label: "Lunch", Kind: "break"},
 			{At: "13:00", Label: "Longsword, eliminations", Kind: "discipline"},
-			{At: "15:00", Label: "Sabre, pools", Kind: "discipline"},
+			{At: "15:00", Label: "Sabre, pools", Kind: "discipline",
+				Tournament: "sabre-pools", Capacity: 16},
 			{At: "17:00", Label: "Prize giving"},
 		},
 		// A password with a separator in it, because that is the case the QR escaping
 		// gets wrong and the demo is where anybody would notice.
 		Wifi: store.Wifi{SSID: "Hall-Guest", Password: "fencing;2026", Security: "WPA"},
+		// Offline signup (issue #91): configured, so a visitor can download the file
+		// that goes out to participants and see what they would be sent.
+		Signup: store.Signup{
+			DefinitionID: "stangebroslaget-2026",
+			Name:         "Stångebroslaget",
+			Venue:        "Linköping",
+			Date:         "2026-11-14",
+			Tournament:   "longsword-pools",
+		},
 	}
 	t.Mats = 3
 	t.MinPoolSize = 5

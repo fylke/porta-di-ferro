@@ -19,6 +19,19 @@ import (
 //go:embed all:dist
 var dist embed.FS
 
+// The participant's offline signup app (issue #91). One self-contained file of plain
+// HTML, embedded separately from the bundle because it is not part of the application:
+// it is a thing the organizer downloads and emails to people, and it has to work from a
+// downloads folder with no server anywhere.
+//
+//go:embed signup/signup.html
+var signupApp embed.FS
+
+// SignupApp is the participant app as it ships, before the event is written into it.
+func SignupApp() ([]byte, error) {
+	return signupApp.ReadFile("signup/signup.html")
+}
+
 // Assets is the bundle rooted at dist/.
 func Assets() fs.FS {
 	sub, err := fs.Sub(dist, "dist")

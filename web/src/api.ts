@@ -145,10 +145,63 @@ export interface Wifi {
  * The day around the tournament (issue #98): what the participant view and the printed
  * info sheet put around the fencing. None of it reaches a result.
  */
+/** What the offline signup files carry about the event (issue #91). */
+export interface SignupInfo {
+  definitionId?: string;
+  name?: string;
+  venue?: string;
+  date?: string;
+  /** Which discipline this run of the application is, matching a schedule row. */
+  tournament?: string;
+  contact?: boolean;
+}
+
 export interface EventInfo {
   welcome?: string;
   schedule?: ScheduleItem[];
   wifi?: Wifi;
+  signup?: SignupInfo;
+}
+
+/** Somebody who offered to work this discipline rather than fence in it (issue #5). */
+export interface StaffMember {
+  id: string;
+  name: string;
+  club?: string;
+  /** "head-ref", "assistant-ref", "score-keeper", "physician". */
+  roles: string[];
+  signup?: string;
+}
+
+/** One response file as the organizer sees it before deciding. */
+export interface SignupRow {
+  source: string;
+  verdict: 'new' | 'staff' | 'already' | 'repeat' | 'other-event' | 'not-here' | 'unknown' | 'invalid';
+  name?: string;
+  club?: string;
+  contact?: string;
+  submissionId?: string;
+  entries?: string[];
+  /** The offer to work (issue #5): which disciplines, in which roles. */
+  staffing?: string[];
+  roles?: string[];
+  problem?: string;
+}
+
+export interface SignupPreview {
+  rows: SignupRow[];
+  adding: number;
+  addingStaff: number;
+  capacity?: string[];
+  tournament?: string;
+  poolsDrawn: boolean;
+}
+
+export interface SignupReady {
+  missing: string[];
+  tournaments: { id: string; label: string; capacity?: number }[];
+  filename: string;
+  definition: string;
 }
 
 export interface Snapshot {
@@ -173,6 +226,7 @@ export interface Snapshot {
     pools: unknown[];
     generatedAt?: string;
     violations?: string[];
+    staff?: StaffMember[];
   };
   pools: PoolView[];
   ruleset: Ruleset;
@@ -249,6 +303,20 @@ export const api = {
     }),
   /** The welcome message, the agenda and the wifi. Written from the admin view only. */
   saveEvent: (event: EventInfo) => req<EventInfo>('PUT', '/api/event', event),
+  /** What is still missing before the signup files can go out. */
+  signupReady: () => req<SignupReady>('GET', '/api/signup/ready'),
+  /**
+   * What an import would do. Writes nothing: the organizer looks first, and confirming
+   * runs the same check again on the server rather than trusting what came back here.
+   */
+  previewSignups: (files: { source: string; body: string }[]) =>
+    req<SignupPreview>('POST', '/api/signup/preview', { files }),
+  importSignups: (files: { source: string; body: string }[]) =>
+    req<{ added: number; addedStaff: number; preview: SignupPreview }>('POST', '/api/signup/import', {
+      files,
+    }),
+  /** Takes somebody off the staff. They are in no match, so the draw does not stop it. */
+  removeStaff: (id: string) => req<{ ok: boolean }>('DELETE', `/api/staff/${id}`),
   generatePools: () => req<unknown>('POST', '/api/tournament/pools'),
   drawBracket: () => req<unknown>('POST', '/api/tournament/bracket'),
   movePool: (number: number, mat: number) =>
