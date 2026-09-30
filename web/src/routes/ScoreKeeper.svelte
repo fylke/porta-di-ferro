@@ -17,6 +17,15 @@
   import { Heartbeat } from '../lib/presence.svelte';
   import { navigate } from '../router.svelte';
   import { t, locale } from '../lib/i18n.svelte';
+  import {
+    REST_DEFAULT_MS,
+    REST_STEP_MS,
+    adjustLength,
+    adjustUntil,
+    backToBack,
+    formatRest,
+    remaining,
+  } from '../lib/rest';
   import LangToggle from './LangToggle.svelte';
 
   let { mat, variant = 'panels' }: { mat: number; variant?: string } = $props();
@@ -302,6 +311,72 @@
     return side === 'red' ? names.red : names.blue;
   }
 
+  // --- a rest between back-to-back matches (lib/rest.ts) --------------------------------
+  //
+  // Offered when somebody in this match fenced the one just before it on this mat and
+  // this match has not started. Worked out from the running order rather than from Next
+  // match having been pressed, so it is still offered after a reload or a handover. The
+  // timer is this device's own and never reaches the log.
+  const previous = $derived.by(() => {
+    const i = queue.findIndex((m) => m.id === matchId);
+    const before = i > 0 ? queue[i - 1] : null;
+    return before && !isOpen(before) ? before : null;
+  });
+  const resting = $derived(backToBack(previous, view));
+  const untouched = $derived(
+    !!matchState && !matchState.ended && !matchState.running && elapsed === 0 && matchState.undoableSeq === 0,
+  );
+  const restKey = $derived(`porta.rest.${matchId}`);
+  let restLength = $state(REST_DEFAULT_MS);
+  let restUntil = $state<number | null>(null);
+
+  // Each match starts from the default, or from a rest this device already has running
+  // for it -- a reload in the middle of a rest must not lose it.
+  $effect(() => {
+    const key = restKey;
+    restLength = REST_DEFAULT_MS;
+    let until: number | null = null;
+    try {
+      const stored = Number(localStorage.getItem(key));
+      if (stored > 0) until = stored;
+    } catch {
+      // No memory on this browser; the rest just does not survive a reload.
+    }
+    restUntil = until;
+  });
+  function keepRest(until: number | null) {
+    restUntil = until;
+    try {
+      if (until === null) localStorage.removeItem(restKey);
+      else localStorage.setItem(restKey, String(until));
+    } catch {
+      // Fine without it.
+    }
+  }
+  // Once the match is under way the rest is history, whatever the timer said. Not before
+  // the match has loaded: on a reload there is a moment with no state at all, and taking
+  // that for a started match would throw away the rest the reload was meant to keep.
+  $effect(() => {
+    if (matchState && !untouched && untrack(() => restUntil) !== null) keepRest(null);
+  });
+
+  const restLeft = $derived(restUntil === null ? 0 : remaining(restUntil, clock.now));
+  const restRunning = $derived(untouched && restUntil !== null && restLeft > 0);
+  const restOver = $derived(untouched && restUntil !== null && restLeft === 0);
+  const offerRest = $derived(untouched && resting.length > 0 && restUntil === null);
+  const restNames = $derived.by(() => {
+    const who = resting.map((id) => (id === view?.red ? names.red : names.blue));
+    return who.length === 2 ? t('{a} and {b}', { a: who[0], b: who[1] }) : (who[0] ?? '');
+  });
+
+  function startRest() {
+    keepRest(Date.now() + restLength);
+  }
+  function adjustRest(delta: number) {
+    if (restRunning && restUntil !== null) keepRest(adjustUntil(restUntil, delta, Date.now()));
+    else restLength = adjustLength(restLength, delta);
+  }
+
   // What the centre column says once the match is over, in place of the clock controls.
   const result = $derived(
     matchState?.ended && sk ? ended(MSL, matchState, names, sk.log.events) : null,
@@ -389,7 +464,13 @@
       {@render panel(order[0])}
 
       <div class="centre" class:flashing>
-        <div class="time mono">{formatClock(elapsed)}</div>
+        {#if restRunning}
+          <!-- The rest takes the clock's place while it runs: the match clock would only
+               say 0:00, and this is the number everyone at the mat is waiting on. -->
+          <div class="time mono resting" role="timer">{formatRest(restLeft)}</div>
+        {:else}
+          <div class="time mono">{formatClock(elapsed)}</div>
+        {/if}
         {#if suddenDeath}
           <div class="sudden" role="status">{t('SUDDEN DEATH')}<span>{t('first point wins')}</span></div>
         {/if}
@@ -401,19 +482,46 @@
             <span class="final mono">{result?.detail}</span>
           </div>
         {:else}
-          <div class="clock-row">
-            <button class="clock" onclick={() => void sk?.toggleClock(elapsed)}>
-              {matchState.running ? t('PAUSE') : t('PLAY')}
-            </button>
-            <!-- For a clock started by mistake. Small, because it is rare; confirmed, because
-                 it is a correction to the record rather than a pause. -->
-            <button
-              class="reset"
-              aria-label={t('Reset the clock to zero')}
-              title={t('Reset the clock to zero')}
-              disabled={elapsed === 0 && !matchState.running}
-              onclick={() => (askReset = true)}>&#8634;</button
-            >
+          <!-- Play stays where it always is, rest or no rest: a fencer who is ready early
+               ends their own rest, and starting the match is how that is recorded. -->
+          <div class="pre" class:with-rest={offerRest || restRunning || restOver}>
+            {#if restRunning}
+              <div class="rest running">
+                <span class="rest-head">{t('REST')} &middot; {restNames}</span>
+                <div class="rest-steps">
+                  <button aria-label={t('Thirty seconds shorter')} onclick={() => adjustRest(-REST_STEP_MS)}>&minus;30 s</button>
+                  <button class="rest-end" onclick={() => keepRest(null)}>{t('END REST')}</button>
+                  <button aria-label={t('Thirty seconds longer')} onclick={() => adjustRest(REST_STEP_MS)}>+30 s</button>
+                </div>
+              </div>
+            {:else if offerRest}
+              <!-- Offered, not imposed: Play starts the match without it. -->
+              <div class="rest">
+                <span class="rest-head">{t('{name} has just fenced', { name: restNames })}</span>
+                <div class="rest-steps">
+                  <button aria-label={t('Thirty seconds shorter')} onclick={() => adjustRest(-REST_STEP_MS)}>&minus;30 s</button>
+                  <span class="rest-length mono">{formatRest(restLength)}</span>
+                  <button aria-label={t('Thirty seconds longer')} onclick={() => adjustRest(REST_STEP_MS)}>+30 s</button>
+                </div>
+                <button class="rest-go" onclick={startRest}>{t('START REST')}</button>
+              </div>
+            {:else if restOver}
+              <div class="rest over" role="status">{t('REST OVER')}</div>
+            {/if}
+            <div class="clock-row">
+              <button class="clock" onclick={() => void sk?.toggleClock(elapsed)}>
+                {matchState.running ? t('PAUSE') : t('PLAY')}
+              </button>
+              <!-- For a clock started by mistake. Small, because it is rare; confirmed, because
+                   it is a correction to the record rather than a pause. -->
+              <button
+                class="reset"
+                aria-label={t('Reset the clock to zero')}
+                title={t('Reset the clock to zero')}
+                disabled={elapsed === 0 && !matchState.running}
+                onclick={() => (askReset = true)}>&#8634;</button
+              >
+            </div>
           </div>
         {/if}
         <div class="sync" class:offline={sk.log.sync === 'offline' || live.stale}>
@@ -683,6 +791,80 @@
     letter-spacing: 0.04em;
     text-transform: lowercase;
   }
+  /* The rest between back-to-back matches. Amber, the colour this screen already uses for
+     what needs attention without being an error, so it cannot be mistaken for the match
+     clock or for a result. */
+  .time.resting {
+    color: var(--amber-bright);
+  }
+  /* The centre's flexible row, holding the rest offer above the clock controls. Without a
+     rest it is just the clock row, at the size it always was. */
+  .pre {
+    display: grid;
+    min-height: 0;
+  }
+  .pre.with-rest {
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 0.5rem;
+  }
+  .rest {
+    align-self: stretch;
+    display: grid;
+    align-content: start;
+    gap: 0.35rem;
+    padding: 0.45rem;
+    border: 2px solid var(--amber-bright);
+    border-radius: var(--radius);
+    background: var(--panel-2);
+    min-width: 0;
+  }
+  .rest-head {
+    font-size: clamp(0.7rem, 1.8vh, 0.9rem);
+    font-weight: 700;
+    color: var(--amber-bright);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .rest-steps {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    align-items: center;
+    gap: 0.3rem;
+  }
+  .rest-steps button {
+    padding: 0.35rem 0.2rem;
+    font-size: clamp(0.75rem, 1.9vh, 0.95rem);
+    font-weight: 700;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    white-space: nowrap;
+  }
+  .rest-length {
+    text-align: center;
+    font-size: clamp(1rem, 2.6vh, 1.4rem);
+    font-weight: 800;
+  }
+  .rest-go {
+    padding: 0.45rem 0.3rem;
+    font-size: clamp(0.8rem, 2vh, 1rem);
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    background: var(--amber-bright);
+    color: #0d0f14;
+    border: none;
+  }
+  .rest-steps .rest-end {
+    color: var(--amber-bright);
+  }
+  .rest.over {
+    text-align: center;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    color: var(--amber-bright);
+  }
+
   .result {
     align-self: stretch;
     display: grid;

@@ -577,6 +577,14 @@ not move on by itself: when it did, the final score was replaced by the next two
 the end was written, before anyone had read it or read it back to the head referee. **Forfeits ask
 first**, for the same reason undo does — they end the match, and a menu tap should not.
 
+**A fencer coming straight off one match into the next is offered a rest.** When somebody in the
+match on screen fenced the one just before it on the same mat, and this one has not started, the
+centre column offers a rest timer: two minutes, longer or shorter in steps of thirty seconds as the
+head referee decides. While it runs, the countdown takes the clock's place and *End rest* stops it.
+*Play* never goes away: starting the match declines the rest, or ends it early when the fencer is
+ready. The timer is the score keeper device's own (kept across a reload) and never reaches the log,
+the result or the displays (`web/src/lib/rest.ts`).
+
 ### Corner controls — rare, destructive, out of the way
 
 Two controls sit outside the main grid, because they are unusual and damaging and should not compete
