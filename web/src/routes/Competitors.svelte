@@ -20,6 +20,11 @@
 
   const active = $derived(competitors.filter((c) => !c.withdrawn).length);
 
+  // A club open of up to 32 is read in one go, and a box that scrolls inside a page that
+  // also scrolls is two scrollbars for one list. Past that the list would push everything
+  // under it off the screen, so it scrolls in place.
+  const SCROLL_FROM = 33;
+
   let layout = $state<Layout>('one');
 
   async function add(event: SubmitEvent) {
@@ -67,6 +72,7 @@
   {#if error}<p class="err">{error}</p>{/if}
 
   <ul
+    class:scroll={competitors.length >= SCROLL_FROM}
     data-layout={layout}
     use:fitRows={{ onlayout: (l) => (layout = l) }}
   >
@@ -128,6 +134,8 @@
     padding: 0;
     display: grid;
     gap: 0.2rem;
+  }
+  ul.scroll {
     max-height: 22rem;
     overflow-y: auto;
   }
