@@ -369,6 +369,7 @@ export const sv: Record<string, string> = {
   // --- the three views (issue #98) ------------------------------------------------------
   // Landing page, info sheet and admin.
   'Landing page': 'Startsida',
+  'The organizer’s view': 'Arrangörens vy',
   'landing page': 'startsidan',
   'Info sheet': 'Infoblad',
   Admin: 'Admin',
