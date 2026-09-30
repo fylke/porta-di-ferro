@@ -76,9 +76,10 @@ other difference is behind `fetch`.
 
 ## The tournament
 
-Thirty-two entrants across six Nordic clubs, three mats, pools of five and six. Mats 2
-and 3 have finished; mat 1 has a match under way and two more to come; the eliminations
-are not drawn yet.
+Thirty-two entrants across six Nordic clubs, three mats, pools of five and six, about
+halfway through the pools. Mat 1 is two thirds into its first pool with a match under
+way, mat 2 is halfway into its second, and mat 3 is between its two, so many fencers have
+two matches left. The eliminations are not drawn yet.
 
 None of that is a stored snapshot. `internal/demo/fixture.go` holds a list of names, and
 everything after it — the pools, the club spread, the running order, the colours, the mat

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { api, type Competitor } from '../api';
   import { t } from '../lib/i18n.svelte';
+  import { fitRows, type Layout } from '../lib/fit';
 
   /**
    * Registration and status. Name and club only -- picture, phone number and club crest
@@ -18,6 +19,13 @@
   let error = $state('');
 
   const active = $derived(competitors.filter((c) => !c.withdrawn).length);
+
+  // A club open of up to 32 is read in one go, and a box that scrolls inside a page that
+  // also scrolls is two scrollbars for one list. Past that the list would push everything
+  // under it off the screen, so it scrolls in place.
+  const SCROLL_FROM = 33;
+
+  let layout = $state<Layout>('one');
 
   async function add(event: SubmitEvent) {
     event.preventDefault();
@@ -63,19 +71,25 @@
   </form>
   {#if error}<p class="err">{error}</p>{/if}
 
-  <ul>
+  <ul
+    class:scroll={competitors.length >= SCROLL_FROM}
+    data-layout={layout}
+    use:fitRows={{ onlayout: (l) => (layout = l) }}
+  >
     {#each competitors as c (c.id)}
-      <li class:withdrawn={c.withdrawn}>
+      <li class="fit-row" class:withdrawn={c.withdrawn}>
         <span class="name">{c.name}</span>
         <span class="club">{c.club}</span>
-        {#if c.withdrawn}
-          <span class="tag">{t('Withdrawn')}</span>
-          <button class="link" onclick={() => setWithdrawn(c, false)}>{t('Reinstate')}</button>
-        {:else if poolsDrawn}
-          <button class="link" onclick={() => setWithdrawn(c, true)}>{t('Withdraw')}</button>
-        {:else}
-          <button class="link" onclick={() => remove(c)}>{t('Remove')}</button>
-        {/if}
+        <span class="actions">
+          {#if c.withdrawn}
+            <span class="tag">{t('Withdrawn')}</span>
+            <button class="link" onclick={() => setWithdrawn(c, false)}>{t('Reinstate')}</button>
+          {:else if poolsDrawn}
+            <button class="link" onclick={() => setWithdrawn(c, true)}>{t('Withdraw')}</button>
+          {:else}
+            <button class="link" onclick={() => remove(c)}>{t('Remove')}</button>
+          {/if}
+        </span>
       </li>
     {/each}
   </ul>
@@ -120,6 +134,8 @@
     padding: 0;
     display: grid;
     gap: 0.2rem;
+  }
+  ul.scroll {
     max-height: 22rem;
     overflow-y: auto;
   }
@@ -130,6 +146,41 @@
     align-items: baseline;
     padding: 0.4rem 0.5rem;
     border-radius: 6px;
+  }
+  .actions {
+    display: inline-flex;
+    gap: 0.6rem;
+    align-items: baseline;
+    justify-self: end;
+  }
+  /* Every row on one line at its natural width while it is measured; the widest decides
+     whether all of them get one line or two (lib/fit.ts). */
+  ul:global(.fit-measure) li.fit-row {
+    display: flex;
+    width: max-content;
+    white-space: nowrap;
+  }
+  /* Too wide for one line: name over club in every row, never only in some. */
+  ul[data-layout='stacked'] li {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.1rem 0.6rem;
+  }
+  ul[data-layout='stacked'] .name {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  ul[data-layout='stacked'] .club {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  ul[data-layout='stacked'] .actions {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: center;
+  }
+  ul[data-layout='stacked'] .name,
+  ul[data-layout='stacked'] .club {
+    overflow-wrap: anywhere;
   }
   li:nth-child(odd) {
     background: var(--panel-2);

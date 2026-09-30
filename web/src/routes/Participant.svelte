@@ -3,6 +3,7 @@
   import { Clock, Live, liveElapsed, matchOn, nameLookup, upcomingOn } from './lib-display.svelte';
   import { formatClock } from '../lib/clock.svelte';
   import { t } from '../lib/i18n.svelte';
+  import { fitRows, type Layout } from '../lib/fit';
   import LangToggle from './LangToggle.svelte';
   import Schedule from './Schedule.svelte';
   import Standings from './Standings.svelte';
@@ -33,6 +34,7 @@
   });
 
   const snapshot = $derived(live.snapshot);
+  let rosterLayout = $state<Layout>('one');
   const event = $derived(snapshot?.tournament.event ?? {});
   const name = $derived(nameLookup(snapshot));
   const mats = $derived(
@@ -79,10 +81,18 @@
       <section class="people">
         <h2>{t('Competitors')} <span class="count">{roster.length}</span></h2>
         <p class="dim hint">{t('Tap a name for that person’s matches.')}</p>
-        <ul class="roster">
+        <ul
+          class="roster"
+          data-layout={rosterLayout}
+          use:fitRows={{
+            onlayout: (l) => (rosterLayout = l),
+            twoColumnsFrom: '(min-width: 64rem)',
+            gap: 1,
+          }}
+        >
           {#each roster as c (c.id)}
             <li class:out={c.withdrawn}>
-              <a href="/who/{c.id}">
+              <a class="fit-row" href="/who/{c.id}">
                 <span class="who">{c.name}</span>
                 <span class="club">{c.club}</span>
                 {#if c.withdrawn}<span class="tag">{t('withdrawn')}</span>{/if}
@@ -231,6 +241,35 @@
     color: var(--ink);
     text-decoration: none;
   }
+  /* Under measurement every row lies on one line at its natural width, and the widest
+     picks the layout for all of them (lib/fit.ts). The withdrawn tag has a line of its
+     own in every layout, so it is not counted. */
+  .roster:global(.fit-measure) a.fit-row {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    width: max-content;
+    white-space: nowrap;
+  }
+  .roster:global(.fit-measure) .tag {
+    display: none;
+  }
+  .roster[data-layout='two'] {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 1px 1rem;
+  }
+  .roster[data-layout='stacked'] a {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.1rem;
+  }
+  .roster[data-layout='stacked'] .club {
+    margin-left: 0;
+    text-align: left;
+  }
+  .roster[data-layout='stacked'] .who,
+  .roster[data-layout='stacked'] .club {
+    overflow-wrap: anywhere;
+  }
   .roster a:hover {
     background: var(--panel-2);
   }
@@ -351,12 +390,4 @@
     }
   }
 
-  /* A laptop and up has room for the competitor list in two columns rather than one
-     very long one. */
-  @media (min-width: 64rem) {
-    .roster {
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-      gap: 1px 1rem;
-    }
-  }
 </style>

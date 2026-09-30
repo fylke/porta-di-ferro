@@ -369,6 +369,15 @@ export const sv: Record<string, string> = {
   // --- the three views (issue #98) ------------------------------------------------------
   // Landing page, info sheet and admin.
   'Landing page': 'Startsida',
+  // --- rest between back-to-back matches -------------------------------------------------
+  REST: 'VILA',
+  '{name} has just fenced': '{name} fäktades precis',
+  'START REST': 'STARTA VILA',
+  'END REST': 'AVSLUTA VILA',
+  'REST OVER': 'VILAN ÄR SLUT',
+  'Thirty seconds shorter': 'Trettio sekunder kortare',
+  'Thirty seconds longer': 'Trettio sekunder längre',
+  'The organizer’s view': 'Arrangörens vy',
   'landing page': 'startsidan',
   'Info sheet': 'Infoblad',
   Admin: 'Admin',

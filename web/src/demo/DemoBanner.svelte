@@ -1,6 +1,7 @@
 <script lang="ts">
   import { demoControls } from './adapter';
   import { t } from '../lib/i18n.svelte';
+  import { route } from '../router.svelte';
 
   /**
    * The strip along the bottom of every demo screen (issue #88).
@@ -14,7 +15,13 @@
    * The two buttons are the demo's own and exist nowhere in the application. Play the
    * rest is how somebody who does not want to score forty matches still gets to see the
    * bracket and the podium, which is the part that sells this.
+   *
+   * The demo opens on the participants' landing page, and nothing there leads to /admin
+   * -- rightly, at an event, where the address is on a poster for everyone. A visitor has
+   * no poster telling them the organizer's side exists, so the strip links to it, and
+   * back again from it.
    */
+  const onAdmin = $derived(!!route('/admin'));
   let busy = $state(false);
   let open = $state(false);
 
@@ -42,6 +49,11 @@
   </p>
 
   <span class="actions">
+    {#if onAdmin}
+      <a class="go" href="/">{t('Landing page')}</a>
+    {:else}
+      <a class="go" href="/admin">{t('The organizer’s view')}</a>
+    {/if}
     <button disabled={busy} onclick={() => run(demoControls.playRest)}>
       {t('Play the rest')}
     </button>
@@ -117,6 +129,17 @@
     color: var(--ink-dim);
     font-size: 0.78rem;
   }
+  /* The way into the organizer's side is the one thing here a visitor is looking for, so
+     it reads as a button rather than as the quiet link to the project. */
+  .actions a.go {
+    padding: 0.3rem 0.6rem;
+    border-radius: 6px;
+    background: var(--amber-bright);
+    color: #0d0f14;
+    font-weight: 700;
+    text-decoration: none;
+    white-space: nowrap;
+  }
 
   @media (max-width: 760px) {
     .demo {
@@ -141,6 +164,11 @@
     }
     .demo.open .what {
       flex-basis: 100%;
+    }
+    .demo.open .actions {
+      flex: 1 1 100%;
+      flex-wrap: wrap;
+      row-gap: 0.4rem;
     }
   }
 </style>

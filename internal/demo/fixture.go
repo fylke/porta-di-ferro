@@ -24,25 +24,34 @@ import (
 // README stays true.
 const fixtureSeed = 20260922
 
-// Where the visitor comes in.
+// Where the visitor comes in: about halfway through the pools, with each mat somewhere
+// different, because mats never keep pace with each other in a real hall.
 //
-// Mats 2 and 3 have finished their pools; mat 1 has a match under way and two more to
-// come. That is deliberately not "the last few matches of the tournament", which is what
-// stopping at the end of the overall running order gives you: the demo's most obvious
-// link is Score keeper, the score keeper opens on a mat, and a mat with nothing left on
-// it is a dead end. Mat 1 is the one everything points at, so mat 1 is the one still
-// fencing.
+// Halfway, not nearly done. A tournament down to its last few matches shows standings
+// that have stopped moving and fencers with nothing left to do; the middle is where a
+// visitor sees what the views are for -- who has two matches left, who is on deck, a
+// table half filled in. And every mat has a match up, because the demo's most obvious
+// link is Score keeper, it opens on a mat, and a mat with nothing on it is a dead end.
 //
 // The eliminations are left undrawn so there is an arc to finish. Play the rest does it
-// for anyone who does not want to score three matches by hand.
+// for anyone who does not want to score the rest by hand.
 const liveMat = 1
-const unplayedOnLiveMat = 3
 
-// And one still to come on each of the others, so all three mat displays have something
-// on them and /score/2 and /score/3 are not dead ends either. A hall of screens saying
-// "no match up yet" is a poor advertisement for a thing whose whole job is telling a
-// hall what is happening.
-const unplayedOnOtherMats = 1
+// progress says how far each mat has got: into which of its pools, in running order, and
+// what share of that pool's matches are fenced. Everything before that pool is finished.
+//
+//   - Mat 1, the live one everything points at: two thirds into its first pool, with the
+//     next match under way. Its fencers have one or two matches left.
+//   - Mat 2: first pool done, halfway into the second, where everyone has two left.
+//   - Mat 3: between pools, the first done and the second about to start.
+var progress = map[int]struct {
+	pool  int
+	share float64
+}{
+	1: {pool: 0, share: 2.0 / 3},
+	2: {pool: 1, share: 0.5},
+	3: {pool: 1, share: 0},
+}
 
 func fixture(rules match.Ruleset, limits tournament.Limits) ([]store.Competitor, store.Tournament, map[string][]match.Event) {
 	competitors := roster()
@@ -94,14 +103,14 @@ func fixture(rules match.Ruleset, limits tournament.Limits) ([]store.Competitor,
 	}
 	drawn.GeneratedAt = time.Now().Add(-2 * time.Hour).Format(time.RFC3339)
 
-	// Each mat's queue, in the order that mat runs it.
-	byMat := map[int][]store.Match{}
+	// Each mat's pools, in the order that mat runs them.
+	byMat := map[int][]store.Pool{}
 	var mats []int
 	for _, p := range tournament.RunOrder(drawn) {
 		if _, seen := byMat[p.Mat]; !seen {
 			mats = append(mats, p.Mat)
 		}
-		byMat[p.Mat] = append(byMat[p.Mat], p.Matches...)
+		byMat[p.Mat] = append(byMat[p.Mat], p)
 	}
 	// Sorted, because the seed walks this list and a map's order is not stable between
 	// runs. Without it every reset would draw a different tournament.
@@ -110,15 +119,19 @@ func fixture(rules match.Ruleset, limits tournament.Limits) ([]store.Competitor,
 	logs := map[string][]match.Event{}
 	seed := int64(fixtureSeed)
 	for _, mat := range mats {
-		queue := byMat[mat]
-		leave := unplayedOnOtherMats
-		if mat == liveMat {
-			leave = unplayedOnLiveMat
+		var queue []store.Match
+		stop := 0
+		at := progress[mat]
+		for i, p := range byMat[mat] {
+			switch {
+			case i < at.pool:
+				stop += len(p.Matches)
+			case i == at.pool:
+				stop += int(at.share * float64(len(p.Matches)))
+			}
+			queue = append(queue, p.Matches...)
 		}
-		stop := len(queue) - leave
-		if stop < 0 {
-			stop = 0
-		}
+		stop = min(stop, len(queue))
 		for _, m := range queue[:stop] {
 			seed++
 			logs[m.ID] = playMatch(rules, m.ID, seed, false)
