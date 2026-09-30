@@ -60,8 +60,30 @@ func TestTheVisitorArrivesInARunningTournament(t *testing.T) {
 			}
 		}
 	}
-	if complete < 20 {
-		t.Errorf("most of the pools should be fenced, got %d complete", complete)
+	// About halfway: far enough that the standings mean something, not so far that the
+	// views have nothing left to show.
+	if total := complete + running + pending; complete*10 < total*4 || complete*10 > total*6 {
+		t.Errorf("the pools should be about half fenced, got %d of %d complete", complete, total)
+	}
+	// Somebody has exactly two matches left, which is the state a fencer checking their
+	// own page is most often in.
+	left := map[string]int{}
+	for _, p := range snap.Pools {
+		for _, m := range p.Matches {
+			if m.Status != "complete" {
+				left[m.Red]++
+				left[m.Blue]++
+			}
+		}
+	}
+	two := 0
+	for _, n := range left {
+		if n == 2 {
+			two++
+		}
+	}
+	if two == 0 {
+		t.Errorf("nobody has exactly two matches left: %v", left)
 	}
 	if running != 1 {
 		t.Errorf("exactly one match should be under way, for the displays to show a live clock; got %d", running)
