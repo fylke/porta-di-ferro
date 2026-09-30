@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"regexp"
 	"time"
 
 	"github.com/fylke/porta-di-ferro/internal/match"
@@ -136,6 +137,7 @@ func BuildSnapshot(src Source, rules match.Ruleset, self Instance,
 		byID[c.ID] = c
 	}
 
+	t.Violations = namedViolations(t.Violations, byID)
 	snap := Snapshot{
 		Competitors: competitors,
 		Tournament:  t,
@@ -286,4 +288,33 @@ func BuildSnapshot(src Source, rules match.Ruleset, self Instance,
 		}
 	}
 	return snap, nil
+}
+
+// backToBack is the generator's report of a pool that cannot avoid somebody fencing two
+// matches in a row (tournament/schedule.go), which names the two by identifier.
+var backToBack = regexp.MustCompile(`^(pool \d+: )(\S+) or (\S+)( fences two matches in a row)$`)
+
+// namedViolations puts names where the draw's warnings have identifiers: "c8 or c6"
+// means nothing to an organizer. The stored warning keeps the identifiers, so a
+// competitor renamed after the draw shows under the new name, and a file written before
+// this reads the same way. Only that one warning is rewritten -- the club warnings name
+// clubs, and a club could be called anything.
+func namedViolations(violations []string, byID map[string]store.Competitor) []string {
+	if len(violations) == 0 {
+		return violations
+	}
+	name := func(id string) string {
+		if c, ok := byID[id]; ok && c.Name != "" {
+			return c.Name
+		}
+		return id
+	}
+	out := make([]string, len(violations))
+	for i, v := range violations {
+		if m := backToBack.FindStringSubmatch(v); m != nil {
+			v = m[1] + name(m[2]) + " or " + name(m[3]) + m[4]
+		}
+		out[i] = v
+	}
+	return out
 }
