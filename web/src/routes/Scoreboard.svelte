@@ -46,27 +46,33 @@
   );
 </script>
 
-<section class="board" class:compact class:flashing>
-  {#if !match || !board}
-    <div class="idle">
-      <span class="mat">{matLabel}</span>
-      <span class="dim">{t('No match up yet')}</span>
-    </div>
-  {:else}
-    {@render side(order[0])}
+<!-- The frame is what the board measures itself against. The displays are open to anyone
+     with a phone, so the same board has to work as a hall screen, as one of two mats side
+     by side on a portrait tablet, and in somebody's hand (issue #107). What decides the
+     layout is the shape of the space the board was given, not the shape of the device. -->
+<div class="frame">
+  <section class="board" class:compact class:flashing>
+    {#if !match || !board}
+      <div class="idle">
+        <span class="mat">{matLabel}</span>
+        <span class="dim">{t('No match up yet')}</span>
+      </div>
+    {:else}
+      {@render side(order[0])}
 
-    <div class="centre">
-      <div class="mat">{matLabel}</div>
-      {#if decided}
-        <div class="result">{winnerName ? t('{name} wins', { name: winnerName }) : t('Draw')}</div>
-      {:else}
-        <div class="time mono">{formatClock(elapsed)}</div>
-      {/if}
-    </div>
+      <div class="centre">
+        <div class="mat">{matLabel}</div>
+        {#if decided}
+          <div class="result">{winnerName ? t('{name} wins', { name: winnerName }) : t('Draw')}</div>
+        {:else}
+          <div class="time mono">{formatClock(elapsed)}</div>
+        {/if}
+      </div>
 
-    {@render side(order[1])}
-  {/if}
-</section>
+      {@render side(order[1])}
+    {/if}
+  </section>
+</div>
 
 {#snippet side(which: Side)}
   {#if board}
@@ -81,6 +87,11 @@
 {/snippet}
 
 <style>
+  .frame {
+    container: scoreboard / size;
+    height: 100%;
+    min-height: 0;
+  }
   .board {
     display: grid;
     grid-template-columns: 1fr auto 1fr;
@@ -145,6 +156,9 @@
     justify-items: center;
     gap: 0.4rem;
     text-align: center;
+    /* The discipline label is long and the column is sized to it, so without a cap it
+       wins every argument with the two competitors for width. */
+    max-width: 40cqw;
   }
   .mat {
     font-size: clamp(0.7rem, 2vh, 1.2rem);
@@ -200,5 +214,43 @@
   .compact .time,
   .compact .result {
     font-size: clamp(1rem, 4vh, 2.2rem);
+  }
+
+  /* Taller than it is wide -- a phone held upright, or one of two mats on a portrait
+     tablet -- or simply narrow, like the audience board above its queue on a phone: the
+     competitors stack, first side on top, with the clock between them. Side by side, the
+     two scores and the clock were three columns fighting for a third of a phone's width
+     each and losing. The type follows the board here rather than the viewport height,
+     which on a phone is the one dimension there is plenty of. A compact row on a phone
+     stacks the same way, each side becoming one departures-board line. */
+  @container scoreboard (orientation: portrait) or (max-width: 30rem) {
+    .board,
+    .board.compact {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: minmax(0, 1fr) auto minmax(0, 1fr);
+      align-items: stretch;
+      gap: clamp(0.4rem, 2cqh, 1rem);
+    }
+    .side {
+      align-content: center;
+    }
+    .centre {
+      max-width: none;
+    }
+    .board:not(.compact) .name {
+      font-size: clamp(1rem, min(4cqh, 8cqw), 3rem);
+    }
+    .board:not(.compact) .score {
+      font-size: clamp(3rem, min(18cqh, 50cqw), 14rem);
+    }
+    .board:not(.compact) .warns {
+      font-size: clamp(0.9rem, min(3cqh, 6cqw), 2rem);
+    }
+    .board:not(.compact) .time {
+      font-size: clamp(1.6rem, min(8cqh, 20cqw), 6rem);
+    }
+    .board:not(.compact) .result {
+      font-size: clamp(1.1rem, min(5cqh, 9cqw), 3rem);
+    }
   }
 </style>

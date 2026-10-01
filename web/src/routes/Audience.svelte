@@ -100,6 +100,7 @@
     grid-template-rows: 1fr auto;
     gap: 0.75rem;
     min-height: 0;
+    min-width: 0;
   }
   .board {
     min-height: 0;
@@ -118,8 +119,12 @@
     text-transform: uppercase;
     color: var(--ink-dim);
   }
+  /* Wraps rather than pushing the page sideways: two full names do not fit across a
+     phone (issue #107). */
   .pair {
     display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
     align-items: center;
     gap: 0.6rem;
     max-width: 100%;
@@ -194,11 +199,29 @@
 
   @media (orientation: portrait), (max-width: 800px) {
     main {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
       grid-template-rows: 1fr auto;
     }
     .deck {
       max-height: 40dvh;
+    }
+  }
+  /* A phone is held, not hung on a wall, so it can scroll: the board takes most of the
+     screen and the queue follows below it, instead of all three squeezed into one
+     screen with the names clipped off the board (issue #107). */
+  @media (max-width: 34rem) {
+    main {
+      height: auto;
+      min-height: 100dvh;
+    }
+    .stage {
+      grid-template-rows: auto auto;
+    }
+    .board {
+      height: 64dvh;
+    }
+    .deck {
+      max-height: none;
     }
   }
 </style>
