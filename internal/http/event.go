@@ -28,12 +28,35 @@ func (s *Server) putEvent(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
+	in, err := CleanEvent(in)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
 
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	t, err := s.store.Tournament()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	t.Event = in
+	if err := s.store.SaveTournament(t); err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.publishState()
+	writeJSON(w, http.StatusOK, t.Event)
+}
+
+// CleanEvent trims what the admin view sent and holds it to the limits above. Exported
+// for internal/demo, which answers the same call out of memory and must not accept
+// anything this would refuse.
+func CleanEvent(in store.Event) (store.Event, error) {
 	in.Welcome = strings.TrimSpace(in.Welcome)
 	if len([]rune(in.Welcome)) > maxWelcome {
-		writeErr(w, http.StatusBadRequest,
-			fmt.Errorf("the welcome message is longer than %d characters", maxWelcome))
-		return
+		return in, fmt.Errorf("the welcome message is longer than %d characters", maxWelcome)
 	}
 
 	// Blank rows are how a row is deleted from the editor, so they are dropped rather
@@ -51,9 +74,7 @@ func (s *Server) putEvent(w http.ResponseWriter, r *http.Request) {
 		kept = append(kept, item)
 	}
 	if len(kept) > maxSchedule {
-		writeErr(w, http.StatusBadRequest,
-			fmt.Errorf("a schedule of more than %d items is not one anybody reads off a wall", maxSchedule))
-		return
+		return in, fmt.Errorf("a schedule of more than %d items is not one anybody reads off a wall", maxSchedule)
 	}
 	in.Schedule = kept
 
@@ -61,21 +82,7 @@ func (s *Server) putEvent(w http.ResponseWriter, r *http.Request) {
 	if in.Wifi.Security != "WEP" && in.Wifi.Security != "nopass" {
 		in.Wifi.Security = "WPA"
 	}
-
-	s.writeMu.Lock()
-	defer s.writeMu.Unlock()
-	t, err := s.store.Tournament()
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err)
-		return
-	}
-	t.Event = in
-	if err := s.store.SaveTournament(t); err != nil {
-		writeErr(w, http.StatusInternalServerError, err)
-		return
-	}
-	s.publishState()
-	writeJSON(w, http.StatusOK, t.Event)
+	return in, nil
 }
 
 // WifiQR is the payload a phone's camera understands as "join this network". The format
