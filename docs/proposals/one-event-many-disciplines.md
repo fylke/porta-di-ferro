@@ -35,15 +35,16 @@ each of them. Concretely:
 - **An event coordinator** owns everything that is about the event rather than about one
   discipline: the welcome, the programme, the wifi, the people, the physical mats and the plan of
   what runs where and when. It serves **one address** for the whole hall.
-- **Each discipline stays isolated**, exactly as #49 made it: its own data folder, its own
-  `tournament.json`, `competitors.json` and match logs, its own ruleset and its own lock. A
-  discipline is a *worker* the coordinator supervises.
-- **Recommended: the workers run inside the coordinator's process**, one supervised server per
-  discipline, rather than as separate executables on separate ports. It fits the Erlang model in
-  the comments at least as well as separate OS processes do (§5), it gives one address and one
-  browser origin for free, and the code already supports it: `httpapi.Server` has no global state, so
-  several can run side by side. The worker contract is written so that moving workers out into
-  their own OS processes later stays possible.
+- **Each discipline stays isolated on disk**, exactly as #49 made it: its own data folder, its
+  own `tournament.json`, `competitors.json` and match logs, its own ruleset and its own lock.
+- **Recommended: one process serves every discipline**, rather than one executable per discipline
+  on its own port, and rather than a process or actor per discipline inside it. Disciplines
+  happening at the same time in the hall does not need them running in parallel in the server, and
+  process boundaries protect against almost none of the failures this product actually has (§5).
+  The split that matters is by *data* (a folder per discipline) and by *responsibility* (event code
+  apart from discipline code). The code already supports it: `httpapi.Server` has no global state,
+  so several can run side by side. A small watchdog that restarts the whole process gives
+  "let it crash" where it is worth having.
 - **Mats belong to the event.** A score keeper or a display is bound to a *physical* mat and
   follows whatever that mat is running, across disciplines. What a mat runs comes from an
   event-wide queue of *work items* — a pool, a bracket round, the finals — placed by the plan.
@@ -160,8 +161,8 @@ Used precisely from here on.
 | **Plan** | Every work item's mat and order, plus time constraints. What the organizer edits |
 | **Forecast** | The plan re-timed against what has actually happened. Read-only; recomputed all day |
 | **Person** | One human across the event. A competitor record in a discipline, and a staff entry, point at a person |
-| **Coordinator** | The event-level component that owns all of the above and supervises the disciplines |
-| **Worker** | One discipline as the coordinator runs it |
+| **Coordinator** | The event-level code that owns all of the above and loads the disciplines |
+| **Worker** | One discipline as the coordinator holds it: a tournament with its own folder and lock. Not a separate process, thread or actor |
 
 ---
 
@@ -170,23 +171,76 @@ Used precisely from here on.
 The question the issue opened with: how do the disciplines and the event-wide part relate as
 running programs? Everything else depends on the answer.
 
-### First, about "processes"
+### First, is "a process per discipline" the right question?
 
-The comments describe the right shape — a parent process per tournament, a process per discipline,
-mats handed out and returned, results reported up — and come at it from Erlang. One thing about
-the mapping is worth saying plainly, because it changes which option that shape points to.
+The comments propose a parent process per tournament and a process per discipline, with mats
+handed out and results reported up, and come at it from Erlang. Part of that is exactly right and
+part of it is worth challenging before it shapes the design.
 
-**An Erlang process is not an operating-system process.** It is a lightweight unit inside one
-BEAM VM: its own private state, a mailbox, no shared memory, and a supervisor that restarts it when
-it crashes. A hundred thousand of them run inside one OS process. The isolation comes from the
-language and the runtime, not from the OS.
+**What is right: mats are a contested resource, and stages have sync points.** Two disciplines
+cannot use one mat at once, the eliminations cannot start before the pools are done, and the
+finals may be held for the end of the day. That is a real allocation problem, and §9 and §10 are
+built around it.
 
-Go's nearest equivalent is a **goroutine that owns its own state** and is talked to through
-methods or channels, with a supervisor that recovers and restarts it. Go does not give
-Erlang's guarantees for free — a panic in an unsupervised goroutine takes the whole OS process
-down, where Erlang would only lose that one process — so in Go the supervision has to be written
-deliberately (§5, option D). But the *architecture* the comments describe maps onto one OS process
-with supervised workers at least as naturally as onto several OS processes.
+**What does not follow: that a discipline must be its own thread or process to run
+concurrently.** Disciplines happening at the same time *in the hall* does not mean they need to
+run in parallel *in the server*:
+
+- Every HTTP request is already handled on its own goroutine. Two score keepers on two
+  disciplines are served side by side today, inside one process, with no extra design.
+- The work per request is small: replaying a match log and appending one exchange is dominated
+  by the disk sync, a few milliseconds at most. A busy hall produces a write every few seconds. A
+  single lock over the whole event would hardly ever be contended, and each discipline keeps its
+  own lock anyway, as today.
+- Parallel execution is a performance tool, and there is no performance problem to solve.
+
+**Isolation from what?** The other argument for a process per discipline is that one failing
+cannot take the others down. It is worth listing what actually fails at an event:
+
+| Failure | Contained by a process per discipline? |
+|---|---|
+| The laptop sleeps, loses power or is closed | no — everything is on it |
+| The venue wifi drops | no — and the clients already survive it (R8) |
+| A hand-edited file no longer parses | only by loading each discipline separately, which one process can do equally well |
+| A bug in the code | rarely: every discipline runs the *same* code, so a bug one can hit, the others usually can too |
+
+Process boundaries mainly help with the last case, and only when a bug is triggered by one
+discipline's data and not another's. Against that they cost a protocol between the parts (option
+C below), and the costs of a protocol are paid on every feature, not only when something fails.
+
+**The decisions that matter most need one consistent view.** "One discipline per mat at a time",
+"nobody in two places at once" and "no referee who is fencing" are decisions across several
+disciplines' state at once. With isolated units that only exchange messages, each becomes a small
+distributed agreement with its own failure modes: a message lost while a worker restarts, two
+units disagreeing after a crash. Erlang itself would solve it by sending every such decision through
+one coordinating process. That process serialises them, which is a lock by another name. Isolation
+is the wrong default for state that has to agree across disciplines.
+
+**Where Erlang's model earns its keep, and why that is not here.** It shines with many
+independent, long-lived units that fail often, run across machines and are upgraded while running.
+A club event has a handful of disciplines on one laptop, all state on disk, clients that keep
+scoring through an outage, and a restart that only has to re-read a few JSON files. In that setting the cheapest
+form of "let it crash" is coarse: **restart the whole process** and let it reload from disk. A tiny
+watchdog — the executable starting itself as a child and restarting it when it exits — gives that
+with no supervision code inside the application.
+
+**So the useful split is by data and responsibility, not by execution unit.** Each discipline
+keeps its own folder, files and lock (data isolation, which is what #49 really bought), and the
+event's code is kept apart from the discipline's code (responsibility). How many OS processes or
+goroutines that runs on is a detail, and the simplest answer — one — is the right one until there
+is evidence otherwise.
+
+**When to revisit.** Separate processes, or separate machines, become worth their protocol if
+any of these turns up:
+
+- an event that needs disciplines on more than one PC — two halls, or more mats than one laptop
+  and one network can serve;
+- a need to run different versions of the software for different disciplines;
+- evidence from real events of crashes that hit one discipline and not the others.
+
+The first is the most plausible, and it is a different problem, distribution rather than isolation.
+If it comes, the coordinator becomes a hub that other PCs report to, and the work in §6–§10 carries
+over unchanged.
 
 ### The options
 
@@ -216,7 +270,8 @@ watches and restarts the workers. It aggregates their event streams into the lan
 stream. This is the comments' model, taken literally.
 
 - For: the strongest crash isolation. A discipline that panics loses only itself, and the
-  coordinator restarts it. Workers are today's code nearly unchanged.
+  coordinator restarts it. Workers are today's code nearly unchanged. And it is the shape a
+  multi-PC event would need, if that ever becomes a requirement.
 - Against:
   - The coordinator and workers talk over HTTP on localhost, so every interaction — "pools are
     done", "this mat is yours next", "who is Astrid" — becomes a little protocol with its own
@@ -229,26 +284,33 @@ stream. This is the comments' model, taken literally.
   - The coordinator is still a single point of failure for the hall, because it is the address.
     So the isolation it buys protects against discipline-specific crashes only, not against the
     failure that matters most.
+  - The decisions that span disciplines (mats, people, staff) cross a process boundary every
+    time, which is the hardest part of the design to get right and test.
 
-**D. A coordinator with in-process workers — recommended.** One OS process, one port. Each
+**D. One process serving every discipline — recommended.** One OS process, one port. Each
 discipline is an `httpapi.Server` exactly as today — its own store and folder, its own SSE hub, its
-own write lock, its own presence — mounted under its own path prefix and supervised by the
-coordinator. Coordinator and workers talk through Go interfaces rather than HTTP.
+own write lock, its own presence — mounted under its own path prefix. The coordinator is ordinary
+code in the same process, calling the disciplines through Go methods.
 
 - For:
-  - It is the comments' model — a parent per tournament, a supervised worker per discipline, mats
-    handed out and results reported up — with the plumbing of option C removed.
+  - It keeps what was right in the comments — mats handed out, stages reporting up — and drops
+    the plumbing that option C needs to do the same across processes.
+  - Decisions across disciplines are made against one consistent view, under one lock, in one
+    place. They can be tested as ordinary functions.
   - It needs little new machinery: `httpapi.Server` keeps all of its state on the struct and none
     in package variables, so several can live in one process — the Go tests already create one
     per test.
   - One address and one browser origin come for free (R1). The aggregated stream is a
     subscription to N in-memory hubs.
-  - The demo can run a multi-discipline event, because WebAssembly has goroutines (R11).
+  - The demo can run a multi-discipline event, because nothing here needs processes or sockets
+    (R11).
 - Against:
-  - **Crash isolation is weaker and must be built.** A panic in a discipline's background
-    goroutine would kill every discipline. The mitigation is a rule plus a helper: every goroutine
-    a worker starts goes through `worker.Go(fn)`, which recovers, marks the worker failed and
-    restarts it from disk. HTTP handlers are already recovered per request by `net/http`.
+  - **A crash takes every discipline down at once.** Two cheap measures cover the realistic
+    cases:
+    - A discipline whose files will not load is reported as failed and skipped, never fatal (§11).
+    - A watchdog restarts the process when it dies. HTTP handlers are already recovered per request
+      by `net/http`, and the few background goroutines recover, as a coding rule.
+    - Clients ride through the restart as they ride through a wifi drop.
   - A runaway discipline (a hot loop, a leak) shares memory and CPU with the others. At this
     scale — four disciplines, a few hundred matches — that is a risk on paper more than in practice.
 
@@ -256,12 +318,12 @@ coordinator. Coordinator and workers talk through Go interfaces rather than HTTP
 disciplines into one `tournament.json` and one engine instance. This undoes #49: one ruleset per
 run, the hand-editable folder per discipline and the engine's assumption that it owns one
 tournament all go. Ruled out, for the reasons the comments give. **Option D is not this.** In D
-every discipline keeps its own folder, files, ruleset, lock and engine; only the address and the
-supervisor are shared.
+every discipline keeps its own folder, files, ruleset, lock and engine; only the process, the
+address and the event-level code are shared.
 
 ### Comparison
 
-| | A proxy | B fan-out | C OS workers | **D in-process workers** | E merge |
+| | A proxy | B fan-out | C OS workers | **D one process** | E merge |
 |---|---|---|---|---|---|
 | R1 one address | reads only | no | yes | **yes** | yes |
 | R2 degrade | parent is SPOF | per discipline | coordinator is SPOF | **coordinator is SPOF** | all or nothing |
@@ -269,22 +331,28 @@ supervisor are shared.
 | R4 one identity | no | no | yes | **yes** | yes |
 | R5 event-wide mats | no | no | yes, via protocol | **yes, in memory** | yes |
 | R6 plan across disciplines | no | in every browser | yes, via protocol | **yes, in memory** | yes |
-| R7 isolation | full | full | full, by OS | **full on disk; crashes by supervision** | lost |
+| R7 isolation | full | full | full, by OS | **full on disk; a crash restarts everything** | lost |
 | R8 offline score keepers | unchanged | unchanged | unchanged | **unchanged** | unchanged |
 | R9 one executable | yes | yes | yes, N processes | **yes, one process** | yes |
 | R11 demo | no | no | no | **yes** | yes |
+| Decisions across disciplines | none possible | in every browser | over a protocol | **one view, one lock** | one view |
 | New machinery | small | small | large | **moderate** | very large |
 
 ### Recommendation
 
-**D, with the coordinator–worker boundary written as an interface** (`Discipline` below), so that
-the implementation behind it could become an OS process later without the coordinator, the HTTP
-routes or the clients noticing. If the in-process supervision ever proves insufficient in a real
-hall, C is a contained change from D, not a redesign.
+**D: one process, a folder per discipline, and a watchdog around the process.** No actors,
+mailboxes or in-process supervisors. They would add machinery to protect against failures this
+product rarely has, and make the decisions it constantly has to make — across disciplines — harder.
+
+The coordinator talks to a discipline through a small interface (`Discipline` below). That is
+worth having for its own sake: the coordinator's logic can be tested against fake disciplines,
+and the demo can supply in-memory ones. It is **not** there to prepare for separate processes. If
+one of the triggers above ever fires, the interface is where a remote implementation would go, but
+designing for that now would be paying for a requirement nobody has.
 
 ```go
-// What the coordinator needs from a discipline. In-process now; could be a client for a
-// worker process later.
+// What the coordinator needs from a discipline. Implemented by today's httpapi.Server
+// with a few additions; faked in the coordinator's tests and supplied by the demo.
 type Discipline interface {
     Slug() string                       // "longsword", stable, used in URLs and folders
     Handler() http.Handler              // today's routes, mounted under /api/d/{slug}/
@@ -292,7 +360,7 @@ type Discipline interface {
     Subscribe() (<-chan httpapi.Update, func())
     WorkItems() []WorkItem              // what it needs mat time for, with estimates
     Entries() []Entry                   // its competitors, with the person they point at
-    Health() Health                     // running / failed (why) / restarting
+    Health() Health                     // loaded, or failed to load and why
 }
 ```
 
@@ -305,7 +373,7 @@ flowchart TB
             People["people.json"]
             Plan["mats · plan · forecast"]
             Agg["aggregated event stream"]
-            Sup["supervisor"]
+            Reg["discipline registry<br/>loads each folder, reports failures"]
         end
         subgraph W1["Worker: Longsword"]
             S1["httpapi.Server"] --> F1[("disciplines/longsword/<br/>tournament.json · competitors.json · matches/")]
@@ -316,12 +384,13 @@ flowchart TB
         Router --> Coord
         Router -- "/api/d/longsword/…" --> S1
         Router -- "/api/d/sabre/…" --> S2
-        Sup -. supervises .-> W1
-        Sup -. supervises .-> W2
+        Reg -. loads .-> W1
+        Reg -. loads .-> W2
         S1 -. updates .-> Agg
         S2 -. updates .-> Agg
     end
     Phones["Every phone, tablet and screen in the hall<br/>one address"] --> Router
+    Watchdog["watchdog: restarts the process if it exits"] -. restarts .-> PC
 ```
 
 ---
@@ -601,14 +670,19 @@ stateDiagram-v2
 
 ### Why not a new process per stage
 
-The comments sketch a fresh process for the eliminations. Under this design it does not need one,
-and is better without:
+The comments sketch a fresh process for the eliminations. That ties two things together that
+should stay apart: the *unit of planning* (a stage, a work item) and the *unit of execution* (a
+process). A stage ending is a change of state in a tournament, not a reason to start a new
+program. Keeping one discipline as one tournament through all its stages is simpler and safer:
 
 - **The bracket is seeded from the pool standings.** Those live, with their match logs, in the
   discipline's folder. A separate eliminations worker would need them copied across, and a
   corrected pool result after the draw would need copying again.
 - **Exports and the discipline's own admin page show pools and bracket together**, as one
   tournament.
+- **A correction after the draw would cross a boundary.** A pool result fixed in the log editor
+  after the bracket is drawn changes the seeding. Within one tournament that is a recomputation,
+  which is how it already works. Across two processes it becomes a data migration between them.
 - **What the per-stage process was for is kept.** A stage starts only when the previous one
   reports done, and its mats are allocated at that point. The *allocation* is per stage; the
   *process* need not be.
@@ -729,8 +803,9 @@ happens in each failure, under the recommended design.
 |---|---|---|
 | A discipline's files no longer parse | a hand edit (design decision 8 invites them) | that worker is **failed** with the parse error shown on `/admin`; every other discipline runs; the landing page shows that discipline's last known state, marked stale |
 | A discipline's code panics in a handler | a bug | `net/http` recovers it; that request fails; nothing else notices |
-| A discipline's code panics in a goroutine | a bug | `worker.Go` recovers it, marks the worker failed and reloads it from disk; its devices see a short gap, as for a LAN drop |
-| The whole process stops | a crash, the PC sleeping, someone closing it | every screen loses the server, as today; score keepers keep scoring offline and resend on return (R8); state is on disk |
+| A discipline's code panics in a goroutine | a bug | background goroutines recover by rule; one that slips through stops the process, and the watchdog restarts it within seconds; devices see a gap, as for a LAN drop |
+| The whole process stops | a crash, or someone closing it | the watchdog restarts it, unless it was closed on purpose; score keepers keep scoring offline and resend on return (R8); state is on disk |
+| The PC sleeps or loses power | a laptop | every screen loses the server until it is back, as today, whatever the topology |
 | A device loses the LAN | venue wifi | unchanged from today |
 | The coordinator's own state is corrupt | a hand edit to `event.json` | the event starts with the disciplines and no plan, and says so; the disciplines' own data is untouched |
 
@@ -763,7 +838,7 @@ load as a state, not an error.
 
 | Today | Becomes |
 |---|---|
-| `POST /api/instances` and sibling processes on new ports (#49) | `POST /api/disciplines`: a new worker in the same process (#4) |
+| `POST /api/instances` and sibling processes on new ports (#49) | `POST /api/disciplines`: another folder and server in the same process (#4) |
 | `-port`, `-parent`, `-name` flags | one `-dir` pointing at the event folder; the others retire |
 | A tray icon per discipline | one tray icon for the event |
 | `Tournament.Event` per run (#98) | `event.json`, once; migrated on first open |
@@ -772,7 +847,7 @@ load as a state, not an error.
 | Signup per run, "each run takes its share" (#91) | one import at event level that hands each discipline its share, using the same `signup.Check` |
 | `Tournament.Staff` per run (#5) | staff at event level, so availability spans disciplines |
 | `/who/:id` (competitor id) | `/who/:person`; the old form redirects |
-| The demo | can show a two-discipline event once phase 1 lands, because the workers are in-process |
+| The demo | can show a two-discipline event once phase 1 lands, because there is only one process |
 | The cloud mirror (design §8) | simpler: one event stream to mirror instead of N |
 
 ---
@@ -783,7 +858,7 @@ Each phase ships on its own and leaves the product better than it found it.
 
 | Phase | Delivers | Issues |
 |---|---|---|
-| **1. One event, one address** | Coordinator with in-process workers; `/api/d/{d}/…` routing and the one-discipline aliases; namespaced client storage; `event.json` for welcome, programme items and wifi; the combined landing page and info sheet; per-discipline degradation; disciplines added from `/admin` | **#102**, #4, #104 (one `/admin` to protect) |
+| **1. One event, one address** | Coordinator and every discipline in one process, with a watchdog; `/api/d/{d}/…` routing and the one-discipline aliases; namespaced client storage; `event.json` for welcome, programme items and wifi; the combined landing page and info sheet; per-discipline degradation; disciplines added from `/admin` | **#102**, #4, #104 (one `/admin` to protect) |
 | **2. Physical mats** | Event-wide mats; devices bound to mats and following them across disciplines; mat queues of work items with manual placement; the mat board without suggestions; drag and menu moves | #101 |
 | **3. People** | `people.json`, links from competitor records, signup import at event level, `/who/{person}` across disciplines, duplicate review | #91 follow-up |
 | **4. Plan and forecast** | Duration templates from match logs, the forecast, greedy suggestions with pins, conflict warnings, the derived programme, personal estimated times, a planning mode before the event | #64, #6 |
@@ -798,8 +873,10 @@ the coordinator, not changes to the disciplines.
 
 In the order they block work.
 
-1. **Topology.** In-process workers (D, recommended) or OS-process workers (C)? Everything in
-   phase 1 depends on it. D keeps C reachable later through the `Discipline` interface.
+1. **Topology.** One process serving every discipline (D, recommended), or a process per
+   discipline (C)? Everything in phase 1 depends on it. §5 argues that what #49 really bought was
+   *data* isolation, which D keeps, and that the triggers for separate processes — several PCs,
+   per-discipline versions, discipline-specific crashes — have not appeared yet.
 2. **Mat model.** Event-wide mat queues of work items (recommended) or stage leases? Decides
    whether phase 2 moves pool placement out of the discipline.
 3. **Identity.** An event person registry with explicit links (recommended)? Name matching is
