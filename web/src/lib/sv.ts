@@ -357,8 +357,8 @@ export const sv: Record<string, string> = {
   ', or the roster at': ', eller matchlistan på',
   // --- the demo (issue #88) -----------------------------------------------------------
   Demo: 'Demo',
-  'A real tournament, running entirely in this tab. Nothing is saved and no other device can see it.':
-    'En riktig tävling som körs helt i den här fliken. Ingenting sparas och ingen annan enhet kan se den.',
+  'A real tournament, running entirely in this browser. Your changes follow you from tab to tab until you leave it alone for half an hour, and no other device can see them.':
+    'En riktig tävling som körs helt i den här webbläsaren. Dina ändringar följer med från flik till flik tills du lämnar den orörd i en halvtimme, och ingen annan enhet kan se dem.',
   'Play the rest': 'Spela klart resten',
   'Start over': 'Börja om',
   'The project': 'Projektet',

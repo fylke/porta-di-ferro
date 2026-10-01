@@ -9,8 +9,9 @@ anything or being walked through it.
 
 ## What it is not
 
-It is not a hosted version of the product. There is no server, nothing is saved, and no
-other device can see it — close the tab and it is gone. Every screen says so.
+It is not a hosted version of the product. There is no server, nothing leaves the
+browser, and no other device can see it — leave it alone for half an hour and it is gone.
+Every screen says so.
 
 The real deployment is unchanged and is the only one that runs an event: one binary on
 the organizer's PC, serving JSON files it owns, with the score keepers' tablets and the
@@ -62,7 +63,29 @@ router learning about base paths.
 - **Joining from another device** needs a LAN. The organizer view says "one tab, every
   screen" instead of reporting no network, and links to the score keeper and the displays
   in the same tab.
-- **Nothing persists.** Not to a disk, not to `localStorage`, not between tabs.
+- **Nothing persists beyond the browser,** and not for long in it. See below.
+
+### Between tabs
+
+Several of the organizer's links open a new tab — the displays, the roster, the info
+sheet — and every tab is its own copy of the module. Without help, a visitor who edited
+the welcome message and opened the landing page found the demo as it was before they
+touched it (issue #108).
+
+So the adapter keeps the tournament in `localStorage`. After every request the module
+reports as a change it writes the whole state out (`GET /api/demo/save`); a tab that
+opens loads it (`POST /api/demo/load`); and the tabs already open follow the `storage`
+event, so the score keeper in one tab and the organizer's view in another are the same
+tournament. **Start over** clears it, which resets every tab.
+
+It lasts until the visitor has done nothing for half an hour. After that the next tab
+starts from the fixture, so somebody coming back next week, or the next person at the
+same computer, sees what every first visitor sees. A save the module will not take, such
+as one written by an older demo (`saveFormat` in `internal/demo`), is dropped the same
+way.
+
+The event editor's call, `PUT /api/event`, was missing from the demo's router and is
+answered now, through the same `httpapi.CleanEvent` the server uses.
 
 ### One concession
 

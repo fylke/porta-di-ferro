@@ -76,6 +76,66 @@ func (d *Demo) Reset() {
 	}
 }
 
+// --- keeping it between tabs (issue #108) --------------------------------------------
+//
+// A visitor who edits the welcome message and opens the landing page to see it, or
+// scores a match and goes back to the organizer's view, expects to find the change
+// there. Several of those links open a new tab, and every tab is its own copy of this
+// module, so the adapter keeps the tournament in the browser's localStorage after each
+// change and hands it to every tab that opens. These two are all it needs from here:
+// the whole state out, and back in.
+
+// saveFormat is the shape of saved. Bump it whenever the fields of Demo change, so a
+// browser holding a save from an older demo starts fresh rather than loading half of one.
+const saveFormat = 1
+
+type saved struct {
+	Format      int                      `json:"format"`
+	Competitors []store.Competitor       `json:"competitors"`
+	Tournament  store.Tournament         `json:"tournament"`
+	Logs        map[string][]match.Event `json:"logs"`
+	LastEvent   map[string]time.Time     `json:"lastEvent"`
+}
+
+// Save is the visitor's tournament as JSON, for Load to take back.
+func (d *Demo) Save() ([]byte, error) {
+	return json.Marshal(saved{
+		Format:      saveFormat,
+		Competitors: d.competitors,
+		Tournament:  d.tournament,
+		Logs:        d.logs,
+		LastEvent:   d.lastEvent,
+	})
+}
+
+// Load replaces the tournament with one Save produced. Anything it cannot use -- an
+// older format, or a tournament the snapshot cannot be built from -- is refused and
+// leaves the current one standing, so a bad save costs the visitor their changes and
+// nothing more.
+func (d *Demo) Load(b []byte) error {
+	var in saved
+	if err := json.Unmarshal(b, &in); err != nil {
+		return err
+	}
+	if in.Format != saveFormat {
+		return fmt.Errorf("a save in format %d, and this demo reads %d", in.Format, saveFormat)
+	}
+	if in.Logs == nil {
+		in.Logs = map[string][]match.Event{}
+	}
+	if in.LastEvent == nil {
+		in.LastEvent = map[string]time.Time{}
+	}
+
+	was := *d
+	d.competitors, d.tournament, d.logs, d.lastEvent = in.Competitors, in.Tournament, in.Logs, in.LastEvent
+	if _, err := d.snapshot(); err != nil {
+		*d = was
+		return err
+	}
+	return nil
+}
+
 // --- httpapi.Source -----------------------------------------------------------------
 //
 // The four reads BuildSnapshot needs. *store.Store answers these off the disk; this
@@ -106,7 +166,7 @@ func (d *Demo) LastEventAt(id string) (time.Time, bool) {
 
 // Dir is what the organizer view shows as where the data lives. Saying so plainly beats
 // inventing a path that does not exist.
-func (d *Demo) Dir() string { return "in this browser tab" }
+func (d *Demo) Dir() string { return "in this browser" }
 
 func (d *Demo) snapshot() (httpapi.Snapshot, error) {
 	return httpapi.BuildSnapshot(d, d.rules, httpapi.Instance{
@@ -244,6 +304,8 @@ func (d *Demo) Request(method, path string, body []byte) Response {
 		d.tournament.Staff = kept
 		return changed(map[string]bool{"ok": true})
 
+	case method == "PUT" && path == "/api/event":
+		return d.putEvent(body)
 	case method == "PUT" && path == "/api/tournament":
 		return d.putTournament(body)
 	case method == "POST" && path == "/api/tournament/pools":
@@ -264,7 +326,7 @@ func (d *Demo) Request(method, path string, body []byte) Response {
 		}
 	case method == "GET" && len(parts) == 4 && parts[1] == "matches" && parts[3] == "backups":
 		// The demo keeps no backups: there is no disk to keep them on, and nothing here
-		// outlives the tab.
+		// outlives the browser.
 		return ok([]string{})
 	case len(parts) == 4 && parts[1] == "matches" && parts[3] == "claim":
 		return ok(map[string]bool{"ok": true})
@@ -275,6 +337,17 @@ func (d *Demo) Request(method, path string, body []byte) Response {
 		return changed(map[string]bool{"ok": true})
 	case method == "POST" && path == "/api/demo/play":
 		return d.playOut()
+	case method == "GET" && path == "/api/demo/save":
+		b, err := d.Save()
+		if err != nil {
+			return fail(500, err)
+		}
+		return Response{Status: 200, ContentType: "application/json; charset=utf-8", Body: string(b)}
+	case method == "POST" && path == "/api/demo/load":
+		if err := d.Load(body); err != nil {
+			return fail(400, err)
+		}
+		return ok(map[string]bool{"ok": true})
 	}
 
 	return fail(404, fmt.Errorf("the demo does not answer %s %s", method, path))
@@ -473,6 +546,23 @@ func (d *Demo) deleteCompetitor(id string) Response {
 		}
 	}
 	return fail(404, fmt.Errorf("no competitor %s", id))
+}
+
+// --- the day around it --------------------------------------------------------------
+
+// putEvent is the welcome message, the agenda and the wifi, held to the same limits the
+// server holds them to.
+func (d *Demo) putEvent(body []byte) Response {
+	var in store.Event
+	if err := json.Unmarshal(body, &in); err != nil {
+		return fail(400, err)
+	}
+	ev, err := httpapi.CleanEvent(in)
+	if err != nil {
+		return fail(400, err)
+	}
+	d.tournament.Event = ev
+	return changed(ev)
 }
 
 // --- the draw -----------------------------------------------------------------------

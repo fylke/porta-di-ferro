@@ -77,9 +77,12 @@
     text-transform: uppercase;
     color: var(--ink-dim);
   }
+  /* Capped by the width too, so two full names on an upright phone wrap onto a second
+     line instead of a third and fourth. */
   .up {
-    font-size: clamp(1rem, 4vh, 2.4rem);
+    font-size: clamp(1rem, min(4vh, 6vw), 2.4rem);
     font-weight: 700;
+    text-align: center;
   }
   .stale {
     position: absolute;

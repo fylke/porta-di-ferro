@@ -2,6 +2,7 @@ package demo_test
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/fylke/porta-di-ferro/internal/demo"
@@ -386,5 +387,91 @@ func TestThePDFExportIsARealDocument(t *testing.T) {
 	}
 	if len(res.Body) < 1000 {
 		t.Errorf("the document is %d base64 characters, which is not a pool sheet", len(res.Body))
+	}
+}
+
+// The welcome message and the agenda are edited from the admin view and read on the
+// landing page. The demo answered the edit with a 404 until issue #108.
+func TestTheEventEditorSaves(t *testing.T) {
+	d := demo.New()
+	res := d.Request("PUT", "/api/event", []byte(`{"welcome":"  Welcome to the hall  ","schedule":[{"at":"09:00","label":"Pools"},{"at":"","label":"  "}]}`))
+	if res.Status != 200 {
+		t.Fatalf("saving the event returned %d: %s", res.Status, res.Body)
+	}
+	if !res.Changed {
+		t.Error("the landing page is open in other tabs and needs to hear about the edit")
+	}
+	snap := state(t, d)
+	if got := snap.Tournament.Event.Welcome; got != "Welcome to the hall" {
+		t.Errorf("welcome is %q", got)
+	}
+	if got := len(snap.Tournament.Event.Schedule); got != 1 {
+		t.Errorf("the blank row should have been dropped, leaving 1 item, got %d", got)
+	}
+
+	long := `{"welcome":"` + strings.Repeat("x", 5000) + `"}`
+	if res := d.Request("PUT", "/api/event", []byte(long)); res.Status != 400 {
+		t.Errorf("a welcome message past the server's limit should be refused, got %d", res.Status)
+	}
+}
+
+// Every tab is its own copy of the module, so a visitor's changes reach the next tab
+// they open only by way of a save (issue #108). What comes back has to be the same
+// tournament, results and all.
+func TestASavedTournamentComesBack(t *testing.T) {
+	d := demo.New()
+	d.Request("PUT", "/api/event", []byte(`{"welcome":"Kept"}`))
+	d.Request("POST", "/api/competitors", []byte(`{"name":"Someone Else","club":"Nowhere"}`))
+	d.Request("POST", "/api/demo/play", nil)
+	before := state(t, d)
+
+	res := d.Request("GET", "/api/demo/save", nil)
+	if res.Status != 200 {
+		t.Fatalf("save returned %d: %s", res.Status, res.Body)
+	}
+	// It lives in localStorage, which a browser caps at about five megabytes for the
+	// whole of github.io. A finished tournament has to sit well inside that.
+	if len(res.Body) > 1<<20 {
+		t.Errorf("a finished tournament saves to %d bytes, too much for localStorage", len(res.Body))
+	}
+
+	next := demo.New()
+	if r := next.Request("POST", "/api/demo/load", []byte(res.Body)); r.Status != 200 {
+		t.Fatalf("load returned %d: %s", r.Status, r.Body)
+	}
+	after := state(t, next)
+	if after.Tournament.Event.Welcome != "Kept" {
+		t.Errorf("the welcome message did not survive: %q", after.Tournament.Event.Welcome)
+	}
+	if len(after.Competitors) != len(before.Competitors) {
+		t.Errorf("%d competitors came back, there were %d", len(after.Competitors), len(before.Competitors))
+	}
+	if !after.PoolsComplete {
+		t.Error("the played-out pools came back unplayed")
+	}
+	a, _ := json.Marshal(before.Overall)
+	b, _ := json.Marshal(after.Overall)
+	if string(a) != string(b) {
+		t.Error("the overall ranking differs after a round trip, so the results did not come back as they were")
+	}
+}
+
+// A save the demo cannot use is refused and changes nothing: the visitor loses their
+// changes, not the demo.
+func TestABadSaveIsRefused(t *testing.T) {
+	d := demo.New()
+	before := state(t, d)
+
+	for name, body := range map[string]string{
+		"not json":       `{"format":`,
+		"another format": `{"format":999,"competitors":[]}`,
+	} {
+		if res := d.Request("POST", "/api/demo/load", []byte(body)); res.Status != 400 {
+			t.Errorf("%s: load returned %d, want 400", name, res.Status)
+		}
+	}
+	after := state(t, d)
+	if len(after.Competitors) != len(before.Competitors) || len(after.Pools) != len(before.Pools) {
+		t.Error("a refused load still changed the tournament")
 	}
 }

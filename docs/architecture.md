@@ -56,17 +56,20 @@ flowchart LR
         B1[Browser] --> S[Go server] --> F[(JSON files)]
         S -. SSE .-> B1
     end
-    subgraph Demo["The demo, one browser tab"]
+    subgraph Demo["The demo, one browser"]
         B2[The same Svelte bundle] --> A[demo adapter: window.fetch and EventSource replaced]
         A --> W[cmd/demo-wasm]
         W --> M[(tournament in memory)]
         A -. pushes a snapshot on every write .-> B2
+        A -. saved on every write, loaded by every tab .-> L[(localStorage)]
     end
     W --> T[internal/tournament, internal/match, httpapi.BuildSnapshot]
     S --> T
 ```
 
 `BuildSnapshot` takes a `Source` — the four reads a snapshot needs — so `*store.Store` serves it off disk for an event and the demo serves it out of memory. Both sides reach the same tournament code, which is what stops the demo drifting into a second, subtly different implementation of the standings.
+
+Each tab runs its own copy of the module. The adapter saves the whole tournament to `localStorage` after every write, each new tab loads it, and open tabs follow the `storage` event, so the tabs of one browser share one tournament the way the tablets and the PC share one at an event (issue #108). A visitor away for half an hour comes back to the fixture.
 
 ### 1c. The three views
 

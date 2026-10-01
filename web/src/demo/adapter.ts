@@ -123,6 +123,93 @@ class DemoEventSource extends EventTarget {
   }
 }
 
+// --- keeping the tournament between tabs (issue #108) ---------------------------------
+//
+// Every tab runs its own copy of the module, and several of the organizer's links open a
+// new tab, so a visitor who edited the welcome message and opened the landing page found
+// the demo as it was before they touched it. The tournament is therefore kept in
+// localStorage after every change, taken up by each tab as it opens, and followed by the
+// tabs already open -- which makes the score keeper in one tab and the organizer's view
+// in another the same tournament, the way the tablets and the PC are at an event.
+//
+// It is still one browser. Nothing leaves it, and a visitor who comes back after a while
+// away finds the demo as everyone first finds it, not as they or somebody on the same
+// computer left it.
+
+const SAVED = 'porta-di-ferro-demo';
+/** When the visitor last did anything. Its own key, so touching it is not a whole save. */
+const SEEN = 'porta-di-ferro-demo-seen';
+/** How long the demo waits for a visitor before it starts over. */
+const IDLE_MS = 30 * 60 * 1000;
+
+let lastSeen = 0;
+
+/** Marks the visitor as still here, at most every few seconds. */
+function seen(): void {
+  const now = Date.now();
+  if (now - lastSeen < 5000) return;
+  lastSeen = now;
+  try {
+    localStorage.setItem(SEEN, String(now));
+  } catch {
+    // Storage blocked or full: the demo works, it just will not follow into a new tab.
+  }
+}
+
+/** Writes the whole tournament out, after anything that changed it. */
+function persist(): void {
+  const res = call('GET', '/api/demo/save');
+  if (res.status !== 200) return;
+  try {
+    localStorage.setItem(SAVED, res.body);
+    lastSeen = 0;
+    seen();
+  } catch {
+    // As above.
+  }
+}
+
+function forget(): void {
+  try {
+    localStorage.removeItem(SAVED);
+    localStorage.removeItem(SEEN);
+  } catch {
+    // As above.
+  }
+}
+
+/**
+ * Takes up the tournament another tab left, if the visitor was here recently. A save
+ * the module will not take -- an older demo's, say -- is dropped, and the tab starts
+ * from the fixture like a first visit.
+ */
+function restore(): void {
+  let state: string | null = null;
+  let at = 0;
+  try {
+    state = localStorage.getItem(SAVED);
+    at = Number(localStorage.getItem(SEEN) ?? 0);
+  } catch {
+    return;
+  }
+  if (state === null) return;
+  if (!(Date.now() - at < IDLE_MS)) {
+    forget();
+    return;
+  }
+  if (call('POST', '/api/demo/load', state).status !== 200) forget();
+}
+
+/** Follows the other tabs: their save is this tab's tournament too. */
+function follow(): void {
+  window.addEventListener('storage', (ev) => {
+    if (ev.key !== SAVED && ev.key !== null) return;
+    if (ev.newValue === null) call('POST', '/api/demo/reset');
+    else call('POST', '/api/demo/load', ev.newValue);
+    broadcast();
+  });
+}
+
 // --- installing the shims -------------------------------------------------------------
 
 function installFetch(): void {
@@ -134,7 +221,11 @@ function installFetch(): void {
     const method = (init?.method ?? (typeof input === 'object' && 'method' in input ? input.method : 'GET')).toUpperCase();
     const body = typeof init?.body === 'string' ? init.body : undefined;
     const res = call(method, path, body);
-    if (res.changed) broadcast();
+    seen();
+    if (res.changed) {
+      broadcast();
+      persist();
+    }
     return toResponse(res);
   };
 }
@@ -225,6 +316,8 @@ export async function startDemo(navigate: (to: string) => void): Promise<void> {
   void go.run(result.instance);
   await ready;
 
+  restore();
+  follow();
   installFetch();
   window.EventSource = DemoEventSource as unknown as typeof EventSource;
   installLinks(navigate);
@@ -247,12 +340,15 @@ export async function startDemo(navigate: (to: string) => void): Promise<void> {
 
 /** The demo's own controls, for the banner. Both go through the module like anything else. */
 export const demoControls = {
+  /** Start over is for every tab: the others hear the save go and reset with it. */
   reset(): void {
     call('POST', '/api/demo/reset');
+    forget();
     broadcast();
   },
   playRest(): void {
     call('POST', '/api/demo/play');
     broadcast();
+    persist();
   },
 };

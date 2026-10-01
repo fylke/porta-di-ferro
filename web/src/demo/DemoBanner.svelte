@@ -7,10 +7,10 @@
    * The strip along the bottom of every demo screen (issue #88).
    *
    * It is there to stop the demo being mistaken for the application. This runs in one
-   * browser tab with no server behind it: nothing is saved, nothing reaches another
-   * device, and a visitor who closed the tab believing otherwise would have a bad
-   * surprise waiting at their event. So it says so, on every screen, rather than once on
-   * a landing page nobody reads.
+   * browser with no server behind it: nothing reaches another device, what the visitor
+   * changed is gone after half an hour away (issue #108), and a visitor who believed
+   * otherwise would have a bad surprise waiting at their event. So it says so, on every
+   * screen, rather than once on a landing page nobody reads.
    *
    * The two buttons are the demo's own and exist nowhere in the application. Play the
    * rest is how somebody who does not want to score forty matches still gets to see the
@@ -45,7 +45,7 @@
   </button>
 
   <p class="what">
-    {t('A real tournament, running entirely in this tab. Nothing is saved and no other device can see it.')}
+    {t('A real tournament, running entirely in this browser. Your changes follow you from tab to tab until you leave it alone for half an hour, and no other device can see them.')}
   </p>
 
   <span class="actions">
