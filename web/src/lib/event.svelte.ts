@@ -26,6 +26,7 @@ export class EventLive {
   /** Every device in the hall and everything set aside, for the admin's Screens panel. */
   presence = $state<Presence | null>(null);
   private source: EventSource | null = null;
+  private followers = 0;
 
   /** Several disciplines, so an address with none in it is the event's page. */
   get multi(): boolean {
@@ -49,8 +50,14 @@ export class EventLive {
     }
   }
 
-  /** Follows the event from here on: what the landing page and the event admin do. */
+  /**
+   * Follows the event from here on: what the landing page, the event admin, the info sheet
+   * and a person's page do. Counted, because two of them can be on screen at once -- the
+   * admin and its Screens panel -- or hand over to each other, and the one leaving must not
+   * close the stream the one arriving has just asked for.
+   */
   follow(): void {
+    this.followers++;
     if (this.source) return;
     const source = new EventSource('/api/event/stream');
     this.source = source;
@@ -74,6 +81,8 @@ export class EventLive {
   }
 
   unfollow(): void {
+    this.followers = Math.max(0, this.followers - 1);
+    if (this.followers > 0) return;
     this.source?.close();
     this.source = null;
     this.connected = false;
