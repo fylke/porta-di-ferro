@@ -28,6 +28,9 @@ type Server struct {
 	identity identity
 	// event is the event this discipline is part of, or nil for a server on its own.
 	event EventInfo
+	// mats is the event's plan, when the discipline's work runs on the event's mats.
+	mats EventMats
+
 
 	// writeMu serialises writes. One organizer and at most four mats: a single lock is
 	// simpler than anything cleverer and cannot be got wrong.
@@ -40,6 +43,14 @@ type Server struct {
 // this is; a name left empty is read from its tournament.json, where renaming it from the
 // admin page keeps it (issue #80).
 func New(st *store.Store, assets fs.FS, self Instance) *Server {
+	return newServer(st, assets, self, nil)
+}
+
+// newServer is New with the registry of devices given: the event's, shared by every
+// discipline in it, which the coordinator sweeps. Nil makes the server its own and starts
+// its own sweep. Given here rather than swapped in after, so no goroutine of this server
+// ever sees the registry change under it.
+func newServer(st *store.Store, assets fs.FS, self Instance, shared *presence) *Server {
 	self.Dir = st.Dir()
 	if self.Name == "" {
 		if t, err := st.Tournament(); err == nil {
@@ -58,11 +69,14 @@ func New(st *store.Store, assets fs.FS, self Instance) *Server {
 		limits:   tournament.DefaultLimits(),
 		hub:      newHub(),
 		assets:   assets,
-		presence: newPresence(),
+		presence: shared,
 		stop:     make(chan struct{}),
 	}
 	s.identity.self = self
-	go s.sweepPresence(s.stop)
+	if shared == nil {
+		s.presence = newPresence()
+		go s.sweepPresence(s.stop)
+	}
 	return s
 }
 

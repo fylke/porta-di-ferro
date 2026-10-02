@@ -163,6 +163,24 @@ func (s *Server) patchPool(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
+	if s.mats != nil {
+		// In an event the pool is a work item on the event's mats, and moving it is a
+		// change to the plan (phase 2). The pool keeps its lane; the plan says where it runs.
+		if in.Mat <= 0 && in.Move != "up" && in.Move != "down" {
+			writeErr(w, http.StatusBadRequest, errNoOverride)
+			return
+		}
+		if err := s.movePoolOnEventMats(number, in.Mat, in.Move); err != nil {
+			code := http.StatusBadRequest
+			if _, locked := err.(ErrNotMovable); locked {
+				code = http.StatusConflict
+			}
+			writeErr(w, code, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+		return
+	}
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 	t, err := s.store.Tournament()

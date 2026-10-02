@@ -36,6 +36,14 @@ type Coordinator struct {
 	assets       fs.FS
 	hub          *hub
 	addressCache addressCache
+	// matsHub carries the hall's mats -- every queue, and what each mat is running -- to
+	// the score keepers and the screens (phase 2).
+	matsHub *hub
+	// presence is every device in the hall, shared with every discipline so a claim on a
+	// match anywhere asks the one registry whether its holder is alive.
+	presence *presence
+	// planMu serialises changes to the plan.
+	planMu sync.Mutex
 
 	mu      sync.Mutex
 	order   []string
@@ -65,10 +73,12 @@ func NewCoordinator(folder *event.Folder, assets fs.FS) (*Coordinator, error) {
 	c := &Coordinator{
 		folder:  folder,
 		assets:  assets,
-		hub:     newHub(),
-		workers: map[string]*worker{},
-		changed: make(chan struct{}, 1),
-		stop:    make(chan struct{}),
+		hub:      newHub(),
+		matsHub:  newHub(),
+		presence: newPresence(),
+		workers:  map[string]*worker{},
+		changed:  make(chan struct{}, 1),
+		stop:     make(chan struct{}),
 	}
 	slugs, err := folder.Slugs()
 	if err != nil {
@@ -85,7 +95,9 @@ func NewCoordinator(folder *event.Folder, assets fs.FS) (*Coordinator, error) {
 		c.workers[slug] = c.load(slug)
 		c.order = append(c.order, slug)
 	}
+	c.liftDisplays()
 	go c.announce()
+	go c.sweep()
 	return c, nil
 }
 
@@ -121,10 +133,11 @@ func (c *Coordinator) load(slug string) *worker {
 		log.Printf("porta: discipline %s failed to load: %v", slug, err)
 		return w
 	}
-	w.srv = New(st, nil, Instance{Slug: slug})
+	w.srv = newServer(st, nil, Instance{Slug: slug}, c.presence)
 	w.srv.UseEvent(c)
+	w.srv.UseMats(c)
 	w.handler = w.srv.Handler()
-	w.unfollow = c.follow(w.srv)
+	w.unfollow = c.follow(w.srv, slug)
 	return w
 }
 
@@ -139,8 +152,9 @@ func (w *worker) close() {
 
 // follow listens to a discipline's stream for as long as it is in the event, and tells
 // the event's stream something changed. A subscriber that falls behind is dropped by the
-// hub, so this subscribes again rather than going quiet.
-func (c *Coordinator) follow(srv *Server) func() {
+// hub, so this subscribes again rather than going quiet. A log the organizer rewrote is
+// passed on to the mats' stream, with its discipline, for the score keeper holding it.
+func (c *Coordinator) follow(srv *Server, slug string) func() {
 	done := make(chan struct{})
 	go func() {
 		defer recoverLogged("following a discipline")
@@ -151,10 +165,15 @@ func (c *Coordinator) follow(srv *Server) func() {
 				case <-done:
 					unsubscribe()
 					return
-				case _, open = <-ch:
-					if open {
-						c.poke()
+				case u, ok := <-ch:
+					open = ok
+					if !ok {
+						break
 					}
+					if u.Kind == "log-replaced" {
+						c.matsHub.publish(Update{Kind: "log-replaced", Match: u.Match, Data: map[string]string{"discipline": slug}})
+					}
+					c.poke()
 				}
 			}
 		}
@@ -190,8 +209,18 @@ func (c *Coordinator) announce() {
 		case <-c.changed:
 		default:
 		}
-		if c.hub.subscribers() > 0 {
-			c.hub.publish(Update{Kind: "event", Data: c.View()})
+		event, mats := c.hub.subscribers() > 0, c.matsHub.subscribers() > 0
+		if !event && !mats {
+			continue
+		}
+		snaps := c.snapshots()
+		view := c.matsFrom(snaps)
+		if event {
+			c.hub.publish(Update{Kind: "event", Data: c.viewFrom(snaps, view)})
+			c.hub.publish(Update{Kind: "presence", Data: c.presenceView()})
+		}
+		if mats {
+			c.matsHub.publish(Update{Kind: "mats", Data: view})
 		}
 	}
 }
@@ -244,14 +273,25 @@ func (c *Coordinator) snapshotWorkers() []*worker {
 
 // View is the event as its pages see it.
 func (c *Coordinator) View() EventView {
+	snaps := c.snapshots()
+	return c.viewFrom(snaps, c.matsFrom(snaps))
+}
+
+// viewFrom builds the event view from snapshots already taken, with each discipline's
+// mats -- the event's mats it is running right now -- read off the hall's.
+func (c *Coordinator) viewFrom(snaps []snapped, mats MatsView) EventView {
 	view := EventView{Dir: c.folder.Dir(), Disciplines: []DisciplineSummary{}}
 	file, err := c.folder.Read()
 	if err != nil {
 		view.InfoError = err.Error()
 	}
 	view.Info = file.Event
-	for _, w := range c.snapshotWorkers() {
-		view.Disciplines = append(view.Disciplines, c.summarize(w))
+	for _, s := range snaps {
+		d := c.summarizeFrom(s)
+		if s.err == nil {
+			d.Mats = summaryMats(mats, s.w.slug)
+		}
+		view.Disciplines = append(view.Disciplines, d)
 	}
 	view.Name = strings.TrimSpace(view.Info.Signup.Name)
 	if view.Name == "" && len(view.Disciplines) == 1 {
@@ -261,6 +301,17 @@ func (c *Coordinator) View() EventView {
 }
 
 func (c *Coordinator) summarize(w *worker) DisciplineSummary {
+	s := snapped{w: w}
+	if w.srv == nil {
+		s.err = w.err
+	} else {
+		s.snap, s.err = w.srv.Snapshot()
+	}
+	return c.summarizeFrom(s)
+}
+
+func (c *Coordinator) summarizeFrom(sn snapped) DisciplineSummary {
+	w := sn.w
 	failed := func(err error) DisciplineSummary {
 		c.mu.Lock()
 		last := w.last
@@ -277,14 +328,10 @@ func (c *Coordinator) summarize(w *worker) DisciplineSummary {
 		}
 		return out
 	}
-	if w.srv == nil {
-		return failed(w.err)
+	if sn.err != nil {
+		return failed(sn.err)
 	}
-	snap, err := w.srv.Snapshot()
-	if err != nil {
-		return failed(err)
-	}
-	s := Summarize(w.slug, snap)
+	s := Summarize(w.slug, sn.snap)
 	c.mu.Lock()
 	w.last = &s
 	c.mu.Unlock()
@@ -320,6 +367,22 @@ func (c *Coordinator) Handler() http.Handler {
 	mux.HandleFunc("PATCH /api/disciplines/{d}", c.renameDiscipline)
 	mux.HandleFunc("DELETE /api/disciplines/{d}", c.retireDiscipline)
 	mux.HandleFunc("POST /api/disciplines/{d}/reload", c.reloadDiscipline)
+
+	mux.HandleFunc("GET /api/mats", c.getMats)
+	mux.HandleFunc("PUT /api/mats", c.putMats)
+	mux.HandleFunc("GET /api/mats/stream", func(w http.ResponseWriter, r *http.Request) {
+		serveStream(w, r, c.matsHub)
+	})
+	mux.HandleFunc("GET /api/plan", c.getMats)
+	mux.HandleFunc("PATCH /api/plan/items/{id...}", c.patchItem)
+
+	// The devices at the mats are the event's, whatever discipline they are scoring.
+	mux.HandleFunc("GET /api/presence", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, c.presenceView())
+	})
+	mux.HandleFunc("POST /api/clients/{id}", c.register)
+	mux.HandleFunc("POST /api/clients/{id}/release", c.release)
+	mux.HandleFunc("PUT /api/clients/{id}/target", c.assignDisplay)
 
 	mux.HandleFunc("/api/d/{d}/", c.discipline)
 	mux.HandleFunc("/api/", c.alias)

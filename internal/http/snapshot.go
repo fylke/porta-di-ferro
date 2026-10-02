@@ -112,12 +112,16 @@ type Source interface {
 // snapshot builds this server's picture. The work is in BuildSnapshot; what the server
 // adds is where the state comes from and who is connected.
 func (s *Server) snapshot() (Snapshot, error) {
-	return BuildSnapshot(source{s.store, s}, s.rules, s.self(), func(mat int) string {
+	snap, err := BuildSnapshot(source{s.store, s}, s.rules, s.self(), func(mat int) string {
 		if sk := s.presence.scorekeeperOn(mat); sk != nil {
 			return sk.Match
 		}
 		return ""
 	})
+	if err == nil {
+		s.onEventMats(&snap)
+	}
+	return snap, err
 }
 
 // BuildSnapshot assembles the whole derived picture from stored state.
