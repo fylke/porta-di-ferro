@@ -7,6 +7,8 @@ export interface Competitor {
   name: string;
   club: string;
   withdrawn: boolean;
+  /** Who they are across the event (phase 3): their page is /who/{person}. */
+  person?: string;
 }
 
 /**
@@ -204,7 +206,7 @@ export interface DisciplineSummary {
   matchesTotal: number;
   podium?: { first: string; second: string; third: string };
   mats: MatSummary[];
-  entrants: { id: string; name: string; club?: string }[];
+  entrants: { id: string; name: string; club?: string; person?: string }[];
 }
 
 /** The whole event: the day around the fencing, and every discipline in it. */
@@ -295,6 +297,64 @@ export interface SignupReady {
   definition: string;
 }
 
+/** Which discipline takes which programme row, in the event's signup (phase 3). */
+export interface SignupShare {
+  discipline: string;
+  name: string;
+  tournament: string;
+  /** The discipline chose the row; otherwise it was matched by name. */
+  chosen: boolean;
+  adding: number;
+  addingStaff: number;
+  capacity?: string[];
+  poolsDrawn?: boolean;
+  error?: string;
+}
+
+export interface EventSignupReady extends SignupReady {
+  disciplines: SignupShare[];
+  /** Programme rows no discipline takes: whoever enters them is imported nowhere. */
+  unclaimed: { id: string; label: string }[];
+}
+
+/** One response, and the disciplines it adds to. */
+export interface EventSignupRow extends SignupRow {
+  into?: { discipline: string; name: string; verdict: 'new' | 'staff' }[];
+}
+
+export interface EventSignupPreview {
+  rows: EventSignupRow[];
+  disciplines: SignupShare[];
+  adding: number;
+  addingStaff: number;
+}
+
+/** One of a person's entries, in one discipline. */
+export interface PersonEntry {
+  discipline: string;
+  disciplineName: string;
+  competitor: string;
+  name: string;
+  club?: string;
+  withdrawn?: boolean;
+}
+
+/** One person of the event's, with every entry of theirs. */
+export interface PersonView {
+  id: string;
+  name: string;
+  club?: string;
+  entries: PersonEntry[];
+  /** People merged into this one, whose merge can be undone. */
+  mergedFrom?: { id: string; name: string }[];
+}
+
+export interface PeopleView {
+  people: PersonView[];
+  /** Groups of people who might be one, by id, for the organizer to decide. */
+  duplicates: string[][];
+}
+
 export interface Snapshot {
   competitors: Competitor[];
   /** Everyone ranked across the pools by the pool chain: the seeding for the eliminations. */
@@ -380,8 +440,9 @@ async function req<T>(
 function disciplineApi(base: () => string) {
   return {
     state: () => req<Snapshot>('GET', `${base()}/state`),
-    addCompetitor: (name: string, club: string) =>
-      req<Competitor>('POST', `${base()}/competitors`, { name, club }),
+    /** person: somebody already in the event this entry is, from the desk's suggestion. */
+    addCompetitor: (name: string, club: string, person?: string) =>
+      req<Competitor>('POST', `${base()}/competitors`, { name, club, ...(person ? { person } : {}) }),
     updateCompetitor: (id: string, patch: Partial<Pick<Competitor, 'name' | 'club' | 'withdrawn'>>) =>
       req<{ ok: boolean }>('PATCH', `${base()}/competitors/${id}`, patch),
     removeCompetitor: (id: string) => req<{ ok: boolean }>('DELETE', `${base()}/competitors/${id}`),
@@ -471,6 +532,26 @@ export const api = {
   /** The welcome, the programme, the wifi and the signup settings, typed once for the event. */
   saveEventInfo: (info: EventInfo) => req<EventInfo>('PUT', '/api/event/info', info),
   addresses: () => req<Address[]>('GET', '/api/addresses'),
+
+  /** Everybody in the event, and who might be the same person. */
+  people: () => req<PeopleView>('GET', '/api/people'),
+  /** One person's entries across the event, by any id they have had. */
+  person: (id: string) => req<PersonView>('GET', `/api/people/${encodeURIComponent(id)}`),
+  mergePerson: (id: string, into: string) => req<PeopleView>('POST', `/api/people/${id}/merge`, { into }),
+  unmergePerson: (id: string) => req<PeopleView>('POST', `/api/people/${id}/unmerge`, {}),
+  keepApart: (id: string, other: string) => req<PeopleView>('POST', `/api/people/${id}/apart`, { other }),
+
+  /** The signup for the whole event: one file out, one folder back, every discipline its share. */
+  eventSignupReady: () => req<EventSignupReady>('GET', '/api/event/signup/ready'),
+  setSignupRows: (rows: Record<string, string>) => req<EventSignupReady>('PUT', '/api/event/signup/rows', rows),
+  previewEventSignups: (files: { source: string; body: string }[]) =>
+    req<EventSignupPreview>('POST', '/api/event/signup/preview', { files }),
+  importEventSignups: (files: { source: string; body: string }[]) =>
+    req<{ added: number; addedStaff: number; preview: EventSignupPreview; error?: string }>(
+      'POST',
+      '/api/event/signup/import',
+      { files },
+    ),
   /** The preloaded list of disciplines the organizer picks from rather than types out. */
   presets: () => req<string[]>('GET', '/api/disciplines/presets'),
   /** Another discipline in the event: another folder and tournament at the same address (#4). */

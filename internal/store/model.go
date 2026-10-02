@@ -27,6 +27,10 @@ type Competitor struct {
 	// Withdrawn voids this competitor's results as though they never entered. The
 	// ranking divides by matches completed, which is what makes that work retroactively.
 	Withdrawn bool `json:"withdrawn"`
+	// Person is who this entry is across the event: one person can be entered in several
+	// disciplines, and each entry points at the same Person (phase 3 of
+	// docs/proposals/one-event-many-disciplines.md). Empty for a discipline on its own.
+	Person string `json:"person,omitempty"`
 }
 
 // Match is one competitor against another, fixed at pool creation along with the colours
@@ -196,6 +200,33 @@ type StaffMember struct {
 	// Signup is the submission identifier they came in on, the same as a competitor's:
 	// importing the folder twice must not offer the same person twice.
 	Signup string `json:"signup,omitempty"`
+}
+
+// Person is one human across an event: the competitor entries in every discipline that
+// are them point here (proposal §8). Ids are random, never sequential, so they cannot
+// collide between disciplines, devices or events the way competitor ids do.
+//
+// Two people are never made one by their names: two Anna Nilssons from the same club are a
+// real thing. A signup's submission id is exact and links without asking; everything else
+// is the organizer's to merge -- and a merge can be undone.
+type Person struct {
+	ID string `json:"id"`
+	// Name and Club are as the person was first entered. Pages show the entries' own
+	// names, which the organizer corrects in the discipline; these are for when there are
+	// none.
+	Name string `json:"name"`
+	Club string `json:"club,omitempty"`
+	// Signup is the submission id the person came in on, so a response that enters
+	// several disciplines is one person in all of them.
+	Signup string `json:"signup,omitempty"`
+	// MergedInto says this person turned out to be another; their entries were moved
+	// there. Moved lists those entries, "discipline/competitor", so the merge can be
+	// undone exactly.
+	MergedInto string   `json:"mergedInto,omitempty"`
+	Moved      []string `json:"moved,omitempty"`
+	// Apart lists people the organizer has said are somebody else, despite the name, so
+	// the pair stops being offered as a possible duplicate.
+	Apart []string `json:"apart,omitempty"`
 }
 
 // Plan is where every discipline's work runs: the event's physical mats, and each work

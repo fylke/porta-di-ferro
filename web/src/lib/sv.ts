@@ -440,6 +440,22 @@ export const sv: Record<string, string> = {
   'No such competitor': 'Ingen sådan fäktare',
   'That name is not in this tournament. It may be in another discipline.':
     'Det namnet finns inte i den här tävlingen. Det kan finnas i en annan disciplin.',
+  // The event's people (phase 3).
+  People: 'Personer',
+  'One person, however many disciplines they entered: one page with their whole day. A signup makes one response one person everywhere; the same name alone never does, so it is asked about here.':
+    'En person, hur många discipliner hen än är anmäld till: en sida med hela hens dag. En anmälan gör ett svar till en person överallt; samma namn ensamt gör det aldrig, så det frågas om här.',
+  'Maybe the same person': 'Kanske samma person',
+  'The same person': 'Samma person',
+  'Two people': 'Två personer',
+  'Nobody to ask about: no two people share a name.': 'Inget att fråga om: inga två personer har samma namn.',
+  Merged: 'Sammanslagna',
+  '{from} is now {into}': '{from} är nu {into}',
+  'Separate again': 'Dela upp igen',
+  Everybody: 'Alla',
+  'Already entered elsewhere. Is this them?': 'Redan anmäld någon annanstans. Är det hen?',
+  'If not, Add enters somebody new.': 'Om inte: Lägg till anmäler någon ny.',
+  'Nobody by that link is in this event.': 'Ingen med den länken finns i den här tävlingen.',
+  'Not entered in anything just now.': 'Inte anmäld till något just nu.',
   'This competitor has withdrawn. Their results are voided and do not count towards anyone else’s standing.':
     'Den här fäktaren har avanmält sig. Resultaten är ogiltiga och räknas inte in i någon annans tabell.',
   Rank: 'Placering',
@@ -514,8 +530,22 @@ export const sv: Record<string, string> = {
   'This run is': 'Den här körningen är',
   'the only discipline': 'den enda disciplinen',
   'Ask for a contact detail': 'Fråga efter en kontaktuppgift',
-  'An event with several disciplines is several runs of the application. Each imports the responses naming its own, so you can point all of them at the same folder.':
-    'Ett evenemang med flera discipliner är flera körningar av programmet. Var och en importerar de svar som nämner just den, så du kan peka ut samma mapp för alla.',
+  // The event's signup (phase 3).
+  'This event takes its signups once, for every discipline:': 'Tävlingen tar emot anmälningar en gång, för alla discipliner:',
+  'on the event’s admin page': 'på tävlingens adminsida',
+  'Who takes what': 'Vem tar vad',
+  'Each discipline takes the responses for its row in the programme: the one named like it, unless you pick another.':
+    'Varje disciplin tar svaren för sin rad i programmet: den som heter som disciplinen, om du inte väljer en annan.',
+  'Programme row for {discipline}': 'Programrad för {discipline}',
+  '{row}, by its name': '{row}, efter namnet',
+  nothing: 'ingenting',
+  'No discipline takes {row}: whoever enters it would be imported nowhere.':
+    'Ingen disciplin tar {row}: den som anmäler sig dit importeras ingenstans.',
+  'The pools are already drawn in {disciplines}. Anyone imported there will not be in one until you draw again.':
+    'Poolerna är redan lottade i {disciplines}. Den som importeras dit hamnar inte i någon pool förrän du lottar om.',
+  'into {where}': 'till {where}',
+  'no discipline takes it': 'ingen disciplin tar den',
+  '{discipline} as staff': '{discipline} som funktionär',
   'Before the files can go out, this still needs:': 'Innan filerna kan skickas ut saknas:',
   'Send this out': 'Skicka ut det här',
   'One file, with the event already in it. They open it, fill it in and send back a small .json.':

@@ -75,9 +75,11 @@ export function query(): URLSearchParams {
   return new URLSearchParams(q);
 }
 
-export function navigate(to: string): void {
+/** Goes to a page; replace for an address that only ever meant this one, as a redirect. */
+export function navigate(to: string, replace = false): void {
   if (to === current) return;
-  window.history.pushState({}, '', href(to));
+  if (replace) window.history.replaceState({}, '', href(to));
+  else window.history.pushState({}, '', href(to));
   current = to;
 }
 

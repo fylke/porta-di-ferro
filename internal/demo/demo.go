@@ -415,22 +415,11 @@ func (d *Demo) signupApp() Response {
 // signupImport previews an import, and performs it when confirm is set. Two calls on the
 // real server, and two here, because the preview writing nothing is the whole design.
 func (d *Demo) signupImport(body []byte, confirm bool) Response {
-	var in struct {
-		Files []struct {
-			Source string `json:"source"`
-			Body   string `json:"body"`
-		} `json:"files"`
-	}
-	if err := json.Unmarshal(body, &in); err != nil {
+	files, err := signupFiles(body)
+	if err != nil {
 		return fail(400, err)
 	}
-	files := make([]signup.File, 0, len(in.Files))
-	for _, f := range in.Files {
-		files = append(files, signup.File{Source: f.Source, Body: []byte(f.Body)})
-	}
-
-	def := signup.BuildDefinition(d.merged())
-	preview := signup.Check(def, d.tournament.Event.Signup.Tournament, files, d.competitors, d.tournament.Staff)
+	preview := d.checkSignups(files, d.tournament.Event.Signup.Tournament)
 	view := map[string]any{
 		"rows": preview.Rows, "adding": preview.Adding, "addingStaff": preview.AddingStaff,
 		"capacity": preview.Capacity, "tournament": preview.Tournament,
@@ -440,14 +429,33 @@ func (d *Demo) signupImport(body []byte, confirm bool) Response {
 		return ok(view)
 	}
 
-	before, staffBefore := len(d.competitors), len(d.tournament.Staff)
-	d.competitors = signup.Import(preview, httpapi.NextCompetitorID, d.competitors)
-	d.tournament.Staff = signup.ImportStaff(preview, d.tournament.Staff)
+	added, addedStaff := d.importSignups(files, d.tournament.Event.Signup.Tournament)
 	return changed(map[string]any{
-		"added":      len(d.competitors) - before,
-		"addedStaff": len(d.tournament.Staff) - staffBefore,
+		"added":      added,
+		"addedStaff": addedStaff,
 		"preview":    view,
 	})
+}
+
+// checkSignups is signup.Check over this discipline, as the programme row mine.
+func (d *Demo) checkSignups(files []signup.File, mine string) signup.Preview {
+	def := signup.BuildDefinition(d.merged())
+	return signup.Check(def, mine, files, d.competitors, d.tournament.Staff)
+}
+
+// importSignups adds what the check calls new, each entry a person of the event's.
+func (d *Demo) importSignups(files []signup.File, mine string) (added, addedStaff int) {
+	preview := d.checkSignups(files, mine)
+	before, staffBefore := len(d.competitors), len(d.tournament.Staff)
+	d.competitors = signup.Import(preview, httpapi.NextCompetitorID, d.competitors)
+	if d.event != nil {
+		for i := before; i < len(d.competitors); i++ {
+			c := d.competitors[i]
+			d.competitors[i].Person = d.event.personFor(c.Name, c.Club, c.Signup, "")
+		}
+	}
+	d.tournament.Staff = signup.ImportStaff(preview, d.tournament.Staff)
+	return len(d.competitors) - before, len(d.tournament.Staff) - staffBefore
 }
 
 // qr renders a code for whatever it is given -- the wifi payload and the landing address
@@ -527,7 +535,7 @@ func (d *Demo) exportPDF(swedish bool) Response {
 // --- competitors --------------------------------------------------------------------
 
 func (d *Demo) addCompetitor(body []byte) Response {
-	var in struct{ Name, Club string }
+	var in struct{ Name, Club, Person string }
 	if err := json.Unmarshal(body, &in); err != nil {
 		return fail(400, err)
 	}
@@ -538,6 +546,9 @@ func (d *Demo) addCompetitor(body []byte) Response {
 		ID:   httpapi.NextCompetitorID(d.competitors),
 		Name: strings.TrimSpace(in.Name),
 		Club: strings.TrimSpace(in.Club),
+	}
+	if d.event != nil {
+		c.Person = d.event.personFor(c.Name, c.Club, "", in.Person)
 	}
 	d.competitors = append(d.competitors, c)
 	return changed(c)

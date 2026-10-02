@@ -65,6 +65,9 @@
   <Organizer multi={hall.multi} />
 {:else if route('/info')}
   <Info />
+{:else if eventPage && personMatch?.id.startsWith('pr-')}
+  <!-- A person is the event's, whichever disciplines they entered (phase 3). -->
+  <Person id={personMatch.id} />
 {:else if eventPage && !matPage}
   <DisciplinePicker />
 {:else if personMatch}

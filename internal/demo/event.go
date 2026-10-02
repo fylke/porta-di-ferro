@@ -28,6 +28,8 @@ type Event struct {
 	plan store.Plan
 	// keepers are the score keepers registered in this tab, for the match each holds.
 	keepers map[string]keeper
+	// people is the event's registry of people (phase 3): people.json, in memory.
+	people []store.Person
 }
 
 // NewEvent builds the event a visitor arrives in: the longsword halfway through its pools
@@ -51,8 +53,12 @@ func (e *Event) Reset() {
 	e.disciplines = nil
 	e.plan = store.Plan{}
 	e.keepers = nil
+	e.people = nil
 	e.adopt(longsword)
 	e.adopt(sabre)
+	// Astrid and Greta signed up for both on one response each, so they are one person in
+	// both; Bo was typed in at each desk, so he is two until the organizer says otherwise.
+	e.ensurePeople()
 }
 
 func (e *Event) adopt(d *Demo) {
@@ -101,6 +107,10 @@ func (e *Event) Request(method, path string, body []byte) Response {
 	}
 	bare = strings.TrimSuffix(bare, "/")
 	parts := strings.Split(strings.TrimPrefix(bare, "/"), "/")
+
+	if res, found := e.peopleRequest(method, bare, parts, body); found {
+		return res
+	}
 
 	switch {
 	case method == "GET" && bare == "/api/event":
@@ -326,14 +336,15 @@ func (e *Event) infoPDF(query string) Response {
 // --- keeping it between tabs (issue #108) ---------------------------------------------
 
 // eventSaveFormat is the shape of savedEvent. Format 1 was a single tournament, from
-// before the demo was an event, and format 2 an event without its mats' plan; a browser
-// holding either starts fresh.
-const eventSaveFormat = 3
+// before the demo was an event, format 2 an event without its mats' plan, and format 3
+// one without its people; a browser holding any of them starts fresh.
+const eventSaveFormat = 4
 
 type savedEvent struct {
 	Format      int               `json:"format"`
 	Info        store.Event       `json:"info"`
 	Plan        store.Plan        `json:"plan"`
+	People      []store.Person    `json:"people"`
 	Disciplines []savedDiscipline `json:"disciplines"`
 }
 
@@ -345,7 +356,7 @@ type savedDiscipline struct {
 
 // Save is the whole event as JSON: the day, and every discipline's own save.
 func (e *Event) Save() ([]byte, error) {
-	out := savedEvent{Format: eventSaveFormat, Info: e.info, Plan: e.plan}
+	out := savedEvent{Format: eventSaveFormat, Info: e.info, Plan: e.plan, People: e.people}
 	for _, d := range e.disciplines {
 		state, err := d.Save()
 		if err != nil {
@@ -386,9 +397,10 @@ func (e *Event) Load(b []byte) error {
 		}
 		next.adopt(d)
 	}
-	e.info, e.plan, e.disciplines, e.keepers = next.info, next.plan, nil, nil
+	e.info, e.plan, e.disciplines, e.keepers, e.people = next.info, next.plan, nil, nil, in.People
 	for _, d := range next.disciplines {
 		e.adopt(d)
 	}
+	e.ensurePeople()
 	return nil
 }

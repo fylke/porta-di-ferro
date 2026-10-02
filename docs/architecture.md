@@ -113,6 +113,26 @@ flowchart LR
 - **Devices are the event's.** Heartbeats, screen assignments (`displays.json` in the event folder) and the Screens panel are event-level, and one registry is shared by every discipline, so a claim on a match anywhere asks it whether the holder is alive. A score keeper registers its mat, match and the match's discipline, and the client keys everything it keeps by discipline and match id, because ids repeat across disciplines.
 - **The mat board** (`MatBoard.svelte`) shows every mat's queue as cards and moves them by a pointer-events drag or by each card's menu.
 
+### People and the event's signup (phase 3)
+
+A person is one human across the event. `people.json` in the event folder holds one record per person with a random id (`pr-` and twelve hex digits, so ids never collide the way per-discipline competitor ids do), and each competitor entry points at one (`Competitor.Person`). The rules are pure functions in `internal/people`; the coordinator applies them to the files and `demo.Event` to memory.
+
+```mermaid
+flowchart LR
+    SU["signup import<br/>(submission id)"] -->|same id, same person| R[(people.json)]
+    DESK["desk entry<br/>(picked suggestion, or new)"] --> R
+    OLD["entry from before people"] -->|linked when the event opens| R
+    R --> WHO["/who/pr-…<br/>every discipline, live"]
+    R --> REV["/admin · People<br/>same name? merge or keep apart"]
+```
+
+- **Who an entry is** (`people.For`): the person the desk picked, else whoever came in on the same signup submission, else somebody new. A name is never enough on its own: two Anna Nilssons from one club are real, and "Karl-Johan" and "Karl Johan" are one person, so people with the same folded name are offered on the event admin's People panel (`people.Duplicates`) to merge, or to keep apart so they stop being offered.
+- **A merge can be undone.** The merged person keeps `mergedInto` and the entries it moved, so `unmerge` puts exactly those back. An id merged away still resolves (`people.Resolve`), so a link somebody shared keeps working.
+- **Locks.** The registry has its own lock and is never held while a discipline's is wanted, because a discipline's signup import holds its own lock and asks the registry for a person. Changes are decided under the registry's lock and written to the entries after, through `Server.LinkPeople`.
+- **Endpoints.** `GET /api/people` (everybody with an entry, and the duplicate groups), `GET /api/people/{id}`, and `POST /api/people/{id}/{merge|unmerge|apart|link}`.
+- **One signup for the event.** `/api/event/signup/…` serves the event's definition and app, and previews and imports a folder across every discipline. Each discipline takes its share through the same `signup.Check` it runs on its own, as the programme row it chose, or else the row named like it (`httpapi.RowFor`); the preview says per response which disciplines it goes into, and the ready check lists rows that nobody takes. With one discipline an unset row still means everything, and a discipline's own `/api/d/{slug}/signup/…` still works.
+- **The person's page** (`Person.svelte`) fetches the person and stacks one live `PersonEntry` per discipline. The old `/who/c7` loads the discipline, and moves on to `/who/{person}` once it knows who that is.
+
 
 ### 1b. The public demo
 
@@ -148,7 +168,7 @@ flowchart LR
     P[Poster by the door<br/>/info, or its PDF] -->|wifi QR| W((venue wifi))
     P -->|landing QR| L
     L["/ participant view<br/>welcome · programme · competitors · mats · results"]
-    L --> WHO["/who/:id<br/>one person's matches"]
+    L --> WHO["/who/:person<br/>one person's matches, every discipline"]
     L --> D["/display/mat/N<br/>the scoreboard"]
     A["/admin<br/>every edit control"] -.->|writes the welcome,<br/>the programme, the wifi| L
     A -.-> P
@@ -158,7 +178,7 @@ flowchart LR
 | Route | For | Writes anything? |
 | --- | --- | --- |
 | `/` | competitors and spectators | no |
-| `/who/:id` | the same, one person at a time | no |
+| `/who/:person` | the same, one person at a time, across the event (`/who/c7` moves on to its person) | no |
 | `/info` | the wall by the entrance, on screen or printed | no |
 | `/admin` | the organizer | everything |
 

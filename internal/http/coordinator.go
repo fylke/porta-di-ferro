@@ -44,6 +44,9 @@ type Coordinator struct {
 	presence *presence
 	// planMu serialises changes to the plan.
 	planMu sync.Mutex
+	// peopleMu serialises changes to the event's people. Never held while waiting for a
+	// discipline's lock (coordinator_people.go).
+	peopleMu sync.Mutex
 
 	mu      sync.Mutex
 	order   []string
@@ -96,6 +99,7 @@ func NewCoordinator(folder *event.Folder, assets fs.FS) (*Coordinator, error) {
 		c.order = append(c.order, slug)
 	}
 	c.liftDisplays()
+	c.ensurePeople()
 	go c.announce()
 	go c.sweep()
 	return c, nil
@@ -136,6 +140,7 @@ func (c *Coordinator) load(slug string) *worker {
 	w.srv = newServer(st, nil, Instance{Slug: slug}, c.presence)
 	w.srv.UseEvent(c)
 	w.srv.UseMats(c)
+	w.srv.UsePeople(c)
 	w.handler = w.srv.Handler()
 	w.unfollow = c.follow(w.srv, slug)
 	return w
@@ -351,6 +356,12 @@ func (c *Coordinator) Handler() http.Handler {
 	mux.HandleFunc("GET /api/event/stream", func(w http.ResponseWriter, r *http.Request) {
 		serveStream(w, r, c.hub)
 	})
+	mux.HandleFunc("GET /api/event/signup/ready", c.signupReady)
+	mux.HandleFunc("GET /api/event/signup/definition.json", c.signupDefinition)
+	mux.HandleFunc("GET /api/event/signup/app.html", c.signupApp)
+	mux.HandleFunc("PUT /api/event/signup/rows", c.putSignupRows)
+	mux.HandleFunc("POST /api/event/signup/preview", c.previewSignups)
+	mux.HandleFunc("POST /api/event/signup/import", c.importSignups)
 	mux.HandleFunc("GET /api/info.pdf", c.infoPDF)
 	mux.HandleFunc("GET /api/addresses", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, c.addressCache.get())
@@ -367,6 +378,10 @@ func (c *Coordinator) Handler() http.Handler {
 	mux.HandleFunc("PATCH /api/disciplines/{d}", c.renameDiscipline)
 	mux.HandleFunc("DELETE /api/disciplines/{d}", c.retireDiscipline)
 	mux.HandleFunc("POST /api/disciplines/{d}/reload", c.reloadDiscipline)
+
+	mux.HandleFunc("GET /api/people", c.getPeople)
+	mux.HandleFunc("GET /api/people/{id}", c.getPerson)
+	mux.HandleFunc("POST /api/people/{id}/{action}", c.postPerson)
 
 	mux.HandleFunc("GET /api/mats", c.getMats)
 	mux.HandleFunc("PUT /api/mats", c.putMats)
@@ -670,6 +685,7 @@ func (c *Coordinator) reloadDiscipline(w http.ResponseWriter, r *http.Request) {
 	c.mu.Lock()
 	c.workers[slug] = wk
 	c.mu.Unlock()
+	c.ensurePeople()
 	c.poke()
 	writeJSON(w, http.StatusOK, c.summarize(wk))
 }

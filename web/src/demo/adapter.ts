@@ -273,7 +273,7 @@ function installLinks(navigate: (to: string) => void): void {
 
       // A discipline's files are under its prefix in an event of several (#102).
       const bare = raw.replace(/^\/api\/d\/[^/]+/, '/api');
-      if (bare.startsWith('/api/export') || bare.startsWith('/api/signup/')) {
+      if (bare.startsWith('/api/export') || bare.startsWith('/api/signup/') || bare.startsWith('/api/event/signup/')) {
         ev.preventDefault();
         const res = call('GET', raw);
         if (res.status !== 200) return;

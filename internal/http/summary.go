@@ -70,6 +70,8 @@ type Entrant struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 	Club string `json:"club,omitempty"`
+	// Person is who they are across the event: their page is /who/{person}.
+	Person string `json:"person,omitempty"`
 }
 
 // PodiumNames is a discipline's podium, by name.
@@ -96,7 +98,7 @@ func Summarize(slug string, snap Snapshot) DisciplineSummary {
 			continue
 		}
 		out.Competitors++
-		out.Entrants = append(out.Entrants, Entrant{ID: c.ID, Name: c.Name, Club: c.Club})
+		out.Entrants = append(out.Entrants, Entrant{ID: c.ID, Name: c.Name, Club: c.Club, Person: c.Person})
 	}
 
 	byID := map[string]MatchView{}

@@ -146,11 +146,29 @@ type importRequest struct {
 	} `json:"files"`
 }
 
-func (s *Server) readImport(r *http.Request) (signup.Preview, store.Tournament, error) {
+func readFiles(r *http.Request) ([]signup.File, error) {
 	var in importRequest
 	if err := json.NewDecoder(http.MaxBytesReader(nil, r.Body, maxImport)).Decode(&in); err != nil {
+		return nil, err
+	}
+	files := make([]signup.File, 0, len(in.Files))
+	for _, f := range in.Files {
+		files = append(files, signup.File{Source: f.Source, Body: []byte(f.Body)})
+	}
+	return files, nil
+}
+
+func (s *Server) readImport(r *http.Request) (signup.Preview, store.Tournament, error) {
+	files, err := readFiles(r)
+	if err != nil {
 		return signup.Preview{}, store.Tournament{}, err
 	}
+	return s.checkSignups(files, nil)
+}
+
+// checkSignups is signup.Check over this discipline: as the programme row it is, or as
+// the one the event says it is when mine is given.
+func (s *Server) checkSignups(files []signup.File, mine *string) (signup.Preview, store.Tournament, error) {
 	t, err := s.tournament()
 	if err != nil {
 		return signup.Preview{}, store.Tournament{}, err
@@ -159,14 +177,47 @@ func (s *Server) readImport(r *http.Request) (signup.Preview, store.Tournament, 
 	if err != nil {
 		return signup.Preview{}, store.Tournament{}, err
 	}
-
-	files := make([]signup.File, 0, len(in.Files))
-	for _, f := range in.Files {
-		files = append(files, signup.File{Source: f.Source, Body: []byte(f.Body)})
-	}
 	def := signup.BuildDefinition(t)
-	mine := strings.TrimSpace(t.Event.Signup.Tournament)
-	return signup.Check(def, mine, files, competitors, t.Staff), t, nil
+	row := strings.TrimSpace(t.Event.Signup.Tournament)
+	if mine != nil {
+		row = *mine
+	}
+	return signup.Check(def, row, files, competitors, t.Staff), t, nil
+}
+
+// SignupRow is the programme row this discipline said it is, if it said.
+func (s *Server) SignupRow() (string, error) {
+	t, err := s.store.Tournament()
+	return strings.TrimSpace(t.Event.Signup.Tournament), err
+}
+
+// SetSignupRow says which programme row this discipline is: whose entries it takes.
+func (s *Server) SetSignupRow(id string) error {
+	s.writeMu.Lock()
+	t, err := s.store.Tournament()
+	if err == nil {
+		t.Event.Signup.Tournament = strings.TrimSpace(id)
+		err = s.store.SaveTournament(t)
+	}
+	s.writeMu.Unlock()
+	if err == nil {
+		s.publishState()
+	}
+	return err
+}
+
+// PreviewSignups is what an import would do here, for the event's import.
+func (s *Server) PreviewSignups(files []signup.File, mine string) (signup.Preview, bool, error) {
+	p, t, err := s.checkSignups(files, &mine)
+	return p, len(t.Pools) > 0, err
+}
+
+// ImportSignups is this discipline's share of the event's import.
+func (s *Server) ImportSignups(files []signup.File, mine string) (added, addedStaff int, err error) {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	res, err := s.importSignups(files, &mine)
+	return res.added, res.addedStaff, err
 }
 
 // previewImport says what would happen. It writes nothing, which is the whole point of
@@ -200,20 +251,52 @@ type previewView struct {
 // to it: the competitor list may have moved between the two calls -- another import, a
 // name typed in by hand -- and the second check is what keeps the duplicate rule true.
 func (s *Server) confirmImport(w http.ResponseWriter, r *http.Request) {
-	s.writeMu.Lock()
-	defer s.writeMu.Unlock()
-
-	preview, t, err := s.readImport(r)
+	files, err := readFiles(r)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	competitors, err := s.store.Competitors()
+	s.writeMu.Lock()
+	res, err := s.importSignups(files, nil)
+	s.writeMu.Unlock()
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"added":      res.added,
+		"addedStaff": res.addedStaff,
+		"preview":    previewView{Preview: res.preview, PoolsDrawn: len(res.t.Pools) > 0},
+	})
+}
+
+type imported struct {
+	added, addedStaff int
+	preview           signup.Preview
+	t                 store.Tournament
+}
+
+// importSignups writes the rows the check calls new. The caller holds writeMu.
+func (s *Server) importSignups(files []signup.File, mine *string) (imported, error) {
+	preview, t, err := s.checkSignups(files, mine)
+	if err != nil {
+		return imported{}, err
+	}
+	competitors, err := s.store.Competitors()
+	if err != nil {
+		return imported{}, err
+	}
 	updated := signup.Import(preview, NextCompetitorID, competitors)
+	// Each new entry is a person of the event's: the same one in every discipline the
+	// response entered, by its submission id (phase 3).
+	for i, c := range updated {
+		if c.Person != "" {
+			continue
+		}
+		if updated[i].Person, err = s.personFor(c.Name, c.Club, c.Signup, ""); err != nil {
+			return imported{}, err
+		}
+	}
 	staff := signup.ImportStaff(preview, t.Staff)
 	addedStaff := len(staff) - len(t.Staff)
 	if addedStaff > 0 {
@@ -221,29 +304,22 @@ func (s *Server) confirmImport(w http.ResponseWriter, r *http.Request) {
 		// event's day laid over it and must not be written back here.
 		stored, err := s.store.Tournament()
 		if err != nil {
-			writeErr(w, http.StatusInternalServerError, err)
-			return
+			return imported{}, err
 		}
 		stored.Staff = staff
 		if err := s.store.SaveTournament(stored); err != nil {
-			writeErr(w, http.StatusInternalServerError, err)
-			return
+			return imported{}, err
 		}
 	}
 	if len(updated) != len(competitors) {
 		if err := s.store.SaveCompetitors(updated); err != nil {
-			writeErr(w, http.StatusInternalServerError, err)
-			return
+			return imported{}, err
 		}
 	}
 	if len(updated) != len(competitors) || addedStaff > 0 {
 		s.publishState()
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"added":      len(updated) - len(competitors),
-		"addedStaff": addedStaff,
-		"preview":    previewView{Preview: preview, PoolsDrawn: len(t.Pools) > 0},
-	})
+	return imported{added: len(updated) - len(competitors), addedStaff: addedStaff, preview: preview, t: t}, nil
 }
 
 // deleteStaff takes somebody off the staff: an import the organizer did not want, or a
