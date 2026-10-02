@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { navigate } from '../router.svelte';
+  import { dhref, navigate } from '../router.svelte';
   import { Live } from '../lib/live.svelte';
   import { matchOn, namesFor } from './lib-display.svelte';
   import { t } from '../lib/i18n.svelte';
@@ -54,7 +54,7 @@
   <div class="mats">
     {#each mats as mat (mat)}
       {@const up = upNext(mat)}
-      <button onclick={() => navigate(`/score/${mat}`)}>
+      <button onclick={() => navigate(dhref(`/score/${mat}`))}>
         <span class="n">{t('Mat {n}', { n: mat })}</span>
         <span class="up">
           {#if up}

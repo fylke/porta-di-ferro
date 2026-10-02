@@ -1,4 +1,6 @@
 import type { Event, Options, Ruleset, State } from './lib/match';
+import { apiBase } from './lib/paths';
+import { discipline } from './router.svelte';
 
 export interface Competitor {
   id: string;
@@ -116,14 +118,57 @@ export interface Presence {
   quarantined: Quarantined[];
 }
 
-/** One running copy of the application: a discipline, its port and its data. */
+/** Which discipline a snapshot is: its name, its address in the event and its folder. */
 export interface Instance {
   name: string;
-  port: number;
+  /** The discipline's address: /d/{slug}/ and /api/d/{slug}/. Never changes once made. */
+  slug?: string;
   dir: string;
-  parent?: string;
-  self: boolean;
+  /** Where its pages are, relative to the event's address: "/d/open-sabre/". */
   url: string;
+}
+
+/** What one of a discipline's mats is running or has up next, for the event's pages. */
+export interface MatSummary {
+  mat: number;
+  match?: string;
+  status?: 'pending' | 'running' | 'complete';
+  pool?: number;
+  round?: string;
+  red?: string;
+  blue?: string;
+  redColour?: string;
+  blueColour?: string;
+  redScore: number;
+  blueScore: number;
+}
+
+/** One discipline, compactly: what the event's landing page and admin show of it. */
+export interface DisciplineSummary {
+  slug: string;
+  name: string;
+  url: string;
+  /** Set when the discipline could not be read; the rest is then its last known summary. */
+  error?: string;
+  stale?: boolean;
+  stage: 'setup' | 'pools' | 'waiting' | 'eliminations' | 'done';
+  competitors: number;
+  pools: number;
+  matchesDone: number;
+  matchesTotal: number;
+  podium?: { first: string; second: string; third: string };
+  mats: MatSummary[];
+  entrants: { id: string; name: string; club?: string }[];
+}
+
+/** The whole event: the day around the fencing, and every discipline in it. */
+export interface EventView {
+  name: string;
+  info: EventInfo;
+  /** event.json could not be read; the disciplines run regardless. */
+  infoError?: string;
+  disciplines: DisciplineSummary[];
+  dir: string;
 }
 
 /** One line of the day's agenda. `at` is free text: "after the pools" is a valid time. */
@@ -151,7 +196,7 @@ export interface SignupInfo {
   name?: string;
   venue?: string;
   date?: string;
-  /** Which discipline this run of the application is, matching a schedule row. */
+  /** Which programme row this discipline is. The discipline's own; never the event's. */
   tournament?: string;
   contact?: boolean;
 }
@@ -275,95 +320,131 @@ async function req<T>(
   return (await res.json()) as T;
 }
 
-export const api = {
-  state: () => req<Snapshot>('GET', '/api/state'),
-  addresses: () => req<Address[]>('GET', '/api/addresses'),
-  instances: () => req<Instance[]>('GET', '/api/instances'),
-  startInstance: (name: string) => req<Instance>('POST', '/api/instances', { name }),
-  /** The preloaded list of disciplines the organizer picks from rather than types out. */
-  disciplines: () => req<string[]>('GET', '/api/disciplines'),
-  renameInstance: (port: number, name: string) =>
-    req<Instance[]>('PATCH', `/api/instances/${port}`, { name }),
-  stopInstance: (port: number) => req<{ ok: boolean }>('DELETE', `/api/instances/${port}`),
-  addCompetitor: (name: string, club: string) =>
-    req<Competitor>('POST', '/api/competitors', { name, club }),
-  updateCompetitor: (id: string, patch: Partial<Pick<Competitor, 'name' | 'club' | 'withdrawn'>>) =>
-    req<{ ok: boolean }>('PATCH', `/api/competitors/${id}`, patch),
-  removeCompetitor: (id: string) => req<{ ok: boolean }>('DELETE', `/api/competitors/${id}`),
-  /**
-   * Left out rather than sent as 0 when the caller has no opinion on it: the setup screen
-   * saves mats and pool sizes without touching what the eliminations were set to.
-   */
-  saveTournament: (mats: number, minPoolSize: number, maxPoolSize: number, elimMats?: number) =>
-    req<unknown>('PUT', '/api/tournament', {
-      mats,
-      minPoolSize,
-      maxPoolSize,
-      ...(elimMats === undefined ? {} : { elimMats }),
-    }),
-  /** The welcome message, the agenda and the wifi. Written from the admin view only. */
-  saveEvent: (event: EventInfo) => req<EventInfo>('PUT', '/api/event', event),
-  /** What is still missing before the signup files can go out. */
-  signupReady: () => req<SignupReady>('GET', '/api/signup/ready'),
-  /**
-   * What an import would do. Writes nothing: the organizer looks first, and confirming
-   * runs the same check again on the server rather than trusting what came back here.
-   */
-  previewSignups: (files: { source: string; body: string }[]) =>
-    req<SignupPreview>('POST', '/api/signup/preview', { files }),
-  importSignups: (files: { source: string; body: string }[]) =>
-    req<{ added: number; addedStaff: number; preview: SignupPreview }>('POST', '/api/signup/import', {
-      files,
-    }),
-  /** Takes somebody off the staff. They are in no match, so the draw does not stop it. */
-  removeStaff: (id: string) => req<{ ok: boolean }>('DELETE', `/api/staff/${id}`),
-  generatePools: () => req<unknown>('POST', '/api/tournament/pools'),
-  drawBracket: () => req<unknown>('POST', '/api/tournament/bracket'),
-  movePool: (number: number, mat: number) =>
-    req<unknown>('PATCH', `/api/tournament/pools/${number}`, { mat }),
-  reorderPool: (number: number, move: 'up' | 'down') =>
-    req<unknown>('PATCH', `/api/tournament/pools/${number}`, { move }),
-  events: (matchId: string, after = 0) =>
-    req<Event[]>('GET', `/api/matches/${matchId}/events?after=${after}`),
-  /**
-   * The organizer's editor saving: the whole log, rewritten. The server keeps the version
-   * being replaced as a backup and tells a score keeper holding the match to reload.
-   */
-  replaceEvents: (matchId: string, events: Event[]) =>
-    req<{ backup: string; state: State }>('PUT', `/api/matches/${matchId}/events`, events),
-  backups: (matchId: string) => req<string[]>('GET', `/api/matches/${matchId}/backups`),
-  /**
-   * Stamped with who is pushing and which epoch it holds, so a device whose match has
-   * been handed to another is told so -- a 409 -- rather than having its backlog appended
-   * or silently dropped. No stamp is the anonymous path: the tests and paper entry.
-   */
-  pushEvents: (matchId: string, events: Event[], writer?: { client: string; epoch: number }) =>
-    req<{ written: number; state: State; lastSeq: number }>(
-      'POST',
-      `/api/matches/${matchId}/events`,
-      events,
-      writer ? { 'X-Porta-Client': writer.client, 'X-Porta-Epoch': String(writer.epoch) } : {},
-    ),
-  claim: (matchId: string, client: string, force = false) =>
-    req<{ epoch: number; tookOverFrom?: string }>('POST', `/api/matches/${matchId}/claim`, { client, force }),
-  releaseClaim: (matchId: string, client: string) =>
-    req<{ ok: boolean }>('DELETE', `/api/matches/${matchId}/claim?client=${encodeURIComponent(client)}`),
+/**
+ * Everything one discipline answers, at the address it is mounted under. `base` is read on
+ * every call rather than once, so the page's discipline -- from its own address -- is the
+ * one asked, and a score keeper's backlog can be sent to the discipline it was scored in
+ * whatever page is open (apiIn).
+ */
+function disciplineApi(base: () => string) {
+  return {
+    state: () => req<Snapshot>('GET', `${base()}/state`),
+    addCompetitor: (name: string, club: string) =>
+      req<Competitor>('POST', `${base()}/competitors`, { name, club }),
+    updateCompetitor: (id: string, patch: Partial<Pick<Competitor, 'name' | 'club' | 'withdrawn'>>) =>
+      req<{ ok: boolean }>('PATCH', `${base()}/competitors/${id}`, patch),
+    removeCompetitor: (id: string) => req<{ ok: boolean }>('DELETE', `${base()}/competitors/${id}`),
+    /**
+     * Left out rather than sent as 0 when the caller has no opinion on it: the setup screen
+     * saves mats and pool sizes without touching what the eliminations were set to.
+     */
+    saveTournament: (mats: number, minPoolSize: number, maxPoolSize: number, elimMats?: number) =>
+      req<unknown>('PUT', `${base()}/tournament`, {
+        mats,
+        minPoolSize,
+        maxPoolSize,
+        ...(elimMats === undefined ? {} : { elimMats }),
+      }),
+    /**
+     * The welcome message, the agenda, the wifi and the signup settings, through the
+     * discipline: the event keeps the day, and the discipline keeps which programme row it
+     * is. Written from the admin view only.
+     */
+    saveEvent: (event: EventInfo) => req<EventInfo>('PUT', `${base()}/event`, event),
+    /** What is still missing before the signup files can go out. */
+    signupReady: () => req<SignupReady>('GET', `${base()}/signup/ready`),
+    /**
+     * What an import would do. Writes nothing: the organizer looks first, and confirming
+     * runs the same check again on the server rather than trusting what came back here.
+     */
+    previewSignups: (files: { source: string; body: string }[]) =>
+      req<SignupPreview>('POST', `${base()}/signup/preview`, { files }),
+    importSignups: (files: { source: string; body: string }[]) =>
+      req<{ added: number; addedStaff: number; preview: SignupPreview }>('POST', `${base()}/signup/import`, {
+        files,
+      }),
+    /** Takes somebody off the staff. They are in no match, so the draw does not stop it. */
+    removeStaff: (id: string) => req<{ ok: boolean }>('DELETE', `${base()}/staff/${id}`),
+    generatePools: () => req<unknown>('POST', `${base()}/tournament/pools`),
+    drawBracket: () => req<unknown>('POST', `${base()}/tournament/bracket`),
+    movePool: (number: number, mat: number) =>
+      req<unknown>('PATCH', `${base()}/tournament/pools/${number}`, { mat }),
+    reorderPool: (number: number, move: 'up' | 'down') =>
+      req<unknown>('PATCH', `${base()}/tournament/pools/${number}`, { move }),
+    events: (matchId: string, after = 0) =>
+      req<Event[]>('GET', `${base()}/matches/${matchId}/events?after=${after}`),
+    /**
+     * The organizer's editor saving: the whole log, rewritten. The server keeps the version
+     * being replaced as a backup and tells a score keeper holding the match to reload.
+     */
+    replaceEvents: (matchId: string, events: Event[]) =>
+      req<{ backup: string; state: State }>('PUT', `${base()}/matches/${matchId}/events`, events),
+    backups: (matchId: string) => req<string[]>('GET', `${base()}/matches/${matchId}/backups`),
+    /**
+     * Stamped with who is pushing and which epoch it holds, so a device whose match has
+     * been handed to another is told so -- a 409 -- rather than having its backlog appended
+     * or silently dropped. No stamp is the anonymous path: the tests and paper entry.
+     */
+    pushEvents: (matchId: string, events: Event[], writer?: { client: string; epoch: number }) =>
+      req<{ written: number; state: State; lastSeq: number }>(
+        'POST',
+        `${base()}/matches/${matchId}/events`,
+        events,
+        writer ? { 'X-Porta-Client': writer.client, 'X-Porta-Epoch': String(writer.epoch) } : {},
+      ),
+    claim: (matchId: string, client: string, force = false) =>
+      req<{ epoch: number; tookOverFrom?: string }>('POST', `${base()}/matches/${matchId}/claim`, {
+        client,
+        force,
+      }),
+    releaseClaim: (matchId: string, client: string) =>
+      req<{ ok: boolean }>('DELETE', `${base()}/matches/${matchId}/claim?client=${encodeURIComponent(client)}`),
 
-  presence: () => req<Presence>('GET', '/api/presence'),
-  register: (
-    id: string,
-    fields: { role: 'scorekeeper' | 'display'; name: string; mat?: number; match?: string },
-  ) => req<Client>('POST', `/api/clients/${id}`, fields),
-  release: (id: string) => req<{ ok: boolean }>('POST', `/api/clients/${id}/release`),
-  /** A goodbye from a page that is closing: fire and forget, the only kind it can send. */
-  releaseBeacon: (id: string) => {
-    try {
-      navigator.sendBeacon(`/api/clients/${id}/release`, '');
-    } catch {
-      // The server notices on its own.
-    }
-  },
-  assignDisplay: (id: string, target: string) =>
-    req<{ target: string }>('PUT', `/api/clients/${id}/target`, { target }),
-  discardQuarantine: (matchId: string) => req<{ ok: boolean }>('DELETE', `/api/quarantine/${matchId}`),
+    presence: () => req<Presence>('GET', `${base()}/presence`),
+    register: (
+      id: string,
+      fields: { role: 'scorekeeper' | 'display'; name: string; mat?: number; match?: string },
+    ) => req<Client>('POST', `${base()}/clients/${id}`, fields),
+    release: (id: string) => req<{ ok: boolean }>('POST', `${base()}/clients/${id}/release`),
+    /** A goodbye from a page that is closing: fire and forget, the only kind it can send. */
+    releaseBeacon: (id: string) => {
+      try {
+        navigator.sendBeacon(`${base()}/clients/${id}/release`, '');
+      } catch {
+        // The server notices on its own.
+      }
+    },
+    assignDisplay: (id: string, target: string) =>
+      req<{ target: string }>('PUT', `${base()}/clients/${id}/target`, { target }),
+    discardQuarantine: (matchId: string) => req<{ ok: boolean }>('DELETE', `${base()}/quarantine/${matchId}`),
+  };
+}
+
+/** One discipline's API by name, whatever page is open. */
+export function apiIn(slug: string) {
+  return disciplineApi(() => apiBase(slug));
+}
+
+/**
+ * The page's discipline -- the one in its address, or the event's only one -- and the
+ * event's own calls beside it.
+ */
+export const api = {
+  ...disciplineApi(() => apiBase(discipline())),
+
+  /** The whole event: the day, and a summary of every discipline. */
+  event: () => req<EventView>('GET', '/api/event'),
+  /** The welcome, the programme, the wifi and the signup settings, typed once for the event. */
+  saveEventInfo: (info: EventInfo) => req<EventInfo>('PUT', '/api/event/info', info),
+  addresses: () => req<Address[]>('GET', '/api/addresses'),
+  /** The preloaded list of disciplines the organizer picks from rather than types out. */
+  presets: () => req<string[]>('GET', '/api/disciplines/presets'),
+  /** Another discipline in the event: another folder and tournament at the same address (#4). */
+  addDiscipline: (name: string) => req<DisciplineSummary>('POST', '/api/disciplines', { name }),
+  renameDiscipline: (slug: string, name: string) =>
+    req<DisciplineSummary>('PATCH', `/api/disciplines/${slug}`, { name }),
+  /** Takes a discipline out of the event. Its folder is kept, under retired/. */
+  retireDiscipline: (slug: string) => req<{ retired: string }>('DELETE', `/api/disciplines/${slug}`),
+  /** Reads a discipline's files again, after a hand edit that stopped it loading was fixed. */
+  reloadDiscipline: (slug: string) => req<DisciplineSummary>('POST', `/api/disciplines/${slug}/reload`),
 };

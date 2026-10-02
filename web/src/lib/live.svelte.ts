@@ -4,10 +4,9 @@
  * connection being up -- a display that loses the server shows stale data rather than
  * breaking (design decision 15).
  */
-import { api, type Presence, type Snapshot } from '../api';
-
-/** Where the last snapshot this device saw is kept, so a client can start with no server. */
-const CACHE = 'porta.snapshot';
+import { apiIn, type Presence, type Snapshot } from '../api';
+import { apiBase, namespace } from './paths';
+import { discipline } from '../router.svelte';
 
 export class Live {
   #snapshot = $state<Snapshot | null>(null);
@@ -36,6 +35,14 @@ export class Live {
   replaced = $state<{ match: string; nonce: number } | null>(null);
 
   private source: EventSource | null = null;
+  /** The discipline this page follows: the one in its address, or the event's only one. */
+  private readonly slug = discipline();
+  /**
+   * Where the last snapshot this device saw is kept, so a client can start with no
+   * server. One per discipline, so a device that has been on two never opens one with
+   * the other's schedule; the unprefixed pages keep the key they always had.
+   */
+  private readonly cache = `porta.${namespace(this.slug)}snapshot`;
 
   get snapshot(): Snapshot | null {
     return this.#snapshot;
@@ -47,7 +54,7 @@ export class Live {
     this.stale = false;
     if (!next) return;
     try {
-      localStorage.setItem(CACHE, JSON.stringify({ at: Date.now(), snapshot: next }));
+      localStorage.setItem(this.cache, JSON.stringify({ at: Date.now(), snapshot: next }));
     } catch {
       // No room or no storage. The live copy still works; only the offline start is lost.
     }
@@ -67,7 +74,7 @@ export class Live {
    */
   private restore(): void {
     try {
-      const raw = localStorage.getItem(CACHE);
+      const raw = localStorage.getItem(this.cache);
       if (!raw) return;
       const { at, snapshot } = JSON.parse(raw) as { at: number; snapshot: Snapshot };
       this.#snapshot = snapshot;
@@ -82,7 +89,7 @@ export class Live {
   /** Asks for the whole picture again. Cheap at this size, and always safe. */
   async refresh(): Promise<void> {
     try {
-      this.snapshot = await api.state();
+      this.snapshot = await apiIn(this.slug).state();
       this.error = '';
     } catch (e) {
       this.error = e instanceof Error ? e.message : String(e);
@@ -91,7 +98,7 @@ export class Live {
 
   private connect(): void {
     if (this.source) return;
-    const source = new EventSource('/api/stream');
+    const source = new EventSource(`${apiBase(this.slug)}/stream`);
     this.source = source;
     source.onopen = () => {
       this.connected = true;

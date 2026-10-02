@@ -15,6 +15,8 @@
  * the way out, in one place, rather than every route being written twice.
  */
 
+import { disciplineOf, routeOf, within } from './lib/paths';
+
 /** "/" for the real application, "/porta-di-ferro/" for the demo on GitHub Pages. */
 const base = import.meta.env.BASE_URL.replace(/\/+$/, '');
 
@@ -29,14 +31,43 @@ export function href(to: string): string {
   return base && to.startsWith('/') ? base + to : to;
 }
 
-let current = $state(appPath(window.location.pathname) + window.location.search);
+// Guarded for the unit tests, which import modules that import this one and run with no
+// window: there the application is at "/".
+const browser = typeof window !== 'undefined';
 
-window.addEventListener('popstate', () => {
-  current = appPath(window.location.pathname) + window.location.search;
-});
+let current = $state(browser ? appPath(window.location.pathname) + window.location.search : '/');
+
+if (browser) {
+  window.addEventListener('popstate', () => {
+    current = appPath(window.location.pathname) + window.location.search;
+  });
+}
+
+/**
+ * The discipline a page is about (docs/proposals/one-event-many-disciplines.md §6).
+ *
+ * An event's disciplines share one address, so a discipline's pages carry it in the path:
+ * /d/open-sabre/score/1. Routes below are matched with that prefix taken off
+ * (lib/paths.ts), so every page is written once and works for any discipline. The
+ * organizer's /admin/open-sabre is the same as /d/open-sabre/admin.
+ *
+ * Empty for the event's own pages, and for the unprefixed pages of an event with one
+ * discipline -- which answer as that discipline, exactly as before there were several.
+ */
+export function discipline(): string {
+  return disciplineOf(current);
+}
 
 export function path(): string {
-  return current.split('?')[0];
+  return routeOf(current);
+}
+
+/**
+ * A link within the discipline the page is on: /score/1 becomes /d/open-sabre/score/1 on
+ * a Sabre page, and stays /score/1 on a page with no discipline in its address.
+ */
+export function dhref(to: string, slug = discipline()): string {
+  return within(slug, to);
 }
 
 export function query(): URLSearchParams {

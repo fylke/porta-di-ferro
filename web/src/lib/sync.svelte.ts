@@ -6,7 +6,7 @@
  * Retries are safe because the server is idempotent on (match, seq), so this needs no
  * deduplication logic and no acknowledgement protocol -- just "try again later".
  */
-import { api, ApiError, type Client } from '../api';
+import { apiIn, ApiError, type Client } from '../api';
 import * as db from './db';
 import { differences } from './drift';
 import { MSL, replay, type Event, type State } from './match';
@@ -32,13 +32,15 @@ let flushingAll = false;
  * Outstanding is derived the same way load() derives it, by asking the server what it has,
  * so nothing has to be flagged in storage.
  */
-export async function flushAll(except = ''): Promise<void> {
+export async function flushAll(except?: { discipline: string; match: string }): Promise<void> {
   if (flushingAll) return;
   flushingAll = true;
   try {
-    for (const id of await db.matches()) {
-      if (id === except) continue;
-      const local = await db.read(id);
+    for (const { discipline, match: id } of await db.matches()) {
+      if (except && id === except.match && discipline === except.discipline) continue;
+      // To the discipline it was scored in, whichever page is open now.
+      const api = apiIn(discipline);
+      const local = await db.read(discipline, id);
       if (local.length === 0) continue;
       const remote = await api.events(id, 0);
       const have = new Set(remote.map((e) => e.seq));
@@ -68,6 +70,9 @@ export async function flushAll(except = ''): Promise<void> {
 
 export class MatchLog {
   matchId = $state('');
+  /** The discipline the match is in: where its log is kept, and where it is sent. */
+  readonly discipline: string;
+  private readonly api: ReturnType<typeof apiIn>;
   events = $state<Event[]>([]);
   sync = $state<SyncState>('idle');
   pendingCount = $state(0);
@@ -110,8 +115,14 @@ export class MatchLog {
   // Note: reload() replaces this set outright, so it cannot be readonly.
   private timer: ReturnType<typeof setInterval> | null = null;
 
-  constructor(matchId: string) {
+  constructor(matchId: string, discipline: string) {
     this.matchId = matchId;
+    this.discipline = discipline;
+    this.api = apiIn(discipline);
+  }
+
+  private get held() {
+    return { discipline: this.discipline, match: this.matchId };
   }
 
   /**
@@ -121,10 +132,10 @@ export class MatchLog {
    * device that has been offline needs.
    */
   async load(): Promise<void> {
-    const local = await db.read(this.matchId);
+    const local = await db.read(this.discipline, this.matchId);
     let remote: Event[] = [];
     try {
-      remote = await api.events(this.matchId, 0);
+      remote = await this.api.events(this.matchId, 0);
       this.sync = 'idle';
     } catch {
       this.sync = 'offline';
@@ -142,14 +153,14 @@ export class MatchLog {
     // on alone from here.
     const known = new Set(local.map((e) => e.seq));
     const missing = remote.filter((e) => !known.has(e.seq));
-    if (missing.length > 0) await db.append(this.matchId, missing);
+    if (missing.length > 0) await db.append(this.discipline, this.matchId, missing);
 
     this.durable = db.usable();
     // Claimed as soon as it is opened, backlog or not, so a second device opening the
     // same mat is told this one is here rather than finding the match free.
     await this.claim();
     await this.flush();
-    if (this.sync === 'idle') void flushAll(this.matchId);
+    if (this.sync === 'idle') void flushAll(this.held);
     this.start();
   }
 
@@ -162,7 +173,7 @@ export class MatchLog {
   private async claim(force = false): Promise<boolean> {
     if (this.epoch > 0 && !force) return true;
     try {
-      const res = await api.claim(this.matchId, clientId(), force);
+      const res = await this.api.claim(this.matchId, clientId(), force);
       this.epoch = res.epoch;
       this.contested = null;
       return true;
@@ -191,7 +202,7 @@ export class MatchLog {
     await this.flush();
     if (this.epoch > 0 && this.sync === 'idle') {
       try {
-        await api.releaseClaim(this.matchId, clientId());
+        await this.api.releaseClaim(this.matchId, clientId());
       } catch {
         // The server will treat this device as gone soon enough.
       }
@@ -201,7 +212,7 @@ export class MatchLog {
   /** Appends to the log and returns. The push happens after; so does the disk write. */
   async write(events: Event[]): Promise<void> {
     this.events = [...this.events, ...events].sort((a, b) => a.seq - b.seq);
-    await db.append(this.matchId, events);
+    await db.append(this.discipline, this.matchId, events);
     this.durable = db.usable();
     void this.flush();
   }
@@ -215,13 +226,13 @@ export class MatchLog {
   async reload(): Promise<void> {
     let remote: Event[];
     try {
-      remote = await api.events(this.matchId, 0);
+      remote = await this.api.events(this.matchId, 0);
     } catch {
       // Offline: the old copy stays until the next contact.
       return;
     }
-    await db.clear(this.matchId);
-    await db.append(this.matchId, remote);
+    await db.clear(this.discipline, this.matchId);
+    await db.append(this.discipline, this.matchId, remote);
     this.pushed = new Set(remote.map((e) => e.seq));
     this.events = remote;
     this.pendingCount = 0;
@@ -255,14 +266,14 @@ export class MatchLog {
     }
     this.sync = 'pushing';
     try {
-      const res = await api.pushEvents(this.matchId, batch, { client: clientId(), epoch: this.epoch });
+      const res = await this.api.pushEvents(this.matchId, batch, { client: clientId(), epoch: this.epoch });
       for (const e of batch) this.pushed.add(e.seq);
       this.check(res.state);
       this.pendingCount = 0;
       this.sync = 'idle';
       // Reaching the server with this match's backlog means the LAN is back: the matches
       // finished before it are waiting too.
-      void flushAll(this.matchId);
+      void flushAll(this.held);
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
         // Another device has taken this match over. The server has set these events
