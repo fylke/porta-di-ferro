@@ -31,7 +31,6 @@ type Server struct {
 	// mats is the event's plan, when the discipline's work runs on the event's mats.
 	mats EventMats
 
-
 	// writeMu serialises writes. One organizer and at most four mats: a single lock is
 	// simpler than anything cleverer and cannot be got wrong.
 	writeMu sync.Mutex

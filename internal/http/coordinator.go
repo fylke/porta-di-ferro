@@ -71,8 +71,8 @@ type worker struct {
 // (proposal R10).
 func NewCoordinator(folder *event.Folder, assets fs.FS) (*Coordinator, error) {
 	c := &Coordinator{
-		folder:  folder,
-		assets:  assets,
+		folder:   folder,
+		assets:   assets,
 		hub:      newHub(),
 		matsHub:  newHub(),
 		presence: newPresence(),
