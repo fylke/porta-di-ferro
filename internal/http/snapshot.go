@@ -111,15 +111,14 @@ type Source interface {
 
 // snapshot builds this server's picture. The work is in BuildSnapshot; what the server
 // adds is where the state comes from and who is connected.
+//
+// In an event, Mats is read off the hall: for every event mat, the match it is on when that
+// match is this discipline's. Every client that read Mats before there were several
+// disciplines still finds it where it was.
 func (s *Server) snapshot() (Snapshot, error) {
-	snap, err := BuildSnapshot(source{s.store, s}, s.rules, s.self(), func(mat int) string {
-		if sk := s.presence.scorekeeperOn(mat); sk != nil {
-			return sk.Match
-		}
-		return ""
-	})
-	if err == nil {
-		s.onEventMats(&snap)
+	snap, err := s.PlacedSnapshot()
+	if err == nil && s.mats != nil {
+		snap.Mats = s.mats.CurrentMats(s.self().Slug)
 	}
 	return snap, err
 }

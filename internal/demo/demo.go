@@ -193,6 +193,17 @@ func (d *Demo) LastEventAt(id string) (time.Time, bool) {
 func (d *Demo) Dir() string { return "in this browser" }
 
 func (d *Demo) snapshot() (httpapi.Snapshot, error) {
+	snap, err := d.placedSnapshot()
+	if err == nil && d.event != nil {
+		// Which match each of the event's mats is on, when it is this discipline's: the
+		// hall's to say, built from the placed snapshots, as the coordinator does.
+		snap.Mats = httpapi.CurrentFrom(d.event.mats(), d.slug)
+	}
+	return snap, err
+}
+
+// placedSnapshot is the snapshot on the event's mats, without Mats.
+func (d *Demo) placedSnapshot() (httpapi.Snapshot, error) {
 	url := "/"
 	if d.slug != "" {
 		url = "/d/" + d.slug + "/"

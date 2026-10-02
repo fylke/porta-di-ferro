@@ -323,8 +323,10 @@ func BuildMats(inputs []MatsInput, placed map[string]store.Placement, mats int,
 			}
 		}
 		if d, id := held(mat); id != "" {
+			// A score keeper that does not say which discipline -- a client from before
+			// there were several -- is matched on the id alone.
 			for i := range mv.Queue {
-				if mv.Queue[i].Discipline == d && mv.Queue[i].Match.ID == id {
+				if (d == "" || mv.Queue[i].Discipline == d) && mv.Queue[i].Match.ID == id {
 					s := mv.Queue[i]
 					mv.Current = &s
 					break
@@ -445,9 +447,9 @@ func Step(view MatsView, placed map[string]store.Placement, id string, earlier b
 // OnEventMats makes a discipline's snapshot speak the event's mats: every pool and bracket
 // match says the mat the plan runs it on, the pools come in that order, and EventMats says
 // how many mats there are. The standings, the roster, the pool sheets and a person's page
-// then name the right mat without knowing there is a plan. Mats -- a discipline's idea of
-// which match is up on its own mats -- has no meaning across the event and is emptied:
-// the hall's mats are /api/mats.
+// then name the right mat without knowing there is a plan. Mats -- which match each mat is
+// on -- is emptied here, because only the whole hall can say: the discipline fills it from
+// CurrentFrom over the hall's mats.
 func OnEventMats(snap *Snapshot, slug string, placed map[string]store.Placement, mats int) {
 	matOf := func(m store.Match) (int, int, bool) {
 		p, ok := placed[slug+"/"+ItemKeyFor(m)]
@@ -481,4 +483,16 @@ func OnEventMats(snap *Snapshot, slug string, placed map[string]store.Placement,
 	}
 	snap.EventMats = mats
 	snap.Mats = map[int]string{}
+}
+
+// CurrentFrom is what CurrentMats answers, from a view of the hall already built.
+func CurrentFrom(view MatsView, slug string) map[int]string {
+	out := map[int]string{}
+	for _, m := range view.Mats {
+		out[m.Mat] = ""
+		if m.Current != nil && m.Current.Discipline == slug {
+			out[m.Mat] = m.Current.Match.ID
+		}
+	}
+	return out
 }

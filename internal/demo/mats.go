@@ -51,7 +51,7 @@ func (e *Event) mats() httpapi.MatsView {
 	placed, n := e.placements()
 	var inputs []httpapi.MatsInput
 	for _, d := range e.disciplines {
-		snap, err := d.snapshot()
+		snap, err := d.placedSnapshot()
 		if err != nil {
 			continue
 		}

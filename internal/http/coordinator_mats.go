@@ -39,7 +39,7 @@ func (c *Coordinator) snapshots() []snapped {
 		if w.srv == nil {
 			s.err = w.err
 		} else {
-			s.snap, s.err = w.srv.Snapshot()
+			s.snap, s.err = w.srv.PlacedSnapshot()
 		}
 		out = append(out, s)
 	}
@@ -122,6 +122,12 @@ func (c *Coordinator) matsFrom(snaps []snapped) MatsView {
 	}
 	placed, mats := c.Placements()
 	return BuildMats(inputs, placed, mats, c.held)
+}
+
+// CurrentMats is every mat of the hall, with the match it is on when that match is the
+// discipline's. For a discipline's snapshot, so its Mats means what it always did.
+func (c *Coordinator) CurrentMats(slug string) map[int]string {
+	return CurrentFrom(c.MatsNow(), slug)
 }
 
 // MatsNow is the hall's mats as they stand.

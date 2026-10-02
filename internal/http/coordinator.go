@@ -305,7 +305,7 @@ func (c *Coordinator) summarize(w *worker) DisciplineSummary {
 	if w.srv == nil {
 		s.err = w.err
 	} else {
-		s.snap, s.err = w.srv.Snapshot()
+		s.snap, s.err = w.srv.PlacedSnapshot()
 	}
 	return c.summarizeFrom(s)
 }
