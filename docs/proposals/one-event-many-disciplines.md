@@ -1,8 +1,9 @@
 # Design Proposal: One Event, Many Disciplines
 
-> **Status: accepted; phase 1 built.** The maintainers took every recommendation (§15). Phase 1 —
-> one event, one address — is built: see [docs/architecture.md](../architecture.md) §1a for what
-> it became. Phases 2–5 are not. It answers issue #102 and the comments on it, and deliberately goes past the issue's original scope: the comments asked for
+> **Status: accepted; phases 1 and 2 built.** The maintainers took every recommendation (§15).
+> Phase 1 — one event, one address — and phase 2 — physical mats, work items and the mat board —
+> are built: see [docs/architecture.md](../architecture.md) §1a for what they became. The bronze
+> match and the final are items of their own by default (§15, 4). Phases 3–5 are not. It answers issue #102 and the comments on it, and deliberately goes past the issue's original scope: the comments asked for
 > mats to be treated as a shared resource and for a planning view across disciplines, and both
 > change the architecture enough that they have to be designed together with the landing page,
 > not after it. Related issues: #4 (add a discipline), #5 (staff), #6 (timetable), #64 (event

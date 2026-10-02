@@ -85,7 +85,34 @@ flowchart TB
 - **Clients keep disciplines apart.** IndexedDB is keyed `[discipline, match, seq]`, and an unsent exchange is pushed to the discipline it was scored in whatever page is open; the snapshot cache and the score keeper's remembered state are namespaced per discipline (`web/src/lib/paths.ts`).
 - **Opening an old folder** moves its files into `disciplines/<slug>/` and lifts its day into `event.json` (`internal/event/migrate.go`); the move resumes if interrupted.
 
-Mats are still per discipline in phase 1: mat 1 of the sabre and mat 1 of the longsword are different mats, as they were when they were different processes. Event-wide mats are phase 2.
+### Event-wide mats (phase 2)
+
+The mats are the event's. Each discipline's work is **work items** — each pool, its eliminations on each of its lanes, the bronze match, the final (`httpapi.ItemsOf`) — and the plan in `event.json` places each item on one of the hall's mats, at a place in that mat's queue (`store.Plan`). The discipline still decides what its items are and how the matches inside each are ordered; the plan decides which mat runs each and when.
+
+```mermaid
+flowchart LR
+    subgraph Disciplines
+        LS["Longsword: pool 1, pool 2, elim-1, elim-2, bronze, final"]
+        SA["Sabre: pool 1, pool 2"]
+    end
+    Plan["event.json plan: item → mat, place"]
+    LS --> Plan
+    SA --> Plan
+    Plan --> M1["Mat 1: LS pool 1 → SA pool 1 → LS final"]
+    Plan --> M2["Mat 2: SA pool 2 → LS pool 2 → LS bronze"]
+    M1 --> Feed["/api/mats and its stream"]
+    M2 --> Feed
+    Feed --> SK["score keeper at a mat"]
+    Feed --> D["mat, audience and all-mats displays"]
+```
+
+- **Placing.** A new item — pools just drawn, a bracket just drawn, a redraw (the item's `Stamp` changes) — goes to the end of the mat its lane maps to (`httpapi.Place`). With one discipline and no mat count set, the event has that discipline's mats and every item lands where it always ran, so a one-discipline event is unchanged.
+- **What a mat runs** (`httpapi.BuildMats`): the match its live score keeper is holding, or else the first match still to fence in the first item on its queue that is not done. A mat waits rather than skipping ahead when that item's next match is still waiting on a feeder.
+- **Moving** (`PATCH /api/plan/items/{discipline}/{key}`, `httpapi.Move`/`Step`): an item under way or done cannot move, and nothing can be put in front of it, so a mat never changes what it runs in the middle of an item. A discipline's own pool controls move its items the same way. `PUT /api/mats` sets how many mats the hall has; a mat running something cannot be taken away.
+- **Snapshots speak event mats** (`httpapi.OnEventMats`): every pool and bracket match in a discipline's snapshot says the mat the plan runs it on, so standings, rosters, pool sheets and personal pages need no change; `eventMats` says how many there are.
+- **Devices are the event's.** Heartbeats, screen assignments (`displays.json` in the event folder) and the Screens panel are event-level, and one registry is shared by every discipline, so a claim on a match anywhere asks it whether the holder is alive. A score keeper registers its mat, match and the match's discipline, and the client keys everything it keeps by discipline and match id, because ids repeat across disciplines.
+- **The mat board** (`MatBoard.svelte`) shows every mat's queue as cards and moves them by a pointer-events drag or by each card's menu.
+
 
 ### 1b. The public demo
 

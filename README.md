@@ -91,6 +91,8 @@ This is Milestone 1, scoped to run MSL's club event on 15 November 2026:
   address — with the SM rules' own vocabulary
 - One event, many disciplines: every discipline of the day at one address, each with its own
   data folder, added from `/admin`, with one landing page and one info sheet for the whole hall
+- The hall's mats are shared: every pool, elimination and final is a card on a mat board, moved
+  by drag or menu, and a score keeper or a screen follows its mat from one discipline to the next
 
 The full picture is in [`docs/design.md`](docs/design.md); the engineering decisions and
 what was ruled out are in [`docs/tech-stack.md`](docs/tech-stack.md).
