@@ -1,7 +1,8 @@
 # Design Proposal: One Event, Many Disciplines
 
-> **Status: proposal, for discussion.** Nothing here is built. It answers issue #102 and the
-> comments on it, and deliberately goes past the issue's original scope: the comments asked for
+> **Status: accepted; phase 1 built.** The maintainers took every recommendation (§15). Phase 1 —
+> one event, one address — is built: see [docs/architecture.md](../architecture.md) §1a for what
+> it became. Phases 2–5 are not. It answers issue #102 and the comments on it, and deliberately goes past the issue's original scope: the comments asked for
 > mats to be treated as a shared resource and for a planning view across disciplines, and both
 > change the architecture enough that they have to be designed together with the landing page,
 > not after it. Related issues: #4 (add a discipline), #5 (staff), #6 (timetable), #64 (event
@@ -871,7 +872,9 @@ the coordinator, not changes to the disciplines.
 
 ## 15. Decisions needed from the maintainers
 
-In the order they block work.
+In the order they block work. **All seven were answered in the review of this proposal (#106):
+every recommendation is taken.** Finals are normally split off (4), and `/admin` stays
+unprotected for now, the first event having only friendly users (7).
 
 1. **Topology.** One process serving every discipline (D, recommended), or a process per
    discipline (C)? Everything in phase 1 depends on it. §5 argues that what #49 really bought was

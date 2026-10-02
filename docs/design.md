@@ -37,7 +37,7 @@ Defined first, because the names are used throughout.
 
 | Term | Meaning |
 |---|---|
-| **Event** | A whole occasion, such as MSL's club event on 15 November. May contain several tournaments. **Not modelled in MVP** — one run of the application is one tournament |
+| **Event** | A whole occasion, such as MSL's club event on 15 November. May contain several tournaments. **Not modelled in MVP** — one run of the application was one tournament. *(Modelled since #102: one run is one event, each discipline a tournament with its own folder.)* |
 | **Tournament** | A single self-contained competition, assigned exactly one discipline. Owns its own competitors, pools and results |
 | **Discipline** | The weapon and ruleset a tournament is fought under — *open steel longsword*, for instance. Hardcoded in MVP |
 | **Pool** | A group of competitors within a tournament who each fence all the others once |
@@ -865,11 +865,11 @@ Deliberate, and listed so nobody is surprised on the day:
    or step it up or down its mat's queue. Every screen reads pools in run order, so all of them follow;
    the organizer view and the roster mark a moved pool as moved.)*
 9. **Concurrent disciplines** — several runs at once, which requires a distinct port and data
-   directory per instance. *(Built. The first instance starts the others from its organizer page:
-   each is the same executable on the next free port, with a data folder beside the first named for
-   the discipline, and each shows its name on every page — organizer, mat picker, score keeper,
-   scoreboards, roster — so a screen or a tab is never silently on the wrong one. Closing the first
-   closes the ones it started; each also has its own tray Quit.)*
+   directory per instance. *(Built as sibling processes, then rebuilt as one event (#102,
+   docs/proposals/one-event-many-disciplines.md): every discipline in one process at one address,
+   each with its own folder under the event's, added, renamed and taken out from /admin. Each shows
+   its name on every page — organizer, mat picker, score keeper, scoreboards, roster — so a screen or
+   a tab is never silently on the wrong one, and the landing page shows all of them.)*
 10. **Score keeper client handover** — graceful (planned: bathroom break, shift change) and ungraceful
    (device died). Graceful flushes before releasing so nothing is lost; ungraceful increments a
    writer epoch, and any late events from the old device are quarantined and shown to the organizer

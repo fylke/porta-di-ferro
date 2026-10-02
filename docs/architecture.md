@@ -6,7 +6,7 @@ This document provides architectural diagrams for Porta di Ferro, illustrating c
 
 ## 1. System & Deployment Architecture
 
-Porta di Ferro runs as a single Go binary on the organizer's PC, embedding the Svelte 5 SPA via `//go:embed`. Devices connect locally across the venue LAN without requiring an external internet connection. Several disciplines at once are several processes: the first can spawn siblings (`POST /api/instances`) on the next free ports, each with its own data directory, and stops them when it exits. Replacing the sibling processes with one event over supervised disciplines, at one address, is proposed in [docs/proposals/one-event-many-disciplines.md](proposals/one-event-many-disciplines.md) (issue #102).
+Porta di Ferro runs as a single Go binary on the organizer's PC, embedding the Svelte 5 SPA via `//go:embed`. Devices connect locally across the venue LAN without requiring an external internet connection. One run is one event: every discipline in one process, at one address, each with its own data folder (§1a).
 
 ```mermaid
 flowchart TB
@@ -46,6 +46,47 @@ flowchart TB
 
 ---
 
+### 1a. One event, many disciplines
+
+One run of `porta` is one **event**: every discipline of the day in one process, at one address, each in a folder of its own (issue #102, [docs/proposals/one-event-many-disciplines.md](proposals/one-event-many-disciplines.md), phase 1). Each discipline is an `httpapi.Server` exactly as it was when it was a process of its own — its own `store.Store`, lock, SSE hub and presence — mounted by `httpapi.Coordinator` under `/api/d/{slug}/`. The coordinator owns what is about the event: `event.json` (the welcome, the programme, the wifi, the signup settings and the order of the disciplines), the event's stream, and the address everything is served from.
+
+```mermaid
+flowchart TB
+    subgraph PC["Organizer PC"]
+        WD["watchdog: porta starts a copy of itself and restarts it if it dies"]
+        subgraph Proc["porta (one process, one port)"]
+            Router["Coordinator.Handler"]
+            subgraph Coord["httpapi.Coordinator"]
+                Info["event.json via internal/event"]
+                Hub["event hub: /api/event/stream"]
+            end
+            S1["httpapi.Server: open-steel-longsword"]
+            S2["httpapi.Server: open-sabre"]
+            Router -- "/api/event…, /api/disciplines…" --> Coord
+            Router -- "/api/d/open-steel-longsword/…" --> S1
+            Router -- "/api/d/open-sabre/…" --> S2
+            Router -- "/api/… (only while there is one discipline)" --> S1
+            S1 -. "state updates" .-> Hub
+            S2 -. "state updates" .-> Hub
+            S1 -. "reads the day from" .-> Info
+            S2 -. "reads the day from" .-> Info
+        end
+        WD -. restarts .-> Proc
+        S1 --> F1[("disciplines/open-steel-longsword/")]
+        S2 --> F2[("disciplines/open-sabre/")]
+    end
+    Phones["Every phone, tablet and screen: one address"] --> Router
+```
+
+- **Addresses.** A discipline's API is `/api/d/{slug}/…` and its pages `/d/{slug}/…` (`/admin/{slug}` for its admin). While the event has one discipline, the unprefixed paths answer as it, so a one-discipline event is exactly what a run of the application always was; with several they answer 409 and name the disciplines, and the client's unprefixed pages ask which one. The slug comes from the name and never changes, except once for a discipline made before it had a name, whose old slug stays as an alias.
+- **The day is the event's.** A discipline's snapshot carries `event.json` laid over its own tournament; it keeps only which programme row it is (`Signup.Tournament`). A discipline's `PUT /api/d/{slug}/event` writes the day to the event and the row to itself, so every admin screen saves as it always did.
+- **A broken discipline is contained.** Each discipline's files are read when it loads; one that does not parse is listed with the reason, served as 503, shown on the landing page from its last summary, and reloaded with `POST /api/disciplines/{slug}/reload` once fixed. A broken `event.json` blanks the day and nothing else.
+- **The event's stream** carries `httpapi.Summarize` of every discipline — stage, progress, what is on each mat, the podium, the entrants — coalesced over 150 ms, so the event landing page holds one stream however many disciplines there are.
+- **Clients keep disciplines apart.** IndexedDB is keyed `[discipline, match, seq]`, and an unsent exchange is pushed to the discipline it was scored in whatever page is open; the snapshot cache and the score keeper's remembered state are namespaced per discipline (`web/src/lib/paths.ts`).
+- **Opening an old folder** moves its files into `disciplines/<slug>/` and lifts its day into `event.json` (`internal/event/migrate.go`); the move resumes if interrupted.
+
+Mats are still per discipline in phase 1: mat 1 of the sabre and mat 1 of the longsword are different mats, as they were when they were different processes. Event-wide mats are phase 2.
+
 ### 1b. The public demo
 
 The same client with no server under it (issue #88, [docs/demo.md](docs/demo.md)). Deployed to GitHub Pages from `main`; the production deployment above is unchanged.
@@ -59,7 +100,7 @@ flowchart LR
     subgraph Demo["The demo, one browser"]
         B2[The same Svelte bundle] --> A[demo adapter: window.fetch and EventSource replaced]
         A --> W[cmd/demo-wasm]
-        W --> M[(tournament in memory)]
+        W --> M[(the event in memory: two disciplines)]
         A -. pushes a snapshot on every write .-> B2
         A -. saved on every write, loaded by every tab .-> L[(localStorage)]
     end
@@ -67,7 +108,7 @@ flowchart LR
     S --> T
 ```
 
-`BuildSnapshot` takes a `Source` — the four reads a snapshot needs — so `*store.Store` serves it off disk for an event and the demo serves it out of memory. Both sides reach the same tournament code, which is what stops the demo drifting into a second, subtly different implementation of the standings.
+`BuildSnapshot` takes a `Source` — the four reads a snapshot needs — so `*store.Store` serves it off disk for an event and the demo serves it out of memory. `demo.Event` is the demo's coordinator: it answers the event's paths and hands `/api/d/{slug}/…` to each `demo.Demo`, the same way `httpapi.Coordinator` does. Both sides reach the same tournament code, which is what stops the demo drifting into a second, subtly different implementation of the standings.
 
 Each tab runs its own copy of the module. The adapter saves the whole tournament to `localStorage` after every write, each new tab loads it, and open tabs follow the `storage` event, so the tabs of one browser share one tournament the way the tablets and the PC share one at an event (issue #108). A visitor away for half an hour comes back to the fixture.
 

@@ -1,7 +1,7 @@
 # The public demo
 
 <https://fylke.github.io/porta-di-ferro/> — the whole application, running in a browser
-tab, with a tournament already half fenced (issue #88).
+tab, with an event of two disciplines, one of them already half fenced (issues #88, #102).
 
 It exists to lower the bar. Somebody who might help with usability testing, or run an
 event on this, or write some of it, should be able to see what it is without installing
@@ -30,7 +30,7 @@ the other end of `fetch` and `EventSource`.
 
 | Piece | What it does |
 | --- | --- |
-| `internal/demo` | The tournament in memory, and a router answering the same API paths. Ordinary portable Go, tested by `go test ./...`. |
+| `internal/demo` | The event in memory — `Event` over two `Demo` disciplines — and a router answering the same API paths. Ordinary portable Go, tested by `go test ./...`. |
 | `cmd/demo-wasm` | Forty lines of `syscall/js` glue. The only part with a `js && wasm` build tag. |
 | `web/src/demo/adapter.ts` | Replaces `window.fetch` and `window.EventSource` before the app mounts. |
 | `web/src/demo/DemoBanner.svelte` | The strip that says what this is, with Play the rest and Start over. |
@@ -58,8 +58,8 @@ router learning about base paths.
 
 ### What the demo cannot do, and says so
 
-- **Starting a second discipline** is a second copy of the application running beside the
-  first. There is no process to start, so the API answers 400 with that sentence.
+- **Taking a discipline out keeps nothing.** At an event its folder is kept under
+  `retired/`; in a browser tab there is nowhere to keep it, and the answer says so.
 - **Joining from another device** needs a LAN. The organizer view says "one tab, every
   screen" instead of reporting no network, and links to the score keeper and the displays
   in the same tab.
@@ -72,16 +72,16 @@ sheet — and every tab is its own copy of the module. Without help, a visitor w
 the welcome message and opened the landing page found the demo as it was before they
 touched it (issue #108).
 
-So the adapter keeps the tournament in `localStorage`. After every request the module
+So the adapter keeps the event in `localStorage`. After every request the module
 reports as a change it writes the whole state out (`GET /api/demo/save`); a tab that
 opens loads it (`POST /api/demo/load`); and the tabs already open follow the `storage`
 event, so the score keeper in one tab and the organizer's view in another are the same
-tournament. **Start over** clears it, which resets every tab.
+event. **Start over** clears it, which resets every tab.
 
 It lasts until the visitor has done nothing for half an hour. After that the next tab
 starts from the fixture, so somebody coming back next week, or the next person at the
 same computer, sees what every first visitor sees. A save the module will not take, such
-as one written by an older demo (`saveFormat` in `internal/demo`), is dropped the same
+as one written by an older demo (`eventSaveFormat` in `internal/demo`), is dropped the same
 way.
 
 The event editor's call, `PUT /api/event`, was missing from the demo's router and is
@@ -97,9 +97,12 @@ needs a filesystem to be exercised.
 `Organizer.svelte` has one `if (demo)` branch, for the LAN panel described above. Every
 other difference is behind `fetch`.
 
-## The tournament
+## The event
 
-Thirty-two entrants across six Nordic clubs, three mats, pools of five and six, about
+Stångebroslaget, with two disciplines, at the addresses a real event gives them
+(`demo.Event`, the demo's stand-in for the server's coordinator).
+
+**Open steel Longsword**: thirty-two entrants across six Nordic clubs, three mats, pools of five and six, about
 halfway through the pools. Mat 1 is two thirds into its first pool with a match under
 way, mat 2 is halfway into its second, and mat 3 is between its two, so many fencers have
 two matches left. The eliminations are not drawn yet.
@@ -111,9 +114,14 @@ that are real match logs the real engine replays. A fixture written out as JSON 
 have gone stale the first time the draw changed. The seed is fixed, so every visitor sees
 the same tournament.
 
-**Play the rest** finishes every open match, so the bracket and the podium can be reached
-without scoring by hand. **Start over** rebuilds the fixture. Neither exists in the
-application.
+**Open Sabre**: fourteen entrants in two pools of seven on two mats, drawn and waiting
+for the 15:00 slot in the programme. Astrid, Bo and Greta are in both, which is the
+normal case at a club open and what the landing page's name search is for. A visitor can
+add a discipline of their own from the event admin; it starts empty.
+
+**Play the rest** finishes every open match in every discipline, so the brackets and the
+podiums can be reached without scoring by hand. **Start over** rebuilds the event. Neither
+exists in the application.
 
 ## Working on it locally
 
