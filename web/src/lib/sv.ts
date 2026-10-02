@@ -505,6 +505,9 @@ export const sv: Record<string, string> = {
   '{item} is placed before what it waits for.': '{item} ligger före det den väntar på.',
   '{name} is in {a} and {b}, which overlap {from}–{to}.': '{name} är med i {a} och {b}, som överlappar {from}–{to}.',
   '{time} a match': '{time} per match',
+  'about {from}–{to}': 'ungefär {from}–{to}',
+  'about {time}': 'ungefär {time}',
+  'mats {list}': 'mattor {list}',
 
   // The event's people (phase 3).
   People: 'Personer',

@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { Clock, Live, liveElapsed, nameLookup, roundLabel } from './lib-display.svelte';
   import { formatClock } from '../lib/clock.svelte';
+  import { clockOf } from '../lib/clock-of-day';
   import { t } from '../lib/i18n.svelte';
   import type { Competitor } from '../api';
 
@@ -140,7 +141,7 @@
               </span>
               <span class="result">
                 {#if f.match.status === 'pending'}
-                  <span class="dim">{t('to come')}</span>
+                  <span class="dim">{f.match.eta ? t('about {time}', { time: clockOf(f.match.eta) }) : t('to come')}</span>
                 {:else}
                   <span class="mono score {outcome(f.match)}">{theirScore(f.match)}</span>
                   {#if f.match.state.running}

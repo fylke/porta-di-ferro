@@ -5,6 +5,7 @@
   import { t } from '../lib/i18n.svelte';
   import LangToggle from './LangToggle.svelte';
   import Schedule from './Schedule.svelte';
+  import FencingProgramme from './FencingProgramme.svelte';
 
   /**
    * What everyone in the hall gets when the event runs several disciplines (#102).
@@ -88,6 +89,7 @@
         <section class="schedule">
           <h2>{t('Programme')}</h2>
           <Schedule items={info.schedule ?? []} />
+          <FencingProgramme rows={view.programme ?? []} />
         </section>
 
         <section class="find">
