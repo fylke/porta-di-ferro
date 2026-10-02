@@ -19,17 +19,19 @@ test.describe('Tournament & Organizer Flow', () => {
       { name: 'Diana Prince', club: 'Northern Sword' },
     ];
 
-    // One at a time, as at the desk: the name field is cleared when the server answers,
-    // so typing the next before it has would be typing into a field about to be emptied.
+    // Counted from whatever is entered already: the specs share one server, and the
+    // competitor entry spec may have added its own names first.
+    const count = page.locator('.count').first();
+    const before = Number((await count.textContent())?.match(/\d+/)?.[0] ?? 0);
     for (const [i, c] of competitors.entries()) {
       await nameInput.fill(c.name);
       await clubInput.fill(c.club);
       await addButton.click();
-      await expect(page.locator('.count')).toContainText(`${i + 1} entered`);
+      await expect(count).toContainText(`${before + i + 1} entered`);
     }
 
     // Verify competitor list count
-    await expect(page.locator('.count')).toContainText('4 entered');
+    await expect(count).toContainText(`${before + competitors.length} entered`);
 
     // 3. Draw pools
     const drawButton = page.getByRole('button', { name: /Draw the pools/i });
