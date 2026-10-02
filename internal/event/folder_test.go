@@ -196,8 +196,8 @@ func TestDisciplinesAreCreatedOrderedAndRetired(t *testing.T) {
 
 func TestSlugs(t *testing.T) {
 	for in, want := range map[string]string{
-		"Open steel Longsword": "open-steel-longsword",
-		"Långsvärd, damer":     "langsvard-damer",
+		"Open steel Longsword":                           "open-steel-longsword",
+		"Långsvärd, damer":                               "langsvard-damer",
 		"Women's and underrepresented genders Longsword": "women-s-and-underrepresented-genders-longsword",
 		"  !!  ": "",
 	} {
