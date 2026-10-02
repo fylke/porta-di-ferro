@@ -2,6 +2,10 @@
   import { onMount, untrack } from 'svelte';
   import {
     api,
+    type EventInfo,
+    type EventSignupPreview,
+    type EventSignupReady,
+    type EventSignupRow,
     type Snapshot,
     type SignupInfo,
     type SignupPreview,
@@ -24,12 +28,33 @@
    * written until the organizer has seen what would be, and the confirm re-checks rather
    * than trusting what this screen sends back.
    */
-  // The files are this discipline's: its signup definition, and the app with it baked in.
-  const base = apiBase(discipline());
+  /**
+   * Where it runs. 'single': a discipline on its own, or an event's only one, as it always
+   * was. 'event': the event's admin, where one import gives every discipline its share
+   * (phase 3). 'share': a discipline of an event with several, which keeps its staff and
+   * points at the event's import.
+   */
+  let {
+    snapshot,
+    info,
+    onchange,
+    scope = 'single',
+  }: {
+    snapshot?: Snapshot;
+    /** The event's day, for the event's panel. */
+    info?: EventInfo;
+    onchange: () => void;
+    scope?: 'single' | 'event' | 'share';
+  } = $props();
 
-  let { snapshot, onchange }: { snapshot: Snapshot; onchange: () => void } = $props();
+  // The files are the event's, or this discipline's: the definition, and the app with it
+  // baked in.
+  // svelte-ignore state_referenced_locally
+  const base = scope === 'event' ? '/api/event' : apiBase(discipline());
+  // svelte-ignore state_referenced_locally
+  const several = scope === 'event';
 
-  const initial = untrack(() => snapshot.tournament.event?.signup ?? {});
+  const initial = untrack(() => (scope === 'event' ? info?.signup : snapshot?.tournament.event?.signup) ?? {});
   let definitionId = $state(initial.definitionId ?? '');
   let name = $state(initial.name ?? '');
   let venue = $state(initial.venue ?? '');
@@ -37,7 +62,9 @@
   let tournament = $state(initial.tournament ?? '');
   let contact = $state(initial.contact ?? false);
 
-  let ready = $state<SignupReady | null>(null);
+  let ready = $state<SignupReady | EventSignupReady | null>(null);
+  const shares = $derived(ready && 'disciplines' in ready ? ready.disciplines : []);
+  const unclaimed = $derived(ready && 'unclaimed' in ready ? ready.unclaimed : []);
   let saving = $state(false);
   let saved = $state(false);
   let error = $state('');
@@ -46,16 +73,31 @@
   // look, change their mind, and pick a different folder without anything having
   // happened.
   let files = $state<{ source: string; body: string }[]>([]);
-  let preview = $state<SignupPreview | null>(null);
+  let preview = $state<SignupPreview | EventSignupPreview | null>(null);
+  const rows: EventSignupRow[] = $derived(preview?.rows ?? []);
+  // Over capacity, and imported after the draw: per discipline at the event's import.
+  const capacity = $derived(
+    !preview ? [] : 'disciplines' in preview ? preview.disciplines.flatMap((d) => d.capacity ?? []) : (preview.capacity ?? []),
+  );
+  const drawnInto = $derived(
+    !preview
+      ? []
+      : 'disciplines' in preview
+        ? preview.disciplines.filter((d) => d.poolsDrawn && d.adding > 0).map((d) => d.name)
+        : preview.poolsDrawn && preview.adding > 0
+          ? ['']
+          : [],
+  );
   let busy = $state(false);
   let imported = $state<{ competitors: number; staff: number } | null>(null);
 
   // Who has offered to work this discipline rather than fence in it (issue #5).
-  const staff: StaffMember[] = $derived(snapshot.tournament.staff ?? []);
+  const staff: StaffMember[] = $derived(snapshot?.tournament.staff ?? []);
 
   async function refreshReady() {
+    if (scope === 'share') return;
     try {
-      ready = await api.signupReady();
+      ready = scope === 'event' ? await api.eventSignupReady() : await api.signupReady();
     } catch {
       // The panel still works; it just cannot say what is missing.
     }
@@ -71,8 +113,12 @@
     error = '';
     saving = true;
     try {
-      const signup: SignupInfo = { definitionId, name, venue, date, tournament, contact };
-      await api.saveEvent({ ...(snapshot.tournament.event ?? {}), signup });
+      if (scope === 'event') {
+        await api.saveEventInfo({ ...(info ?? {}), signup: { definitionId, name, venue, date, contact } });
+      } else {
+        const signup: SignupInfo = { definitionId, name, venue, date, tournament, contact };
+        await api.saveEvent({ ...(snapshot?.tournament.event ?? {}), signup });
+      }
       saved = true;
       await refreshReady();
       onchange();
@@ -111,10 +157,21 @@
     await look();
   }
 
+  /** Which programme row a discipline takes, at the event's panel. */
+  async function setRow(slug: string, row: string) {
+    error = '';
+    try {
+      ready = await api.setSignupRows({ [slug]: row });
+      if (files.length > 0) await look();
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+    }
+  }
+
   async function look() {
     busy = true;
     try {
-      preview = await api.previewSignups(files);
+      preview = scope === 'event' ? await api.previewEventSignups(files) : await api.previewSignups(files);
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
     } finally {
@@ -126,9 +183,10 @@
     busy = true;
     error = '';
     try {
-      const res = await api.importSignups(files);
+      const res = scope === 'event' ? await api.importEventSignups(files) : await api.importSignups(files);
       imported = { competitors: res.added, staff: res.addedStaff };
       preview = res.preview;
+      if ('error' in res && res.error) error = res.error;
       onchange();
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
@@ -192,13 +250,26 @@
   // find out that thirty-eight are fine.
   const counts = $derived.by(() => {
     const out: Record<string, number> = {};
-    for (const row of preview?.rows ?? []) out[row.verdict] = (out[row.verdict] ?? 0) + 1;
+    for (const row of rows) out[row.verdict] = (out[row.verdict] ?? 0) + 1;
     return out;
   });
+
+  /** Where a response goes, at the event's import. */
+  function into(row: EventSignupRow): string {
+    return (row.into ?? [])
+      .map((i) => (i.verdict === 'staff' ? t('{discipline} as staff', { discipline: i.name }) : i.name))
+      .join(', ');
+  }
 </script>
 
 <section>
   <h2>{t('Signup files')}</h2>
+  {#if scope === 'share'}
+  <p class="dim">
+    {t('This event takes its signups once, for every discipline:')}
+    <a href="/admin">{t('on the event’s admin page')}</a>.
+  </p>
+  {:else}
   <p class="dim">
     {t('Send people a file they fill in offline and send back. Nothing here needs the internet, and neither does what they open.')}
   </p>
@@ -225,6 +296,48 @@
     {t('The identifier keeps a response from last year’s event out of this one. It goes in every file and cannot change once they are sent.')}
   </p>
 
+  {#if scope === 'event'}
+  <div class="shares">
+    <h3>{t('Who takes what')}</h3>
+    <p class="dim small">
+      {t('Each discipline takes the responses for its row in the programme: the one named like it, unless you pick another.')}
+    </p>
+    <ul>
+      {#each shares as d (d.discipline)}
+        <li>
+          <span class="strong">{d.name}</span>
+          {#if d.error}
+            <span class="warn-inline">{d.error}</span>
+          {:else}
+            <select
+              value={d.chosen ? d.tournament : ''}
+              onchange={(e) => void setRow(d.discipline, e.currentTarget.value)}
+              aria-label={t('Programme row for {discipline}', { discipline: d.name })}
+            >
+              <option value="">
+                {d.tournament && !d.chosen
+                  ? t('{row}, by its name', { row: ready?.tournaments.find((tn) => tn.id === d.tournament)?.label ?? d.tournament })
+                  : t('nothing')}
+              </option>
+              {#each ready?.tournaments ?? [] as tn (tn.id)}
+                <option value={tn.id}>{tn.label}</option>
+              {/each}
+            </select>
+          {/if}
+        </li>
+      {/each}
+    </ul>
+    {#each unclaimed as row (row.id)}
+      <p class="warn">{t('No discipline takes {row}: whoever enters it would be imported nowhere.', { row: row.label })}</p>
+    {/each}
+  </div>
+  <div class="fields">
+    <label class="check">
+      <input type="checkbox" bind:checked={contact} onchange={touch} />
+      {t('Ask for a contact detail')}
+    </label>
+  </div>
+  {:else}
   <div class="fields">
     <label>
       {t('This run is')}
@@ -240,9 +353,7 @@
       {t('Ask for a contact detail')}
     </label>
   </div>
-  <p class="dim small">
-    {t('An event with several disciplines is several runs of the application. Each imports the responses naming its own, so you can point all of them at the same folder.')}
-  </p>
+  {/if}
 
   {#if error}<p class="err">{error}</p>{/if}
   <div class="actions">
@@ -314,12 +425,16 @@
         {/each}
       </p>
 
-      {#each preview.capacity ?? [] as warning (warning)}
+      {#each capacity as warning (warning)}
         <p class="warn">{warning}</p>
       {/each}
-      {#if preview.poolsDrawn && preview.adding > 0}
+      {#if drawnInto.length > 0 && !several}
         <p class="warn">
           {t('The pools are already drawn. Anyone imported now will not be in one until you draw again.')}
+        </p>
+      {:else if drawnInto.length > 0}
+        <p class="warn">
+          {t('The pools are already drawn in {disciplines}. Anyone imported there will not be in one until you draw again.', { disciplines: drawnInto.join(', ') })}
         </p>
       {/if}
 
@@ -335,7 +450,7 @@
             </tr>
           </thead>
           <tbody>
-            {#each preview.rows as row (row.source + row.submissionId)}
+            {#each rows as row (row.source + row.submissionId)}
               <tr class={row.verdict}>
                 <td class="l strong">{row.name || '—'}</td>
                 <td class="l">{row.club || ''}</td>
@@ -343,6 +458,9 @@
                 <td class="l file">{row.source}</td>
                 <td class="l">
                   <span class="verdict {row.verdict}">{verdictLabel[row.verdict]}</span>
+                  {#if several && (row.into?.length ?? 0) > 0}
+                    <span class="dim problem">{t('into {where}', { where: into(row) })}</span>
+                  {/if}
                   {#if row.verdict === 'staff'}
                     <span class="dim problem">{t('as {roles}', { roles: rolesText(row.roles) })}</span>
                   {/if}
@@ -370,6 +488,7 @@
       {/if}
     {/if}
   </div>
+  {/if}
 
   {#if staff.length > 0}
     <div class="staff-list">
@@ -451,6 +570,33 @@
     height: 1.1rem;
   }
 
+  .shares ul {
+    list-style: none;
+    margin: 0 0 0.6rem;
+    padding: 0;
+    display: grid;
+    gap: 0.4rem;
+  }
+  .shares li {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem 0.8rem;
+    align-items: center;
+    font-size: 0.9rem;
+  }
+  .shares li .strong {
+    min-width: 12rem;
+  }
+  .shares select {
+    padding: 0.35rem 0.5rem;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .warn-inline {
+    color: var(--amber-bright);
+    font-size: 0.85rem;
+  }
+  .shares,
   .send,
   .import,
   .staff-list {

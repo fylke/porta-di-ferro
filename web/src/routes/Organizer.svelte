@@ -160,7 +160,7 @@
     </section>
 
     <div class="columns">
-      <Competitors competitors={snapshot.competitors} poolsDrawn={drawn} onchange={refresh} />
+      <Competitors competitors={snapshot.competitors} poolsDrawn={drawn} onchange={refresh} {multi} />
       <Setup {snapshot} onchange={refresh} />
     </div>
 
@@ -170,7 +170,7 @@
       <EventEditor event={snapshot.tournament.event ?? {}} save={api.saveEvent} onchange={refresh} />
     {/if}
 
-    <Signup {snapshot} onchange={refresh} />
+    <Signup {snapshot} onchange={refresh} scope={multi ? 'share' : 'single'} />
 
     <!-- Screens and score keepers are the event's: here while there is one discipline,
          on the event's page once there are several. -->

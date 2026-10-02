@@ -7,6 +7,8 @@
   import MatBoard from './MatBoard.svelte';
   import Screens from './Screens.svelte';
   import EventEditor from './EventEditor.svelte';
+  import People from './People.svelte';
+  import Signup from './Signup.svelte';
   import LangToggle from './LangToggle.svelte';
   import { t } from '../lib/i18n.svelte';
 
@@ -122,6 +124,11 @@
          discipline, and an editor that reset itself on each would lose the sentence
          being typed. -->
     <EventEditor event={view.info} save={api.saveEventInfo} onchange={() => void hall.refresh()} />
+
+    <!-- One signup for the whole event, and the people it and the desks make (phase 3). -->
+    <Signup scope="event" info={view.info} onchange={() => void hall.refresh()} />
+
+    <People />
 
 
     <p class="dir">{t('The event’s files are in')} <span class="mono">{view.dir}</span></p>
