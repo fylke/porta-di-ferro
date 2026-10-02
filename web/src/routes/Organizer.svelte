@@ -1,7 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { api, type Address } from '../api';
+  import { api } from '../api';
   import { Live } from '../lib/live.svelte';
+  import { LanAddress, describeNetwork } from '../lib/lan.svelte';
+  import { apiBase } from '../lib/paths';
+  import { dhref, discipline } from '../router.svelte';
   import Competitors from './Competitors.svelte';
   import Setup from './Setup.svelte';
   import Pools from './Pools.svelte';
@@ -14,33 +17,31 @@
   import { t, lang } from '../lib/i18n.svelte';
 
   /**
-   * The admin view, at /admin (issue #98): everything that changes the tournament, and
-   * nothing that does not.
+   * One discipline's admin view (issue #98): everything that changes the tournament, and
+   * nothing that does not. At /admin while the event has one discipline, and at
+   * /d/{discipline}/admin -- or /admin/{discipline} -- once it has several, when /admin
+   * itself is the event's page (docs/proposals/one-event-many-disciplines.md §6).
    *
    * It used to be the landing page. It is not any more, because the address on the poster
    * by the door reaches every phone in the hall and this page can withdraw a competitor
-   * and redraw the pools. The landing page is now the participants' and the spectators',
-   * and the only way here is to type /admin.
+   * and redraw the pools.
    *
    * It carries the LAN address and a QR code large enough to read from across a table,
    * because "now open your browser" is the cost of choosing a server over a desktop
    * application and this is the mitigation (docs/tech-stack.md §2).
    */
+  let { multi = false }: { multi?: boolean } = $props();
+
   const live = new Live();
-  let addresses = $state<Address[]>([]);
+  const lan = new LanAddress();
   // Substituted at build time, so this is a constant the normal build evaluates to
   // false and Rollup removes along with the branch it guards.
   const demo = import.meta.env.VITE_DEMO === 'true';
-
-  let chosenIP = $state('');
-
-  // Which network the QR code points at, remembered per PC. An organizer who had to pick
-  // once should not have to pick again after every restart.
-  const REMEMBERED = 'porta.clientAddress';
+  const base = apiBase(discipline());
 
   onMount(() => {
     live.start();
-    void pickAddress();
+    lan.start();
     // Who is connected arrives over the stream from then on; this is the first copy.
     api
       .presence()
@@ -48,86 +49,13 @@
       .catch(() => {
         // The stream brings it along.
       });
-    // The list follows the PC between networks without a reload. Joining the wrong wifi
-    // first is a reasonable thing to have happen, and the organizer should see the right
-    // one appear the moment the PC is on it. Only while this tab is visible: a background
-    // tab has nobody looking at it.
-    const poll = setInterval(() => {
-      if (document.visibilityState === 'visible') void refreshAddresses();
-    }, 5000);
     return () => {
-      clearInterval(poll);
+      lan.stop();
       live.stop();
     };
   });
 
-  /**
-   * The address a tablet should open. It is emphatically NOT this page's own origin: the
-   * organizer's browser is on http://localhost, which is the one address on this PC that
-   * no other device can reach. The server enumerates the real ones and this picks between
-   * them.
-   */
-  async function pickAddress() {
-    try {
-      addresses = await api.addresses();
-    } catch {
-      addresses = [];
-    }
-    choosePreferred();
-  }
-
-  function choosePreferred() {
-    // If this page was itself opened over the network, that address is not a guess -- it
-    // demonstrably works from at least one other device, which is more than the server's
-    // ranking can know.
-    const here = addresses.find((a) => a.ip === window.location.hostname);
-    const remembered = addresses.find((a) => a.ip === remembering());
-    chosenIP = (here ?? remembered ?? addresses[0])?.ip ?? '';
-  }
-
-  /** Re-reads the list, and re-picks only if the chosen address has gone. */
-  async function refreshAddresses() {
-    let next: Address[];
-    try {
-      next = await api.addresses();
-    } catch {
-      return;
-    }
-    if (JSON.stringify(next) === JSON.stringify(addresses)) return;
-    addresses = next;
-    if (!addresses.some((a) => a.ip === chosenIP)) choosePreferred();
-  }
-
-  /** "Wi-Fi Hall-Guest" when the network has a name; the adapter otherwise. */
-  function describe(a: Address): string {
-    return a.ssid ? `Wi-Fi ${a.ssid}` : a.interface;
-  }
-
-  const chosen = $derived(addresses.find((a) => a.ip === chosenIP) ?? null);
-
-  // Both sides of the memory are guarded: a browser with site data switched off throws on
-  // access rather than returning null, and that must not take the join panel down with it.
-  function remembering(): string {
-    try {
-      return localStorage.getItem(REMEMBERED) ?? '';
-    } catch {
-      return '';
-    }
-  }
-
-  function choose(ip: string) {
-    chosenIP = ip;
-    try {
-      localStorage.setItem(REMEMBERED, ip);
-    } catch {
-      // A browser with storage switched off still gets the choice, just not the memory.
-    }
-  }
-
-  // The port is this page's own: the clients connect to the same server on the same port,
-  // so it never has to be configured or passed through the API.
-  const port = $derived(window.location.port ? `:${window.location.port}` : '');
-  const clientURL = $derived(chosenIP ? `http://${chosenIP}${port}` : '');
+  const clientURL = $derived(lan.clientURL);
   /**
    * What the QR code encodes, and what an organizer reads out: the score keeper's own
    * page, not the front door.
@@ -136,7 +64,7 @@
    * register, the setup, the pool tables -- with the mat picker somewhere below it. That
    * is the organizer's page on the organizer's PC, and none of it is any use at a mat.
    */
-  const scoreURL = $derived(clientURL ? `${clientURL}/score` : '');
+  const scoreURL = $derived(clientURL ? `${clientURL}${dhref('/score')}` : '');
 
   async function refresh() {
     try {
@@ -158,13 +86,14 @@
       {#if snapshot?.instance.name}<span class="discipline">{snapshot.instance.name}</span>{/if}
     </h1>
     <nav>
-      <a href="/">{t('Landing page')}</a>
+      {#if multi}<a href="/admin">&larr; {t('The event')}</a>{/if}
+      <a href={dhref('/')}>{t('Landing page')}</a>
       <a href="/info">{t('Info sheet')}</a>
-      <a href="/display/mats" target="_blank" rel="noreferrer">{t('Displays')}</a>
-      <a href="/display/roster" target="_blank" rel="noreferrer">{t('Roster')}</a>
-      <a href="/print/pools" target="_blank" rel="noreferrer">{t('Pool sheets')}</a>
-      <a href="/api/export.json">{t('Export JSON')}</a>
-      <a href="/api/export.pdf?lang={lang.current}">{t('Export PDF')}</a>
+      <a href={dhref('/display/mats')} target="_blank" rel="noreferrer">{t('Displays')}</a>
+      <a href={dhref('/display/roster')} target="_blank" rel="noreferrer">{t('Roster')}</a>
+      <a href={dhref('/print/pools')} target="_blank" rel="noreferrer">{t('Pool sheets')}</a>
+      <a href="{base}/export.json">{t('Export JSON')}</a>
+      <a href="{base}/export.pdf?lang={lang.current}">{t('Export PDF')}</a>
       <LangToggle />
     </nav>
   </header>
@@ -177,15 +106,15 @@
         <h2>{t('Join from a tablet or phone')}</h2>
         {#if clientURL}
           <p class="url">{scoreURL}</p>
-          {#if chosen}
-            <p class="on">{t('on {network}', { network: describe(chosen) })}</p>
+          {#if lan.chosen}
+            <p class="on">{t('on {network}', { network: describeNetwork(lan.chosen) })}</p>
           {/if}
-          {#if addresses.length > 1}
+          {#if lan.addresses.length > 1}
             <label class="network">
               {t('Network')}
-              <select value={chosenIP} onchange={(e) => choose(e.currentTarget.value)}>
-                {#each addresses as a (a.ip)}
-                  <option value={a.ip}>{describe(a)}: {a.ip}</option>
+              <select value={lan.chosenIP} onchange={(e) => lan.choose(e.currentTarget.value)}>
+                {#each lan.addresses as a (a.ip)}
+                  <option value={a.ip}>{describeNetwork(a)}: {a.ip}</option>
                 {/each}
               </select>
             </label>
@@ -208,19 +137,19 @@
         {/if}
         {#if clientURL}
           <p class="hint">
-            {t('Spare screens open')} <span class="mono">{clientURL}/display</span>
+            {t('Spare screens open')} <span class="mono">{clientURL}{dhref('/display')}</span>
             {t('and are told what to show from here, under Screens — or go straight to')}
-            <span class="mono">{clientURL}/display/mats</span>,
-            <span class="mono">{clientURL}/display/audience/1</span> {t('or')}
-            <span class="mono">{clientURL}/display/roster</span>. {t('Any device on the venue wifi can reach them.')}
+            <span class="mono">{clientURL}{dhref('/display/mats')}</span>,
+            <span class="mono">{clientURL}{dhref('/display/audience/1')}</span> {t('or')}
+            <span class="mono">{clientURL}{dhref('/display/roster')}</span>. {t('Any device on the venue wifi can reach them.')}
           </p>
         {/if}
         <p class="links">
-          <a href="/score">{t('Score keeper')}</a>
+          <a href={dhref('/score')}>{t('Score keeper')}</a>
           {#each { length: snapshot.tournament.mats } as _, i (i)}
-            <a href="/display/mat/{i + 1}">{t('Mat {n}', { n: i + 1 })}</a>
+            <a href={dhref(`/display/mat/${i + 1}`)}>{t('Mat {n}', { n: i + 1 })}</a>
           {/each}
-          {#if demo}<a href="/display/audience/1">{t('Audience')}</a>{/if}
+          {#if demo}<a href={dhref('/display/audience/1')}>{t('Audience')}</a>{/if}
         </p>
       </div>
       {#if scoreURL}
@@ -233,7 +162,11 @@
       <Setup {snapshot} onchange={refresh} />
     </div>
 
-    <EventEditor {snapshot} onchange={refresh} />
+    <!-- The day around the fencing belongs to the event. With one discipline it is
+         edited here, as it always was; with several, once, on the event's own page. -->
+    {#if !multi}
+      <EventEditor event={snapshot.tournament.event ?? {}} save={api.saveEvent} onchange={refresh} />
+    {/if}
 
     <Signup {snapshot} onchange={refresh} />
 
@@ -241,7 +174,9 @@
 
     <Eliminations {snapshot} onchange={refresh} />
 
-    <Disciplines self={snapshot.instance} onrenamed={refresh} />
+    {#if !multi}
+      <Disciplines onchange={refresh} />
+    {/if}
 
     <Pools {snapshot} onchange={refresh} />
   {/if}

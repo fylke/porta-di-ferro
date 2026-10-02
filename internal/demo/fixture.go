@@ -148,6 +148,60 @@ func fixture(rules match.Ruleset, limits tournament.Limits) ([]store.Competitor,
 	return competitors, drawn, logs
 }
 
+// sabreFixture is the event's second discipline (#102): Open Sabre, its pools drawn and
+// waiting for the afternoon, as the programme says. A demo of one event over several
+// disciplines needs a second one there to show, and one that has not started is also the
+// honest picture of a day at 11 o'clock.
+//
+// Three of its fencers are in the longsword as well -- Astrid, Bo and Greta -- because
+// somebody entered in two disciplines is the normal case at a club open, and finding a
+// name across the event is the thing a single-discipline page could never do.
+func sabreFixture(rules match.Ruleset, limits tournament.Limits) ([]store.Competitor, store.Tournament, map[string][]match.Event) {
+	entries := []struct{ name, club string }{
+		{"Astrid Lindqvist", "MSL Linköping"},
+		{"Bo Kjellberg", "MSL Linköping"},
+		{"Greta Mäkinen", "Helsinki Longsword"},
+		{"Hanna Strand", "Oslo Fribryterlag"},
+		{"Isak Berg", "Uppsala HEMA"},
+		{"Johanna Vik", "Malmö Svärdsgille"},
+		{"Kalle Persson", "MSL Linköping"},
+		{"Liv Haugen", "Oslo Fribryterlag"},
+		{"Mikael Laine", "Helsinki Longsword"},
+		{"Nora Ahl", "Gotlands Fäktskola"},
+		{"Olof Grahn", "Uppsala HEMA"},
+		{"Pia Lehto", "Helsinki Longsword"},
+		{"Rasmus Holt", "Malmö Svärdsgille"},
+		{"Saga Eriksson", "Gotlands Fäktskola"},
+	}
+	competitors := make([]store.Competitor, len(entries))
+	for i, e := range entries {
+		competitors[i] = store.Competitor{ID: fmt.Sprintf("c%d", i+1), Name: e.name, Club: e.club}
+	}
+
+	t := store.Defaults()
+	t.Discipline = "Open Sabre"
+	t.Event = store.Event{Signup: store.Signup{Tournament: "sabre-pools"}}
+	t.Mats = 2
+	t.MinPoolSize = 4
+	t.MaxPoolSize = 7
+	t.Seed = fixtureSeed + 1
+	drawn, err := tournament.Generate(t, competitors, limits)
+	if err != nil {
+		panic("demo sabre fixture cannot be drawn: " + err.Error())
+	}
+	drawn.GeneratedAt = time.Now().Add(-90 * time.Minute).Format(time.RFC3339)
+	return competitors, drawn, map[string][]match.Event{}
+}
+
+// emptyFixture is a discipline a visitor adds in the demo: named, and nothing else yet.
+func emptyFixture(name string) func(match.Ruleset, tournament.Limits) ([]store.Competitor, store.Tournament, map[string][]match.Event) {
+	return func(match.Ruleset, tournament.Limits) ([]store.Competitor, store.Tournament, map[string][]match.Event) {
+		t := store.Defaults()
+		t.Discipline = name
+		return []store.Competitor{}, t, map[string][]match.Event{}
+	}
+}
+
 // roster is the field: names and clubs that read as a Nordic HEMA event without being
 // anybody in particular. Thirty-two entrants fill five pools of six and one of five at
 // the sizes above, which is a plausible club open and enough for a full bracket.

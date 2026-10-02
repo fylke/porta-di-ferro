@@ -89,8 +89,8 @@ This is Milestone 1, scoped to run MSL's club event on 15 November 2026:
   never write over its replacement
 - English and Swedish, chosen per device — a toggle on every surface, or `?lang=sv` on an
   address — with the SM rules' own vocabulary
-- Several disciplines run at once, each its own run of the application on its own port and
-  data folder, started from the organizer page and named on every page
+- One event, many disciplines: every discipline of the day at one address, each with its own
+  data folder, added from `/admin`, with one landing page and one info sheet for the whole hall
 
 The full picture is in [`docs/design.md`](docs/design.md); the engineering decisions and
 what was ruled out are in [`docs/tech-stack.md`](docs/tech-stack.md).
@@ -103,7 +103,7 @@ Go on the server with an embedded Svelte SPA, shipped as one Windows executable.
 go test ./...              # engine, ranking, store, and end to end against the real binary
 cd web && npm ci && npm test   # the TypeScript engine against the same shared vectors
 cd web && npm run build    # the bundle //go:embed picks up
-go run ./cmd/porta         # http://localhost:8080
+go run ./cmd/porta -host 127.0.0.1 -dir ../porta-scratch   # a scratch event; http://localhost:8080/admin
 ```
 
 The match engine exists twice, in Go and in TypeScript, because the score keeper client
@@ -117,7 +117,9 @@ cmd/porta/          the local product
 internal/match/     the match engine — mirrored in web/src/lib/match/
 internal/tournament/  pools, ordering, colours, ranking
 internal/store/     JSON files, atomic writes, the append-only log
-internal/http/      routes, SSE, the embedded bundle
+internal/event/     the event folder: event.json, a folder per discipline
+internal/http/      the coordinator, each discipline's routes, SSE, the embedded bundle
+internal/watchdog/  restarts the server if it dies
 web/                Svelte 5 + Vite
 testdata/vectors/   the shared corpus
 installer/          Inno Setup

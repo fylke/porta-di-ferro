@@ -84,12 +84,12 @@ Filename: "{app}\{#MyAppExeName}"; Description: "Start Porta di Ferro"; Flags: n
 
 [Code]
 // Belt and braces for the same problem. CloseApplications=force covers the copy Restart
-// Manager can see -- the one holding {app}\porta.exe open. It does not cover a second
-// discipline started from the organizer page: that is another porta.exe from the same
-// file, and whether Restart Manager enumerates it depends on what it has open at the
-// moment Setup looks.
+// Manager can see -- the one holding {app}\porta.exe open. It does not reliably cover
+// the pair a running event is: porta.exe starts a copy of itself to serve the event and
+// stays behind to restart it if it dies, and whether Restart Manager enumerates both
+// depends on what each has open at the moment Setup looks.
 //
-// An install that half-succeeds because one of two servers survived is worse than one
+// An install that half-succeeds because one of the two survived is worse than one
 // that says what is wrong, so this ends every copy the organizer is running and waits to
 // see it gone before any file is replaced. Per-user, so only this account's processes are
 // in reach, which is the same account the shortcut starts them under.
@@ -124,7 +124,7 @@ begin
   if not StillRunning() then
     Exit;
 
-  // /T takes any process it started with it, which is how the sibling disciplines go.
+  // /T takes any process it started with it, which is how the watched server goes.
   RunHidden(ExpandConstant('{sys}\taskkill.exe'), '/F /T /IM ' + ExeName, Code);
 
   Waited := 0;

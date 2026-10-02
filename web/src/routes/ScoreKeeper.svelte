@@ -15,7 +15,8 @@
   import { summarise } from '../lib/drift';
   import { inSuddenDeath, suddenDeathDecided as decidedOnSuddenDeath } from '../lib/knockout';
   import { Heartbeat } from '../lib/presence.svelte';
-  import { navigate } from '../router.svelte';
+  import { dhref, discipline, navigate } from '../router.svelte';
+  import { namespace } from '../lib/paths';
   import { t, locale } from '../lib/i18n.svelte';
   import {
     REST_DEFAULT_MS,
@@ -32,6 +33,12 @@
 
   const live = new Live();
   const clock = new Clock();
+  // The discipline the mat's matches are in, from the snapshot they come from: where their
+  // logs are kept on this device and where they are sent. A snapshot cached before
+  // disciplines existed has none, and its logs are the unprefixed ones.
+  const slug = $derived(live.snapshot?.instance.slug ?? discipline());
+  // What this device remembers about the mat, kept apart per discipline the page is for.
+  const ns = namespace(discipline());
   let sk = $state<ScoreKeeperSession | null>(null);
   let loadedMatch = $state('');
   let askUndo = $state(false);
@@ -74,7 +81,7 @@
     menuOpen = false;
     await sk?.log.release();
     await beat.release();
-    navigate('/score');
+    navigate(dhref('/score'));
   }
 
   // Every match on this mat, in running order. The server's own idea of which one is up
@@ -86,7 +93,7 @@
   let matchId = $state('');
   // Every match on the mat is done and the score keeper has said so.
   let exhausted = $state(false);
-  const rememberedKey = $derived(`porta.mat.${mat}.current`);
+  const rememberedKey = $derived(`porta.${ns}mat.${mat}.current`);
 
   // Matches this device has finished that the server may not know about yet -- the
   // whole point of running a pool offline. Found by replaying the logs on this device, so
@@ -99,7 +106,7 @@
     void (async () => {
       const done = new Set<string>();
       for (const id of ids) {
-        const events = await db.read(id);
+        const events = await db.read(slug, id);
         if (events.length > 0 && replay(MSL, events).ended) done.add(id);
       }
       // Merged rather than replaced, so a match that ended here since the scan began is
@@ -165,7 +172,7 @@
   // Which side of this screen each competitor is on. This device's own choice, kept per
   // mat, and independent of the displays' -- so a score keeper who sits facing the mat
   // from the far side can mirror their screen without turning every scoreboard round.
-  const swapKey = $derived(`porta.mat.${mat}.swap`);
+  const swapKey = $derived(`porta.${ns}mat.${mat}.swap`);
   let swapHere = $state(false);
   $effect(() => {
     try {
@@ -196,7 +203,7 @@
     if (matchId && matchId !== loadedMatch) {
       loadedMatch = matchId;
       dismissedFinal = 0;
-      const next = new ScoreKeeperSession(matchId);
+      const next = new ScoreKeeperSession(matchId, untrack(() => slug));
       sk?.log.stop();
       sk = next;
       void next.load();
@@ -326,7 +333,7 @@
   const untouched = $derived(
     !!matchState && !matchState.ended && !matchState.running && elapsed === 0 && matchState.undoableSeq === 0,
   );
-  const restKey = $derived(`porta.rest.${matchId}`);
+  const restKey = $derived(`porta.rest.${ns}${matchId}`);
   let restLength = $state(REST_DEFAULT_MS);
   let restUntil = $state<number | null>(null);
 
@@ -451,7 +458,7 @@
         <button role="menuitem" onclick={() => void handOver()}>
           <span>{t('Hand over this mat')}</span><span class="why">{t('to another device')}</span>
         </button>
-        <a role="menuitem" href="/score/{mat}?variant={variant === 'panels' ? 'edge' : 'panels'}">
+        <a role="menuitem" href={dhref(`/score/${mat}?variant=${variant === 'panels' ? 'edge' : 'panels'}`)}>
           {t('Try the other layout')}
         </a>
         <div class="menu-lang"><span>{t('Language')}</span><LangToggle compact /></div>
@@ -606,7 +613,7 @@
       detail={t('Take it over on this device? Anything the other device has not yet sent will be set aside for the organizer rather than counted.')}
       confirmLabel={t('Take over on this device')}
       onConfirm={() => void sk?.log.takeOver()}
-      onCancel={() => navigate('/score')}
+      onCancel={() => navigate(dhref('/score'))}
     />
   {/if}
 

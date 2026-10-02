@@ -28,8 +28,9 @@ export class ScoreKeeperSession {
   /** When the clock was last set running, for the live readout. */
   runningSince = $state<number | null>(null);
 
-  constructor(matchId: string) {
-    this.log = new MatchLog(matchId);
+  /** discipline is the one the match is in, from the snapshot it was picked out of. */
+  constructor(matchId: string, discipline: string) {
+    this.log = new MatchLog(matchId, discipline);
   }
 
   async load(): Promise<void> {

@@ -67,7 +67,7 @@ func TestRedrawingThePoolsRestartsThem(t *testing.T) {
 
 	// Nothing is lost: the log that was retired is on disk as a dated backup, which is
 	// the same promise the history editor makes.
-	entries, err := os.ReadDir(filepath.Join(s.dir, "matches"))
+	entries, err := os.ReadDir(filepath.Join(s.disciplineDir(t), "matches"))
 	if err != nil {
 		t.Fatalf("reading the matches directory: %v", err)
 	}

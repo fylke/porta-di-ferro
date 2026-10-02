@@ -43,13 +43,19 @@ func (s *Store) path(name string) string { return filepath.Join(s.dir, name) }
 // writeAtomic replaces a file rather than writing into it, so a crash mid-write leaves
 // the previous version intact instead of a half-file.
 func (s *Store) writeAtomic(name string, v any) error {
+	return WriteJSONAtomic(s.dir, name, v)
+}
+
+// WriteJSONAtomic writes v as indented JSON to dir/name by atomic replace. Exported for
+// the event folder above the tournaments, whose files follow the same rule.
+func WriteJSONAtomic(dir, name string, v any) error {
 	b, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		return err
 	}
 	b = append(b, '\n')
-	final := s.path(name)
-	tmp, err := os.CreateTemp(s.dir, "."+name+".*")
+	final := filepath.Join(dir, name)
+	tmp, err := os.CreateTemp(dir, "."+name+".*")
 	if err != nil {
 		return err
 	}

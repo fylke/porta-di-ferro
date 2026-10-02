@@ -23,8 +23,18 @@ type server struct {
 	cmd  *exec.Cmd
 }
 
-// start builds the binary and runs it against a fresh tournament directory.
+// start builds the binary and runs it against a fresh event directory.
 func start(t *testing.T) *server {
+	t.Helper()
+	return startIn(t, t.TempDir())
+}
+
+// startIn runs the binary against a directory the test has prepared -- a tournament
+// folder from before events existed, say.
+//
+// Without the watchdog: it would be the process the test kills, and the server it
+// watches would outlive the test holding the port. The watchdog has tests of its own.
+func startIn(t *testing.T, dir string) *server {
 	t.Helper()
 
 	bin := filepath.Join(t.TempDir(), "porta")
@@ -38,10 +48,9 @@ func start(t *testing.T) *server {
 	}
 
 	port := freePort(t)
-	dir := t.TempDir()
 	// Loopback only: every test builds a new executable, and Windows Firewall asks about
 	// each new one that listens on a network.
-	cmd := exec.Command(bin, "-dir", dir, "-port", fmt.Sprint(port), "-no-browser", "-host", "127.0.0.1")
+	cmd := exec.Command(bin, "-dir", dir, "-port", fmt.Sprint(port), "-no-browser", "-no-watchdog", "-host", "127.0.0.1")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
@@ -66,7 +75,7 @@ func restart(t *testing.T, s *server) *server {
 	_, _ = s.cmd.Process.Wait()
 
 	port := freePort(t)
-	cmd := exec.Command(s.bin, "-dir", s.dir, "-port", fmt.Sprint(port), "-no-browser", "-host", "127.0.0.1")
+	cmd := exec.Command(s.bin, "-dir", s.dir, "-port", fmt.Sprint(port), "-no-browser", "-no-watchdog", "-host", "127.0.0.1")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
@@ -95,7 +104,8 @@ func (s *server) waitReady(t *testing.T) {
 	t.Helper()
 	deadline := time.Now().Add(20 * time.Second)
 	for time.Now().Before(deadline) {
-		res, err := http.Get(s.base + "/api/state")
+		// The event answers whatever it holds; /api/state only while it holds one discipline.
+		res, err := http.Get(s.base + "/api/event")
 		if err == nil {
 			res.Body.Close()
 			if res.StatusCode == http.StatusOK {
@@ -135,6 +145,23 @@ func (s *server) do(t *testing.T, method, path string, body, out any) int {
 		}
 	}
 	return res.StatusCode
+}
+
+// disciplineDir is the folder of the event's one discipline: where its tournament.json
+// and match logs are, under the event folder.
+func (s *server) disciplineDir(t *testing.T) string {
+	t.Helper()
+	var snap struct {
+		Dir string `json:"dir"`
+	}
+	s.mustDo(t, "GET", "/api/state", nil, &snap)
+	return snap.Dir
+}
+
+func portOf(s *server) int {
+	var port int
+	fmt.Sscanf(s.base, "http://127.0.0.1:%d", &port)
+	return port
 }
 
 func (s *server) mustDo(t *testing.T, method, path string, body, out any) {

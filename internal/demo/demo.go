@@ -44,8 +44,16 @@ import (
 // There is no locking. A browser tab is single threaded, and the wasm entry point is
 // called from that one thread.
 type Demo struct {
-	rules       match.Ruleset
-	limits      tournament.Limits
+	rules  match.Ruleset
+	limits tournament.Limits
+	// slug is the discipline's address in the event, or "" for a demo on its own.
+	slug string
+	// build makes the discipline as a visitor first finds it, for Reset.
+	build func(match.Ruleset, tournament.Limits) ([]store.Competitor, store.Tournament, map[string][]match.Event)
+	// event is the event this discipline is part of, which holds the day around it.
+	// Nil for a demo on its own, which keeps the day in its own tournament as every run
+	// of the application did before events existed.
+	event       *Event
 	competitors []store.Competitor
 	tournament  store.Tournament
 	logs        map[string][]match.Event
@@ -54,9 +62,12 @@ type Demo struct {
 	lastEvent map[string]time.Time
 }
 
-// New builds the demo tournament: the fixture, drawn and mostly played.
-func New() *Demo {
-	d := &Demo{rules: match.MSL(), limits: tournament.DefaultLimits()}
+// New builds the demo tournament on its own: the fixture, drawn and mostly played. The
+// browser demo runs NewEvent, which has this and a second discipline in it.
+func New() *Demo { return newDiscipline("", fixture) }
+
+func newDiscipline(slug string, build func(match.Ruleset, tournament.Limits) ([]store.Competitor, store.Tournament, map[string][]match.Event)) *Demo {
+	d := &Demo{rules: match.MSL(), limits: tournament.DefaultLimits(), slug: slug, build: build}
 	d.Reset()
 	return d
 }
@@ -64,7 +75,7 @@ func New() *Demo {
 // Reset puts the tournament back to how a visitor first found it. The demo is meant to
 // be poked at, which means it has to be possible to undo the poking.
 func (d *Demo) Reset() {
-	d.competitors, d.tournament, d.logs = fixture(d.rules, d.limits)
+	d.competitors, d.tournament, d.logs = d.build(d.rules, d.limits)
 	d.lastEvent = map[string]time.Time{}
 	// The match still running had its last exchange a few seconds ago, so every display
 	// opens with a clock that is already moving. Setting it to this instant would be
@@ -147,7 +158,20 @@ func (d *Demo) Competitors() ([]store.Competitor, error) {
 	return out, nil
 }
 
-func (d *Demo) Tournament() (store.Tournament, error) { return d.tournament, nil }
+func (d *Demo) Tournament() (store.Tournament, error) { return d.merged(), nil }
+
+// merged is the tournament with the event's day laid over it, as the server's discipline
+// reads it (httpapi.Server.tournament): only which programme row it is stays its own.
+// Every reader of t.Event wants this; every write goes to d.tournament.
+func (d *Demo) merged() store.Tournament {
+	t := d.tournament
+	if d.event != nil {
+		mine := t.Event.Signup.Tournament
+		t.Event = d.event.info
+		t.Event.Signup.Tournament = mine
+	}
+	return t
+}
 
 func (d *Demo) Events(id string, after int) ([]match.Event, error) {
 	var out []match.Event
@@ -169,11 +193,15 @@ func (d *Demo) LastEventAt(id string) (time.Time, bool) {
 func (d *Demo) Dir() string { return "in this browser" }
 
 func (d *Demo) snapshot() (httpapi.Snapshot, error) {
+	url := "/"
+	if d.slug != "" {
+		url = "/d/" + d.slug + "/"
+	}
 	return httpapi.BuildSnapshot(d, d.rules, httpapi.Instance{
-		Name: "Open steel Longsword",
-		Port: 8080,
-		Self: true,
-		URL:  "/",
+		Name: d.tournament.Discipline,
+		Slug: d.slug,
+		Dir:  d.Dir(),
+		URL:  url,
 	}, func(int) string {
 		// Nobody is connected to a demo: every mat shows the next match it would run.
 		return ""
@@ -214,12 +242,12 @@ func fail(status int, err error) Response {
 	return Response{Status: status, ContentType: "application/json; charset=utf-8", Body: string(b)}
 }
 
-// Request answers one API call.
+// Request answers one API call to this discipline, at the paths a discipline's server
+// answers them (the event in front of it takes off the /api/d/{slug} prefix).
 //
 // It is deliberately a router rather than a mock: the client is the real client, and it
-// asks for exactly what it asks a Go server for. Anything the demo cannot honestly do --
-// starting a second discipline, which is a second process -- says so with a status code
-// rather than pretending it worked.
+// asks for exactly what it asks a Go server for. Anything the demo cannot honestly do
+// says so with a status code rather than pretending it worked.
 func (d *Demo) Request(method, path string, body []byte) Response {
 	path = strings.TrimSuffix(path, "/")
 	query := ""
@@ -255,30 +283,20 @@ func (d *Demo) Request(method, path string, body []byte) Response {
 		return d.infoPDF(query)
 
 	case method == "GET" && path == "/api/qr.png":
-		return d.qr(query)
+		return qr(query)
 
 	// Offline signup (issue #91). The demo can do all of it: the files never touch a
 	// network in the real thing either, so there is nothing here it has to pretend about.
 	case method == "GET" && path == "/api/signup/ready":
 		return d.signupReady()
 	case method == "GET" && path == "/api/signup/definition.json":
-		return ok(signup.BuildDefinition(d.tournament))
+		return ok(signup.BuildDefinition(d.merged()))
 	case method == "GET" && path == "/api/signup/app.html":
 		return d.signupApp()
 	case method == "POST" && path == "/api/signup/preview":
 		return d.signupImport(body, false)
 	case method == "POST" && path == "/api/signup/import":
 		return d.signupImport(body, true)
-
-	case method == "GET" && path == "/api/instances":
-		snap, _ := d.snapshot()
-		return ok([]httpapi.Instance{snap.Instance})
-
-	case method == "GET" && path == "/api/disciplines":
-		return ok(httpapi.Disciplines)
-
-	case method == "POST" && path == "/api/instances":
-		return fail(400, fmt.Errorf("a second discipline is a second copy of the application running beside this one, which the demo has no way to start"))
 
 	case method == "GET" && path == "/api/presence":
 		return ok(map[string]any{"clients": []any{}, "quarantined": []any{}})
@@ -356,7 +374,7 @@ func (d *Demo) Request(method, path string, body []byte) Response {
 // --- offline signup --------------------------------------------------------------------
 
 func (d *Demo) signupReady() Response {
-	def := signup.BuildDefinition(d.tournament)
+	def := signup.BuildDefinition(d.merged())
 	return ok(map[string]any{
 		"missing":     signup.Ready(def),
 		"tournaments": def.Tournaments,
@@ -370,7 +388,7 @@ func (d *Demo) signupApp() Response {
 	if err != nil {
 		return fail(500, err)
 	}
-	baked, err := httpapi.BakeSignupApp(page, signup.BuildDefinition(d.tournament))
+	baked, err := httpapi.BakeSignupApp(page, signup.BuildDefinition(d.merged()))
 	if err != nil {
 		return fail(500, err)
 	}
@@ -394,7 +412,7 @@ func (d *Demo) signupImport(body []byte, confirm bool) Response {
 		files = append(files, signup.File{Source: f.Source, Body: []byte(f.Body)})
 	}
 
-	def := signup.BuildDefinition(d.tournament)
+	def := signup.BuildDefinition(d.merged())
 	preview := signup.Check(def, d.tournament.Event.Signup.Tournament, files, d.competitors, d.tournament.Staff)
 	view := map[string]any{
 		"rows": preview.Rows, "adding": preview.Adding, "addingStaff": preview.AddingStaff,
@@ -419,7 +437,7 @@ func (d *Demo) signupImport(body []byte, confirm bool) Response {
 // on the info sheet. The server has an endpoint for this and the client asks for it with
 // an <img>, so without it here the demo's info sheet shows two broken images, which is
 // the first thing a visitor to the demo would see of a page that is mostly two codes.
-func (d *Demo) qr(query string) Response {
+func qr(query string) Response {
 	target := ""
 	for _, kv := range strings.Split(query, "&") {
 		if after, found := strings.CutPrefix(kv, "url="); found {
@@ -561,7 +579,15 @@ func (d *Demo) putEvent(body []byte) Response {
 	if err != nil {
 		return fail(400, err)
 	}
-	d.tournament.Event = ev
+	if d.event == nil {
+		d.tournament.Event = ev
+		return changed(ev)
+	}
+	// As the server does it: the event takes the day, the discipline keeps its row.
+	d.tournament.Event = store.Event{Signup: store.Signup{Tournament: ev.Signup.Tournament}}
+	shared := ev
+	shared.Signup.Tournament = ""
+	d.event.info = shared
 	return changed(ev)
 }
 

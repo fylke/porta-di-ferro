@@ -9,6 +9,8 @@
     type StaffMember,
   } from '../api';
   import { t } from '../lib/i18n.svelte';
+  import { apiBase } from '../lib/paths';
+  import { discipline } from '../router.svelte';
 
   /**
    * Offline signup, the organizer's half (issue #91).
@@ -22,6 +24,9 @@
    * written until the organizer has seen what would be, and the confirm re-checks rather
    * than trusting what this screen sends back.
    */
+  // The files are this discipline's: its signup definition, and the app with it baked in.
+  const base = apiBase(discipline());
+
   let { snapshot, onchange }: { snapshot: Snapshot; onchange: () => void } = $props();
 
   const initial = untrack(() => snapshot.tournament.event?.signup ?? {});
@@ -257,9 +262,9 @@
         {t('One file, with the event already in it. They open it, fill it in and send back a small .json.')}
       </p>
       <p class="row">
-        <a class="button" href="/api/signup/app.html?download=1">{t('The signup app')}</a>
-        <a class="quiet" href="/api/signup/app.html" target="_blank" rel="noreferrer">{t('Preview it')}</a>
-        <a class="quiet" href="/api/signup/definition.json?download=1">{t('Just the definition')}</a>
+        <a class="button" href="{base}/signup/app.html?download=1">{t('The signup app')}</a>
+        <a class="quiet" href="{base}/signup/app.html" target="_blank" rel="noreferrer">{t('Preview it')}</a>
+        <a class="quiet" href="{base}/signup/definition.json?download=1">{t('Just the definition')}</a>
       </p>
     </div>
   {/if}

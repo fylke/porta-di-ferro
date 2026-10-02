@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { Clock, Live, liveElapsed, nameLookup, roundLabel } from './lib-display.svelte';
+  import { dhref } from '../router.svelte';
   import { formatClock } from '../lib/clock.svelte';
   import { t } from '../lib/i18n.svelte';
   import LangToggle from './LangToggle.svelte';
@@ -85,7 +86,7 @@
 
 <main>
   <header>
-    <a class="back" href="/">&larr; {t('Everyone')}</a>
+    <a class="back" href={dhref('/')}>&larr; {t('Everyone')}</a>
     <LangToggle />
   </header>
 

@@ -359,15 +359,18 @@ func TestResetPutsItBack(t *testing.T) {
 func TestWhatTheDemoCannotDoItRefuses(t *testing.T) {
 	d := demo.New()
 
-	res := d.Request("POST", "/api/instances", []byte(`{"name":"Open Sabre"}`))
-	if res.Status != 400 {
-		t.Errorf("starting a second discipline needs a second process; want 400, got %d", res.Status)
-	}
-	if res = d.Request("GET", "/api/nonsense", nil); res.Status != 404 {
+	if res := d.Request("GET", "/api/nonsense", nil); res.Status != 404 {
 		t.Errorf("an unknown endpoint should be a 404, got %d", res.Status)
 	}
-	if res = d.Request("GET", "/api/addresses", nil); res.Status != 200 || res.Body != "[]" {
+	if res := d.Request("GET", "/api/addresses", nil); res.Status != 200 || res.Body != "[]" {
 		t.Errorf("a browser tab is on no LAN; want an empty list, got %d %s", res.Status, res.Body)
+	}
+	e := demo.NewEvent()
+	if res := e.Request("DELETE", "/api/disciplines/open-sabre", nil); res.Status != 200 {
+		t.Fatalf("taking Sabre out returned %d", res.Status)
+	}
+	if res := e.Request("DELETE", "/api/disciplines/open-steel-longsword", nil); res.Status != 400 {
+		t.Errorf("an event keeps at least one discipline; want 400, got %d", res.Status)
 	}
 }
 

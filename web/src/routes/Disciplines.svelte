@@ -1,135 +1,106 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { api, type Instance } from '../api';
+  import { api, type DisciplineSummary } from '../api';
+  import { hall } from '../lib/event.svelte';
+  import { stageLabel } from '../lib/stage';
   import { t } from '../lib/i18n.svelte';
 
   /**
-   * Concurrent disciplines (design §7 item 9). Several at once are several runs of the
-   * application at once, each with its own port and data directory; this is the organizer
-   * starting the second one from here rather than from a terminal, and seeing them all.
+   * The event's disciplines: add one, rename one, take one out (#4, #102).
    *
-   * Every one of them is named from here too, this one included. The name used to arrive
-   * only as a command-line flag, which the shortcut that starts the first run does not
-   * pass -- so the one discipline an organizer always has was called "Unnamed" and there
-   * was nowhere to say otherwise (issue #80). The usual runs are on the list rather than
-   * typed, because the same four come round at every event and two spellings of the
-   * women's longsword is two disciplines where there should be one.
+   * Every discipline of the day runs in this one application, at this one address, each in
+   * a folder of its own (docs/proposals/one-event-many-disciplines.md). Adding one used to
+   * start a second copy of the application on the next free port; it is now a folder and a
+   * tournament in this one, and it is on the landing page beside the others the moment it
+   * exists.
+   *
+   * The usual disciplines are on the list rather than typed, because the same four come
+   * round at every event and two spellings of the women's longsword is two disciplines
+   * where there should be one (issue #80).
    */
-  let { self, onrenamed }: { self: Instance; onrenamed?: () => void } = $props();
+  let { onchange }: { onchange?: () => void } = $props();
 
-  let instances = $state<Instance[]>([]);
   let presets = $state<string[]>([]);
   let name = $state('');
   let error = $state('');
   let busy = $state(false);
-
-  // The discipline being renamed, by port, with the text as it stands.
-  let editingPort = $state<number | null>(null);
+  let editing = $state<string | null>(null);
   let editingName = $state('');
-
-  async function refresh() {
-    try {
-      instances = await api.instances();
-    } catch {
-      // Fine: the list is a convenience, and it refreshes on the next action.
-    }
-  }
+  let retiring = $state<string | null>(null);
 
   onMount(() => {
-    void refresh();
+    void hall.refresh();
     void (async () => {
       try {
-        presets = await api.disciplines();
+        presets = await api.presets();
       } catch {
         // Without the list the field is still a field; it is a shortcut, not a gate.
       }
     })();
-    const poll = setInterval(() => {
-      if (document.visibilityState === 'visible') void refresh();
-    }, 5000);
-    return () => clearInterval(poll);
   });
 
-  // What is left to start: the list minus what is already running, so the quick picks
-  // are only ever things that would work.
-  const running = $derived(new Set(instances.map((i) => i.name.toLowerCase())));
-  const available = $derived(presets.filter((p) => !running.has(p.toLowerCase())));
+  const disciplines = $derived(hall.view?.disciplines ?? []);
+  // What is left to add: the list minus what is already here, so the quick picks are only
+  // ever things that would work.
+  const taken = $derived(new Set(disciplines.map((d) => d.name.toLowerCase())));
+  const available = $derived(presets.filter((p) => !taken.has(p.toLowerCase())));
 
-  function startEditing(i: Instance) {
-    editingPort = i.port;
-    // An unnamed run opens on the default, so naming it is one press rather than typing
-    // out "Women's and underrepresented genders Longsword".
-    editingName = i.name || presets[0] || '';
+  async function act(fn: () => Promise<unknown>) {
+    error = '';
+    busy = true;
+    try {
+      await fn();
+      await hall.refresh();
+      // The one discipline's admin page refreshes its snapshot on a change -- unless the
+      // change made the event several disciplines, when that page is about to give way to
+      // the event's, and the address it would ask no longer means one discipline.
+      if (!hall.multi) onchange?.();
+      return true;
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+      return false;
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function add(discipline?: string) {
+    const wanted = (discipline ?? name).trim();
+    if (!wanted) return;
+    // The field is cleared only when it was the field that was added, and only if it
+    // still says so: a preset's button leaves it alone, and so does a save that comes
+    // back after the organizer has typed something else.
+    const typed = discipline === undefined ? name : null;
+    if ((await act(() => api.addDiscipline(wanted))) && typed !== null && name === typed) name = '';
+  }
+
+  function startEditing(d: DisciplineSummary) {
+    editing = d.slug;
+    // An unnamed discipline opens on the default, so naming it is one press rather than
+    // typing out "Women's and underrepresented genders Longsword".
+    editingName = d.name || presets[0] || '';
     error = '';
   }
 
   async function saveName() {
-    if (editingPort === null) return;
-    error = '';
-    busy = true;
-    try {
-      instances = await api.renameInstance(editingPort, editingName);
-      editingPort = null;
-      onrenamed?.();
-    } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
-    } finally {
-      busy = false;
-    }
+    if (editing === null) return;
+    const slug = editing;
+    if (await act(() => api.renameDiscipline(slug, editingName))) editing = null;
   }
 
-  async function start(discipline?: string) {
-    error = '';
-    const wanted = (discipline ?? name).trim();
-    if (!wanted) return;
-    busy = true;
-    try {
-      const inst = await api.startInstance(wanted);
-      name = '';
-      await refresh();
-      // It takes a moment to come up; open it once it answers rather than to a blank tab.
-      const opened = window.open('', '_blank');
-      const until = Date.now() + 10000;
-      const tryOpen = async () => {
-        try {
-          const res = await fetch(`${inst.url}api/state`, { mode: 'no-cors' });
-          if (res) {
-            if (opened) opened.location.href = inst.url;
-            return;
-          }
-        } catch {
-          // Not up yet.
-        }
-        if (Date.now() < until) setTimeout(() => void tryOpen(), 500);
-        else if (opened) opened.location.href = inst.url;
-      };
-      void tryOpen();
-    } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
-    } finally {
-      busy = false;
-    }
-  }
-
-  async function stop(port: number) {
-    error = '';
-    try {
-      await api.stopInstance(port);
-      await refresh();
-    } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
-    }
+  async function retire(slug: string) {
+    if (await act(() => api.retireDiscipline(slug))) retiring = null;
   }
 </script>
 
 <section>
   <h2>{t('Disciplines')}</h2>
-  <p class="dim">{t('Each discipline is its own run of the application, on its own port with its own data folder. Score keepers and screens join one discipline by its address; the name shows on every page so nobody has to guess which one they are on.')}</p>
+  <p class="dim">{t('Every discipline of the event runs here, at this one address, each with its own data folder. Score keepers, screens and spectators reach all of them from the same place.')}</p>
 
   <ul>
-    {#each instances as i (i.port)}
-      <li class:self={i.self}>
-        {#if editingPort === i.port}
+    {#each disciplines as d (d.slug)}
+      <li class:failed={!!d.error}>
+        {#if editing === d.slug}
           <form
             class="rename"
             onsubmit={(e) => {
@@ -137,62 +108,64 @@
               void saveName();
             }}
           >
-            <input
-              list="discipline-names"
-              bind:value={editingName}
-              aria-label={t('Name of this discipline')}
-              required
-            />
+            <input list="discipline-names" bind:value={editingName} aria-label={t('Name of this discipline')} required />
             <button type="submit" disabled={busy || !editingName.trim()}>{t('Save')}</button>
-            <button type="button" onclick={() => (editingPort = null)}>{t('Cancel')}</button>
+            <button type="button" onclick={() => (editing = null)}>{t('Cancel')}</button>
           </form>
         {:else}
-          <span class="who" class:unnamed={!i.name}>{i.name || t('Unnamed')}</span>
-          {#if i.self}
-            <span class="meta">{t('this one · port {n}', { n: i.port })}</span>
+          <span class="who" class:unnamed={!d.name}>{d.name || t('Unnamed')}</span>
+          {#if d.error}
+            <span class="meta warn">{t('could not be read')}</span>
           {:else}
-            <a href={i.url} target="_blank" rel="noreferrer">{i.url}</a>
+            <span class="meta">{stageLabel(d)}</span>
           {/if}
-          <button class="edit" onclick={() => startEditing(i)}>{t('Rename')}</button>
-          {#if !i.self}
-            <button onclick={() => void stop(i.port)}>{t('Stop')}</button>
+          {#if disciplines.length > 1}
+            <a href="/d/{d.slug}/admin">{t('Admin')}</a>
+          {/if}
+          {#if !d.error}
+            <button class="edit" onclick={() => startEditing(d)}>{t('Rename')}</button>
+          {:else}
+            <button onclick={() => void act(() => api.reloadDiscipline(d.slug))}>{t('Try again')}</button>
+          {/if}
+          {#if disciplines.length > 1}
+            {#if retiring === d.slug}
+              <span class="confirm">
+                {t('Take {name} out of the event? Its folder is kept.', { name: d.name || d.slug })}
+                <button class="danger" disabled={busy} onclick={() => void retire(d.slug)}>{t('Take it out')}</button>
+                <button onclick={() => (retiring = null)}>{t('Cancel')}</button>
+              </span>
+            {:else}
+              <button onclick={() => (retiring = d.slug)}>{t('Take out')}</button>
+            {/if}
           {/if}
         {/if}
+        {#if d.error}<p class="err small">{d.error}</p>{/if}
       </li>
     {/each}
   </ul>
 
-  <!-- Shared by the rename field and the start field: the same four names either way. -->
+  <!-- Shared by the rename field and the add field: the same four names either way. -->
   <datalist id="discipline-names">
     {#each presets as p (p)}<option value={p}></option>{/each}
   </datalist>
 
-  {#if self.parent}
-    <p class="dim">{t('Started from')} <a href={self.parent}>{self.parent}</a>.</p>
-  {:else}
-    {#if available.length > 0}
-      <p class="presets">
-        <span class="label">{t('Start one of the usual')}</span>
-        {#each available as p (p)}
-          <button type="button" disabled={busy} onclick={() => void start(p)}>{p}</button>
-        {/each}
-      </p>
-    {/if}
-    <form
-      onsubmit={(e) => {
-        e.preventDefault();
-        void start();
-      }}
-    >
-      <input
-        list="discipline-names"
-        placeholder={t('Rapier and dagger, Sword and buckler, …')}
-        bind:value={name}
-        required
-      />
-      <button type="submit" disabled={busy || !name.trim()}>{t('Start another discipline')}</button>
-    </form>
+  {#if available.length > 0}
+    <p class="presets">
+      <span class="label">{t('Add one of the usual')}</span>
+      {#each available as p (p)}
+        <button type="button" disabled={busy} onclick={() => void add(p)}>{p}</button>
+      {/each}
+    </p>
   {/if}
+  <form
+    onsubmit={(e) => {
+      e.preventDefault();
+      void add();
+    }}
+  >
+    <input list="discipline-names" placeholder={t('Rapier and dagger, Sword and buckler, …')} bind:value={name} required />
+    <button type="submit" disabled={busy || !name.trim()}>{t('Add a discipline')}</button>
+  </form>
   {#if error}<p class="err">{error}</p>{/if}
 </section>
 
@@ -218,7 +191,7 @@
     margin: 0 0 0.8rem;
     padding: 0;
     display: grid;
-    gap: 0.35rem;
+    gap: 0.45rem;
   }
   li {
     display: flex;
@@ -227,64 +200,61 @@
     gap: 0.6rem;
     font-size: 0.92rem;
   }
-  li.self .who {
-    color: var(--amber-bright);
-  }
   .who {
     font-weight: 700;
   }
-  /* A run nobody has named yet says so quietly, and the button beside it is the answer. */
   .who.unnamed {
-    font-weight: 400;
-    font-style: italic;
     color: var(--ink-dim);
+    font-style: italic;
   }
   .meta {
     color: var(--ink-dim);
+    font-size: 0.82rem;
   }
+  .meta.warn,
+  .err {
+    color: var(--amber-bright);
+  }
+  .err.small {
+    flex-basis: 100%;
+    margin: 0;
+    font-size: 0.8rem;
+    overflow-wrap: anywhere;
+  }
+  button {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.82rem;
+  }
+  button.danger {
+    border-color: var(--red);
+  }
+  .confirm {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+  }
+  .rename,
   form {
     display: flex;
+    flex-wrap: wrap;
     gap: 0.5rem;
   }
+  .rename input,
   form input {
-    flex: 1;
-  }
-  .rename {
-    flex: 1;
+    flex: 1 1 16rem;
     min-width: 0;
   }
-  /* The quick picks: the four that come round at every event, one press each, and only
-     the ones not already running. */
   .presets {
-    margin: 0 0 0.6rem;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 0.4rem;
+    margin: 0 0 0.6rem;
   }
-  .presets .label {
-    font-size: 0.8rem;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
+  .label {
     color: var(--ink-dim);
-    margin-right: 0.2rem;
-  }
-  button {
-    padding: 0.45rem 0.8rem;
-    font-size: 0.9rem;
-    background: var(--panel-2);
-    border: 1px solid var(--line);
-  }
-  .edit {
-    padding: 0.3rem 0.6rem;
-    font-size: 0.82rem;
-    color: var(--ink-dim);
-  }
-  .edit:hover {
-    color: var(--ink);
-  }
-  .err {
-    margin: 0.5rem 0 0;
-    color: var(--amber-bright);
+    font-size: 0.85rem;
   }
 </style>

@@ -176,20 +176,42 @@ export const sv: Record<string, string> = {
   'from {device} on {match}': 'från {device} i {match}',
   Discard: 'Kasta',
 
-  // --- disciplines -------------------------------------------------------------------
+  // --- disciplines and the event (#102) ------------------------------------------------
   Disciplines: 'Discipliner',
-  'Each discipline is its own run of the application, on its own port with its own data folder. Score keepers and screens join one discipline by its address; the name shows on every page so nobody has to guess which one they are on.':
-    'Varje disciplin är en egen körning av programmet, på egen port med egen datamapp. Sekretariat och skärmar ansluter till en disciplin via dess adress; namnet visas på varje sida så att ingen behöver gissa vilken de är på.',
+  'Every discipline of the event runs here, at this one address, each with its own data folder. Score keepers, screens and spectators reach all of them from the same place.':
+    'Alla tävlingens discipliner körs här, på den här enda adressen, var och en med egen datamapp. Sekretariat, skärmar och publik når dem alla från samma ställe.',
   Unnamed: 'Namnlös',
-  'this one · port {n}': 'den här · port {n}',
-  Stop: 'Stoppa',
-  'Started from': 'Startad från',
   'Rapier and dagger, Sword and buckler, …': 'Rapir och dolk, Svärd och buckler, …',
-  'Start one of the usual': 'Starta en av de vanliga',
+  'Add one of the usual': 'Lägg till en av de vanliga',
   Rename: 'Byt namn',
   Save: 'Spara',
   'Name of this discipline': 'Namn på disciplinen',
-  'Start another discipline': 'Starta en disciplin till',
+  'could not be read': 'kunde inte läsas',
+  'Try again': 'Försök igen',
+  'Take out': 'Ta bort',
+  'Take it out': 'Ta bort den',
+  'Take {name} out of the event? Its folder is kept.': 'Ta bort {name} från tävlingen? Mappen sparas.',
+  'Not set up yet': 'Inte förberedd än',
+  '{n} entered, pools not drawn yet': '{n} anmälda, poolerna är inte lottade än',
+  'Pools: {done} of {total} matches fenced': 'Pooler: {done} av {total} matcher fäktade',
+  'Pools done, eliminations next': 'Poolerna klara, elimineringar härnäst',
+  Finished: 'Avslutad',
+  'The event': 'Tävlingen',
+  'Whole event': 'Hela tävlingen',
+  'Find a name': 'Hitta ett namn',
+  'Your name, or your club': 'Ditt namn, eller din klubb',
+  'Nobody by that name is entered.': 'Ingen med det namnet är anmäld.',
+  'Not available just now.': 'Inte tillgänglig just nu.',
+  'Not updating just now; this is how it last stood.': 'Uppdateras inte just nu; så här stod det senast.',
+  'Which discipline?': 'Vilken disciplin?',
+  'This event runs several disciplines, each with its own mats and screens. Pick the one you are here for.':
+    'Den här tävlingen har flera discipliner, var och en med egna mattor och skärmar. Välj den du är här för.',
+  'Everyone in the hall': 'Alla i hallen',
+  'One address for every discipline: the landing page, with each discipline’s results a tap away. It is what the info sheet prints.':
+    'En adress för alla discipliner: startsidan, med varje disciplins resultat ett tryck bort. Det är den som infobladet skriver ut.',
+  'The event file could not be read, so the welcome, the programme and the wifi are blank until it is fixed. The disciplines run regardless.':
+    'Tävlingsfilen kunde inte läsas, så välkomsttexten, programmet och wifi är tomma tills den är rättad. Disciplinerna körs ändå.',
+  'The event’s files are in': 'Tävlingens filer finns i',
 
   // --- match editor -------------------------------------------------------------------
   'Edit the match log': 'Redigera matchloggen',
