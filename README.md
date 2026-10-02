@@ -36,7 +36,8 @@ installer below. [How the demo works](docs/demo.md).
    switch networks — no reload needed.
 4. If people signed up in advance, send them the signup file from `/admin` — one HTML
    file they open offline, fill in and send back — and import the responses by pointing at
-   the folder they are all in. The same file asks them to help as referees and score
+   the folder they are all in. With several disciplines it is one file and one import for
+   the whole event, and each discipline takes its share. The same file asks them to help as referees and score
    keepers in the disciplines they are not fencing in. Otherwise enter the competitors by
    hand.
 5. Pick the number of mats and the pool size, and draw the pools. When
@@ -93,6 +94,9 @@ This is Milestone 1, scoped to run MSL's club event on 15 November 2026:
   data folder, added from `/admin`, with one landing page and one info sheet for the whole hall
 - The hall's mats are shared: every pool, elimination and final is a card on a mat board, moved
   by drag or menu, and a score keeper or a screen follows its mat from one discipline to the next
+- One person, one page: somebody entered in two disciplines has one `/who/` page with their whole
+  day, and the organizer is asked — never assumed — whether two entries with the same name are one
+  person
 
 The full picture is in [`docs/design.md`](docs/design.md); the engineering decisions and
 what was ruled out are in [`docs/tech-stack.md`](docs/tech-stack.md).
@@ -119,7 +123,8 @@ cmd/porta/          the local product
 internal/match/     the match engine — mirrored in web/src/lib/match/
 internal/tournament/  pools, ordering, colours, ranking
 internal/store/     JSON files, atomic writes, the append-only log
-internal/event/     the event folder: event.json, a folder per discipline
+internal/event/     the event folder: event.json, people.json, a folder per discipline
+internal/people/    who is the same person across disciplines
 internal/http/      the coordinator, each discipline's routes, SSE, the embedded bundle
 internal/watchdog/  restarts the server if it dies
 web/                Svelte 5 + Vite

@@ -116,7 +116,10 @@ the same tournament.
 
 **Open Sabre**: fourteen entrants in two pools of seven on two mats, drawn and waiting
 for the 15:00 slot in the programme. Astrid, Bo and Greta are in both, which is the
-normal case at a club open and what the landing page's name search is for. A visitor can
+normal case at a club open and what the landing page's name search is for. Astrid and
+Greta signed up for both on one response, so each is one person with one page for the day;
+Bo was typed in at both desks, so the event admin's People panel asks whether the two Bos
+are one person. The people are part of what the demo keeps between tabs. A visitor can
 add a discipline of their own from the event admin; it starts empty.
 
 The mats are the event's, as at a real event: three of them, the longsword on all three
