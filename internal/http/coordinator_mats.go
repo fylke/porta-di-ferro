@@ -174,8 +174,8 @@ func (c *Coordinator) republish() {
 	c.poke()
 }
 
-// summaryMats is what each mat is running, for the discipline whose match it is.
-func summaryMats(view MatsView, slug string) []MatSummary {
+// SummaryMats is what each mat is running, for the discipline whose match it is.
+func SummaryMats(view MatsView, slug string) []MatSummary {
 	out := []MatSummary{}
 	for _, m := range view.Mats {
 		cur := m.Current

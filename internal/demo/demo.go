@@ -197,15 +197,21 @@ func (d *Demo) snapshot() (httpapi.Snapshot, error) {
 	if d.slug != "" {
 		url = "/d/" + d.slug + "/"
 	}
-	return httpapi.BuildSnapshot(d, d.rules, httpapi.Instance{
+	snap, err := httpapi.BuildSnapshot(d, d.rules, httpapi.Instance{
 		Name: d.tournament.Discipline,
 		Slug: d.slug,
 		Dir:  d.Dir(),
 		URL:  url,
 	}, func(int) string {
-		// Nobody is connected to a demo: every mat shows the next match it would run.
+		// A discipline on its own in the demo has nobody connected: every mat shows the
+		// next match it would run. In the event, the mats are the event's.
 		return ""
 	})
+	if err == nil && d.event != nil {
+		placed, mats := d.event.placements()
+		httpapi.OnEventMats(&snap, d.slug, placed, mats)
+	}
+	return snap, err
 }
 
 // --- the API ------------------------------------------------------------------------
@@ -649,6 +655,13 @@ func (d *Demo) patchPool(number string, body []byte) Response {
 	}
 	if err := json.Unmarshal(body, &in); err != nil {
 		return fail(400, err)
+	}
+	if d.event != nil {
+		// In the event a pool is a work item on the event's mats (phase 2).
+		if err := d.event.moveItem(fmt.Sprintf("%s/pool-%d", d.slug, n), in.Mat, -1, in.Move); err != nil {
+			return fail(400, err)
+		}
+		return changed(map[string]bool{"ok": true})
 	}
 	var next store.Tournament
 	switch {

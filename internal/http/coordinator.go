@@ -289,7 +289,7 @@ func (c *Coordinator) viewFrom(snaps []snapped, mats MatsView) EventView {
 	for _, s := range snaps {
 		d := c.summarizeFrom(s)
 		if s.err == nil {
-			d.Mats = summaryMats(mats, s.w.slug)
+			d.Mats = SummaryMats(mats, s.w.slug)
 		}
 		view.Disciplines = append(view.Disciplines, d)
 	}
