@@ -244,6 +244,37 @@ func (f *Folder) SaveDisplays(d map[string]string) error {
 	return store.WriteJSONAtomic(f.dir, "displays.json", d)
 }
 
+// People is the event's registry of people (phase 3). A missing file is nobody yet.
+func (f *Folder) People() ([]store.Person, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []store.Person
+	b, err := os.ReadFile(filepath.Join(f.dir, "people.json"))
+	if errors.Is(err, fs.ErrNotExist) {
+		return []store.Person{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(b, &out); err != nil {
+		return nil, fmt.Errorf("people.json: %w", err)
+	}
+	if out == nil {
+		out = []store.Person{}
+	}
+	return out, nil
+}
+
+// SavePeople replaces the registry.
+func (f *Folder) SavePeople(p []store.Person) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if p == nil {
+		p = []store.Person{}
+	}
+	return store.WriteJSONAtomic(f.dir, "people.json", p)
+}
+
 // HasDisplays says the event has its own displays.json yet.
 func (f *Folder) HasDisplays() bool {
 	_, err := os.Stat(filepath.Join(f.dir, "displays.json"))
