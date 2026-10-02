@@ -218,7 +218,7 @@
     already: t('already imported'),
     repeat: t('the same file twice'),
     'other-event': t('another event'),
-    'not-here': t('another discipline'),
+    'not-here': several ? t('no discipline takes it') : t('another discipline'),
     unknown: t('unknown discipline'),
     invalid: t('not usable'),
   });

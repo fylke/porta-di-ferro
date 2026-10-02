@@ -544,6 +544,7 @@ export const sv: Record<string, string> = {
   'The pools are already drawn in {disciplines}. Anyone imported there will not be in one until you draw again.':
     'Poolerna är redan lottade i {disciplines}. Den som importeras dit hamnar inte i någon pool förrän du lottar om.',
   'into {where}': 'till {where}',
+  'no discipline takes it': 'ingen disciplin tar den',
   '{discipline} as staff': '{discipline} som funktionär',
   'Before the files can go out, this still needs:': 'Innan filerna kan skickas ut saknas:',
   'Send this out': 'Skicka ut det här',
