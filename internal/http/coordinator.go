@@ -335,6 +335,12 @@ func (c *Coordinator) discipline(w http.ResponseWriter, r *http.Request) {
 	wk := c.workers[slug]
 	c.mu.Unlock()
 	if wk == nil {
+		// An address the discipline had before it was named still reaches it.
+		c.mu.Lock()
+		wk = c.workers[c.folder.Resolve(slug)]
+		c.mu.Unlock()
+	}
+	if wk == nil {
 		writeErr(w, http.StatusNotFound, fmt.Errorf("this event has no discipline %q", slug))
 		return
 	}
@@ -498,15 +504,53 @@ func (c *Coordinator) renameDiscipline(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		err = c.nameTaken(name, slug)
 	}
-	if err == nil {
-		err = wk.srv.Rename(name)
-	}
 	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	if event.Placeholder(slug) && wk.srv.Self().Name == "" {
+		wk, err = c.reslug(wk, name)
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err)
+			return
+		}
+	}
+	if err := wk.srv.Rename(name); err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
 	c.poke()
 	writeJSON(w, http.StatusOK, c.summarize(wk))
+}
+
+// reslug gives a discipline that was made before it had a name -- the first one of a
+// fresh event -- an address from the name it is given, so the hall's pages and QR codes
+// say /d/open-sabre/ rather than /d/discipline/. The old address stays an alias for it.
+func (c *Coordinator) reslug(old *worker, name string) (*worker, error) {
+	old.close()
+	slug, err := c.folder.Reslug(old.slug, name)
+	if err != nil {
+		// Back as it was: the folder did not move.
+		again := c.load(old.slug)
+		c.mu.Lock()
+		c.workers[old.slug] = again
+		c.mu.Unlock()
+		return nil, err
+	}
+	wk := c.load(slug)
+	if wk.srv == nil {
+		return nil, wk.err
+	}
+	c.mu.Lock()
+	delete(c.workers, old.slug)
+	c.workers[slug] = wk
+	for i, s := range c.order {
+		if s == old.slug {
+			c.order[i] = slug
+		}
+	}
+	c.mu.Unlock()
+	return wk, nil
 }
 
 // retireDiscipline takes a discipline out of the event. Its folder is kept under

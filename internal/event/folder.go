@@ -52,6 +52,90 @@ type File struct {
 	// that is not on the list is still part of the event, listed after the rest: the
 	// folders are the truth about what exists, this is only how to show them.
 	Disciplines []string `json:"disciplines,omitempty"`
+	// Aliases are slugs a discipline used to have, pointing at the one it has now. Only a
+	// discipline made before it had a name ever moves (see Reslug), and anything that
+	// learned the old address -- a bookmark, an unsent exchange on a tablet -- still
+	// reaches it.
+	Aliases map[string]string `json:"aliases,omitempty"`
+}
+
+// Placeholder says a slug is what a discipline got for having no name yet: "discipline",
+// "discipline-2". Such a slug moves the first time the discipline is named.
+func Placeholder(slug string) bool {
+	if slug == "discipline" {
+		return true
+	}
+	rest, ok := strings.CutPrefix(slug, "discipline-")
+	if !ok || rest == "" {
+		return false
+	}
+	for _, r := range rest {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// Reslug moves a discipline that was made without a name to a slug from the name it has
+// been given, and remembers the old one as an alias. The folder is renamed, not copied.
+func (f *Folder) Reslug(old, name string) (string, error) {
+	slugs, err := f.Slugs()
+	if err != nil {
+		return "", err
+	}
+	taken := map[string]bool{}
+	for _, s := range slugs {
+		if s != old {
+			taken[s] = true
+		}
+	}
+	file, err := f.Read()
+	if err != nil {
+		return "", err
+	}
+	for alias := range file.Aliases {
+		taken[alias] = true
+	}
+	slug := uniqueSlug(name, taken)
+	if slug == old {
+		return old, nil
+	}
+	if err := os.Rename(f.DisciplineDir(old), f.DisciplineDir(slug)); err != nil {
+		return "", err
+	}
+	_, err = f.Update(func(file *File) error {
+		order := withExisting(file.Disciplines, slugs)
+		for i, s := range order {
+			if s == old {
+				order[i] = slug
+			}
+		}
+		file.Disciplines = order
+		if file.Aliases == nil {
+			file.Aliases = map[string]string{}
+		}
+		for alias, target := range file.Aliases {
+			if target == old {
+				file.Aliases[alias] = slug
+			}
+		}
+		file.Aliases[old] = slug
+		return nil
+	})
+	return slug, err
+}
+
+// Resolve is the discipline a slug means now: itself, or what it was moved to.
+func (f *Folder) Resolve(slug string) string {
+	file, err := f.Read()
+	if err != nil {
+		return slug
+	}
+	if to, ok := file.Aliases[slug]; ok {
+		return to
+	}
+	return slug
 }
 
 // Folder is one event's directory.
@@ -162,6 +246,7 @@ func (f *Folder) Slugs() ([]string, error) {
 // Create makes a folder for a new discipline and puts it at the end of the order. The
 // slug comes from the name and never changes after, because it is in every address and
 // in the folder's name: renaming a discipline renames what the pages say, not where it is.
+// The one exception is a discipline made with no name, which moves once (Reslug).
 func (f *Folder) Create(name string) (string, error) {
 	slugs, err := f.Slugs()
 	if err != nil {
@@ -170,6 +255,12 @@ func (f *Folder) Create(name string) (string, error) {
 	taken := map[string]bool{}
 	for _, s := range slugs {
 		taken[s] = true
+	}
+	// An old address of a discipline that moved is still that discipline's.
+	if file, err := f.Read(); err == nil {
+		for alias := range file.Aliases {
+			taken[alias] = true
+		}
 	}
 	slug := uniqueSlug(name, taken)
 	if err := os.MkdirAll(f.DisciplineDir(slug), 0o755); err != nil {
@@ -205,6 +296,11 @@ func (f *Folder) Retire(slug string) (string, error) {
 			}
 		}
 		file.Disciplines = kept
+		for alias, target := range file.Aliases {
+			if target == slug {
+				delete(file.Aliases, alias)
+			}
+		}
 		return nil
 	})
 	return dst, err

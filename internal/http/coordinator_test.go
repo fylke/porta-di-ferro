@@ -149,6 +149,20 @@ func TestASecondDisciplineSharesTheAddress(t *testing.T) {
 		t.Errorf("Sabre's competitors should be in its own folder: %v", err)
 	}
 
+	// The first discipline was made before it had a name. Naming it gives it an address
+	// from the name, and the old one still answers.
+	var first httpapi.EventView
+	h.must("GET", "/api/event", nil, &first)
+	old := first.Disciplines[0].Slug
+	var named httpapi.DisciplineSummary
+	h.must("PATCH", "/api/disciplines/"+old, map[string]string{"name": "Open steel Longsword"}, &named)
+	if named.Slug != "open-steel-longsword" || named.URL != "/d/open-steel-longsword/" {
+		t.Errorf("naming an unnamed discipline should give it an address from the name: %+v", named)
+	}
+	if code := h.do("GET", "/api/d/"+old+"/state", nil, nil); code != 200 {
+		t.Errorf("the address it had before it was named should still answer, got %d", code)
+	}
+
 	var renamed httpapi.DisciplineSummary
 	h.must("PATCH", "/api/disciplines/open-sabre", map[string]string{"name": "Sabre, open"}, &renamed)
 	if renamed.Name != "Sabre, open" || renamed.Slug != "open-sabre" {

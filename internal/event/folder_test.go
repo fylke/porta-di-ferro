@@ -222,6 +222,34 @@ func TestSlugs(t *testing.T) {
 	}
 }
 
+// The first discipline of a fresh event is made before it has a name. Naming it moves it
+// to an address from the name, once, and the old address keeps working.
+func TestAnUnnamedDisciplineMovesWhenNamed(t *testing.T) {
+	f, _ := event.Open(t.TempDir())
+	first, _ := f.Create("")
+	if !event.Placeholder(first) || event.Placeholder("open-sabre") || event.Placeholder("discipline-x") {
+		t.Fatalf("placeholder detection is wrong for %q", first)
+	}
+	write(t, filepath.Join(f.DisciplineDir(first), "competitors.json"), `[]`)
+
+	slug, err := f.Reslug(first, "Open Sabre")
+	if err != nil || slug != "open-sabre" {
+		t.Fatalf("Reslug = %q, %v", slug, err)
+	}
+	if !exists(filepath.Join(f.DisciplineDir(slug), "competitors.json")) || exists(f.DisciplineDir(first)) {
+		t.Error("the folder should have moved, files and all")
+	}
+	if got := f.Resolve(first); got != slug {
+		t.Errorf("the old address should resolve to the new, got %q", got)
+	}
+	if slugs, _ := f.Slugs(); !reflect.DeepEqual(slugs, []string{slug}) {
+		t.Errorf("the order should name the new slug, got %v", slugs)
+	}
+	if again, _ := f.Create(""); again == first {
+		t.Error("a new discipline must not be given an address that is still another's alias")
+	}
+}
+
 func TestABrokenEventFileIsAnError(t *testing.T) {
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, "event.json"), `{"welcome": `)

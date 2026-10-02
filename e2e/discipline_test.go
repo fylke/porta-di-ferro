@@ -68,9 +68,14 @@ func TestNamingThisDiscipline(t *testing.T) {
 		Instance instance `json:"instance"`
 	}
 	s.mustDo(t, "GET", "/api/state", nil, &snap)
-	if snap.Instance.Name != "Open Sabre" || snap.Instance.Slug != slug {
-		t.Errorf("the snapshot should name the discipline and keep its address, got %+v", snap.Instance)
+	// Made before it had a name, it moves to an address from the name, once.
+	if snap.Instance.Name != "Open Sabre" || snap.Instance.Slug != "open-sabre" {
+		t.Errorf("the snapshot should name the discipline at its new address, got %+v", snap.Instance)
 	}
+	if code := s.do(t, "GET", "/api/d/"+slug+"/state", nil, nil); code != 200 {
+		t.Errorf("the address it had before it was named should still answer, got %d", code)
+	}
+	slug = "open-sabre"
 
 	// Written down with the tournament, not just held in the process.
 	b, err := os.ReadFile(filepath.Join(s.disciplineDir(t), "tournament.json"))
