@@ -214,6 +214,17 @@ func (s *Server) confirmImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	updated := signup.Import(preview, NextCompetitorID, competitors)
+	// Each new entry is a person of the event's: the same one in every discipline the
+	// response entered, by its submission id (phase 3).
+	for i, c := range updated {
+		if c.Person != "" {
+			continue
+		}
+		if updated[i].Person, err = s.personFor(c.Name, c.Club, c.Signup, ""); err != nil {
+			writeErr(w, http.StatusInternalServerError, err)
+			return
+		}
+	}
 	staff := signup.ImportStaff(preview, t.Staff)
 	addedStaff := len(staff) - len(t.Staff)
 	if addedStaff > 0 {

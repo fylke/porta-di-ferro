@@ -30,6 +30,8 @@ type Server struct {
 	event EventInfo
 	// mats is the event's plan, when the discipline's work runs on the event's mats.
 	mats EventMats
+	// people is the event's registry, when the discipline's entries are linked to it.
+	people EventPeople
 
 	// writeMu serialises writes. One organizer and at most four mats: a single lock is
 	// simpler than anything cleverer and cannot be got wrong.

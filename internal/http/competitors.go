@@ -28,6 +28,9 @@ func (s *Server) addCompetitor(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Name string `json:"name"`
 		Club string `json:"club"`
+		// Person is who this entry is, when the organizer picked somebody already entered
+		// in another discipline. Empty makes them somebody new (phase 3).
+		Person string `json:"person"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		writeErr(w, http.StatusBadRequest, err)
@@ -36,6 +39,11 @@ func (s *Server) addCompetitor(w http.ResponseWriter, r *http.Request) {
 	in.Name = strings.TrimSpace(in.Name)
 	if in.Name == "" {
 		writeErr(w, http.StatusBadRequest, fmt.Errorf("a competitor needs a name"))
+		return
+	}
+	person, err := s.personFor(in.Name, strings.TrimSpace(in.Club), "", in.Person)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -47,9 +55,10 @@ func (s *Server) addCompetitor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	c := store.Competitor{
-		ID:   NextCompetitorID(competitors),
-		Name: in.Name,
-		Club: strings.TrimSpace(in.Club),
+		ID:     NextCompetitorID(competitors),
+		Name:   in.Name,
+		Club:   strings.TrimSpace(in.Club),
+		Person: person,
 	}
 	competitors = append(competitors, c)
 	if err := s.store.SaveCompetitors(competitors); err != nil {
