@@ -16,10 +16,12 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -37,6 +39,8 @@ var version = "dev"
 func main() {
 	dir := flag.String("dir", defaultDir(), "event data directory")
 	port := flag.Int("port", 8080, "port to listen on")
+	host := flag.String("host", "", "address to listen on: empty for every network this PC is on, "+
+		"127.0.0.1 for this PC only (tests and development, where no other device needs it)")
 	noBrowser := flag.Bool("no-browser", false, "do not open a browser on start")
 	noWatchdog := flag.Bool("no-watchdog", false, "run the server directly, without restarting it if it stops")
 	showVersion := flag.Bool("version", false, "print the version and exit")
@@ -63,7 +67,11 @@ func main() {
 	view := coord.View()
 
 	httpServer := &http.Server{
-		Addr:    fmt.Sprintf(":%d", *port),
+		// Every network by default, because the score keepers' tablets are on the venue
+		// wifi. A loopback address is for runs nothing else has to reach: Windows Firewall
+		// asks about every new program that listens on a network, and the test suites
+		// build a new executable for every test (AGENTS.md).
+		Addr:    net.JoinHostPort(*host, strconv.Itoa(*port)),
 		Handler: coord.Handler(),
 		// No read timeout: an SSE stream is meant to stay open.
 		ReadHeaderTimeout: 10 * time.Second,

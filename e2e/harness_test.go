@@ -48,7 +48,9 @@ func startIn(t *testing.T, dir string) *server {
 	}
 
 	port := freePort(t)
-	cmd := exec.Command(bin, "-dir", dir, "-port", fmt.Sprint(port), "-no-browser", "-no-watchdog")
+	// Loopback only: every test builds a new executable, and Windows Firewall asks about
+	// each new one that listens on a network.
+	cmd := exec.Command(bin, "-dir", dir, "-port", fmt.Sprint(port), "-no-browser", "-no-watchdog", "-host", "127.0.0.1")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
@@ -73,7 +75,7 @@ func restart(t *testing.T, s *server) *server {
 	_, _ = s.cmd.Process.Wait()
 
 	port := freePort(t)
-	cmd := exec.Command(s.bin, "-dir", s.dir, "-port", fmt.Sprint(port), "-no-browser", "-no-watchdog")
+	cmd := exec.Command(s.bin, "-dir", s.dir, "-port", fmt.Sprint(port), "-no-browser", "-no-watchdog", "-host", "127.0.0.1")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
