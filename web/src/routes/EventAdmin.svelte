@@ -4,6 +4,8 @@
   import { hall } from '../lib/event.svelte';
   import { LanAddress, describeNetwork } from '../lib/lan.svelte';
   import Disciplines from './Disciplines.svelte';
+  import MatBoard from './MatBoard.svelte';
+  import Screens from './Screens.svelte';
   import EventEditor from './EventEditor.svelte';
   import LangToggle from './LangToggle.svelte';
   import { t } from '../lib/i18n.svelte';
@@ -111,6 +113,10 @@
     </section>
 
     <Disciplines />
+
+    <MatBoard canSetCount />
+
+    <Screens />
 
     <!-- Seeded once and not re-keyed: the event updates on every exchange in every
          discipline, and an editor that reset itself on each would lose the sentence

@@ -11,6 +11,7 @@
   import Eliminations from './Eliminations.svelte';
   import Screens from './Screens.svelte';
   import Disciplines from './Disciplines.svelte';
+  import MatBoard from './MatBoard.svelte';
   import EventEditor from './EventEditor.svelte';
   import Signup from './Signup.svelte';
   import LangToggle from './LangToggle.svelte';
@@ -180,6 +181,10 @@
     {#if !multi}
       <Disciplines onchange={refresh} />
     {/if}
+
+    <!-- The mat board, for dragging pools between mats (#101). With several disciplines it
+         is on the event's page, where it shows all of them. -->
+    {#if !multi && drawn}<MatBoard />{/if}
 
     <Pools {snapshot} onchange={refresh} />
   {/if}
