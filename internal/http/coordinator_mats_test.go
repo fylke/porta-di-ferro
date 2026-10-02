@@ -65,7 +65,8 @@ func TestTheMatsAreTheEvents(t *testing.T) {
 	sabre := itemOf(v, "open-sabre/pool-1")
 	behind := 0
 	for _, it := range v.Items {
-		if it.Mat == 1 && it.Discipline == ls {
+		// The longsword's drawn work; its bracket, not drawn yet, is planned after Sabre's.
+		if it.Mat == 1 && it.Discipline == ls && !it.Projected {
 			behind++
 		}
 	}

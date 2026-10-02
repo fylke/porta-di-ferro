@@ -27,7 +27,7 @@ func (e *Event) placements() (map[string]store.Placement, int) {
 	var tournaments []store.Tournament
 	for _, d := range e.disciplines {
 		tournaments = append(tournaments, d.tournament)
-		items = append(items, httpapi.ItemsOf(d.slug, d.tournament)...)
+		items = append(items, httpapi.PlanItems(d.slug, d.tournament, httpapi.Entrants(d.competitors, e.plan.Expected[d.slug]))...)
 	}
 	mats := httpapi.MatCount(e.plan, tournaments)
 	placed, changed := httpapi.Place(items, e.plan, mats)
@@ -55,7 +55,8 @@ func (e *Event) mats() httpapi.MatsView {
 		if err != nil {
 			continue
 		}
-		inputs = append(inputs, httpapi.MatsInput{Slug: d.slug, Name: d.tournament.Discipline, Snapshot: snap})
+		inputs = append(inputs, httpapi.MatsInput{Slug: d.slug, Name: d.tournament.Discipline, Snapshot: snap,
+			Expected: e.plan.Expected[d.slug]})
 	}
 	return httpapi.BuildMats(inputs, placed, n, e.held)
 }

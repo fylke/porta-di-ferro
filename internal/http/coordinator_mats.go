@@ -70,8 +70,13 @@ func (c *Coordinator) placementsLocked() (map[string]store.Placement, int) {
 			failed = append(failed, w.slug+"/")
 			continue
 		}
+		comps, err := w.srv.store.Competitors()
+		if err != nil {
+			failed = append(failed, w.slug+"/")
+			continue
+		}
 		tournaments = append(tournaments, t)
-		items = append(items, ItemsOf(w.slug, t)...)
+		items = append(items, PlanItems(w.slug, t, Entrants(comps, file.Plan.Expected[w.slug]))...)
 	}
 	mats := MatCount(file.Plan, tournaments)
 	// A discipline that cannot be read keeps its placements for when it can be again,
@@ -113,12 +118,14 @@ func (c *Coordinator) held(mat int) (string, string) {
 
 // matsFrom lays every readable discipline's items on the mats.
 func (c *Coordinator) matsFrom(snaps []snapped) MatsView {
+	file, _ := c.folder.Read()
 	var inputs []MatsInput
 	for _, s := range snaps {
 		if s.err != nil {
 			continue
 		}
-		inputs = append(inputs, MatsInput{Slug: s.w.slug, Name: s.snap.Instance.Name, Snapshot: s.snap})
+		inputs = append(inputs, MatsInput{Slug: s.w.slug, Name: s.snap.Instance.Name, Snapshot: s.snap,
+			Expected: file.Plan.Expected[s.w.slug]})
 	}
 	placed, mats := c.Placements()
 	return BuildMats(inputs, placed, mats, c.held)
