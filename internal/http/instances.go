@@ -41,6 +41,9 @@ type Instance struct {
 	// Self marks the instance answering the request, in a list of siblings.
 	Self bool   `json:"self"`
 	URL  string `json:"url"`
+	// Host is the address this run listens on, passed on to the siblings it starts: a run
+	// kept to this PC starts siblings kept to it too.
+	Host string `json:"-"`
 }
 
 // instances is the parent's record of the siblings it started. A child knows only its
@@ -196,7 +199,7 @@ func (s *Server) spawn(name string) (Instance, error) {
 			return Instance{}, fmt.Errorf("%s is already running on port %d", c.Name, c.Port)
 		}
 	}
-	port, err := freePortAfter(s.instances.self.Port)
+	port, err := freePortAfter(s.instances.self.Host, s.instances.self.Port)
 	if err != nil {
 		return Instance{}, err
 	}
@@ -208,6 +211,9 @@ func (s *Server) spawn(name string) (Instance, error) {
 		"-parent", s.instances.self.URL,
 		"-no-browser",
 	)
+	if s.instances.self.Host != "" {
+		cmd.Args = append(cmd.Args, "-host", s.instances.self.Host)
+	}
 	hideWindow(cmd)
 	if err := cmd.Start(); err != nil {
 		return Instance{}, err
@@ -266,10 +272,11 @@ func (s *Server) listInstances() []Instance {
 	return out
 }
 
-// freePortAfter finds the first port above the given one that nothing is listening on.
-func freePortAfter(port int) (int, error) {
+// freePortAfter finds the first port above the given one that nothing is listening on,
+// on the address the sibling will listen on.
+func freePortAfter(host string, port int) (int, error) {
 	for p := port + 1; p < port+100; p++ {
-		l, err := net.Listen("tcp", fmt.Sprintf(":%d", p))
+		l, err := net.Listen("tcp", net.JoinHostPort(host, strconv.Itoa(p)))
 		if err != nil {
 			continue
 		}

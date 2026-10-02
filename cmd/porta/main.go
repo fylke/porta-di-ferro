@@ -11,10 +11,12 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -31,6 +33,8 @@ var version = "dev"
 func main() {
 	dir := flag.String("dir", defaultDir(), "tournament data directory")
 	port := flag.Int("port", 8080, "port to listen on")
+	host := flag.String("host", "", "address to listen on: empty for every network this PC is on, "+
+		"127.0.0.1 for this PC only (tests and development, where no other device needs it)")
 	name := flag.String("name", "", "the discipline this run is for, shown on every page")
 	parent := flag.String("parent", "", "URL of the instance that started this one")
 	noBrowser := flag.Bool("no-browser", false, "do not open a browser on start")
@@ -57,8 +61,12 @@ func main() {
 		}
 	}
 
-	srv := httpapi.New(st, web.Assets(), httpapi.Instance{Name: discipline, Port: *port, Parent: *parent})
-	addr := fmt.Sprintf(":%d", *port)
+	srv := httpapi.New(st, web.Assets(), httpapi.Instance{Name: discipline, Port: *port, Parent: *parent, Host: *host})
+	// Every network by default, because the score keepers' tablets are on the venue wifi.
+	// A loopback address is for runs nothing else has to reach: Windows Firewall asks
+	// about every new program that listens on a network, and the test suites build a new
+	// executable for every test (porta-di-ferro AGENTS.md).
+	addr := net.JoinHostPort(*host, strconv.Itoa(*port))
 	httpServer := &http.Server{
 		Addr:    addr,
 		Handler: srv.Handler(),

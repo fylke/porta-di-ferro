@@ -14,6 +14,7 @@
 - **Playwright Browser E2E Tests**: Run `npm run test:e2e` inside `web/` (or `go test -v -race -count=1 ./e2e/...` for Go backend E2E suite).
 - **Nightly CI Pipeline**: Defined in `.github/workflows/nightly-e2e.yml` running daily at 02:00 UTC and on manual dispatch.
 - **Shared Test Vectors**: Verify scoring and rules changes against vector tests in `testdata/vectors/` and both engine implementations (`internal/match/` and `web/src/lib/match/`).
+- **Servers you start yourself listen on loopback**: pass `-host 127.0.0.1` to any `porta` you run for a test, a screenshot or a check (the e2e harness and the Playwright config already do). Without it the server listens on every network, and Windows Firewall asks the person at the machine to allow each new executable -- and `go run` and the e2e suite build a new one every time. Only the organizer's real run needs the LAN.
 
 ## Key Conventions
 
