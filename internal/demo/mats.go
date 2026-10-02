@@ -87,12 +87,25 @@ func (e *Event) moveItem(id string, mat, index int, move string) error {
 
 func (e *Event) patchItem(id string, body []byte) Response {
 	var in struct {
-		Mat   int    `json:"mat"`
-		Index *int   `json:"index"`
-		Move  string `json:"move"`
+		Mat       int     `json:"mat"`
+		Index     *int    `json:"index"`
+		Move      string  `json:"move"`
+		Pinned    *bool   `json:"pinned"`
+		NotBefore *string `json:"notBefore"`
 	}
 	if err := json.Unmarshal(body, &in); err != nil {
 		return fail(400, err)
+	}
+	if in.Pinned != nil || in.NotBefore != nil {
+		placed, _ := e.placements()
+		next, err := httpapi.SetItemFlags(placed, id, in.Pinned, in.NotBefore)
+		if err != nil {
+			return fail(400, err)
+		}
+		e.plan.Items = next
+		if in.Move == "" && in.Mat <= 0 {
+			return changed(e.mats())
+		}
 	}
 	index := -1
 	if in.Index != nil {

@@ -141,13 +141,55 @@ func fixture(rules match.Ruleset, limits tournament.Limits) ([]store.Competitor,
 		// The first of the ones left on the live mat is under way: a couple of exchanges
 		// in with the clock running, which is what every display and the score keeper
 		// client are built around.
+		var fenced []string
+		for _, m := range queue[:stop] {
+			fenced = append(fenced, m.ID)
+		}
 		if mat == liveMat && stop < len(queue) {
 			seed++
 			logs[queue[stop].ID] = partMatch(rules, queue[stop].ID, seed)
+			fenced = append(fenced, queue[stop].ID)
 		}
+		stampMat(logs, fenced, time.Now())
 	}
 
 	return competitors, drawn, logs
+}
+
+// stampMat gives a mat's fenced matches the times they would have been logged at,
+// counting back from now: the match under way a few seconds since its last exchange, and
+// before it, match by match, about three quarters of a minute of stoppages on top of the
+// fencing and a little over a minute between pairs. Real logs carry these times, and the
+// forecast learns each mat's pace from them (phase 4); a fixture without them would have
+// a day with no past.
+func stampMat(logs map[string][]match.Event, ids []string, now time.Time) {
+	cursor := now.Add(-90 * time.Second)
+	if n := len(ids); n > 0 {
+		if events := logs[ids[n-1]]; len(events) > 0 && events[len(events)-1].Type != match.TypeEnd {
+			cursor = now.Add(-8 * time.Second)
+		}
+	}
+	for i := len(ids) - 1; i >= 0; i-- {
+		events := logs[ids[i]]
+		if len(events) == 0 {
+			continue
+		}
+		last := time.Duration(events[len(events)-1].ElapsedMS) * time.Millisecond
+		ended := events[len(events)-1].Type == match.TypeEnd
+		start := cursor.Add(-last)
+		end := cursor
+		if ended {
+			start = cursor.Add(-last - 45*time.Second)
+		}
+		for j := range events {
+			at := start.Add(time.Duration(events[j].ElapsedMS) * time.Millisecond)
+			if events[j].Type == match.TypeEnd {
+				at = end
+			}
+			events[j].At = at.UTC().Format("2006-01-02T15:04:05.000Z07:00")
+		}
+		cursor = start.Add(-70 * time.Second)
+	}
 }
 
 // sabreFixture is the event's second discipline (#102): Open Sabre, its pools drawn and
