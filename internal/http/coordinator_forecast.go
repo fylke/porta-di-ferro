@@ -77,7 +77,10 @@ func (c *Coordinator) Hall(slug string) (map[int]string, map[string]string) {
 // ForecastNow is the forecast as the board reads it.
 func (c *Coordinator) ForecastNow() ForecastView {
 	h := c.timesFrom(c.snapshots())
-	return ViewForecast(h.in, h.result, h.inputs, h.timings)
+	v := ViewForecast(h.in, h.result, h.inputs, h.timings)
+	file, _ := c.folder.Read()
+	v.Expected = file.Plan.Expected
+	return v
 }
 
 func (c *Coordinator) getForecast(w http.ResponseWriter, r *http.Request) {

@@ -8,6 +8,7 @@
   import Screens from './Screens.svelte';
   import EventEditor from './EventEditor.svelte';
   import People from './People.svelte';
+  import Planning from './Planning.svelte';
   import Signup from './Signup.svelte';
   import LangToggle from './LangToggle.svelte';
   import { t } from '../lib/i18n.svelte';
@@ -117,6 +118,8 @@
     <Disciplines />
 
     <MatBoard canSetCount />
+
+    <Planning />
 
     <Screens />
 

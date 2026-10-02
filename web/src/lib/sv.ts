@@ -440,6 +440,72 @@ export const sv: Record<string, string> = {
   'No such competitor': 'Ingen sådan fäktare',
   'That name is not in this tournament. It may be in another discipline.':
     'Det namnet finns inte i den här tävlingen. Det kan finnas i en annan disciplin.',
+  // The plan and the forecast (phase 4).
+  '(planned {time})': '(planerat {time})',
+  '+{n} min': '+{n} min',
+  '{n} min early': '{n} min tidigt',
+  'A match took {match} on average, and {changeover} between matches, from {n} matches.':
+    'En match tog i snitt {match}, och {changeover} mellan matcherna, räknat på {n} matcher.',
+  'A match, in minutes': 'En match, i minuter',
+  'Anything pinned stays on its mat, and what a mat is running stays where it is.':
+    'Det som är fäst stannar på sin matta, och det en matta kör stannar där det är.',
+  Apply: 'Genomför',
+  'Before the eliminations': 'Före elimineringarna',
+  'Before the entries are in': 'Innan anmälningarna är klara',
+  'Between matches': 'Mellan matcherna',
+  'Breaks in the programme, such as lunch, stop the mats: give them a start and an end there.':
+    'Pauser i programmet, som lunchen, stoppar mattorna: ge dem en start- och en sluttid där.',
+  Dismiss: 'Avfärda',
+  Expected: 'Väntas',
+  'First match': 'Första matchen',
+  'Forecast to end at {time}': 'Beräknas sluta {time}',
+  'Planned to end at {time}': 'Planerad att sluta {time}',
+  Gap: 'Paus',
+  Hold: 'Håll',
+  'How long things take, and when the day starts and ends. The mat board times every card from these until the day has a pace of its own, and says whether it all fits.':
+    'Hur lång tid saker tar, och när dagen börjar och slutar. Mattavlan tidsätter varje kort utifrån detta tills dagen har ett eget tempo, och säger om allt får plats.',
+  'How many each discipline expects. Until that many are entered and the pools drawn, the board plans for this many.':
+    'Hur många varje disciplin väntar sig. Tills så många är anmälda och poolerna lottade planerar tavlan för så många.',
+  'Keep the timings for new events': 'Spara tiderna för nya tävlingar',
+  'Kept for new events, in {file}': 'Sparat för nya tävlingar, i {file}',
+  'Leave out': 'Räkna inte',
+  'Leave {match} out': 'Räkna inte {match}',
+  'Let go': 'Släpp',
+  'Mark a match whose time says nothing about the next event, such as a long injury break or a clock nobody stopped, and it is left out.':
+    'Markera en match vars tid inte säger något om nästa tävling, som ett långt skadeuppehåll eller en klocka ingen stoppade, så räknas den inte.',
+  'Not before': 'Inte före',
+  'not before {time}': 'inte före {time}',
+  'Nothing to move: the plan is already as good as the suggestion can make it.':
+    'Inget att flytta: planen är redan så bra som förslaget kan göra den.',
+  'Nothing to plan yet: enter competitors, or say how many are expected.':
+    'Inget att planera än: anmäl fäktare, eller säg hur många som väntas.',
+  'Pin to this mat': 'Fäst vid den här mattan',
+  Unpin: 'Lossa',
+  pinned: 'fäst',
+  'Planning the day': 'Planera dagen',
+  Somebody: 'Någon',
+  Started: 'Började',
+  Took: 'Tog',
+  'Suggest a plan': 'Föreslå en plan',
+  'Suggested plan': 'Föreslagen plan',
+  'The day ends at {end}, after the venue closes at {close}.': 'Dagen slutar {end}, efter att lokalen stänger {close}.',
+  'The day so far, measured': 'Dagen hittills, uppmätt',
+  'The day, mat by mat': 'Dagen, matta för matta',
+  'The plan changed since; this is a new suggestion.': 'Planen har ändrats sedan dess; det här är ett nytt förslag.',
+  'The timings are now the measured ones.': 'Tiderna är nu de uppmätta.',
+  'The venue closes': 'Lokalen stänger',
+  'This would end the day at {end} instead of {before}.': 'Då skulle dagen sluta {end} i stället för {before}.',
+  'Use these as the timings': 'Använd dessa som tider',
+  'free at {time}': 'ledig {time}',
+  'from 1 match': 'räknat på 1 match',
+  'from {n} matches': 'räknat på {n} matcher',
+  'mat {from} to mat {to}': 'matta {from} till matta {to}',
+  'place {from} to {to} on mat {mat}': 'plats {from} till {to} på matta {mat}',
+  'not drawn yet': 'inte lottad än',
+  '{item} is placed before what it waits for.': '{item} ligger före det den väntar på.',
+  '{name} is in {a} and {b}, which overlap {from}–{to}.': '{name} är med i {a} och {b}, som överlappar {from}–{to}.',
+  '{time} a match': '{time} per match',
+
   // The event's people (phase 3).
   People: 'Personer',
   'One person, however many disciplines they entered: one page with their whole day. A signup makes one response one person everywhere; the same name alone never does, so it is asked about here.':

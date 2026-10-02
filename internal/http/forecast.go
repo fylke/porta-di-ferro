@@ -238,6 +238,8 @@ type ForecastView struct {
 	Timings store.Timings `json:"timings"`
 	// Live says the day is under way: somebody has fenced.
 	Live bool `json:"live"`
+	// Expected is how many each discipline expects, by slug, for the planning panel.
+	Expected map[string]int `json:"expected,omitempty"`
 }
 
 func stamp(t time.Time) string {
