@@ -30,9 +30,13 @@
   async function add(event: SubmitEvent) {
     event.preventDefault();
     error = '';
+    // What was sent, so the field is cleared only if it still says that. A volunteer at the
+    // desk types the next name while this one is saving, and clearing the field when the
+    // answer came wiped what they had typed since.
+    const sent = name;
     try {
-      await api.addCompetitor(name, club);
-      name = '';
+      await api.addCompetitor(sent, club);
+      if (name === sent) name = '';
       // The club usually repeats down a queue of people signing in together, so it stays.
       onchange();
     } catch (e) {
