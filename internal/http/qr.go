@@ -11,7 +11,11 @@ import (
 // It exists so the first screen an organizer sees carries the client address in a form a
 // score keeper can join from across a table, rather than one they have to read out loud
 // and have typed in wrong.
-func (s *Server) qr(w http.ResponseWriter, r *http.Request) {
+func (s *Server) qr(w http.ResponseWriter, r *http.Request) { serveQR(w, r) }
+
+// serveQR answers for a discipline and for the event alike: a code depends on nothing
+// but what it encodes.
+func serveQR(w http.ResponseWriter, r *http.Request) {
 	target := r.URL.Query().Get("url")
 	if target == "" {
 		writeErr(w, http.StatusBadRequest, errMissingURL)

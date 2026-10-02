@@ -13,8 +13,12 @@ import (
 //
 // The binary is the web app. At a venue with no internet this is also how a device that
 // has never opened it gets it.
-func (s *Server) serveApp(w http.ResponseWriter, r *http.Request) {
-	if s.assets == nil {
+func (s *Server) serveApp(w http.ResponseWriter, r *http.Request) { serveAssets(s.assets, w, r) }
+
+// serveAssets serves a web bundle. The event coordinator serves the one bundle for every
+// discipline; a discipline's server serves it only when it runs on its own.
+func serveAssets(assets fs.FS, w http.ResponseWriter, r *http.Request) {
+	if assets == nil {
 		http.NotFound(w, r)
 		return
 	}
@@ -27,7 +31,7 @@ func (s *Server) serveApp(w http.ResponseWriter, r *http.Request) {
 	if name == "" || name == "." {
 		name = "index.html"
 	}
-	f, err := s.assets.Open(name)
+	f, err := assets.Open(name)
 	if err != nil {
 		// A request with a file extension asked for a file, so a miss is a miss. Falling
 		// through would answer a stale /assets/index-OLD.js -- or a missing /sw.js -- with
@@ -38,13 +42,13 @@ func (s *Server) serveApp(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// No extension: a client-side route, not a missing file.
-		s.serveIndex(w, r)
+		serveIndex(assets, w, r)
 		return
 	}
 	defer f.Close()
 	info, err := f.Stat()
 	if err != nil || info.IsDir() {
-		s.serveIndex(w, r)
+		serveIndex(assets, w, r)
 		return
 	}
 	if rs, ok := f.(interface {
@@ -59,11 +63,11 @@ func (s *Server) serveApp(w http.ResponseWriter, r *http.Request) {
 		http.ServeContent(w, r, name, info.ModTime(), rs)
 		return
 	}
-	s.serveIndex(w, r)
+	serveIndex(assets, w, r)
 }
 
-func (s *Server) serveIndex(w http.ResponseWriter, r *http.Request) {
-	b, err := fs.ReadFile(s.assets, "index.html")
+func serveIndex(assets fs.FS, w http.ResponseWriter, r *http.Request) {
+	b, err := fs.ReadFile(assets, "index.html")
 	if err != nil {
 		http.Error(w, "web app not built into this binary", http.StatusNotFound)
 		return

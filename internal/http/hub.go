@@ -62,7 +62,18 @@ func (h *hub) publish(u Update) {
 
 // stream is the SSE handler. One stream carries every kind of update; the client filters
 // by what it is showing, which keeps the server from having to know what each display is.
-func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
+func (s *Server) stream(w http.ResponseWriter, r *http.Request) { serveStream(w, r, s.hub) }
+
+// subscribers is how many streams are open, so work done only to tell them something can
+// be skipped when nobody is listening.
+func (h *hub) subscribers() int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return len(h.subs)
+}
+
+// serveStream holds an SSE stream open on a hub: a discipline's, or the event's.
+func serveStream(w http.ResponseWriter, r *http.Request, h *hub) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
@@ -75,8 +86,8 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	flusher.Flush()
 
-	ch := s.hub.subscribe()
-	defer s.hub.unsubscribe(ch)
+	ch := h.subscribe()
+	defer h.unsubscribe(ch)
 
 	// A comment line every 20 seconds keeps proxies and sleeping phones from deciding the
 	// connection is dead.

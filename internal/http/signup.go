@@ -29,7 +29,7 @@ import (
 const maxImport = 8 << 20
 
 func (s *Server) signupDefinition(w http.ResponseWriter, r *http.Request) {
-	t, err := s.store.Tournament()
+	t, err := s.tournament()
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
@@ -45,7 +45,7 @@ func (s *Server) signupDefinition(w http.ResponseWriter, r *http.Request) {
 // signupReady tells the admin screen what is still missing, so the organizer finds out
 // before the file goes out rather than from a participant who cannot use it.
 func (s *Server) signupReady(w http.ResponseWriter, r *http.Request) {
-	t, err := s.store.Tournament()
+	t, err := s.tournament()
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
@@ -66,7 +66,7 @@ func (s *Server) signupReady(w http.ResponseWriter, r *http.Request) {
 // attachment beats two every time, and "open both of these, the second one from inside
 // the first" is an instruction people get wrong.
 func (s *Server) signupApp(w http.ResponseWriter, r *http.Request) {
-	t, err := s.store.Tournament()
+	t, err := s.tournament()
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
@@ -151,7 +151,7 @@ func (s *Server) readImport(r *http.Request) (signup.Preview, store.Tournament, 
 	if err := json.NewDecoder(http.MaxBytesReader(nil, r.Body, maxImport)).Decode(&in); err != nil {
 		return signup.Preview{}, store.Tournament{}, err
 	}
-	t, err := s.store.Tournament()
+	t, err := s.tournament()
 	if err != nil {
 		return signup.Preview{}, store.Tournament{}, err
 	}
@@ -217,8 +217,15 @@ func (s *Server) confirmImport(w http.ResponseWriter, r *http.Request) {
 	staff := signup.ImportStaff(preview, t.Staff)
 	addedStaff := len(staff) - len(t.Staff)
 	if addedStaff > 0 {
-		t.Staff = staff
-		if err := s.store.SaveTournament(t); err != nil {
+		// Saved onto the stored tournament, not the one read for the check, which has the
+		// event's day laid over it and must not be written back here.
+		stored, err := s.store.Tournament()
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err)
+			return
+		}
+		stored.Staff = staff
+		if err := s.store.SaveTournament(stored); err != nil {
 			writeErr(w, http.StatusInternalServerError, err)
 			return
 		}

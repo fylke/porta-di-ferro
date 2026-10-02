@@ -24,29 +24,44 @@ type Server struct {
 	// not. In memory; a restart lets everyone register again.
 	presence *presence
 	stop     chan struct{}
-	// instances is this run of the application and the sibling disciplines it started.
-	instances *instances
+	// identity is which discipline this is: its name, slug and folder.
+	identity identity
+	// event is the event this discipline is part of, or nil for a server on its own.
+	event EventInfo
 
 	// writeMu serialises writes. One organizer and at most four mats: a single lock is
 	// simpler than anything cleverer and cannot be got wrong.
 	writeMu sync.Mutex
 }
 
-// New builds the server. assets is the embedded web bundle; a nil value serves the API
-// alone, which is what the Go tests use. self says which discipline, port and directory
-// this run is, so it can name itself and start siblings beside itself.
+// New builds the server for one discipline. assets is the embedded web bundle; a nil
+// value serves the API alone, which is what the Go tests and the event coordinator use --
+// the coordinator serves the bundle once for every discipline. self says which discipline
+// this is; a name left empty is read from its tournament.json, where renaming it from the
+// admin page keeps it (issue #80).
 func New(st *store.Store, assets fs.FS, self Instance) *Server {
 	self.Dir = st.Dir()
-	s := &Server{
-		store:     st,
-		rules:     match.MSL(),
-		limits:    tournament.DefaultLimits(),
-		hub:       newHub(),
-		assets:    assets,
-		presence:  newPresence(),
-		instances: newInstances(self),
-		stop:      make(chan struct{}),
+	if self.Name == "" {
+		if t, err := st.Tournament(); err == nil {
+			self.Name = t.Discipline
+		}
 	}
+	if self.URL == "" {
+		self.URL = "/"
+		if self.Slug != "" {
+			self.URL = "/d/" + self.Slug + "/"
+		}
+	}
+	s := &Server{
+		store:    st,
+		rules:    match.MSL(),
+		limits:   tournament.DefaultLimits(),
+		hub:      newHub(),
+		assets:   assets,
+		presence: newPresence(),
+		stop:     make(chan struct{}),
+	}
+	s.identity.self = self
 	go s.sweepPresence(s.stop)
 	return s
 }
@@ -66,11 +81,6 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/export.pdf", s.exportPDF)
 	mux.HandleFunc("GET /api/qr.png", s.qr)
 	mux.HandleFunc("GET /api/addresses", s.addresses)
-	mux.HandleFunc("GET /api/instances", s.getInstances)
-	mux.HandleFunc("POST /api/instances", s.postInstance)
-	mux.HandleFunc("PATCH /api/instances/{port}", s.patchInstance)
-	mux.HandleFunc("DELETE /api/instances/{port}", s.deleteInstance)
-	mux.HandleFunc("GET /api/disciplines", s.getDisciplines)
 
 	mux.HandleFunc("POST /api/competitors", s.addCompetitor)
 	mux.HandleFunc("PATCH /api/competitors/{id}", s.patchCompetitor)
@@ -125,6 +135,20 @@ func (s *Server) getState(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, snap)
 }
+
+// Snapshot is this discipline's whole derived picture, for the event coordinator.
+func (s *Server) Snapshot() (Snapshot, error) { return s.snapshot() }
+
+// Subscribe follows this discipline's updates, for the event coordinator. The channel is
+// closed if the subscriber falls behind, as any stream's is; the caller subscribes again.
+func (s *Server) Subscribe() (<-chan Update, func()) {
+	ch := s.hub.subscribe()
+	return ch, func() { s.hub.unsubscribe(ch) }
+}
+
+// PublishState tells every page on this discipline to fetch nothing and redraw: the
+// event's day changed under it.
+func (s *Server) PublishState() { s.publishState() }
 
 // publishState pushes the whole snapshot. Cheap at this size, and it means a display never
 // has to reconcile a partial update against what it already had.

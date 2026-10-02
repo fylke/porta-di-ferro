@@ -22,6 +22,49 @@ const maxWelcome = 4000
 // anybody reads off a wall.
 const maxSchedule = 40
 
+// EventInfo is the event a discipline is part of: where it reads the welcome, the
+// programme, the wifi and the signup settings, and where an edit to them goes. Several
+// disciplines share one, so it is typed once for the whole hall (proposal §7).
+//
+// A server without one -- the Go tests, mostly -- keeps the day in its own
+// tournament.json, as every run did before events existed.
+type EventInfo interface {
+	EventInfo() (store.Event, error)
+	SaveEventInfo(store.Event) error
+}
+
+// UseEvent puts this discipline inside an event. Called once, before it serves anything.
+func (s *Server) UseEvent(e EventInfo) { s.event = e }
+
+// tournament is the stored tournament with the event's day laid over it, which is what
+// every reader of t.Event wants: the snapshot, the info sheet, the signup definition.
+//
+// Only which programme row this discipline is -- Signup.Tournament -- is the
+// discipline's own. Never save what this returns: a read-modify-write goes through
+// s.store.Tournament(), so the event's copy is never written back into the discipline.
+func (s *Server) tournament() (store.Tournament, error) {
+	t, err := s.store.Tournament()
+	if err != nil || s.event == nil {
+		return t, err
+	}
+	mine := t.Event.Signup.Tournament
+	// An event.json that does not parse leaves the day blank rather than the discipline
+	// unreadable; the event reports the error itself (proposal §11).
+	ev, _ := s.event.EventInfo()
+	ev.Signup.Tournament = mine
+	t.Event = ev
+	return t, nil
+}
+
+// source is what snapshots are built from: the store, with the event laid over its
+// tournament.
+type source struct {
+	*store.Store
+	s *Server
+}
+
+func (src source) Tournament() (store.Tournament, error) { return src.s.tournament() }
+
 func (s *Server) putEvent(w http.ResponseWriter, r *http.Request) {
 	var in store.Event
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
@@ -35,19 +78,37 @@ func (s *Server) putEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.writeMu.Lock()
-	defer s.writeMu.Unlock()
 	t, err := s.store.Tournament()
+	if err != nil {
+		s.writeMu.Unlock()
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	if s.event == nil {
+		t.Event = in
+	} else {
+		// The admin screens send the whole day, as they always have. The event takes it,
+		// and the discipline keeps only which programme row it is.
+		t.Event = store.Event{Signup: store.Signup{Tournament: in.Signup.Tournament}}
+	}
+	err = s.store.SaveTournament(t)
+	s.writeMu.Unlock()
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
-	t.Event = in
-	if err := s.store.SaveTournament(t); err != nil {
-		writeErr(w, http.StatusInternalServerError, err)
-		return
+	if s.event != nil {
+		shared := in
+		shared.Signup.Tournament = ""
+		// Saving it republishes every discipline, this one included.
+		if err := s.event.SaveEventInfo(shared); err != nil {
+			writeErr(w, http.StatusInternalServerError, err)
+			return
+		}
+	} else {
+		s.publishState()
 	}
-	s.publishState()
-	writeJSON(w, http.StatusOK, t.Event)
+	writeJSON(w, http.StatusOK, in)
 }
 
 // CleanEvent trims what the admin view sent and holds it to the limits above. Exported

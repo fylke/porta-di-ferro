@@ -171,8 +171,6 @@ func (d *Demo) Dir() string { return "in this browser" }
 func (d *Demo) snapshot() (httpapi.Snapshot, error) {
 	return httpapi.BuildSnapshot(d, d.rules, httpapi.Instance{
 		Name: "Open steel Longsword",
-		Port: 8080,
-		Self: true,
 		URL:  "/",
 	}, func(int) string {
 		// Nobody is connected to a demo: every mat shows the next match it would run.
