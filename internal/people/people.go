@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/fylke/porta-di-ferro/internal/signup"
 	"github.com/fylke/porta-di-ferro/internal/store"
@@ -207,4 +208,76 @@ func KeepApart(people []store.Person, a, b string) ([]store.Person, error) {
 	add(i, b)
 	add(j, a)
 	return out, nil
+}
+
+// Roster is one discipline's entries, for Ensure.
+type Roster struct {
+	Discipline  string
+	Competitors []store.Competitor
+}
+
+// Links are entries to point at people: discipline, then competitor, then person.
+type Links map[string]map[string]string
+
+func (l Links) set(discipline, competitor, person string) {
+	if l[discipline] == nil {
+		l[discipline] = map[string]string{}
+	}
+	l[discipline][competitor] = person
+}
+
+// Ensure gives every entry a person: an entry from before people existed, or one typed
+// into a file by hand. One that came in on a signup joins whoever has that submission
+// already; anybody else is somebody new -- never matched on the name. An entry pointing
+// at somebody merged away is pointed at whom they were merged into. Returns the people,
+// with any new ones, and the entries whose person changes.
+func Ensure(people []store.Person, rosters []Roster) ([]store.Person, Links) {
+	links := Links{}
+	for _, r := range rosters {
+		for _, c := range r.Competitors {
+			id := Resolve(people, c.Person)
+			if c.Person == "" || !Active(people, id) {
+				people, id = For(people, c.Name, c.Club, c.Signup, "")
+			}
+			if id != c.Person {
+				links.set(r.Discipline, c.ID, id)
+			}
+		}
+	}
+	return people, links
+}
+
+// LinksTo points every one of entries at a person: the entries a merge moves.
+func LinksTo(entries []Entry, person string) Links {
+	links := Links{}
+	for _, e := range entries {
+		links.set(e.Discipline, e.Competitor, person)
+	}
+	return links
+}
+
+// LinksBack points the entries an undone merge recorded, by Key, back at the person.
+func LinksBack(moved []string, person string) Links {
+	links := Links{}
+	for _, key := range moved {
+		if slug, comp, ok := strings.Cut(key, "/"); ok {
+			links.set(slug, comp, person)
+		}
+	}
+	return links
+}
+
+// EntriesOf is every roster's entries, by the person each is now.
+func EntriesOf(people []store.Person, rosters []Roster, names map[string]string) map[string][]Entry {
+	out := map[string][]Entry{}
+	for _, r := range rosters {
+		for _, c := range r.Competitors {
+			id := Resolve(people, c.Person)
+			out[id] = append(out[id], Entry{
+				Discipline: r.Discipline, DisciplineName: names[r.Discipline], Competitor: c.ID,
+				Name: c.Name, Club: c.Club, Withdrawn: c.Withdrawn,
+			})
+		}
+	}
+	return out
 }

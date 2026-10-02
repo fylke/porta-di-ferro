@@ -155,7 +155,9 @@ func fixture(rules match.Ruleset, limits tournament.Limits) ([]store.Competitor,
 //
 // Three of its fencers are in the longsword as well -- Astrid, Bo and Greta -- because
 // somebody entered in two disciplines is the normal case at a club open, and finding a
-// name across the event is the thing a single-discipline page could never do.
+// name across the event is the thing a single-discipline page could never do. Astrid and
+// Greta signed up for both on one response (signedUp), so the event knows each is one
+// person; Bo was typed in at both desks, so he is offered to the organizer to merge.
 func sabreFixture(rules match.Ruleset, limits tournament.Limits) ([]store.Competitor, store.Tournament, map[string][]match.Event) {
 	entries := []struct{ name, club string }{
 		{"Astrid Lindqvist", "MSL Linköping"},
@@ -175,7 +177,7 @@ func sabreFixture(rules match.Ruleset, limits tournament.Limits) ([]store.Compet
 	}
 	competitors := make([]store.Competitor, len(entries))
 	for i, e := range entries {
-		competitors[i] = store.Competitor{ID: fmt.Sprintf("c%d", i+1), Name: e.name, Club: e.club}
+		competitors[i] = store.Competitor{ID: fmt.Sprintf("c%d", i+1), Name: e.name, Club: e.club, Signup: signedUp[e.name]}
 	}
 
 	t := store.Defaults()
@@ -242,9 +244,17 @@ func roster() []store.Competitor {
 	}
 	out := make([]store.Competitor, len(entries))
 	for i, e := range entries {
-		out[i] = store.Competitor{ID: fmt.Sprintf("c%d", i+1), Name: e.name, Club: e.club}
+		out[i] = store.Competitor{ID: fmt.Sprintf("c%d", i+1), Name: e.name, Club: e.club, Signup: signedUp[e.name]}
 	}
 	return out
+}
+
+// signedUp are the fencers who came in on a signup file, by the response they sent. One
+// response entered both disciplines, so the event knows they are one person in both
+// (phase 3). Everybody else was typed in at a desk.
+var signedUp = map[string]string{
+	"Astrid Lindqvist": "demo-signup-astrid",
+	"Greta Mäkinen":    "demo-signup-greta",
 }
 
 // playMatch writes a whole match's log: the clock started, a run of exchanges, and the

@@ -86,13 +86,22 @@ func (c *Coordinator) shares(def signup.Definition) ([]SignupShare, []*worker) {
 		if err != nil {
 			sh.Error = err.Error()
 		}
-		sh.Tournament, sh.Chosen = own, own != ""
-		if own == "" && several {
-			sh.Tournament = rowNamed(def, sh.Name, w.slug)
-		}
+		sh.Tournament, sh.Chosen = RowFor(def, own, sh.Name, w.slug, several)
 		out, srvs = append(out, sh), append(srvs, w)
 	}
 	return out, srvs
+}
+
+// RowFor is the programme row a discipline takes: the one it chose, else -- in an event
+// of several -- the one named like it. Shared with the browser demo.
+func RowFor(def signup.Definition, own, name, slug string, several bool) (row string, chosen bool) {
+	if own != "" {
+		return own, true
+	}
+	if !several {
+		return "", false
+	}
+	return rowNamed(def, name, slug), false
 }
 
 // rowNamed is the programme row named like a discipline, or "".
@@ -111,10 +120,25 @@ func rowNamed(def signup.Definition, name, slug string) string {
 	return ""
 }
 
-// takes says whether a discipline is in the import: it has a row, or it is the event's
+// Takes says whether a discipline is in the import: it has a row, or it is the event's
 // only discipline and takes everything.
-func takes(sh SignupShare, several bool) bool {
+func Takes(sh SignupShare, several bool) bool {
 	return sh.Error == "" && (sh.Tournament != "" || !several)
+}
+
+// Unclaimed are the programme rows nobody takes: whoever enters them is imported nowhere.
+func Unclaimed(def signup.Definition, shares []SignupShare) []signup.TournamentInfo {
+	taken := map[string]bool{}
+	for _, sh := range shares {
+		taken[sh.Tournament] = true
+	}
+	out := []signup.TournamentInfo{}
+	for _, t := range def.Tournaments {
+		if !taken[t.ID] {
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 func (c *Coordinator) signupReady(w http.ResponseWriter, r *http.Request) {
@@ -124,25 +148,19 @@ func (c *Coordinator) signupReady(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	shares, _ := c.shares(def)
-	// Programme rows nobody takes: whoever enters them would be imported nowhere.
-	taken := map[string]bool{}
-	for _, sh := range shares {
-		taken[sh.Tournament] = true
-	}
-	unclaimed := []signup.TournamentInfo{}
-	for _, t := range def.Tournaments {
-		if !taken[t.ID] {
-			unclaimed = append(unclaimed, t)
-		}
-	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	writeJSON(w, http.StatusOK, SignupReadyView(def, shares))
+}
+
+// SignupReadyView is what the event's signup panel is told before anything goes out.
+func SignupReadyView(def signup.Definition, shares []SignupShare) map[string]any {
+	return map[string]any{
 		"missing":     signup.Ready(def),
 		"tournaments": def.Tournaments,
 		"filename":    signupAppFilename(def),
 		"definition":  definitionFilename(def),
 		"disciplines": shares,
-		"unclaimed":   unclaimed,
-	})
+		"unclaimed":   Unclaimed(def, shares),
+	}
 }
 
 func (c *Coordinator) signupDefinition(w http.ResponseWriter, r *http.Request) {
@@ -212,21 +230,41 @@ func (c *Coordinator) PreviewSignups(files []signup.File) (EventSignupPreview, e
 		return EventSignupPreview{}, err
 	}
 	shares, workers := c.shares(def)
-	several := len(workers) > 1
-	out := EventSignupPreview{Rows: []EventSignupRow{}, Disciplines: shares}
-	var each [][]signup.Row
-	var who []int
+	previews := map[int]SharePreview{}
 	for i, sh := range shares {
-		if !takes(sh, several) {
+		if !Takes(sh, len(workers) > 1) {
 			continue
 		}
 		p, drawn, err := workers[i].srv.PreviewSignups(files, sh.Tournament)
 		if err != nil {
-			out.Disciplines[i].Error = err.Error()
+			shares[i].Error = err.Error()
 			continue
 		}
+		previews[i] = SharePreview{Preview: p, PoolsDrawn: drawn}
+	}
+	return CombineSignups(def, files, shares, previews), nil
+}
+
+// SharePreview is one discipline's check of an import.
+type SharePreview struct {
+	Preview    signup.Preview
+	PoolsDrawn bool
+}
+
+// CombineSignups is the disciplines' checks as one answer: per response, where it goes.
+// previews are by index into shares. Shared with the browser demo.
+func CombineSignups(def signup.Definition, files []signup.File, shares []SignupShare, previews map[int]SharePreview) EventSignupPreview {
+	out := EventSignupPreview{Rows: []EventSignupRow{}, Disciplines: shares}
+	var each [][]signup.Row
+	var who []int
+	for i := range shares {
+		sp, ok := previews[i]
+		if !ok {
+			continue
+		}
+		p := sp.Preview
 		out.Disciplines[i].Adding, out.Disciplines[i].AddingStaff = p.Adding, p.AddingStaff
-		out.Disciplines[i].Capacity, out.Disciplines[i].PoolsDrawn = p.Capacity, drawn
+		out.Disciplines[i].Capacity, out.Disciplines[i].PoolsDrawn = p.Capacity, sp.PoolsDrawn
 		out.Adding += p.Adding
 		out.AddingStaff += p.AddingStaff
 		each, who = append(each, p.Rows), append(who, i)
@@ -240,7 +278,7 @@ func (c *Coordinator) PreviewSignups(files []signup.File) (EventSignupPreview, e
 			}
 			out.Rows = append(out.Rows, EventSignupRow{Row: row})
 		}
-		return out, nil
+		return out
 	}
 	// Check gives one row per file, in order, so the disciplines' rows line up.
 	for f := range each[0] {
@@ -272,7 +310,7 @@ func (c *Coordinator) PreviewSignups(files []signup.File) (EventSignupPreview, e
 		}
 		out.Rows = append(out.Rows, row)
 	}
-	return out, nil
+	return out
 }
 
 func (c *Coordinator) previewSignups(w http.ResponseWriter, r *http.Request) {
@@ -306,7 +344,7 @@ func (c *Coordinator) importSignups(w http.ResponseWriter, r *http.Request) {
 	added, addedStaff := 0, 0
 	var failed []string
 	for i, sh := range shares {
-		if !takes(sh, len(workers) > 1) {
+		if !Takes(sh, len(workers) > 1) {
 			continue
 		}
 		a, s, err := workers[i].srv.ImportSignups(files, sh.Tournament)
