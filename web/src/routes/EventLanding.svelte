@@ -33,7 +33,7 @@
     s
       .toLocaleLowerCase()
       .normalize('NFD')
-      .replace(/[̀-ͯ]/g, '');
+      .replace(/[\u0300-\u036f]/g, '');
   // Somebody looking for their match knows their name, not which discipline the
   // organizer filed them under -- and may be in more than one.
   const found = $derived.by(() => {
@@ -70,37 +70,41 @@
         {/if}
       </section>
 
-      <section class="schedule">
-        <h2>{t('Programme')}</h2>
-        <Schedule items={info.schedule ?? []} />
-      </section>
+      <!-- The side column on anything wider than a phone: the programme, and the search
+           under it, stacked on their own rather than pinned to the rows beside them. -->
+      <div class="side">
+        <section class="schedule">
+          <h2>{t('Programme')}</h2>
+          <Schedule items={info.schedule ?? []} />
+        </section>
 
-      <section class="find">
-        <h2>{t('Find a name')}</h2>
-        <input
-          type="search"
-          bind:value={query}
-          placeholder={t('Your name, or your club')}
-          aria-label={t('Find a name')}
-        />
-        {#if query.trim().length >= 2}
-          {#if found.length === 0}
-            <p class="dim">{t('Nobody by that name is entered.')}</p>
-          {:else}
-            <ul class="found">
-              {#each found as f (`${f.slug}/${f.id}`)}
-                <li>
-                  <a href="/d/{f.slug}/who/{f.id}">
-                    <span class="who">{f.name}</span>
-                    <span class="club">{f.club ?? ''}</span>
-                    <span class="in">{f.discipline}</span>
-                  </a>
-                </li>
-              {/each}
-            </ul>
+        <section class="find">
+          <h2>{t('Find a name')}</h2>
+          <input
+            type="search"
+            bind:value={query}
+            placeholder={t('Your name, or your club')}
+            aria-label={t('Find a name')}
+          />
+          {#if query.trim().length >= 2}
+            {#if found.length === 0}
+              <p class="dim">{t('Nobody by that name is entered.')}</p>
+            {:else}
+              <ul class="found">
+                {#each found as f (`${f.slug}/${f.id}`)}
+                  <li>
+                    <a href="/d/{f.slug}/who/{f.id}">
+                      <span class="who">{f.name}</span>
+                      <span class="club">{f.club ?? ''}</span>
+                      <span class="in">{f.discipline}</span>
+                    </a>
+                  </li>
+                {/each}
+              </ul>
+            {/if}
           {/if}
-        {/if}
-      </section>
+        </section>
+      </div>
 
       <section class="disciplines">
         <h2>{t('Disciplines')}</h2>
@@ -365,31 +369,29 @@
     white-space: nowrap;
   }
 
+  .side {
+    display: grid;
+    gap: 0.8rem;
+    align-content: start;
+    min-width: 0;
+  }
+
   @media (min-width: 46rem) {
     .layout {
       grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
       align-items: start;
     }
-    .welcome,
-    .disciplines {
-      grid-column: 1;
-    }
-    .schedule,
-    .find {
-      grid-column: 2;
-    }
     .welcome {
+      grid-column: 1;
       grid-row: 1;
     }
-    .schedule {
-      grid-row: 1 / span 2;
-    }
     .disciplines {
-      grid-row: 2 / span 2;
+      grid-column: 1;
+      grid-row: 2;
     }
-    .find {
-      grid-row: 3;
-      align-self: start;
+    .side {
+      grid-column: 2;
+      grid-row: 1 / span 2;
     }
   }
 </style>
