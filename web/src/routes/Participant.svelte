@@ -99,7 +99,7 @@
         >
           {#each roster as c (c.id)}
             <li class:out={c.withdrawn}>
-              <a class="fit-row" href={dhref(`/who/${c.id}`)}>
+              <a class="fit-row" href={c.person ? `/who/${c.person}` : dhref(`/who/${c.id}`)}>
                 <span class="who">{c.name}</span>
                 <span class="club">{c.club}</span>
                 {#if c.withdrawn}<span class="tag">{t('withdrawn')}</span>{/if}

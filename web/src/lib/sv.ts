@@ -440,6 +440,8 @@ export const sv: Record<string, string> = {
   'No such competitor': 'Ingen sådan fäktare',
   'That name is not in this tournament. It may be in another discipline.':
     'Det namnet finns inte i den här tävlingen. Det kan finnas i en annan disciplin.',
+  'Nobody by that link is in this event.': 'Ingen med den länken finns i den här tävlingen.',
+  'Not entered in anything just now.': 'Inte anmäld till något just nu.',
   'This competitor has withdrawn. Their results are voided and do not count towards anyone else’s standing.':
     'Den här fäktaren har avanmält sig. Resultaten är ogiltiga och räknas inte in i någon annans tabell.',
   Rank: 'Placering',

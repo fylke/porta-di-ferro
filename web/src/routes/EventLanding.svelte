@@ -35,19 +35,31 @@
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '');
   // Somebody looking for their match knows their name, not which discipline the
-  // organizer filed them under -- and may be in more than one.
+  // organizer filed them under -- and may be in more than one, which is one person with
+  // one page for the whole day (phase 3).
   const found = $derived.by(() => {
     const q = fold(query.trim());
     if (q.length < 2 || !view) return [];
-    const out: { slug: string; discipline: string; id: string; name: string; club?: string }[] = [];
+    const byPerson = new Map<string, { key: string; href: string; name: string; club?: string; in: string[] }>();
     for (const d of view.disciplines) {
       for (const e of d.entrants) {
-        if (fold(e.name).includes(q) || fold(e.club ?? '').includes(q)) {
-          out.push({ slug: d.slug, discipline: d.name, ...e });
+        if (!fold(e.name).includes(q) && !fold(e.club ?? '').includes(q)) continue;
+        const key = e.person || `${d.slug}/${e.id}`;
+        const row = byPerson.get(key);
+        if (row) {
+          row.in.push(d.name);
+          continue;
         }
+        byPerson.set(key, {
+          key,
+          href: e.person ? `/who/${e.person}` : `/d/${d.slug}/who/${e.id}`,
+          name: e.name,
+          club: e.club,
+          in: [d.name],
+        });
       }
     }
-    return out.sort((a, b) => a.name.localeCompare(b.name)).slice(0, 30);
+    return [...byPerson.values()].sort((a, b) => a.name.localeCompare(b.name)).slice(0, 30);
   });
 </script>
 
@@ -91,12 +103,12 @@
               <p class="dim">{t('Nobody by that name is entered.')}</p>
             {:else}
               <ul class="found">
-                {#each found as f (`${f.slug}/${f.id}`)}
+                {#each found as f (f.key)}
                   <li>
-                    <a href="/d/{f.slug}/who/{f.id}">
+                    <a href={f.href}>
                       <span class="who">{f.name}</span>
                       <span class="club">{f.club ?? ''}</span>
-                      <span class="in">{f.discipline}</span>
+                      <span class="in">{f.in.join(', ')}</span>
                     </a>
                   </li>
                 {/each}
