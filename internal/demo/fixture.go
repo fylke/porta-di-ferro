@@ -72,7 +72,9 @@ func fixture(rules match.Ruleset, limits tournament.Limits) ([]store.Competitor,
 			{At: "09:30", Label: "Longsword, pools", Kind: "discipline",
 				Tournament: "longsword-pools", Capacity: 32},
 			{At: "12:00", Ends: "13:00", Label: "Lunch", Kind: "break"},
-			{At: "13:00", Label: "Longsword, eliminations", Kind: "discipline"},
+			// The same discipline as the pools, so the signup offers the longsword once and
+			// the event import has nobody to put in a row of its own (phase 3).
+			{At: "13:00", Label: "Longsword, eliminations", Kind: "discipline", Tournament: "longsword-pools"},
 			{At: "15:00", Label: "Sabre, pools", Kind: "discipline",
 				Tournament: "sabre-pools", Capacity: 16},
 			{At: "17:00", Label: "Prize giving"},
