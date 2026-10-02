@@ -1,6 +1,11 @@
 <script lang="ts">
-  import { route, query } from './router.svelte';
+  import { onMount } from 'svelte';
+  import { discipline, route, query } from './router.svelte';
+  import { hall } from './lib/event.svelte';
   import Organizer from './routes/Organizer.svelte';
+  import EventAdmin from './routes/EventAdmin.svelte';
+  import EventLanding from './routes/EventLanding.svelte';
+  import DisciplinePicker from './routes/DisciplinePicker.svelte';
   import Participant from './routes/Participant.svelte';
   import Person from './routes/Person.svelte';
   import Info from './routes/Info.svelte';
@@ -26,17 +31,36 @@
   const audienceMatch = $derived(route('/display/audience/:n'));
   const scoreMatch = $derived(route('/score/:mat'));
   const personMatch = $derived(route('/who/:id'));
+
+  // One event, many disciplines (docs/proposals/one-event-many-disciplines.md §6). A page
+  // with a discipline in its address -- /d/open-sabre/score/1 -- is that discipline's, and
+  // every route below is matched with the prefix taken off. A page without one is the
+  // event's own while the event runs several disciplines, and the one discipline's, as it
+  // always was, while it runs one. Which of the two is known only from the event, so the
+  // unprefixed pages wait for a first look at it: a few milliseconds on the LAN, a cached
+  // copy or at most a few seconds without it.
+  const slug = $derived(discipline());
+  const eventPage = $derived(!slug && hall.multi);
+  onMount(() => void hall.load());
 </script>
 
-{#if route('/')}
+{#if !slug && !hall.ready}
+  <!-- The first look at the event. -->
+{:else if eventPage && route('/')}
+  <EventLanding />
+{:else if eventPage && route('/admin')}
+  <EventAdmin />
+{:else if route('/')}
   <!-- The landing page is the competitors' and the spectators' (issue #98). What used to
        be here is at /admin: the address in the hall is on a poster by the door, and
        everyone who scans it lands somewhere they cannot break anything. -->
   <Participant />
 {:else if route('/admin')}
-  <Organizer />
+  <Organizer multi={hall.multi} />
 {:else if route('/info')}
   <Info />
+{:else if eventPage}
+  <DisciplinePicker />
 {:else if personMatch}
   <Person id={personMatch.id} />
 {:else if route('/score')}

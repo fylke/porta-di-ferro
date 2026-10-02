@@ -1,6 +1,6 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { api, type EventInfo, type ScheduleItem, type Snapshot } from '../api';
+  import type { EventInfo, ScheduleItem } from '../api';
   import { t } from '../lib/i18n.svelte';
 
   /**
@@ -12,12 +12,20 @@
    * change because they hold one value each; this holds a paragraph and a list, and an
    * autosave that fires mid-sentence would push half-written text to every screen in the
    * venue.
+   *
+   * The day belongs to the event (docs/proposals/one-event-many-disciplines.md §7): this
+   * is on the event's admin page, or on the one discipline's while there is only one.
+   * Which is the caller's business; it hands over the day as it stands and how to save it.
    */
-  let { snapshot, onchange }: { snapshot: Snapshot; onchange: () => void } = $props();
+  let {
+    event,
+    save: send,
+    onchange,
+  }: { event: EventInfo; save: (event: EventInfo) => Promise<unknown>; onchange: () => void } = $props();
 
   // Seeded once, like the tournament setup above it: the organizer is the only writer,
   // and a field that rewrites itself under the cursor is worse than one briefly stale.
-  const initial = untrack(() => snapshot.tournament.event ?? {});
+  const initial = untrack(() => event);
   let welcome = $state(initial.welcome ?? '');
   let ssid = $state(initial.wifi?.ssid ?? '');
   let password = $state(initial.wifi?.password ?? '');
@@ -54,13 +62,17 @@
     error = '';
     saving = true;
     try {
-      const event: EventInfo = {
+      // On top of the day as it stands now, not as it was when the page opened: the save
+      // replaces the whole of it, and the signup settings beside these three fields are
+      // edited elsewhere. Sending only these used to wipe them.
+      const next: EventInfo = {
+        ...event,
         welcome,
         // Blank labels are how a row is removed; the server drops them too.
         schedule: schedule.filter((i) => (i.label ?? '').trim() !== ''),
         wifi: { ssid, password, security: security as 'WPA' | 'WEP' | 'nopass' },
       };
-      await api.saveEvent(event);
+      await send(next);
       saved = true;
       onchange();
     } catch (e) {

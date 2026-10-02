@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api, type Address } from '../api';
-  import { Live } from '../lib/live.svelte';
+  import { hall } from '../lib/event.svelte';
   import { t, lang } from '../lib/i18n.svelte';
   import LangToggle from './LangToggle.svelte';
   import Schedule from './Schedule.svelte';
@@ -16,23 +16,25 @@
    *
    * It is a printout first. The PDF beside it is the same content laid out for A4, and
    * the page itself prints directly from a browser as well.
+   *
+   * One sheet for the whole event, however many disciplines it runs: there is one door and
+   * one address (docs/proposals/one-event-many-disciplines.md §6).
    */
-  const live = new Live();
   let addresses = $state<Address[]>([]);
 
   onMount(() => {
-    live.start();
+    void hall.refresh();
+    hall.follow();
     api
       .addresses()
       .then((a) => (addresses = a))
       .catch(() => {
         // No list means no address to advertise, which the page says below.
       });
-    return () => live.stop();
+    return () => hall.unfollow();
   });
 
-  const snapshot = $derived(live.snapshot);
-  const event = $derived(snapshot?.tournament.event ?? {});
+  const event = $derived(hall.view?.info ?? {});
   const wifi = $derived(event.wifi ?? {});
 
   // Substituted at build time: false in the real application, and everything behind it
@@ -86,7 +88,7 @@
     <LangToggle />
   </header>
 
-  <h1>{snapshot?.instance.name || 'Porta di Ferro'}</h1>
+  <h1>{hall.view?.name || 'Porta di Ferro'}</h1>
   <p class="strap">{t('Results and schedule on your phone')}</p>
 
   <div class="sheet">

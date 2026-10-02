@@ -7,6 +7,8 @@
   import LangToggle from './LangToggle.svelte';
   import Schedule from './Schedule.svelte';
   import Standings from './Standings.svelte';
+  import { dhref, discipline } from '../router.svelte';
+  import { hall } from '../lib/event.svelte';
 
   /**
    * What a competitor or a spectator gets when they scan the code on the door (issue #98).
@@ -57,6 +59,8 @@
     <h1>
       {snapshot?.instance.name || 'Porta di Ferro'}
     </h1>
+    <!-- One of several disciplines: the way back to all of them. -->
+    {#if discipline() && hall.multi}<a class="event" href="/">&larr; {t('Whole event')}</a>{/if}
     <LangToggle />
   </header>
 
@@ -92,7 +96,7 @@
         >
           {#each roster as c (c.id)}
             <li class:out={c.withdrawn}>
-              <a class="fit-row" href="/who/{c.id}">
+              <a class="fit-row" href={dhref(`/who/${c.id}`)}>
                 <span class="who">{c.name}</span>
                 <span class="club">{c.club}</span>
                 {#if c.withdrawn}<span class="tag">{t('withdrawn')}</span>{/if}
@@ -112,7 +116,7 @@
             {@const current = matchOn(snapshot, mat)}
             {@const next = upcomingOn(snapshot, mat, 1)[0] ?? null}
             <li>
-              <a class="mat" href="/display/mat/{mat}">
+              <a class="mat" href={dhref(`/display/mat/${mat}`)}>
                 <span class="matname">{t('Mat {n}', { n: mat })}</span>
                 {#if current}
                   <span class="now">
@@ -180,6 +184,10 @@
     display: flex;
     align-items: baseline;
     gap: 0.5rem;
+  }
+  .event {
+    font-size: 0.9rem;
+    white-space: nowrap;
   }
   .count {
     font-size: 0.85rem;
