@@ -141,7 +141,9 @@ type Source interface {
 func (s *Server) snapshot() (Snapshot, error) {
 	snap, err := s.PlacedSnapshot()
 	if err == nil && s.mats != nil {
-		snap.Mats = s.mats.CurrentMats(s.self().Slug)
+		var etas map[string]string
+		snap.Mats, etas = s.mats.Hall(s.self().Slug)
+		ApplyEtas(&snap, etas)
 	}
 	return snap, err
 }

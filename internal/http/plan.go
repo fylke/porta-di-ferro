@@ -544,7 +544,7 @@ func OnEventMats(snap *Snapshot, slug string, placed map[string]store.Placement,
 	snap.Mats = map[int]string{}
 }
 
-// CurrentFrom is what CurrentMats answers, from a view of the hall already built.
+// CurrentFrom is the Mats half of what Hall answers, from a view of the hall already built.
 func CurrentFrom(view MatsView, slug string) map[int]string {
 	out := map[int]string{}
 	for _, m := range view.Mats {
