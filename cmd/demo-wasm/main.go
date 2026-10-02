@@ -21,7 +21,7 @@ import (
 )
 
 func main() {
-	d := demo.New()
+	d := demo.NewEvent()
 
 	api := js.Global().Get("Object").New()
 	api.Set("request", js.FuncOf(func(_ js.Value, args []js.Value) any {
@@ -46,7 +46,7 @@ func main() {
 // A panic here would kill the Go runtime and leave the page with an adapter that answers
 // nothing, which looks to a visitor like the whole application is broken. So it is
 // recovered into a 500, and the demo carries on.
-func request(d *demo.Demo, args []js.Value) (out string) {
+func request(d *demo.Event, args []js.Value) (out string) {
 	defer func() {
 		if r := recover(); r != nil {
 			b, _ := json.Marshal(demo.Response{

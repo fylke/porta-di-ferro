@@ -75,18 +75,35 @@ function toResponse(res: DemoResponse): Response {
 
 const streams = new Set<DemoEventSource>();
 
+/**
+ * What a stream at this URL is sent: the event's view on /api/event/stream, and a
+ * discipline's snapshot on its own stream -- /api/d/{slug}/stream, or /api/stream while
+ * the event has one discipline. The same frames the server's hubs push.
+ */
+function frameFor(url: string): string | null {
+  const path = url.startsWith('http') ? new URL(url).pathname : url;
+  if (path.endsWith('/api/event/stream')) {
+    const res = call('GET', '/api/event');
+    return res.status === 200 ? JSON.stringify({ kind: 'event', data: JSON.parse(res.body) }) : null;
+  }
+  const res = call('GET', path.replace(/\/stream$/, '/state'));
+  return res.status === 200 ? JSON.stringify({ kind: 'state', data: JSON.parse(res.body) }) : null;
+}
+
 function broadcast(): void {
-  if (streams.size === 0) return;
-  const res = call('GET', '/api/state');
-  if (res.status !== 200) return;
-  const frame = JSON.stringify({ kind: 'state', data: JSON.parse(res.body) });
-  for (const s of streams) s.push(frame);
+  // Several pages in one tab can follow the same stream; each frame is built once.
+  const frames = new Map<string, string | null>();
+  for (const s of streams) {
+    if (!frames.has(s.url)) frames.set(s.url, frameFor(s.url));
+    const frame = frames.get(s.url);
+    if (frame) s.push(frame);
+  }
 }
 
 /**
  * Enough of EventSource for the client: the three handlers it sets and close(). It is
- * not a general implementation and is not meant to be -- it stands in for exactly one
- * endpoint, /api/stream.
+ * not a general implementation and is not meant to be -- it stands in for the streams the
+ * server has, the event's and each discipline's.
  */
 class DemoEventSource extends EventTarget {
   onopen: ((ev: Event) => void) | null = null;
@@ -249,7 +266,9 @@ function installLinks(navigate: (to: string) => void): void {
       const raw = anchor.getAttribute('href');
       if (!raw || !raw.startsWith('/')) return;
 
-      if (raw.startsWith('/api/export') || raw.startsWith('/api/signup/')) {
+      // A discipline's files are under its prefix in an event of several (#102).
+      const bare = raw.replace(/^\/api\/d\/[^/]+/, '/api');
+      if (bare.startsWith('/api/export') || bare.startsWith('/api/signup/')) {
         ev.preventDefault();
         const res = call('GET', raw);
         if (res.status !== 200) return;
