@@ -35,14 +35,22 @@ export class Live {
   replaced = $state<{ match: string; nonce: number } | null>(null);
 
   private source: EventSource | null = null;
-  /** The discipline this page follows: the one in its address, or the event's only one. */
-  private readonly slug = discipline();
+  /**
+   * The discipline this page follows: the one in its address, or the event's only one --
+   * or one named outright, by a screen showing a discipline's roster from /display.
+   */
+  private readonly slug: string;
   /**
    * Where the last snapshot this device saw is kept, so a client can start with no
    * server. One per discipline, so a device that has been on two never opens one with
    * the other's schedule; the unprefixed pages keep the key they always had.
    */
-  private readonly cache = `porta.${namespace(this.slug)}snapshot`;
+  private readonly cache: string;
+
+  constructor(slug = discipline()) {
+    this.slug = slug;
+    this.cache = `porta.${namespace(slug)}snapshot`;
+  }
 
   get snapshot(): Snapshot | null {
     return this.#snapshot;

@@ -64,7 +64,8 @@
    * register, the setup, the pool tables -- with the mat picker somewhere below it. That
    * is the organizer's page on the organizer's PC, and none of it is any use at a mat.
    */
-  const scoreURL = $derived(clientURL ? `${clientURL}${dhref('/score')}` : '');
+  // The score keepers' page is the hall's: a tablet picks a physical mat (phase 2).
+  const scoreURL = $derived(clientURL ? `${clientURL}/score` : '');
 
   async function refresh() {
     try {
@@ -89,7 +90,7 @@
       {#if multi}<a href="/admin">&larr; {t('The event')}</a>{/if}
       <a href={dhref('/')}>{t('Landing page')}</a>
       <a href="/info">{t('Info sheet')}</a>
-      <a href={dhref('/display/mats')} target="_blank" rel="noreferrer">{t('Displays')}</a>
+      <a href="/display/mats" target="_blank" rel="noreferrer">{t('Displays')}</a>
       <a href={dhref('/display/roster')} target="_blank" rel="noreferrer">{t('Roster')}</a>
       <a href={dhref('/print/pools')} target="_blank" rel="noreferrer">{t('Pool sheets')}</a>
       <a href="{base}/export.json">{t('Export JSON')}</a>
@@ -137,19 +138,19 @@
         {/if}
         {#if clientURL}
           <p class="hint">
-            {t('Spare screens open')} <span class="mono">{clientURL}{dhref('/display')}</span>
+            {t('Spare screens open')} <span class="mono">{clientURL}/display</span>
             {t('and are told what to show from here, under Screens — or go straight to')}
-            <span class="mono">{clientURL}{dhref('/display/mats')}</span>,
-            <span class="mono">{clientURL}{dhref('/display/audience/1')}</span> {t('or')}
+            <span class="mono">{clientURL}/display/mats</span>,
+            <span class="mono">{clientURL}/display/audience/1</span> {t('or')}
             <span class="mono">{clientURL}{dhref('/display/roster')}</span>. {t('Any device on the venue wifi can reach them.')}
           </p>
         {/if}
         <p class="links">
-          <a href={dhref('/score')}>{t('Score keeper')}</a>
-          {#each { length: snapshot.tournament.mats } as _, i (i)}
-            <a href={dhref(`/display/mat/${i + 1}`)}>{t('Mat {n}', { n: i + 1 })}</a>
+          <a href="/score">{t('Score keeper')}</a>
+          {#each { length: snapshot.eventMats ?? snapshot.tournament.mats } as _, i (i)}
+            <a href="/display/mat/{i + 1}">{t('Mat {n}', { n: i + 1 })}</a>
           {/each}
-          {#if demo}<a href={dhref('/display/audience/1')}>{t('Audience')}</a>{/if}
+          {#if demo}<a href="/display/audience/1">{t('Audience')}</a>{/if}
         </p>
       </div>
       {#if scoreURL}
@@ -170,7 +171,9 @@
 
     <Signup {snapshot} onchange={refresh} />
 
-    <Screens presence={live.presence} {snapshot} />
+    <!-- Screens and score keepers are the event's: here while there is one discipline,
+         on the event's page once there are several. -->
+    {#if !multi}<Screens />{/if}
 
     <Eliminations {snapshot} onchange={refresh} />
 

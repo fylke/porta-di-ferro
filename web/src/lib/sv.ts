@@ -212,6 +212,8 @@ export const sv: Record<string, string> = {
   'The event file could not be read, so the welcome, the programme and the wifi are blank until it is fixed. The disciplines run regardless.':
     'Tävlingsfilen kunde inte läsas, så välkomsttexten, programmet och wifi är tomma tills den är rättad. Disciplinerna körs ändå.',
   'The event’s files are in': 'Tävlingens filer finns i',
+  'Each discipline': 'Varje disciplin',
+  'Match roster: {name}': 'Matchlista: {name}',
 
   // --- match editor -------------------------------------------------------------------
   'Edit the match log': 'Redigera matchloggen',

@@ -1,11 +1,16 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import { keepAwake } from "../lib/wakelock";
   import { t } from "../lib/i18n.svelte";
   import { Live, nameLookup, roundLabel } from "./lib-display.svelte";
 
-  /** Every match in the event and where it stands. The screen competitors check. */
-  const live = new Live();
+  /**
+   * Every match in a discipline and where it stands. The screen competitors check. The
+   * discipline is the page's own, or the one a screen was assigned from /display.
+   */
+  let { slug }: { slug?: string } = $props();
+  // Read once: the screen router re-creates this page when its assignment changes.
+  const live = untrack(() => (slug ? new Live(slug) : new Live()));
 
   onMount(() => {
     live.start();

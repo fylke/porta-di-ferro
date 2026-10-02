@@ -2,16 +2,19 @@
   import { onMount } from 'svelte';
   import { keepAwake } from '../lib/wakelock';
   import Scoreboard from './Scoreboard.svelte';
-  import { Clock, Live, liveElapsed, matchOn, namesFor, nextOn } from './lib-display.svelte';
+  import { Clock } from './lib-display.svelte';
+  import { MatsLive, matOf, slotElapsed, upcoming } from '../lib/mats.svelte';
   import { t } from '../lib/i18n.svelte';
 
   let { mat }: { mat: number } = $props();
 
-  const live = new Live();
+  // One physical mat of the event (phase 2), followed across disciplines: the scoreboard
+  // says which discipline is on it.
+  const live = new MatsLive();
   const clock = new Clock();
 
   onMount(() => {
-    live.start();
+    void live.start();
     clock.start();
     const release = keepAwake();
     return () => {
@@ -21,25 +24,28 @@
     };
   });
 
-  const match = $derived(matchOn(live.snapshot, mat));
-  const names = $derived(namesFor(live.snapshot, match));
-  const upcoming = $derived(nextOn(live.snapshot, mat));
-  const upcomingNames = $derived(namesFor(live.snapshot, upcoming));
-  const elapsed = $derived(liveElapsed(match, live, clock.now));
+  const here = $derived(matOf(live.view, mat));
+  const current = $derived(here?.current ?? null);
+  const match = $derived(current?.match ?? null);
+  const names = $derived({ red: current?.red ?? '', blue: current?.blue ?? '' });
+  const next = $derived(upcoming(here, 1)[0] ?? null);
+  const elapsed = $derived(slotElapsed(current, live.receivedAt, clock.now));
 </script>
 
 <main>
   <div class="board">
-    <Scoreboard {mat} {match} {names} {elapsed} discipline={live.snapshot?.instance.name ?? ''} />
+    <Scoreboard {mat} {match} {names} {elapsed} discipline={current?.disciplineName ?? ''} />
   </div>
   {#if match?.state.ended || !match}
     <footer>
-      {#if upcoming}
-        <span class="label">{t('Next on mat {n}', { n: mat })}</span>
+      {#if next}
+        <span class="label">
+          {t('Next on mat {n}', { n: mat })}{#if next.disciplineName !== current?.disciplineName} &middot; {next.disciplineName}{/if}
+        </span>
         <span class="up">
-          <span style="color: var(--bright-{upcoming.options.red})">{upcomingNames.red}</span>
+          <span style="color: var(--bright-{next.match.options.red})">{next.red}</span>
           {t('v')}
-          <span style="color: var(--bright-{upcoming.options.blue})">{upcomingNames.blue}</span>
+          <span style="color: var(--bright-{next.match.options.blue})">{next.blue}</span>
         </span>
       {:else}
         <span class="label">{t('No more matches on mat {n}', { n: mat })}</span>

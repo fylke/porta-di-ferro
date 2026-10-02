@@ -26,15 +26,19 @@
   // The target is a short path the organizer picked from a list: what to render and
   // for which mat. Anything unknown is treated as unassigned rather than guessed at.
   const target = $derived(beat.me?.target ?? '');
-  const shown = $derived.by((): { kind: string; mat: number; ids: string } => {
-    const [kind, arg = ''] = target.split('/');
+  // The mats are the hall's; a roster is a discipline's, "d/open-sabre/roster", or the
+  // only discipline's when there is just one.
+  const shown = $derived.by((): { kind: string; mat: number; ids: string; slug: string } => {
+    const none = { kind: '', mat: 0, ids: '', slug: '' };
+    const [kind, arg = '', rest = ''] = target.split('/');
     if (kind === 'mat' || kind === 'audience') {
       const mat = Number(arg);
-      return Number.isInteger(mat) && mat > 0 ? { kind, mat, ids: '' } : { kind: '', mat: 0, ids: '' };
+      return Number.isInteger(mat) && mat > 0 ? { ...none, kind, mat } : none;
     }
-    if (kind === 'mats') return { kind, mat: 0, ids: arg };
-    if (kind === 'roster') return { kind, mat: 0, ids: '' };
-    return { kind: '', mat: 0, ids: '' };
+    if (kind === 'mats') return { ...none, kind, ids: arg };
+    if (kind === 'roster') return { ...none, kind };
+    if (kind === 'd' && arg && rest === 'roster') return { ...none, kind: 'roster', slug: arg };
+    return none;
   });
 </script>
 
@@ -45,7 +49,7 @@
 {:else if shown.kind === 'mats'}
   <DisplayMats ids={shown.ids} />
 {:else if shown.kind === 'roster'}
-  <DisplayRoster />
+  {#key shown.slug}<DisplayRoster slug={shown.slug} />{/key}
 {:else}
   <main class="waiting">
     <p class="name">{deviceName()}</p>

@@ -11,7 +11,7 @@
  * A device that cannot reach the server starts from the last copy it saw, so a score
  * keeper's tablet opened with the LAN down still knows what kind of event it is in.
  */
-import { api, type EventView } from '../api';
+import { api, type EventView, type Presence } from '../api';
 
 const CACHE = 'porta.event';
 /** How long the first look waits for the server before going on without it. */
@@ -23,6 +23,8 @@ export class EventLive {
   ready = $state(false);
   connected = $state(false);
   error = $state('');
+  /** Every device in the hall and everything set aside, for the admin's Screens panel. */
+  presence = $state<Presence | null>(null);
   private source: EventSource | null = null;
 
   /** Several disciplines, so an address with none in it is the event's page. */
@@ -61,6 +63,7 @@ export class EventLive {
       try {
         const update = JSON.parse(ev.data) as { kind: string; data: unknown };
         if (update.kind === 'event') this.set(update.data as EventView);
+        if (update.kind === 'presence') this.presence = update.data as Presence;
       } catch {
         // A malformed frame is not worth taking the stream down for.
       }

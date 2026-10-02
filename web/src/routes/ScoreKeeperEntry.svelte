@@ -1,8 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { dhref, navigate } from '../router.svelte';
-  import { Live } from '../lib/live.svelte';
-  import { matchOn, namesFor } from './lib-display.svelte';
+  import { navigate } from '../router.svelte';
+  import { MatsLive } from '../lib/mats.svelte';
   import { t } from '../lib/i18n.svelte';
   import LangToggle from './LangToggle.svelte';
 
@@ -14,39 +13,37 @@
    * somewhere further down -- an organizer's screen, on the organizer's PC, none of it any
    * use at a mat. What a score keeper needs here is one decision, in buttons big enough to
    * hit without looking.
+   *
+   * The mats are the event's (phase 2): a tablet is bound to a physical mat and follows it
+   * from one discipline's work to the next, so this lists the hall's mats, each with the
+   * discipline it is on.
    */
-  const live = new Live();
+  const live = new MatsLive();
 
   // Started and stopped with the component, like every other route. Opening the stream at
   // module evaluation left an EventSource open after navigating on to /score/:mat, so the
   // device carried a dead subscription for the rest of the event.
   onMount(() => {
-    live.start();
+    void live.start();
     return () => live.stop();
   });
 
-  const mats = $derived(
-    live.snapshot ? Array.from({ length: live.snapshot.tournament.mats }, (_, i) => i + 1) : [],
-  );
+  const mats = $derived((live.view?.mats ?? []).map((m) => m.mat));
 
   // What is on each mat right now. A score keeper standing at a mat knows the two people
   // in front of them long before they know which number the organizer gave the mat, so
   // the names are the label that actually identifies the button.
   function upNext(mat: number) {
-    const match = matchOn(live.snapshot, mat);
-    if (!match) return null;
-    const names = namesFor(live.snapshot, match);
-    return { pool: match.pool, ...names };
+    const cur = live.view?.mats.find((m) => m.mat === mat)?.current;
+    if (!cur) return null;
+    return { pool: cur.match.pool, red: cur.red, blue: cur.blue, discipline: cur.disciplineName };
   }
 </script>
 
 <main>
   <div class="top"><LangToggle /></div>
   <h1>{t('Which mat?')}</h1>
-  {#if live.snapshot?.instance.name}
-    <p class="discipline">{live.snapshot.instance.name}</p>
-  {/if}
-  {#if live.error && !live.snapshot}
+  {#if live.error && !live.view}
     <p class="err">{t('Cannot reach the server:')} {live.error}</p>
   {:else if live.stale}
     <p class="err">{t('The server is out of reach. This is the schedule from the last time it was seen; scoring still works.')}</p>
@@ -54,11 +51,11 @@
   <div class="mats">
     {#each mats as mat (mat)}
       {@const up = upNext(mat)}
-      <button onclick={() => navigate(dhref(`/score/${mat}`))}>
+      <button onclick={() => navigate(`/score/${mat}`)}>
         <span class="n">{t('Mat {n}', { n: mat })}</span>
         <span class="up">
           {#if up}
-            {t('Pool {n}', { n: up.pool })} &middot; {up.red} {t('v')} {up.blue}
+            {#if up.discipline}{up.discipline} &middot; {/if}{#if up.pool}{t('Pool {n}', { n: up.pool })} &middot; {/if}{up.red} {t('v')} {up.blue}
           {:else}
             {t('Nothing up yet')}
           {/if}
@@ -86,12 +83,6 @@
   h1 {
     font-size: 2rem;
     margin: 0 0 1.5rem;
-  }
-  .discipline {
-    margin: -1rem 0 1.5rem;
-    font-size: 1.1rem;
-    font-weight: 700;
-    color: var(--amber-bright);
   }
   .mats {
     display: grid;

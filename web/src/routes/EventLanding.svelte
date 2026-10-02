@@ -142,7 +142,7 @@
                   <ul class="mats">
                     {#each d.mats.filter((m) => m.match) as m (m.mat)}
                       <li>
-                        <a href="{d.url}display/mat/{m.mat}">
+                        <a href="/display/mat/{m.mat}">
                           <span class="matname">{t('Mat {n}', { n: m.mat })}</span>
                           <span class="red" style="color: var(--bright-{m.redColour ?? 'red'})">{m.red}</span>
                           <span class="score mono">

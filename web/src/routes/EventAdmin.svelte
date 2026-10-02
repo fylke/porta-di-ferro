@@ -87,13 +87,20 @@
           <p class="hint warn">{t('This PC is not on a network another device could reach, so there is no address to hand out. Join it to the venue wifi and reload this page. Scoring on this PC still works.')}</p>
         {/if}
 
+        <!-- One address for every tablet: it picks a physical mat and follows it through
+             whatever disciplines the plan puts there (phase 2). -->
         <h3>{t('Score keepers')}</h3>
+        <p class="links">
+          <a href="/score">{clientURL ? `${clientURL}/score` : '/score'}</a>
+          <a class="quiet" href="/display/mats" target="_blank" rel="noreferrer">{t('Displays')}</a>
+        </p>
+        <h3>{t('Each discipline')}</h3>
         <ul class="perdiscipline">
           {#each view.disciplines.filter((d) => !d.error) as d (d.slug)}
             <li>
               <span class="dname">{d.name || t('Unnamed')}</span>
-              <a href="/d/{d.slug}/score">{clientURL ? `${clientURL}/d/${d.slug}/score` : `/d/${d.slug}/score`}</a>
-              <a class="quiet" href="/d/{d.slug}/admin">{t('Admin')}</a>
+              <a href="/d/{d.slug}/admin">{t('Admin')}</a>
+              <a class="quiet" href="/d/{d.slug}/">{t('Landing page')}</a>
             </li>
           {/each}
         </ul>
@@ -227,6 +234,14 @@
   }
   .hint.warn {
     color: var(--amber-bright);
+  }
+  .links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1rem;
+    margin: 0;
+    font-size: 0.9rem;
+    overflow-wrap: anywhere;
   }
   .perdiscipline {
     list-style: none;

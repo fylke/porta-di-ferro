@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
-  import { Live } from '../lib/live.svelte';
+  import { MatsLive, matOf, slotKey } from '../lib/mats.svelte';
   import { ScoreKeeperSession } from '../lib/scorekeeper.svelte';
   import { Clock, formatClock, isFlashing } from '../lib/clock.svelte';
   import { keepAwake } from '../lib/wakelock';
@@ -8,14 +8,15 @@
   import EndDialog from './EndDialog.svelte';
   import ConfirmDialog from './ConfirmDialog.svelte';
   import OptionsSheet from './OptionsSheet.svelte';
-  import { matchesOn, roundLabel, unfilledOn } from './lib-display.svelte';
+  import { roundLabel } from './lib-display.svelte';
   import { MSL, replay, type Side } from '../lib/match';
+  import type { Slot } from '../api';
   import * as db from '../lib/db';
   import { ended, penaltyLoss } from '../lib/outcome';
   import { summarise } from '../lib/drift';
   import { inSuddenDeath, suddenDeathDecided as decidedOnSuddenDeath } from '../lib/knockout';
   import { Heartbeat } from '../lib/presence.svelte';
-  import { dhref, discipline, navigate } from '../router.svelte';
+  import { navigate } from '../router.svelte';
   import { namespace } from '../lib/paths';
   import { t, locale } from '../lib/i18n.svelte';
   import {
@@ -31,14 +32,11 @@
 
   let { mat, variant = 'panels' }: { mat: number; variant?: string } = $props();
 
-  const live = new Live();
+  // The mat is the event's (phase 2): one queue of every discipline's work placed on it,
+  // followed on one stream. Matches are told apart by discipline as well as id, because
+  // every discipline has a "p1m1".
+  const live = new MatsLive();
   const clock = new Clock();
-  // The discipline the mat's matches are in, from the snapshot they come from: where their
-  // logs are kept on this device and where they are sent. A snapshot cached before
-  // disciplines existed has none, and its logs are the unprefixed ones.
-  const slug = $derived(live.snapshot?.instance.slug ?? discipline());
-  // What this device remembers about the mat, kept apart per discipline the page is for.
-  const ns = namespace(discipline());
   let sk = $state<ScoreKeeperSession | null>(null);
   let loadedMatch = $state('');
   let askUndo = $state(false);
@@ -69,7 +67,7 @@
   });
 
   $effect(() => {
-    beat.update({ mat, match: matchId });
+    beat.update({ mat, match: matchId, discipline: slug });
   });
 
   /**
@@ -81,7 +79,7 @@
     menuOpen = false;
     await sk?.log.release();
     await beat.release();
-    navigate(dhref('/score'));
+    navigate('/score');
   }
 
   // Every match on this mat, in running order. The server's own idea of which one is up
@@ -89,25 +87,34 @@
   // blindly. A finished match stays on screen, with its result, until the score keeper
   // presses Next match: the server moving the mat on the instant the end was written
   // meant the final score was replaced by the next two names before anyone had read it.
-  const queue = $derived(matchesOn(live.snapshot, mat));
-  let matchId = $state('');
+  // A bracket match whose competitors are not known yet is not something a mat can run
+  // and is left out until they are.
+  const here = $derived(matOf(live.view, mat));
+  const queue = $derived((here?.queue ?? []).filter((s) => s.match.red && s.match.blue));
+  // The match on screen, as discipline/match.
+  let current = $state('');
+  const slot = $derived(queue.find((s) => slotKey(s) === current) ?? null);
+  const matchId = $derived(slot?.match.id ?? '');
+  // The discipline the match is in: where its log is kept on this device and sent.
+  const slug = $derived(slot?.discipline ?? '');
   // Every match on the mat is done and the score keeper has said so.
   let exhausted = $state(false);
-  const rememberedKey = $derived(`porta.${ns}mat.${mat}.current`);
+  const rememberedKey = $derived(`porta.mat.${mat}.current`);
 
   // Matches this device has finished that the server may not know about yet -- the
   // whole point of running a pool offline. Found by replaying the logs on this device, so
   // they survive a reload, and kept up to date as matches end here.
   let localDone = $state(new Set<string>());
-  const queueKey = $derived(queue.map((m) => m.id).join(','));
+  const queueKey = $derived(queue.map(slotKey).join(','));
   $effect(() => {
-    const ids = queueKey ? queueKey.split(',') : [];
-    if (ids.length === 0) return;
+    const keys = queueKey ? queueKey.split(',') : [];
+    if (keys.length === 0) return;
     void (async () => {
       const done = new Set<string>();
-      for (const id of ids) {
-        const events = await db.read(slug, id);
-        if (events.length > 0 && replay(MSL, events).ended) done.add(id);
+      for (const key of keys) {
+        const cut = key.indexOf('/');
+        const events = await db.read(key.slice(0, cut), key.slice(cut + 1));
+        if (events.length > 0 && replay(MSL, events).ended) done.add(key);
       }
       // Merged rather than replaced, so a match that ended here since the scan began is
       // not forgotten; untracked, so the merge does not re-run the scan.
@@ -116,18 +123,19 @@
   });
 
   /** Open means neither the server nor this device has seen it end. */
-  function isOpen(m: { id: string; status: string }): boolean {
-    return m.status !== 'complete' && !localDone.has(m.id);
+  function isOpen(s: Slot): boolean {
+    return s.match.status !== 'complete' && !localDone.has(slotKey(s));
   }
 
   function firstOpen(): string {
-    return queue.find(isOpen)?.id ?? '';
+    const s = queue.find(isOpen);
+    return s ? slotKey(s) : '';
   }
 
   $effect(() => {
     if (queue.length === 0) return;
     // Still on a match the mat still has: stay there, finished or not.
-    if (matchId && queue.some((m) => m.id === matchId)) return;
+    if (current && queue.some((s) => slotKey(s) === current)) return;
     // Otherwise pick up where this device left off, or where the mat is.
     let remembered = '';
     try {
@@ -135,14 +143,14 @@
     } catch {
       // No memory on this browser; the mat's own position is the fallback.
     }
-    const open = queue.find((m) => m.id === remembered && isOpen(m));
-    matchId = open?.id ?? firstOpen();
+    const open = queue.find((s) => slotKey(s) === remembered && isOpen(s));
+    current = open ? slotKey(open) : firstOpen();
   });
 
   $effect(() => {
-    if (!matchId) return;
+    if (!current) return;
     try {
-      localStorage.setItem(rememberedKey, matchId);
+      localStorage.setItem(rememberedKey, current);
     } catch {
       // Fine without it.
     }
@@ -153,11 +161,12 @@
     // Let go of the finished match on the way out, so the log is flushed and the claim
     // released before the next device could want it.
     void sk?.log.release();
-    const i = queue.findIndex((m) => m.id === matchId);
+    const i = queue.findIndex((s) => slotKey(s) === current);
     const after = queue.slice(i + 1).find(isOpen);
-    const elsewhere = queue.find((m) => isOpen(m) && m.id !== matchId);
-    matchId = after?.id ?? elsewhere?.id ?? '';
-    if (!matchId) {
+    const elsewhere = queue.find((s) => isOpen(s) && slotKey(s) !== current);
+    const next = after ?? elsewhere;
+    current = next ? slotKey(next) : '';
+    if (!current) {
       exhausted = true;
       try {
         localStorage.removeItem(rememberedKey);
@@ -167,12 +176,12 @@
     }
   }
 
-  const view = $derived(queue.find((m) => m.id === matchId) ?? null);
+  const view = $derived(slot?.match ?? null);
 
   // Which side of this screen each competitor is on. This device's own choice, kept per
   // mat, and independent of the displays' -- so a score keeper who sits facing the mat
   // from the far side can mirror their screen without turning every scoreboard round.
-  const swapKey = $derived(`porta.${ns}mat.${mat}.swap`);
+  const swapKey = $derived(`porta.mat.${mat}.swap`);
   let swapHere = $state(false);
   $effect(() => {
     try {
@@ -191,19 +200,16 @@
   }
   const order = $derived<[Side, Side]>(swapHere ? ['blue', 'red'] : ['red', 'blue']);
   const options = $derived(sk ? sk.options : { red: 'red', blue: 'blue', swapDisplay: false });
-  const names = $derived.by(() => {
-    const byId = new Map((live.snapshot?.competitors ?? []).map((c) => [c.id, c.name]));
-    return {
-      red: view ? (byId.get(view.red) ?? t('Red')) : t('Red'),
-      blue: view ? (byId.get(view.blue) ?? t('Blue')) : t('Blue'),
-    };
+  const names = $derived({
+    red: slot?.red || t('Red'),
+    blue: slot?.blue || t('Blue'),
   });
 
   $effect(() => {
-    if (matchId && matchId !== loadedMatch) {
-      loadedMatch = matchId;
+    if (current && current !== loadedMatch && slot) {
+      loadedMatch = current;
       dismissedFinal = 0;
-      const next = new ScoreKeeperSession(matchId, untrack(() => slug));
+      const next = new ScoreKeeperSession(untrack(() => matchId), untrack(() => slug));
       sk?.log.stop();
       sk = next;
       void next.load();
@@ -213,13 +219,13 @@
   // The organizer rewrote the log of the match on this screen: take the server's copy.
   $effect(() => {
     const r = live.replaced;
-    if (r && r.match === matchId && sk) void sk.log.reload();
+    if (r && r.match === matchId && r.discipline === slug && sk) void sk.log.reload();
   });
 
   const matchState = $derived(sk ? sk.state : null);
   $effect(() => {
-    if (matchState?.ended && matchId && !localDone.has(matchId)) {
-      localDone = new Set([...localDone, matchId]);
+    if (matchState?.ended && current && !localDone.has(current)) {
+      localDone = new Set([...localDone, current]);
     }
   });
   const elapsed = $derived(sk && matchState ? clock.elapsed(matchState, sk.runningSince) : 0);
@@ -324,16 +330,18 @@
   // this match has not started. Worked out from the running order rather than from Next
   // match having been pressed, so it is still offered after a reload or a handover. The
   // timer is this device's own and never reaches the log.
+  // The match before, if it was the same discipline's: competitor ids repeat across
+  // disciplines, and "c7" in the Sabre pool before is somebody else.
   const previous = $derived.by(() => {
-    const i = queue.findIndex((m) => m.id === matchId);
+    const i = queue.findIndex((s) => slotKey(s) === current);
     const before = i > 0 ? queue[i - 1] : null;
-    return before && !isOpen(before) ? before : null;
+    return before && before.discipline === slug && !isOpen(before) ? before.match : null;
   });
   const resting = $derived(backToBack(previous, view));
   const untouched = $derived(
     !!matchState && !matchState.ended && !matchState.running && elapsed === 0 && matchState.undoableSeq === 0,
   );
-  const restKey = $derived(`porta.rest.${ns}${matchId}`);
+  const restKey = $derived(`porta.rest.${namespace(slug)}${matchId}`);
   let restLength = $state(REST_DEFAULT_MS);
   let restUntil = $state<number | null>(null);
 
@@ -458,7 +466,7 @@
         <button role="menuitem" onclick={() => void handOver()}>
           <span>{t('Hand over this mat')}</span><span class="why">{t('to another device')}</span>
         </button>
-        <a role="menuitem" href={dhref(`/score/${mat}?variant=${variant === 'panels' ? 'edge' : 'panels'}`)}>
+        <a role="menuitem" href="/score/{mat}?variant={variant === 'panels' ? 'edge' : 'panels'}">
           {t('Try the other layout')}
         </a>
         <div class="menu-lang"><span>{t('Language')}</span><LangToggle compact /></div>
@@ -539,9 +547,9 @@
           {:else if live.stale}
             {t('Offline · schedule from {time}', { time: new Date(live.cachedAt).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' }) })}
           {:else if view.round}
-            {t('Mat {n}', { n: mat })} &middot; {roundLabel(view)}
+            {#if slot?.disciplineName}{slot.disciplineName} &middot; {/if}{t('Mat {n}', { n: mat })} &middot; {roundLabel(view)}
           {:else}
-            {#if live.snapshot?.instance.name}{live.snapshot.instance.name} &middot; {/if}{t('Mat {n}', { n: mat })} &middot; {t('pool {n}', { n: view.pool })}
+            {#if slot?.disciplineName}{slot.disciplineName} &middot; {/if}{t('Mat {n}', { n: mat })} &middot; {t('pool {n}', { n: view.pool })}
           {/if}
         </div>
       </div>
@@ -592,8 +600,8 @@
     <div class="waiting">
       {#if live.error && queue.length === 0}
         <p>{live.error}</p>
-      {:else if unfilledOn(live.snapshot, mat).length > 0}
-        <p>{t('Waiting for the {round}.', { round: roundLabel(unfilledOn(live.snapshot, mat)[0]).toLowerCase() })}</p>
+      {:else if (here?.waiting ?? []).length > 0}
+        <p>{t('Waiting for the {round}.', { round: roundLabel(here!.waiting![0].match).toLowerCase() })}</p>
         <p class="dim">{t('Its competitors come from matches still running on the other mats.')}</p>
       {:else if exhausted || (queue.length > 0 && !firstOpen())}
         <p>{t('Every match on mat {n} is done.', { n: mat })}</p>
@@ -613,7 +621,7 @@
       detail={t('Take it over on this device? Anything the other device has not yet sent will be set aside for the organizer rather than counted.')}
       confirmLabel={t('Take over on this device')}
       onConfirm={() => void sk?.log.takeOver()}
-      onCancel={() => navigate(dhref('/score'))}
+      onCancel={() => navigate('/score')}
     />
   {/if}
 

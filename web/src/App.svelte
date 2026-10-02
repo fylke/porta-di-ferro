@@ -41,6 +41,12 @@
   // copy or at most a few seconds without it.
   const slug = $derived(discipline());
   const eventPage = $derived(!slug && hall.multi);
+  // The mats are the event's (phase 2): the score keeper and the mat displays are pages of
+  // the hall, never of one discipline, so their addresses never ask which discipline.
+  const matPage = $derived(
+    !!scoreMatch || !!matMatch || !!audienceMatch || route('/score') !== null || route('/display') !== null ||
+      route('/display/mats') !== null,
+  );
   onMount(() => void hall.load());
 </script>
 
@@ -59,7 +65,7 @@
   <Organizer multi={hall.multi} />
 {:else if route('/info')}
   <Info />
-{:else if eventPage}
+{:else if eventPage && !matPage}
   <DisciplinePicker />
 {:else if personMatch}
   <Person id={personMatch.id} />
