@@ -3,6 +3,11 @@
 // It is the whole application. Download one file, run it, and a tournament is running on
 // the venue LAN in under five minutes -- that is the acceptance criterion the project
 // exists to meet (docs/design.md §1), not packaging polish at the end.
+//
+// One run is one event: every discipline of the day, at one address, in one process
+// (docs/proposals/one-event-many-disciplines.md). The process is watched by a copy of
+// itself that starts it again if it dies, so a crash costs the hall a few seconds rather
+// than the organizer finding a closed window.
 package main
 
 import (
@@ -18,9 +23,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/fylke/porta-di-ferro/internal/event"
 	httpapi "github.com/fylke/porta-di-ferro/internal/http"
 	"github.com/fylke/porta-di-ferro/internal/lan"
-	"github.com/fylke/porta-di-ferro/internal/store"
+	"github.com/fylke/porta-di-ferro/internal/watchdog"
 	"github.com/fylke/porta-di-ferro/web"
 )
 
@@ -29,11 +35,10 @@ import (
 var version = "dev"
 
 func main() {
-	dir := flag.String("dir", defaultDir(), "tournament data directory")
+	dir := flag.String("dir", defaultDir(), "event data directory")
 	port := flag.Int("port", 8080, "port to listen on")
-	name := flag.String("name", "", "the discipline this run is for, shown on every page")
-	parent := flag.String("parent", "", "URL of the instance that started this one")
 	noBrowser := flag.Bool("no-browser", false, "do not open a browser on start")
+	noWatchdog := flag.Bool("no-watchdog", false, "run the server directly, without restarting it if it stops")
 	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
 
@@ -42,33 +47,31 @@ func main() {
 		return
 	}
 
-	st, err := store.Open(*dir)
+	if !*noWatchdog && !watchdog.IsChild() {
+		// The browser opens on the first start only; a restart is meant to go unnoticed.
+		os.Exit(watchdog.Run(os.Args[1:], []string{"-no-browser"}, watchdog.Default, log.Printf))
+	}
+
+	folder, err := event.Open(*dir)
 	if err != nil {
-		fatal("could not open the tournament directory %s: %v", *dir, err)
+		fatal("could not open the event folder %s: %v", *dir, err)
 	}
-
-	// A sibling is told its discipline on the command line; the first run is started by a
-	// shortcut and has to remember its own. Renaming it from the organizer page writes it
-	// into the tournament, and this is where it comes back (issue #80).
-	discipline := *name
-	if discipline == "" {
-		if t, err := st.Tournament(); err == nil {
-			discipline = t.Discipline
-		}
+	coord, err := httpapi.NewCoordinator(folder, web.Assets())
+	if err != nil {
+		fatal("could not load the event in %s: %v", *dir, err)
 	}
+	view := coord.View()
 
-	srv := httpapi.New(st, web.Assets(), httpapi.Instance{Name: discipline, Port: *port, Parent: *parent})
-	addr := fmt.Sprintf(":%d", *port)
 	httpServer := &http.Server{
-		Addr:    addr,
-		Handler: srv.Handler(),
+		Addr:    fmt.Sprintf(":%d", *port),
+		Handler: coord.Handler(),
 		// No read timeout: an SSE stream is meant to stay open.
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
 	addrs := lan.Addresses()
 	clients := clientURL(addrs, *port)
-	banner(addrs, *dir, *port, discipline)
+	banner(addrs, *dir, *port, view)
 
 	go func() {
 		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -80,11 +83,11 @@ func main() {
 	if !*noBrowser {
 		// Choosing a server over a desktop application means "now open your browser" is
 		// part of the install. Opening it ourselves is the mitigation.
-		openBrowser(fmt.Sprintf("http://localhost:%d/", *port))
+		openBrowser(fmt.Sprintf("http://localhost:%d/admin", *port))
 	}
 
 	quit := make(chan struct{})
-	go runTray(clients, fmt.Sprintf("http://localhost:%d/", *port), quit)
+	go runTray(clients, fmt.Sprintf("http://localhost:%d/admin", *port), quit)
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
@@ -93,30 +96,30 @@ func main() {
 	case <-quit:
 	}
 
-	// Closing the discipline the organizer started closes the ones it started.
-	srv.StopChildren()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	httpServer.Shutdown(ctx)
-	fmt.Println("\nStopped. Your tournament is saved in", *dir)
+	coord.Close()
+	fmt.Println("\nStopped. Your event is saved in", *dir)
 }
 
-func banner(addrs []lan.Address, dir string, port int, name string) {
+func banner(addrs []lan.Address, dir string, port int, view httpapi.EventView) {
 	fmt.Println()
-	if name != "" {
-		fmt.Println("  Porta di Ferro", version, "--", name)
+	if view.Name != "" {
+		fmt.Println("  Porta di Ferro", version, "--", view.Name)
 	} else {
 		fmt.Println("  Porta di Ferro", version)
 	}
 	fmt.Println()
-	fmt.Println("  Organizer      http://localhost:" + fmt.Sprint(port) + "/   (this PC only)")
+	fmt.Println("  Organizer      http://localhost:" + fmt.Sprint(port) + "/admin   (this PC only)")
 	if len(addrs) == 0 {
 		fmt.Println()
 		fmt.Println("  No network address found -- clients on other devices cannot reach this PC.")
 		fmt.Println("  Join this PC to the venue wifi and restart.")
 	} else {
 		base := url(addrs[0], port)
-		fmt.Println("  Score keepers  " + base + "/score   (" + describe(addrs[0]) + ")")
+		fmt.Println("  Everyone       " + base + "/   (" + describe(addrs[0]) + ")")
+		fmt.Println("  Score keepers  " + base + "/score")
 		fmt.Println("  Displays       " + base + "/display/mats")
 		// Every other network this PC is on, named. An organizer whose PC is on both a
 		// wired office LAN and the hall wifi cannot be guessed at from here, and being
@@ -129,6 +132,21 @@ func banner(addrs []lan.Address, dir string, port int, name string) {
 				fmt.Printf("                 %-24s (%s)\n", url(a, port), describe(a))
 			}
 		}
+	}
+	fmt.Println()
+	for _, d := range view.Disciplines {
+		name := d.Name
+		if name == "" {
+			name = "(not named yet)"
+		}
+		line := fmt.Sprintf("  Discipline     %s   /d/%s/", name, d.Slug)
+		if d.Error != "" {
+			line += "   NOT LOADED: " + d.Error
+		}
+		fmt.Println(line)
+	}
+	if view.InfoError != "" {
+		fmt.Println("  Event file     could not be read: " + view.InfoError)
 	}
 	fmt.Println("  Data           " + dir)
 	fmt.Println()
@@ -160,6 +178,9 @@ func clientURL(addrs []lan.Address, port int) string {
 	return url(addrs[0], port)
 }
 
+// defaultDir is the folder every install has used. It held one tournament before events
+// existed; it now holds the event, and the tournament that was in it becomes the event's
+// first discipline the first time this version opens it.
 func defaultDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -168,8 +189,9 @@ func defaultDir() string {
 	return filepath.Join(home, "Porta di Ferro", "tournament")
 }
 
+// fatal is for failures a restart cannot fix, so the watchdog does not try.
 func fatal(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, "\n  "+format+"\n\n", args...)
 	log.SetFlags(0)
-	os.Exit(1)
+	os.Exit(watchdog.ExitNoRestart)
 }

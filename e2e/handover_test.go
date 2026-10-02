@@ -231,7 +231,7 @@ func TestServerAssignedDisplays(t *testing.T) {
 	if !found {
 		t.Errorf("the organizer should see the screen, alive, with its target: %+v", p.Clients)
 	}
-	if _, err := os.Stat(filepath.Join(s.dir, "displays.json")); err != nil {
+	if _, err := os.Stat(filepath.Join(s.disciplineDir(t), "displays.json")); err != nil {
 		t.Errorf("the assignment should be on disk: %v", err)
 	}
 	if code := s.do(t, "POST", "/api/clients/x", map[string]any{"role": "toaster"}, nil); code != 400 {

@@ -43,10 +43,10 @@ func TestEditingAMatchLogRewritesItAndKeepsABackup(t *testing.T) {
 	if res.Backup == "" {
 		t.Fatal("the edit should have named its backup")
 	}
-	if _, err := os.Stat(filepath.Join(s.dir, "matches", res.Backup)); err != nil {
+	if _, err := os.Stat(filepath.Join(s.disciplineDir(t), "matches", res.Backup)); err != nil {
 		t.Errorf("the backup should be on disk: %v", err)
 	}
-	b, _ := os.ReadFile(filepath.Join(s.dir, "matches", res.Backup))
+	b, _ := os.ReadFile(filepath.Join(s.disciplineDir(t), "matches", res.Backup))
 	if !strings.Contains(string(b), `"reason":"time"`) || strings.Contains(string(b), `"seq":4`) {
 		t.Errorf("the backup should be the log as it was before the edit, is:\n%s", b)
 	}
