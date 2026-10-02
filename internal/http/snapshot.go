@@ -83,6 +83,10 @@ type Snapshot struct {
 	// Instance is which run of the application this is, so every page can say which
 	// discipline it belongs to when there is more than one.
 	Instance Instance `json:"instance"`
+	// EventMats is how many physical mats the event has, when the discipline is part of
+	// one: every Mat in this snapshot is then one of those, placed by the event's plan
+	// (OnEventMats). Zero for a discipline on its own, whose mats are Tournament.Mats.
+	EventMats int `json:"eventMats,omitempty"`
 }
 
 // snapshot builds the whole derived picture. It is deliberately recomputed rather than

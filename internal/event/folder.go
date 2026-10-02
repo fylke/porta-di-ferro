@@ -57,6 +57,8 @@ type File struct {
 	// learned the old address -- a bookmark, an unsent exchange on a tablet -- still
 	// reaches it.
 	Aliases map[string]string `json:"aliases,omitempty"`
+	// Plan is the event's mats and where each discipline's work runs on them.
+	Plan store.Plan `json:"plan,omitempty"`
 }
 
 // Placeholder says a slug is what a discipline got for having no name yet: "discipline",

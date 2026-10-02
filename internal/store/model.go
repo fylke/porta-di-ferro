@@ -198,6 +198,29 @@ type StaffMember struct {
 	Signup string `json:"signup,omitempty"`
 }
 
+// Plan is where every discipline's work runs: the event's physical mats, and each work
+// item's place in one mat's queue (docs/proposals/one-event-many-disciplines.md §9). A
+// work item is a pool, a discipline's eliminations on one of its lanes, the bronze match
+// or the final. The disciplines say what their items are; the plan says which mat runs
+// each and in what order.
+type Plan struct {
+	// Mats is how many mats the hall has, or 0 for as many as the disciplines ask for --
+	// which, with one discipline, keeps a one-discipline event exactly as it always was.
+	Mats int `json:"mats,omitempty"`
+	// Items is each work item's placement, by "slug/key": "open-sabre/pool-3".
+	Items map[string]Placement `json:"items,omitempty"`
+}
+
+// Placement is one work item's mat and its place in that mat's queue.
+type Placement struct {
+	Mat int `json:"mat"`
+	Seq int `json:"seq"`
+	// Stamp is the draw the item belongs to: the pools' GeneratedAt or the bracket's
+	// BracketAt. A redraw makes new items of the same names, which are placed afresh
+	// rather than inheriting where the old ones had been moved.
+	Stamp string `json:"stamp,omitempty"`
+}
+
 // Defaults returns the MVP tournament setup: two mats, pools of four to seven.
 func Defaults() Tournament {
 	return Tournament{Mats: 2, MinPoolSize: 4, MaxPoolSize: 7}
