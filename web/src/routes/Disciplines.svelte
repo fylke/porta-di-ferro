@@ -67,7 +67,11 @@
   async function add(discipline?: string) {
     const wanted = (discipline ?? name).trim();
     if (!wanted) return;
-    if (await act(() => api.addDiscipline(wanted))) name = '';
+    // The field is cleared only when it was the field that was added, and only if it
+    // still says so: a preset's button leaves it alone, and so does a save that comes
+    // back after the organizer has typed something else.
+    const typed = discipline === undefined ? name : null;
+    if ((await act(() => api.addDiscipline(wanted))) && typed !== null && name === typed) name = '';
   }
 
   function startEditing(d: DisciplineSummary) {
