@@ -153,3 +153,52 @@ func TestTheReportLearnsFromTheDayButNotItsAnomalies(t *testing.T) {
 		t.Errorf("three matches measured, the half-hour one left out of the average of five minutes: %+v", rep)
 	}
 }
+
+// Four pools stacked on one mat of two: the suggestion spreads them, keeps what is under
+// way and what is pinned, and finishes the day sooner.
+func TestASuggestionSpreadsTheWork(t *testing.T) {
+	running := item("ls/pool-1", "ls", "pool", 1, 1, 3)
+	running.Matches[0].Started = at("09:00")
+	pinned := item("ls/pool-4", "ls", "pool", 1, 4, 3)
+	pinned.Pinned = true
+	in := forecast.Input{Timings: tpl, Now: at("09:02"), Items: []forecast.Item{
+		running,
+		item("ls/pool-2", "ls", "pool", 1, 2, 3),
+		item("ls/pool-3", "ls", "pool", 1, 3, 3),
+		pinned,
+		item("ls/final", "ls", "final", 1, 5, 1),
+	}}
+	s := forecast.Suggest(in, 2)
+	if s.Order[1][0] != "ls/pool-1" {
+		t.Errorf("the pool under way stays first on its mat: %v", s.Order)
+	}
+	on := map[string]int{}
+	for mat, ids := range s.Order {
+		for _, id := range ids {
+			on[id] = mat
+		}
+	}
+	if on["ls/pool-4"] != 1 {
+		t.Errorf("the pinned pool stays on mat 1: %v", s.Order)
+	}
+	if len(s.Order[2]) == 0 {
+		t.Errorf("mat 2 is idle and should be given work: %v", s.Order)
+	}
+	if !s.End.Before(s.Before) {
+		t.Errorf("spreading the pools should end the day sooner: %s, was %s", hm(s.End), hm(s.Before))
+	}
+	ids := s.Order[on["ls/final"]]
+	if ids[len(ids)-1] != "ls/final" {
+		t.Errorf("the final comes after the pools it waits for: %v", s.Order)
+	}
+	moved := false
+	for _, m := range s.Moves {
+		if m.ID == "ls/pool-1" {
+			t.Errorf("the pool under way must not move: %+v", m)
+		}
+		moved = moved || (m.ToMat == 2 && !m.Start.IsZero())
+	}
+	if !moved {
+		t.Errorf("the moves should say what goes to mat 2, and when it would start: %+v", s.Moves)
+	}
+}

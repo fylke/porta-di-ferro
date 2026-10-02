@@ -259,3 +259,50 @@ func (c *Coordinator) flagItem(id string, pinned *bool, notBefore *string) error
 	}
 	return err
 }
+
+// suggestion is a suggested plan for the hall as it stands.
+func (c *Coordinator) suggestion() (forecast.Suggestion, map[string]store.Placement) {
+	h := c.timesFrom(c.snapshots())
+	placed, mats := c.Placements()
+	return forecast.Suggest(h.in, mats), placed
+}
+
+// suggest is a suggested plan. It writes nothing, like the signup preview.
+func (c *Coordinator) suggest(w http.ResponseWriter, r *http.Request) {
+	s, _ := c.suggestion()
+	writeJSON(w, http.StatusOK, ViewSuggestion(s))
+}
+
+// applySuggestion takes a suggestion: worked out again here rather than trusting what was
+// posted, and refused when it is no longer the one the organizer looked at.
+func (c *Coordinator) applySuggestion(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Signature string `json:"signature"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	s, _ := c.suggestion()
+	if SignatureOf(s) != in.Signature {
+		writeJSON(w, http.StatusConflict, map[string]any{
+			"error":      "the plan has changed since that suggestion; here is a new one",
+			"suggestion": ViewSuggestion(s),
+		})
+		return
+	}
+	c.planMu.Lock()
+	placed, _ := c.placementsLocked()
+	next := ApplySuggestion(placed, s)
+	_, err := c.folder.Update(func(f *event.File) error {
+		f.Plan.Items = next
+		return nil
+	})
+	c.planMu.Unlock()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	c.republish()
+	writeJSON(w, http.StatusOK, c.ForecastNow())
+}

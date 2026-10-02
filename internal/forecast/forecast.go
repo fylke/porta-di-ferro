@@ -60,6 +60,8 @@ type Item struct {
 	Matches    []Match
 	// Projected items are not drawn yet; their matches have no logs.
 	Projected bool
+	// Pinned items were put on their mat by hand; a suggestion keeps them there.
+	Pinned bool
 	NotBefore time.Time
 	// People are everyone fencing in the item, by person, for the overlap check.
 	People []string
@@ -254,29 +256,7 @@ func simulate(in Input, pace map[int]Pace, live bool) (timeline, []Warning) {
 		sort.SliceStable(q, func(i, j int) bool { return q[i].Seq < q[j].Seq })
 	}
 
-	// What each item waits for: a discipline's eliminations wait for all its pools, and
-	// its bronze match and final for its eliminations -- or for its pools, when its
-	// bracket is a final alone.
-	byDisc := map[string]map[string][]string{}
-	for _, it := range in.Items {
-		if byDisc[it.Discipline] == nil {
-			byDisc[it.Discipline] = map[string][]string{}
-		}
-		byDisc[it.Discipline][it.Kind] = append(byDisc[it.Discipline][it.Kind], it.ID)
-	}
-	deps := func(it Item) (ids []string, afterPools bool) {
-		k := byDisc[it.Discipline]
-		switch it.Kind {
-		case KindEliminations:
-			return k[KindPool], true
-		case KindBronze, KindFinal:
-			if len(k[KindEliminations]) > 0 {
-				return k[KindEliminations], false
-			}
-			return k[KindPool], true
-		}
-		return nil, false
-	}
+	deps := dependencies(in.Items)
 
 	tl := timeline{items: map[string]span{}, matches: map[string]time.Time{}}
 	cursor := map[int]time.Time{}

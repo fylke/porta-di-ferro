@@ -150,3 +150,39 @@ func TestPlanningBeforeTheEntries(t *testing.T) {
 		t.Errorf("the planned pool is on the board as planned: %+v", it)
 	}
 }
+
+// A suggestion writes nothing; applying it is checked against what the organizer saw.
+func TestSuggestAndApply(t *testing.T) {
+	h := openHall(t, filepath.Join(t.TempDir(), "event"))
+	h.c.Clock = func() time.Time { return time.Date(2026, 11, 14, 8, 0, 0, 0, time.Local) }
+	h.must("POST", "/api/disciplines", map[string]string{"name": "Open Sabre"}, nil)
+	h.must("PUT", "/api/mats", map[string]int{"count": 3}, nil)
+	h.must("PUT", "/api/plan/expected", map[string]int{"open-sabre": 24}, nil)
+
+	before := h.mats()
+	var s httpapi.SuggestionView
+	h.must("POST", "/api/plan/suggest", nil, &s)
+	if len(s.Moves) == 0 || s.Signature == "" || s.End == "" {
+		t.Fatalf("pools planned onto one discipline's lanes should be spread over three mats: %+v", s)
+	}
+	if after := h.mats(); len(after.Items) != len(before.Items) || itemOf(after, s.Moves[0].ID).Mat != itemOf(before, s.Moves[0].ID).Mat {
+		t.Error("a suggestion must write nothing")
+	}
+	if code := h.do("POST", "/api/plan/apply", map[string]string{"signature": "stale"}, nil); code != 409 {
+		t.Errorf("applying a suggestion the plan no longer matches should be refused, got %d", code)
+	}
+	h.must("POST", "/api/plan/apply", map[string]string{"signature": s.Signature}, nil)
+	m := s.Moves[0]
+	if it := itemOf(h.mats(), m.ID); it.Mat != m.ToMat || it.Position != m.ToPosition {
+		t.Errorf("applied, %s should be at mat %d place %d: %+v", m.ID, m.ToMat, m.ToPosition, it)
+	}
+	// Planned items keep what was applied to them, read after read.
+	if it := itemOf(h.mats(), m.ID); it.Mat != m.ToMat {
+		t.Errorf("an applied plan for work not drawn yet must stick: %+v", it)
+	}
+	var again httpapi.SuggestionView
+	h.must("POST", "/api/plan/suggest", nil, &again)
+	if len(again.Moves) != 0 {
+		t.Errorf("suggesting again straight after applying should move nothing: %+v", again.Moves)
+	}
+}

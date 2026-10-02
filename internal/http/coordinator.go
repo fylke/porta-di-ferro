@@ -401,6 +401,8 @@ func (c *Coordinator) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/plan/expected", c.putExpected)
 	mux.HandleFunc("GET /api/plan/report", c.getReport)
 	mux.HandleFunc("PUT /api/plan/anomalies", c.putAnomaly)
+	mux.HandleFunc("POST /api/plan/suggest", c.suggest)
+	mux.HandleFunc("POST /api/plan/apply", c.applySuggestion)
 	mux.HandleFunc("PATCH /api/plan/items/{id...}", c.patchItem)
 
 	// The devices at the mats are the event's, whatever discipline they are scoring.

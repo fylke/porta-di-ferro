@@ -281,6 +281,10 @@ type Placement struct {
 	Pinned bool `json:"pinned,omitempty"`
 	// NotBefore is the earliest the item may start, "HH:MM": a final held for 16:30.
 	NotBefore string `json:"notBefore,omitempty"`
+	// Planned says the organizer settled this place by applying a suggestion. Like a pin it
+	// keeps a projected item where it is and hands the place to the drawn item; unlike a
+	// pin, the next suggestion may move it.
+	Planned bool `json:"planned,omitempty"`
 }
 
 // Defaults returns the MVP tournament setup: two mats, pools of four to seven.

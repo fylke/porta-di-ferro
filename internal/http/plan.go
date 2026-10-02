@@ -145,7 +145,7 @@ func MatCount(plan store.Plan, tournaments []store.Tournament) int {
 // moved or held to a time. Until then they go after every real item, worked out afresh
 // each time, so the projected bracket of a discipline never sits in front of the pools
 // it has just drawn. A placement the organizer made for a projected item is the real
-// item's once it is drawn.
+// item's once it is drawn. So is a place from a suggestion the organizer applied.
 func Place(items []WorkItem, plan store.Plan, mats int) (map[string]store.Placement, bool) {
 	if mats < 1 {
 		mats = 1
@@ -155,7 +155,7 @@ func Place(items []WorkItem, plan store.Plan, mats int) (map[string]store.Placem
 	var fresh, later []WorkItem
 	for _, it := range items {
 		p, ok := plan.Items[it.ID()]
-		chosen := p.Pinned || p.NotBefore != ""
+		chosen := p.Pinned || p.NotBefore != "" || p.Planned
 		switch {
 		case !ok || p.Mat < 1 || p.Mat > mats:
 		case p.Stamp == it.Stamp && (!it.Projected || chosen):
