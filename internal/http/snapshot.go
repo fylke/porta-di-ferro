@@ -31,6 +31,29 @@ type MatchView struct {
 	// Options is how the match is presented -- colours and display sides -- read from
 	// the log by match.OptionsOf. Always present, defaults filled in.
 	Options match.Options `json:"options"`
+	// StartedAt and EndedAt are when the match's first exchange or timer event and its
+	// end were logged, for the forecast's measured pace (phase 4). Empty until then.
+	StartedAt string `json:"startedAt,omitempty"`
+	EndedAt   string `json:"endedAt,omitempty"`
+	// Eta is when the forecast expects the match to start, for a match still to come in
+	// an event with a plan (phase 4).
+	Eta string `json:"eta,omitempty"`
+}
+
+// times is when a match started and ended, by its log. The colours and sides a score
+// keeper sets before the first exchange are not the start of the fencing.
+func times(events []match.Event, ended bool) (string, string) {
+	started := ""
+	for _, e := range events {
+		if e.Type != match.TypeOptions {
+			started = e.At
+			break
+		}
+	}
+	if !ended || len(events) == 0 {
+		return started, ""
+	}
+	return started, events[len(events)-1].At
 }
 
 // PoolView is a pool with its matches and its live standings.
@@ -172,6 +195,7 @@ func BuildSnapshot(src Source, rules match.Ruleset, self Instance,
 			status = "running"
 		}
 		v := MatchView{Match: m, State: st, Status: status, Options: match.OptionsOf(events)}
+		v.StartedAt, v.EndedAt = times(events, st.Ended)
 		if st.Running {
 			if at, ok := src.LastEventAt(m.ID); ok {
 				if since := time.Since(at).Milliseconds(); since > 0 {

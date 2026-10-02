@@ -273,3 +273,31 @@ func TestASnapshotSpeaksTheEventsMats(t *testing.T) {
 		t.Errorf("EventMats should say 4 and the discipline's own Mats be emptied: %d %v", snap.EventMats, snap.Mats)
 	}
 }
+
+// The day planned before the draw is the drawn day's: a projected item's placement, which
+// has no stamp, is taken over by the real item of the same name (phase 4).
+func TestThePlannedDaySurvivesTheDraw(t *testing.T) {
+	ls := discipline("ls", "drawn", []pool{{1, 1, 2, ""}, {2, 2, 2, ""}}, nil, nil, nil)
+	plan := store.Plan{Items: map[string]store.Placement{
+		"ls/pool-1": {Mat: 2, Seq: 1, Pinned: true, NotBefore: "10:00"},
+		"ls/pool-2": {Mat: 1, Seq: 1},
+	}}
+	placed, changed := httpapi.Place(items(ls), plan, 2)
+	if !changed {
+		t.Error("taking over a projected placement should be written down")
+	}
+	if p := placed["ls/pool-1"]; p.Mat != 2 || p.Stamp != "drawn" || !p.Pinned || p.NotBefore != "10:00" {
+		t.Errorf("pool 1 should stay where it was planned, pinned and held: %+v", p)
+	}
+}
+
+// A card moved by hand is pinned, so a suggestion keeps it on that mat.
+func TestAMoveByHandPins(t *testing.T) {
+	ls := discipline("ls", "d", []pool{{1, 1, 2, ""}, {2, 1, 2, ""}}, nil, nil, nil)
+	placed, _ := httpapi.Place(items(ls), store.Plan{}, 2)
+	view := httpapi.BuildMats([]httpapi.MatsInput{ls}, placed, 2, func(int) (string, string) { return "", "" })
+	next, _, _ := httpapi.Move(view, placed, "ls/pool-2", 2, 0, 2)
+	if !next["ls/pool-2"].Pinned || next["ls/pool-1"].Pinned {
+		t.Errorf("only the moved item should be pinned: %+v", next)
+	}
+}

@@ -145,9 +145,16 @@ func Place(items []WorkItem, plan store.Plan, mats int) (map[string]store.Placem
 	placed := make(map[string]store.Placement, len(items))
 	top := map[int]int{}
 	var fresh []WorkItem
+	adopted := false
 	for _, it := range items {
 		p, ok := plan.Items[it.ID()]
-		if ok && p.Stamp == it.Stamp && p.Mat >= 1 && p.Mat <= mats {
+		// A placement made for the projected item -- the day planned before the draw --
+		// is the real item's once it is drawn (phase 4).
+		projected := ok && p.Stamp == "" && it.Stamp != ""
+		if ok && (p.Stamp == it.Stamp || projected) && p.Mat >= 1 && p.Mat <= mats {
+			if projected {
+				p.Stamp, adopted = it.Stamp, true
+			}
 			placed[it.ID()] = p
 			top[p.Mat] = max(top[p.Mat], p.Seq)
 			continue
@@ -159,7 +166,7 @@ func Place(items []WorkItem, plan store.Plan, mats int) (map[string]store.Placem
 		top[mat]++
 		placed[it.ID()] = store.Placement{Mat: mat, Seq: top[mat], Stamp: it.Stamp}
 	}
-	return placed, len(fresh) > 0 || len(placed) != len(plan.Items)
+	return placed, adopted || len(fresh) > 0 || len(placed) != len(plan.Items)
 }
 
 // --- the mats as the hall sees them ---------------------------------------------------
@@ -418,6 +425,12 @@ func Move(view MatsView, placed map[string]store.Placement, id string, mat, inde
 		}
 		p.Mat, p.Seq = mat, i+1
 		next[itemID] = p
+	}
+	if changed {
+		// Put there by hand, so a suggested plan keeps it on this mat (phase 4).
+		p := next[id]
+		p.Pinned = true
+		next[id] = p
 	}
 	if !changed {
 		return placed, false, nil
