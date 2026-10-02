@@ -83,6 +83,10 @@ type Snapshot struct {
 	// Instance is which run of the application this is, so every page can say which
 	// discipline it belongs to when there is more than one.
 	Instance Instance `json:"instance"`
+	// EventMats is how many physical mats the event has, when the discipline is part of
+	// one: every Mat in this snapshot is then one of those, placed by the event's plan
+	// (OnEventMats). Zero for a discipline on its own, whose mats are Tournament.Mats.
+	EventMats int `json:"eventMats,omitempty"`
 }
 
 // snapshot builds the whole derived picture. It is deliberately recomputed rather than
@@ -107,13 +111,16 @@ type Source interface {
 
 // snapshot builds this server's picture. The work is in BuildSnapshot; what the server
 // adds is where the state comes from and who is connected.
+//
+// In an event, Mats is read off the hall: for every event mat, the match it is on when that
+// match is this discipline's. Every client that read Mats before there were several
+// disciplines still finds it where it was.
 func (s *Server) snapshot() (Snapshot, error) {
-	return BuildSnapshot(source{s.store, s}, s.rules, s.self(), func(mat int) string {
-		if sk := s.presence.scorekeeperOn(mat); sk != nil {
-			return sk.Match
-		}
-		return ""
-	})
+	snap, err := s.PlacedSnapshot()
+	if err == nil && s.mats != nil {
+		snap.Mats = s.mats.CurrentMats(s.self().Slug)
+	}
+	return snap, err
 }
 
 // BuildSnapshot assembles the whole derived picture from stored state.

@@ -2,7 +2,8 @@
   import { onMount } from 'svelte';
   import { keepAwake } from '../lib/wakelock';
   import Scoreboard from './Scoreboard.svelte';
-  import { Clock, Live, liveElapsed, matchOn, namesFor } from './lib-display.svelte';
+  import { Clock } from './lib-display.svelte';
+  import { MatsLive, matOf, slotElapsed } from '../lib/mats.svelte';
   import { t } from '../lib/i18n.svelte';
 
   /**
@@ -19,11 +20,12 @@
    */
   let { ids = '' }: { ids?: string } = $props();
 
-  const live = new Live();
+  // The hall's mats (phase 2): each scoreboard says which discipline its mat is on.
+  const live = new MatsLive();
   const clock = new Clock();
 
   onMount(() => {
-    live.start();
+    void live.start();
     clock.start();
     const release = keepAwake();
     return () => {
@@ -39,8 +41,7 @@
       .map((s) => Number(s.trim()))
       .filter((n) => Number.isFinite(n) && n > 0);
     if (requested.length > 0) return requested;
-    const count = live.snapshot?.tournament.mats ?? 0;
-    return Array.from({ length: count }, (_, i) => i + 1);
+    return (live.view?.mats ?? []).map((m) => m.mat);
   });
 
   const compact = $derived(mats.length >= 3);
@@ -48,14 +49,14 @@
 
 <main class:compact style="--rows: {mats.length}">
   {#each mats as mat (mat)}
-    {@const match = matchOn(live.snapshot, mat)}
+    {@const current = matOf(live.view, mat)?.current ?? null}
     <Scoreboard
       {mat}
-      {match}
-      names={namesFor(live.snapshot, match)}
-      elapsed={liveElapsed(match, live, clock.now)}
+      match={current?.match ?? null}
+      names={{ red: current?.red ?? '', blue: current?.blue ?? '' }}
+      elapsed={slotElapsed(current, live.receivedAt, clock.now)}
       {compact}
-      discipline={live.snapshot?.instance.name ?? ''}
+      discipline={current?.disciplineName ?? ''}
     />
   {/each}
   {#if mats.length === 0}

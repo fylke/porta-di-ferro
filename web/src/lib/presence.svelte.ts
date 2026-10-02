@@ -66,6 +66,8 @@ export function deviceName(): string {
 export interface HeartbeatFields {
   mat?: number;
   match?: string;
+  /** The discipline the match is in: one mat runs several in a day. */
+  discipline?: string;
 }
 
 /**

@@ -57,6 +57,8 @@ type File struct {
 	// learned the old address -- a bookmark, an unsent exchange on a tablet -- still
 	// reaches it.
 	Aliases map[string]string `json:"aliases,omitempty"`
+	// Plan is the event's mats and where each discipline's work runs on them.
+	Plan store.Plan `json:"plan,omitempty"`
 }
 
 // Placeholder says a slug is what a discipline got for having no name yet: "discipline",
@@ -207,6 +209,45 @@ func (f *Folder) Update(change func(*File) error) (File, error) {
 		return File{}, err
 	}
 	return file, nil
+}
+
+// Displays is what each screen in the hall has been told to show, by device id. Screens
+// belong to the event's mats, not to a discipline (phase 2). A missing file is no
+// assignments.
+func (f *Folder) Displays() (map[string]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := map[string]string{}
+	b, err := os.ReadFile(filepath.Join(f.dir, "displays.json"))
+	if errors.Is(err, fs.ErrNotExist) {
+		return out, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(b, &out); err != nil {
+		return nil, fmt.Errorf("displays.json: %w", err)
+	}
+	if out == nil {
+		out = map[string]string{}
+	}
+	return out, nil
+}
+
+// SaveDisplays replaces the screens' assignments.
+func (f *Folder) SaveDisplays(d map[string]string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if d == nil {
+		d = map[string]string{}
+	}
+	return store.WriteJSONAtomic(f.dir, "displays.json", d)
+}
+
+// HasDisplays says the event has its own displays.json yet.
+func (f *Folder) HasDisplays() bool {
+	_, err := os.Stat(filepath.Join(f.dir, "displays.json"))
+	return err == nil
 }
 
 // Slugs lists the event's disciplines in their order: the stored order first, then any

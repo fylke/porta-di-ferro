@@ -2,7 +2,8 @@
   import { onMount } from 'svelte';
   import { keepAwake } from '../lib/wakelock';
   import Scoreboard from './Scoreboard.svelte';
-  import { Clock, Live, liveElapsed, matchOn, nameLookup, namesFor, upcomingOn } from './lib-display.svelte';
+  import { Clock } from './lib-display.svelte';
+  import { MatsLive, matOf, slotElapsed, upcoming } from '../lib/mats.svelte';
   import { t } from '../lib/i18n.svelte';
 
   /**
@@ -18,11 +19,13 @@
    */
   let { mat }: { mat: number } = $props();
 
-  const live = new Live();
+  // One physical mat of the event, across disciplines (phase 2): the queue down the side
+  // may run from one discipline into the next, and each entry says whose it is.
+  const live = new MatsLive();
   const clock = new Clock();
 
   onMount(() => {
-    live.start();
+    void live.start();
     clock.start();
     const release = keepAwake();
     return () => {
@@ -32,13 +35,14 @@
     };
   });
 
-  const match = $derived(matchOn(live.snapshot, mat));
-  const names = $derived(namesFor(live.snapshot, match));
-  const elapsed = $derived(liveElapsed(match, live, clock.now));
-  const name = $derived(nameLookup(live.snapshot));
+  const here = $derived(matOf(live.view, mat));
+  const current = $derived(here?.current ?? null);
+  const match = $derived(current?.match ?? null);
+  const names = $derived({ red: current?.red ?? '', blue: current?.blue ?? '' });
+  const elapsed = $derived(slotElapsed(current, live.receivedAt, clock.now));
   // The next match, then the ones after it: enough to read the queue, few enough to
   // keep the type large.
-  const queue = $derived(upcomingOn(live.snapshot, mat, 6));
+  const queue = $derived(upcoming(here, 6));
   const next = $derived(queue[0] ?? null);
   const deck = $derived(queue.slice(1, 6));
 </script>
@@ -46,15 +50,17 @@
 <main>
   <section class="stage">
     <div class="board">
-      <Scoreboard {mat} {match} {names} {elapsed} discipline={live.snapshot?.instance.name ?? ''} />
+      <Scoreboard {mat} {match} {names} {elapsed} discipline={current?.disciplineName ?? ''} />
     </div>
     <div class="next">
       {#if next}
-        <span class="label">{t('Next on mat {n}', { n: mat })}</span>
+        <span class="label">
+          {t('Next on mat {n}', { n: mat })}{#if next.disciplineName !== current?.disciplineName} &middot; {next.disciplineName}{/if}
+        </span>
         <span class="pair">
-          <span class="who" style="background: var(--tint-{next.options.red}); color: var(--bright-{next.options.red})">{name(next.red)}</span>
+          <span class="who" style="background: var(--tint-{next.match.options.red}); color: var(--bright-{next.match.options.red})">{next.red}</span>
           <span class="v">{t('v')}</span>
-          <span class="who" style="background: var(--tint-{next.options.blue}); color: var(--bright-{next.options.blue})">{name(next.blue)}</span>
+          <span class="who" style="background: var(--tint-{next.match.options.blue}); color: var(--bright-{next.match.options.blue})">{next.blue}</span>
         </span>
       {:else if match}
         <span class="label">{t('Last match on mat {n}', { n: mat })}</span>
@@ -70,11 +76,12 @@
       <p class="dim">{next ? t('Nothing after the next match.') : t('Nothing more on this mat.')}</p>
     {:else}
       <ol>
-        {#each deck as m (m.id)}
+        {#each deck as s (`${s.discipline}/${s.match.id}`)}
           <li>
-            <span class="n mono">{m.order}</span>
-            <span class="who" style="background: var(--tint-{m.options.red}); color: var(--bright-{m.options.red})">{name(m.red)}</span>
-            <span class="who" style="background: var(--tint-{m.options.blue}); color: var(--bright-{m.options.blue})">{name(m.blue)}</span>
+            <span class="n mono">{s.match.order}</span>
+            <span class="who" style="background: var(--tint-{s.match.options.red}); color: var(--bright-{s.match.options.red})">{s.red}</span>
+            <span class="who" style="background: var(--tint-{s.match.options.blue}); color: var(--bright-{s.match.options.blue})">{s.blue}</span>
+            {#if s.disciplineName !== current?.disciplineName}<span class="in">{s.disciplineName}</span>{/if}
           </li>
         {/each}
       </ol>
@@ -179,6 +186,12 @@
     align-items: center;
     font-size: clamp(0.9rem, 2.4vh, 1.5rem);
     font-weight: 700;
+  }
+  li .in {
+    grid-column: 2;
+    font-size: 0.7em;
+    font-weight: 600;
+    color: var(--ink-dim);
   }
   li .n {
     grid-row: 1 / span 2;

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Clock, Live, liveElapsed, matchOn, nameLookup, upcomingOn } from './lib-display.svelte';
+  import { Clock, Live, nameLookup } from './lib-display.svelte';
+  import { MatsLive, matOf, slotElapsed, upcoming } from '../lib/mats.svelte';
   import { formatClock } from '../lib/clock.svelte';
   import { t } from '../lib/i18n.svelte';
   import { fitRows, type Layout } from '../lib/fit';
@@ -24,13 +25,17 @@
    * because the source order does.
    */
   const live = new Live();
+  // The mats are the hall's (phase 2): what each is running, in any discipline.
+  const hallMats = new MatsLive();
   const clock = new Clock();
 
   onMount(() => {
     live.start();
+    void hallMats.start();
     clock.start();
     return () => {
       clock.stop();
+      hallMats.stop();
       live.stop();
     };
   });
@@ -39,9 +44,7 @@
   let rosterLayout = $state<Layout>('one');
   const event = $derived(snapshot?.tournament.event ?? {});
   const name = $derived(nameLookup(snapshot));
-  const mats = $derived(
-    Array.from({ length: snapshot?.tournament.mats ?? 0 }, (_, i) => i + 1),
-  );
+  const mats = $derived((hallMats.view?.mats ?? []).map((m) => m.mat));
 
   // Sorted by name rather than by entry order: this is a list people look themselves up
   // in, and the order competitors were typed in is meaningless to them.
@@ -113,14 +116,18 @@
         <h2>{t('Mats')}</h2>
         <ul class="matlist">
           {#each mats as mat (mat)}
-            {@const current = matchOn(snapshot, mat)}
-            {@const next = upcomingOn(snapshot, mat, 1)[0] ?? null}
+            {@const here = matOf(hallMats.view, mat)}
+            {@const slot = here?.current ?? null}
+            {@const current = slot?.match ?? null}
+            {@const next = upcoming(here, 1)[0] ?? null}
             <li>
-              <a class="mat" href={dhref(`/display/mat/${mat}`)}>
-                <span class="matname">{t('Mat {n}', { n: mat })}</span>
-                {#if current}
+              <a class="mat" href="/display/mat/{mat}">
+                <span class="matname">
+                  {t('Mat {n}', { n: mat })}{#if slot && slot.discipline !== snapshot.instance.slug} &middot; {slot.disciplineName}{/if}
+                </span>
+                {#if slot && current}
                   <span class="now">
-                    <span class="red">{name(current.red)}</span>
+                    <span class="red">{slot.red}</span>
                     <span class="score mono">
                       {#if current.status === 'pending'}
                         {t('up next')}
@@ -128,17 +135,17 @@
                         {current.state.red.score}–{current.state.blue.score}
                       {/if}
                     </span>
-                    <span class="blue">{name(current.blue)}</span>
+                    <span class="blue">{slot.blue}</span>
                   </span>
                   {#if current.state.running}
-                    <span class="clock mono">{formatClock(liveElapsed(current, live, clock.now))}</span>
+                    <span class="clock mono">{formatClock(slotElapsed(slot, hallMats.receivedAt, clock.now))}</span>
                   {/if}
                 {:else}
                   <span class="dim">{t('Nothing on this mat just now.')}</span>
                 {/if}
                 {#if next}
                   <span class="deck dim">
-                    {t('On deck')}: {name(next.red)} {t('v')} {name(next.blue)}
+                    {t('On deck')}: {next.red} {t('v')} {next.blue}
                   </span>
                 {/if}
               </a>

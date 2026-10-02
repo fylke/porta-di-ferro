@@ -1,0 +1,455 @@
+<script lang="ts">
+  import { onMount } from 'svelte';
+  import { api, type ItemView } from '../api';
+  import { MatsLive } from '../lib/mats.svelte';
+  import { roundLabel } from './lib-display.svelte';
+  import { t } from '../lib/i18n.svelte';
+
+  /**
+   * The mat board (docs/proposals/one-event-many-disciplines.md §10, phase 2; #101): the
+   * hall's mats side by side, and every discipline's work items on them as cards in the
+   * order each mat runs them.
+   *
+   * A card moves two ways, and both send the same request. The menu on each card moves it
+   * earlier, later or to another mat, and works from a keyboard and one-handed on a tablet.
+   * Dragging is an addition: pointer events rather than HTML5 drag-and-drop, which does not
+   * fire on touch, from a grip that keeps the rest of the card free to scroll the page.
+   *
+   * What a drop means is decided when the card is let go, against the board as it is then,
+   * and sent as "this item, to this mat, at this place" -- so a score keeper's exchange that
+   * redraws the board mid-drag cannot leave the card where nobody meant it. A drop where the
+   * card already is sends nothing. An item under way or finished cannot be moved, and the
+   * server keeps anything from being put in front of it.
+   */
+  let { canSetCount = false }: { canSetCount?: boolean } = $props();
+
+  const live = new MatsLive();
+  onMount(() => {
+    void live.start();
+    return () => live.stop();
+  });
+
+  const view = $derived(live.view);
+  const mats = $derived(view?.mats ?? []);
+  const byMat = $derived.by(() => {
+    const out = new Map<number, ItemView[]>();
+    for (const m of mats) out.set(m.mat, []);
+    for (const it of view?.items ?? []) out.get(it.mat)?.push(it);
+    for (const list of out.values()) list.sort((a, b) => a.position - b.position);
+    return out;
+  });
+  const disciplines = $derived(new Set((view?.items ?? []).map((it) => it.discipline)).size);
+
+  let error = $state('');
+  let busy = $state(false);
+  let menuFor = $state<string | null>(null);
+
+  async function send(fn: () => Promise<unknown>) {
+    error = '';
+    busy = true;
+    try {
+      await fn();
+      await live.refresh();
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+    } finally {
+      busy = false;
+    }
+  }
+
+  function moveTo(it: ItemView, mat: number, index?: number) {
+    menuFor = null;
+    void send(() => api.moveItem(it.id, index === undefined ? { mat } : { mat, index }));
+  }
+  function step(it: ItemView, move: 'up' | 'down') {
+    menuFor = null;
+    void send(() => api.moveItem(it.id, { move }));
+  }
+  function setCount(n: number) {
+    void send(() => api.setMats(n));
+  }
+
+  /** "Pool 3", "Eliminations 2", "Bronze match", "Final". */
+  function label(it: ItemView): string {
+    switch (it.kind) {
+      case 'pool':
+        return t('Pool {n}', { n: it.number ?? '' });
+      case 'eliminations': {
+        const lanes = (view?.items ?? []).filter((o) => o.discipline === it.discipline && o.kind === 'eliminations').length;
+        return lanes > 1 ? t('Eliminations {n}', { n: it.number ?? '' }) : t('Eliminations');
+      }
+      case 'bronze':
+        return t('Bronze match');
+      case 'final':
+        return t('Final');
+    }
+  }
+
+  function statusLabel(it: ItemView): string {
+    switch (it.status) {
+      case 'running':
+        return t('under way');
+      case 'done':
+        return t('done');
+      case 'waiting':
+        return t('waiting for results');
+      default:
+        return '';
+    }
+  }
+
+  // --- dragging -------------------------------------------------------------------------
+
+  let pressed: { id: string; x: number; y: number; pointer: number } | null = null;
+  let drag = $state<{ id: string; label: string; x: number; y: number; width: number; mat: number; index: number } | null>(null);
+
+  function grab(e: PointerEvent, it: ItemView) {
+    if (!it.movable || busy) return;
+    // The grip is the drag's alone: no text selection, no scrolling under the finger.
+    e.preventDefault();
+    pressed = { id: it.id, x: e.clientX, y: e.clientY, pointer: e.pointerId };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }
+
+  /** Where the pointer is over the board: which mat, and before which of its cards. */
+  function dropAt(x: number, y: number, id: string): { mat: number; index: number } | null {
+    const column = document
+      .elementsFromPoint(x, y)
+      .map((el) => (el as HTMLElement).closest?.('[data-mat]') as HTMLElement | null)
+      .find((el) => el);
+    if (!column) return null;
+    const mat = Number(column.dataset.mat);
+    const cards = [...column.querySelectorAll<HTMLElement>('[data-item]')].filter((c) => c.dataset.item !== id);
+    let index = 0;
+    for (const c of cards) {
+      const r = c.getBoundingClientRect();
+      if (y > r.top + r.height / 2) index++;
+    }
+    return { mat, index };
+  }
+
+  function drift(e: PointerEvent) {
+    if (!pressed || e.pointerId !== pressed.pointer) return;
+    if (!drag) {
+      if (Math.hypot(e.clientX - pressed.x, e.clientY - pressed.y) < 6) return;
+      const it = view?.items.find((i) => i.id === pressed!.id);
+      const card = (e.currentTarget as HTMLElement).closest('[data-item]') as HTMLElement | null;
+      if (!it) return;
+      drag = { id: it.id, label: `${it.disciplineName} · ${label(it)}`, x: 0, y: 0, width: card?.offsetWidth ?? 200, mat: it.mat, index: it.position - 1 };
+    }
+    const at = dropAt(e.clientX, e.clientY, drag.id);
+    drag = { ...drag, x: e.clientX, y: e.clientY, ...(at ?? {}) };
+  }
+
+  function release(e: PointerEvent) {
+    if (!pressed || e.pointerId !== pressed.pointer) return;
+    const done = drag;
+    pressed = null;
+    drag = null;
+    if (!done) return;
+    // The board as it is now, not as it was when the drag began.
+    const it = view?.items.find((i) => i.id === done.id);
+    if (!it || !it.movable) return;
+    if (done.mat === it.mat && done.index === it.position - 1) return; // where it already is
+    moveTo(it, done.mat, done.index);
+  }
+
+  function cancel() {
+    pressed = null;
+    drag = null;
+  }
+
+  /** Whether a drop line goes before this card of this mat, or (index past the end) after the last. */
+  function dropBefore(mat: number, list: ItemView[], it: ItemView): boolean {
+    if (!drag || drag.mat !== mat || it.id === drag.id) return false;
+    const others = list.filter((o) => o.id !== drag!.id);
+    return others.indexOf(it) === drag.index;
+  }
+  function dropAtEnd(mat: number, list: ItemView[]): boolean {
+    if (!drag || drag.mat !== mat) return false;
+    return drag.index >= list.filter((o) => o.id !== drag!.id).length;
+  }
+</script>
+
+<svelte:window onkeydown={(e) => e.key === 'Escape' && (cancel(), (menuFor = null))} />
+
+<section class="board">
+  <div class="head">
+    <h2>{t('Mats')}</h2>
+    {#if canSetCount && view}
+      <span class="count">
+        <button aria-label={t('One mat fewer')} disabled={busy || mats.length <= 1} onclick={() => setCount(mats.length - 1)}>&minus;</button>
+        <span>{t('{n} mats in the hall', { n: mats.length })}</span>
+        <button aria-label={t('One mat more')} disabled={busy || mats.length >= 8} onclick={() => setCount(mats.length + 1)}>+</button>
+      </span>
+    {/if}
+  </div>
+  <p class="dim">
+    {disciplines > 1
+      ? t('Every discipline’s pools, eliminations and finals, in the order each mat runs them. Drag a card by its grip, or use its menu. What a mat is running stays where it is.')
+      : t('The pools, eliminations and finals, in the order each mat runs them. Drag a card by its grip, or use its menu. What a mat is running stays where it is.')}
+  </p>
+  {#if error}<p class="err" role="alert">{error}</p>{/if}
+
+  {#if !view}
+    <p class="dim">{live.error || t('Loading…')}</p>
+  {:else}
+    <div class="columns" class:dragging={!!drag}>
+      {#each mats as m (m.mat)}
+        {@const list = byMat.get(m.mat) ?? []}
+        <div class="column" data-mat={m.mat}>
+          <h3>{t('Mat {n}', { n: m.mat })}</h3>
+          {#if m.current}
+            <p class="now">
+              <span class="disc">{m.current.disciplineName}</span>
+              {m.current.match.round ? roundLabel(m.current.match) : t('Pool {n}', { n: m.current.match.pool })}:
+              {m.current.red} {t('v')} {m.current.blue}
+            </p>
+          {:else}
+            <p class="now dim">{list.length === 0 ? t('Nothing placed here.') : t('Nothing to fence just now.')}</p>
+          {/if}
+          <ol>
+            {#each list as it (it.id)}
+              <li
+                class="card {it.status}"
+                class:lifted={drag?.id === it.id}
+                class:drop-before={dropBefore(m.mat, list, it)}
+                data-item={it.id}
+              >
+                {#if it.movable}
+                  <button
+                    class="grip"
+                    aria-label={t('Drag {item}', { item: label(it) })}
+                    onpointerdown={(e) => grab(e, it)}
+                    onpointermove={drift}
+                    onpointerup={release}
+                    onpointercancel={cancel}>&#x2807;</button
+                  >
+                {:else}
+                  <span class="grip locked" title={statusLabel(it)}>&#x2022;</span>
+                {/if}
+                <span class="what">
+                  {#if disciplines > 1}<span class="disc">{it.disciplineName}</span>{/if}
+                  <span class="name">{label(it)}</span>
+                  <span class="meta">
+                    {it.done}/{it.total}{#if statusLabel(it)} &middot; {statusLabel(it)}{/if}
+                  </span>
+                </span>
+                {#if it.movable}
+                  <button class="more" aria-haspopup="menu" aria-expanded={menuFor === it.id} aria-label={t('Move {item}', { item: label(it) })} onclick={() => (menuFor = menuFor === it.id ? null : it.id)}>&hellip;</button>
+                  {#if menuFor === it.id}
+                    <div class="menu" role="menu">
+                      <button role="menuitem" disabled={busy} onclick={() => step(it, 'up')}>{t('Earlier')}</button>
+                      <button role="menuitem" disabled={busy} onclick={() => step(it, 'down')}>{t('Later')}</button>
+                      {#each mats.filter((o) => o.mat !== it.mat) as o (o.mat)}
+                        <button role="menuitem" disabled={busy} onclick={() => moveTo(it, o.mat)}>{t('To the end of mat {n}', { n: o.mat })}</button>
+                      {/each}
+                    </div>
+                  {/if}
+                {/if}
+              </li>
+            {/each}
+            {#if dropAtEnd(m.mat, list)}<li class="drop-end" aria-hidden="true"></li>{/if}
+          </ol>
+        </div>
+      {/each}
+    </div>
+  {/if}
+
+  {#if drag}
+    <div class="ghost" style="left: {drag.x}px; top: {drag.y}px; width: {drag.width}px" aria-hidden="true">{drag.label}</div>
+  {/if}
+</section>
+
+<style>
+  .board {
+    background: var(--panel);
+    border-radius: var(--radius);
+    padding: 1.1rem 1.25rem;
+    margin-bottom: 1rem;
+  }
+  .head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+  }
+  h2 {
+    margin: 0 0 0.5rem;
+    font-size: 1.15rem;
+  }
+  .count {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+  }
+  .count button {
+    width: 2rem;
+    padding: 0.2rem 0;
+  }
+  .dim {
+    margin: 0 0 0.8rem;
+    color: var(--ink-dim);
+    line-height: 1.5;
+    font-size: 0.9rem;
+  }
+  .err {
+    color: var(--amber-bright);
+  }
+  .columns {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(13.5rem, 1fr);
+    gap: 0.75rem;
+    overflow-x: auto;
+    padding-bottom: 0.3rem;
+  }
+  .column {
+    background: var(--panel-2);
+    border-radius: var(--radius);
+    padding: 0.7rem;
+    min-height: 6rem;
+  }
+  .columns.dragging {
+    user-select: none;
+  }
+  .columns.dragging .column {
+    outline: 1px dashed var(--line);
+  }
+  h3 {
+    margin: 0 0 0.3rem;
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+  .now {
+    margin: 0 0 0.6rem;
+    font-size: 0.82rem;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+  .disc {
+    display: block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--amber-bright);
+  }
+  ol {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.35rem;
+  }
+  .card {
+    position: relative;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.45rem;
+    border-radius: 8px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+  }
+  .card.running {
+    border-color: var(--amber-bright);
+  }
+  .card.done {
+    opacity: 0.55;
+  }
+  .card.lifted {
+    opacity: 0.35;
+  }
+  .card.drop-before::before,
+  .drop-end {
+    content: '';
+    display: block;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--amber-bright);
+  }
+  .card.drop-before::before {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -0.3rem;
+  }
+  .grip {
+    width: 1.8rem;
+    height: 2.2rem;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--ink-dim);
+    font-size: 1.2rem;
+    cursor: grab;
+    /* The grip takes the touch; the rest of the card still scrolls the page. */
+    touch-action: none;
+  }
+  .grip.locked {
+    display: grid;
+    place-items: center;
+    cursor: default;
+    font-size: 0.9rem;
+  }
+  .what {
+    display: grid;
+    min-width: 0;
+  }
+  .name {
+    font-weight: 700;
+    font-size: 0.92rem;
+  }
+  .meta {
+    font-size: 0.75rem;
+    color: var(--ink-dim);
+  }
+  .more {
+    padding: 0.2rem 0.5rem;
+    font-size: 1rem;
+  }
+  .menu {
+    position: absolute;
+    right: 0.3rem;
+    top: calc(100% + 0.2rem);
+    z-index: 20;
+    display: grid;
+    min-width: 11rem;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 0.25rem;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  }
+  .menu button {
+    text-align: left;
+    background: none;
+    border: none;
+    padding: 0.45rem 0.6rem;
+    font-size: 0.85rem;
+  }
+  .menu button:hover {
+    background: var(--panel);
+  }
+  .ghost {
+    position: fixed;
+    z-index: 100;
+    transform: translate(-1rem, -50%);
+    pointer-events: none;
+    padding: 0.5rem 0.7rem;
+    border-radius: 8px;
+    background: var(--panel-2);
+    border: 1px solid var(--amber-bright);
+    font-weight: 700;
+    font-size: 0.9rem;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+</style>

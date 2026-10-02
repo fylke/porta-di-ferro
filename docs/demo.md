@@ -119,6 +119,11 @@ for the 15:00 slot in the programme. Astrid, Bo and Greta are in both, which is 
 normal case at a club open and what the landing page's name search is for. A visitor can
 add a discipline of their own from the event admin; it starts empty.
 
+The mats are the event's, as at a real event: three of them, the longsword on all three
+and the sabre's pools queued behind on the first two. The event admin's mat board moves
+any card by drag or menu, and the score keeper and the screens follow their mat from one
+discipline to the next. The plan is part of what the demo keeps between tabs.
+
 **Play the rest** finishes every open match in every discipline, so the brackets and the
 podiums can be reached without scoring by hand. **Start over** rebuilds the event. Neither
 exists in the application.

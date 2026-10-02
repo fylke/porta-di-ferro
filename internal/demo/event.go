@@ -24,6 +24,10 @@ import (
 type Event struct {
 	info        store.Event
 	disciplines []*Demo
+	// plan is where every discipline's work runs on the event's mats (phase 2).
+	plan store.Plan
+	// keepers are the score keepers registered in this tab, for the match each holds.
+	keepers map[string]keeper
 }
 
 // NewEvent builds the event a visitor arrives in: the longsword halfway through its pools
@@ -45,6 +49,8 @@ func (e *Event) Reset() {
 	e.info.Signup.Tournament = ""
 	longsword.tournament.Event = store.Event{Signup: store.Signup{Tournament: "longsword-pools"}}
 	e.disciplines = nil
+	e.plan = store.Plan{}
+	e.keepers = nil
 	e.adopt(longsword)
 	e.adopt(sabre)
 }
@@ -66,6 +72,7 @@ func (e *Event) find(slug string) *Demo {
 // View is the event as its pages see it, built the way the coordinator builds it.
 func (e *Event) View() httpapi.EventView {
 	view := httpapi.EventView{Info: e.info, Dir: "in this browser", Disciplines: []httpapi.DisciplineSummary{}}
+	mats := e.mats()
 	for _, d := range e.disciplines {
 		snap, err := d.snapshot()
 		if err != nil {
@@ -75,7 +82,9 @@ func (e *Event) View() httpapi.EventView {
 			})
 			continue
 		}
-		view.Disciplines = append(view.Disciplines, httpapi.Summarize(d.slug, snap))
+		s := httpapi.Summarize(d.slug, snap)
+		s.Mats = httpapi.SummaryMats(mats, d.slug)
+		view.Disciplines = append(view.Disciplines, s)
 	}
 	view.Name = strings.TrimSpace(e.info.Signup.Name)
 	if view.Name == "" && len(view.Disciplines) == 1 {
@@ -100,6 +109,21 @@ func (e *Event) Request(method, path string, body []byte) Response {
 		return e.putInfo(body)
 	case method == "GET" && bare == "/api/info.pdf":
 		return e.infoPDF(query)
+	case method == "GET" && (bare == "/api/mats" || bare == "/api/plan"):
+		return ok(e.mats())
+	case method == "PUT" && bare == "/api/mats":
+		return e.putMats(body)
+	case method == "PATCH" && strings.HasPrefix(bare, "/api/plan/items/"):
+		id, _ := itemPath(bare)
+		return e.patchItem(id, body)
+	case method == "GET" && bare == "/api/presence":
+		return ok(map[string]any{"clients": []any{}, "quarantined": []any{}})
+	case method == "POST" && len(parts) == 3 && parts[1] == "clients":
+		return e.register(parts[2], body)
+	case method == "POST" && len(parts) == 4 && parts[1] == "clients" && parts[3] == "release":
+		return e.releaseClient(parts[2])
+	case method == "PUT" && len(parts) == 4 && parts[1] == "clients" && parts[3] == "target":
+		return ok(map[string]string{"target": ""})
 	case method == "GET" && bare == "/api/addresses":
 		// There is no LAN in a browser tab, which is the truth the admin pages show.
 		return ok([]any{})
@@ -302,12 +326,14 @@ func (e *Event) infoPDF(query string) Response {
 // --- keeping it between tabs (issue #108) ---------------------------------------------
 
 // eventSaveFormat is the shape of savedEvent. Format 1 was a single tournament, from
-// before the demo was an event; a browser holding one starts fresh.
-const eventSaveFormat = 2
+// before the demo was an event, and format 2 an event without its mats' plan; a browser
+// holding either starts fresh.
+const eventSaveFormat = 3
 
 type savedEvent struct {
 	Format      int               `json:"format"`
 	Info        store.Event       `json:"info"`
+	Plan        store.Plan        `json:"plan"`
 	Disciplines []savedDiscipline `json:"disciplines"`
 }
 
@@ -319,7 +345,7 @@ type savedDiscipline struct {
 
 // Save is the whole event as JSON: the day, and every discipline's own save.
 func (e *Event) Save() ([]byte, error) {
-	out := savedEvent{Format: eventSaveFormat, Info: e.info}
+	out := savedEvent{Format: eventSaveFormat, Info: e.info, Plan: e.plan}
 	for _, d := range e.disciplines {
 		state, err := d.Save()
 		if err != nil {
@@ -342,7 +368,7 @@ func (e *Event) Load(b []byte) error {
 	if len(in.Disciplines) == 0 {
 		return fmt.Errorf("a save with no disciplines in it")
 	}
-	next := &Event{info: in.Info}
+	next := &Event{info: in.Info, plan: in.Plan}
 	for _, sd := range in.Disciplines {
 		build := emptyFixture(sd.Name)
 		switch sd.Slug {
@@ -351,13 +377,16 @@ func (e *Event) Load(b []byte) error {
 		case "open-sabre":
 			build = sabreFixture
 		}
+		// Loaded and checked on its own, then put in the event: checked inside a half-built
+		// event, its snapshot would place the event's items with the disciplines not yet
+		// loaded missing, and drop their places from the plan.
 		d := newDiscipline(sd.Slug, build)
-		next.adopt(d)
 		if err := d.Load(sd.State); err != nil {
 			return fmt.Errorf("%s: %w", sd.Slug, err)
 		}
+		next.adopt(d)
 	}
-	e.info, e.disciplines = next.info, nil
+	e.info, e.plan, e.disciplines, e.keepers = next.info, next.plan, nil, nil
 	for _, d := range next.disciplines {
 		e.adopt(d)
 	}

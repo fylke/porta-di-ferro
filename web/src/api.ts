@@ -98,7 +98,9 @@ export interface Client {
   name: string;
   mat?: number;
   match?: string;
-  /** A display's assignment: "mat/1", "mats", "roster", "audience/2". Empty until set. */
+  /** Which discipline the score keeper's match is in: match ids repeat across them. */
+  discipline?: string;
+  /** A display's assignment: "mat/1", "mats", "audience/2", "d/{slug}/roster". Empty until set. */
   target?: string;
   lastSeen: string;
   alive: boolean;
@@ -106,6 +108,8 @@ export interface Client {
 
 /** An event a device wrote after its match had been handed to another. */
 export interface Quarantined {
+  /** The discipline the match is in, in an event's list. */
+  discipline?: string;
   match: string;
   client: string;
   clientName: string;
@@ -126,6 +130,48 @@ export interface Instance {
   dir: string;
   /** Where its pages are, relative to the event's address: "/d/open-sabre/". */
   url: string;
+}
+
+/** One match in a mat's queue, with its discipline and the names in it (phase 2). */
+export interface Slot {
+  discipline: string;
+  disciplineName: string;
+  item: string;
+  match: MatchView;
+  red: string;
+  blue: string;
+}
+
+/** One physical mat of the event: everything queued on it, and what it is running. */
+export interface MatView {
+  mat: number;
+  /** The match the mat is on: its score keeper's, or the head item's next. */
+  current?: Slot;
+  /** Every match of every item on the mat, in running order, finished ones included. */
+  queue: Slot[];
+  /** Matches of the head item still waiting on a feeder. */
+  waiting?: Slot[];
+}
+
+/** One work item on the event's mats, for the mat board. */
+export interface ItemView {
+  id: string;
+  discipline: string;
+  disciplineName: string;
+  kind: 'pool' | 'eliminations' | 'bronze' | 'final';
+  number?: number;
+  mat: number;
+  position: number;
+  status: 'waiting' | 'ready' | 'running' | 'done';
+  done: number;
+  total: number;
+  movable: boolean;
+}
+
+/** The hall: every mat, and every work item placed on them. */
+export interface MatsView {
+  mats: MatView[];
+  items: ItemView[];
 }
 
 /** What one of a discipline's mats is running or has up next, for the event's pages. */
@@ -260,6 +306,11 @@ export interface Snapshot {
   elimMatsSuggested: number;
   bracket?: BracketView;
   instance: Instance;
+  /**
+   * How many physical mats the event has. Every mat in this snapshot is then one of the
+   * event's, placed by its plan. Absent for a discipline on its own.
+   */
+  eventMats?: number;
   tournament: {
     event?: EventInfo;
     mats: number;
@@ -399,23 +450,6 @@ function disciplineApi(base: () => string) {
       }),
     releaseClaim: (matchId: string, client: string) =>
       req<{ ok: boolean }>('DELETE', `${base()}/matches/${matchId}/claim?client=${encodeURIComponent(client)}`),
-
-    presence: () => req<Presence>('GET', `${base()}/presence`),
-    register: (
-      id: string,
-      fields: { role: 'scorekeeper' | 'display'; name: string; mat?: number; match?: string },
-    ) => req<Client>('POST', `${base()}/clients/${id}`, fields),
-    release: (id: string) => req<{ ok: boolean }>('POST', `${base()}/clients/${id}/release`),
-    /** A goodbye from a page that is closing: fire and forget, the only kind it can send. */
-    releaseBeacon: (id: string) => {
-      try {
-        navigator.sendBeacon(`${base()}/clients/${id}/release`, '');
-      } catch {
-        // The server notices on its own.
-      }
-    },
-    assignDisplay: (id: string, target: string) =>
-      req<{ target: string }>('PUT', `${base()}/clients/${id}/target`, { target }),
     discardQuarantine: (matchId: string) => req<{ ok: boolean }>('DELETE', `${base()}/quarantine/${matchId}`),
   };
 }
@@ -447,4 +481,30 @@ export const api = {
   retireDiscipline: (slug: string) => req<{ retired: string }>('DELETE', `/api/disciplines/${slug}`),
   /** Reads a discipline's files again, after a hand edit that stopped it loading was fixed. */
   reloadDiscipline: (slug: string) => req<DisciplineSummary>('POST', `/api/disciplines/${slug}/reload`),
+
+  /** The hall's mats: every queue across disciplines, and what each mat is running. */
+  mats: () => req<MatsView>('GET', '/api/mats'),
+  /** How many mats the hall has. */
+  setMats: (count: number) => req<MatsView>('PUT', '/api/mats', { count }),
+  /** Moves a work item: to a place on a mat, or a step along its own. */
+  moveItem: (id: string, to: { mat: number; index?: number } | { move: 'up' | 'down' }) =>
+    req<MatsView>('PATCH', `/api/plan/items/${id.split('/').map(encodeURIComponent).join('/')}`, to),
+
+  // The devices at the mats belong to the event, whatever discipline they are scoring.
+  presence: () => req<Presence>('GET', '/api/presence'),
+  register: (
+    id: string,
+    fields: { role: 'scorekeeper' | 'display'; name: string; mat?: number; match?: string; discipline?: string },
+  ) => req<Client>('POST', `/api/clients/${id}`, fields),
+  release: (id: string) => req<{ ok: boolean }>('POST', `/api/clients/${id}/release`),
+  /** A goodbye from a page that is closing: fire and forget, the only kind it can send. */
+  releaseBeacon: (id: string) => {
+    try {
+      navigator.sendBeacon(`/api/clients/${id}/release`, '');
+    } catch {
+      // The server notices on its own.
+    }
+  },
+  assignDisplay: (id: string, target: string) =>
+    req<{ target: string }>('PUT', `/api/clients/${id}/target`, { target }),
 };

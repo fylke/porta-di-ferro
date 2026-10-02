@@ -212,6 +212,23 @@ export const sv: Record<string, string> = {
   'The event file could not be read, so the welcome, the programme and the wifi are blank until it is fixed. The disciplines run regardless.':
     'Tävlingsfilen kunde inte läsas, så välkomsttexten, programmet och wifi är tomma tills den är rättad. Disciplinerna körs ändå.',
   'The event’s files are in': 'Tävlingens filer finns i',
+  'Each discipline': 'Varje disciplin',
+  'Match roster: {name}': 'Matchlista: {name}',
+  // --- the mat board (phase 2) ------------------------------------------------------
+  'Drag {item}': 'Dra {item}',
+  'Move {item}': 'Flytta {item}',
+  'Eliminations {n}': 'Elimineringar {n}',
+  'Every discipline’s pools, eliminations and finals, in the order each mat runs them. Drag a card by its grip, or use its menu. What a mat is running stays where it is.': 'Alla disciplinernas pooler, elimineringar och finaler, i den ordning varje matta kör dem. Dra ett kort i greppet, eller använd dess meny. Det en matta kör just nu ligger kvar.',
+  'The pools, eliminations and finals, in the order each mat runs them. Drag a card by its grip, or use its menu. What a mat is running stays where it is.': 'Poolerna, elimineringarna och finalerna, i den ordning varje matta kör dem. Dra ett kort i greppet, eller använd dess meny. Det en matta kör just nu ligger kvar.',
+  'Nothing placed here.': 'Inget lagt här.',
+  'Nothing to fence just now.': 'Inget att fäkta just nu.',
+  'One mat fewer': 'En matta färre',
+  'One mat more': 'En matta till',
+  'To the end of mat {n}': 'Sist på matta {n}',
+  'done': 'klar',
+  'under way': 'pågår',
+  'waiting for results': 'väntar på resultat',
+  '{n} mats in the hall': '{n} mattor i hallen',
 
   // --- match editor -------------------------------------------------------------------
   'Edit the match log': 'Redigera matchloggen',

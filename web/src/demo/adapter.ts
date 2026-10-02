@@ -76,7 +76,8 @@ function toResponse(res: DemoResponse): Response {
 const streams = new Set<DemoEventSource>();
 
 /**
- * What a stream at this URL is sent: the event's view on /api/event/stream, and a
+ * What a stream at this URL is sent: the event's view on /api/event/stream, the hall's
+ * mats on /api/mats/stream, and a
  * discipline's snapshot on its own stream -- /api/d/{slug}/stream, or /api/stream while
  * the event has one discipline. The same frames the server's hubs push.
  */
@@ -85,6 +86,10 @@ function frameFor(url: string): string | null {
   if (path.endsWith('/api/event/stream')) {
     const res = call('GET', '/api/event');
     return res.status === 200 ? JSON.stringify({ kind: 'event', data: JSON.parse(res.body) }) : null;
+  }
+  if (path.endsWith('/api/mats/stream')) {
+    const res = call('GET', '/api/mats');
+    return res.status === 200 ? JSON.stringify({ kind: 'mats', data: JSON.parse(res.body) }) : null;
   }
   const res = call('GET', path.replace(/\/stream$/, '/state'));
   return res.status === 200 ? JSON.stringify({ kind: 'state', data: JSON.parse(res.body) }) : null;

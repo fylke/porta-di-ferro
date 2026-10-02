@@ -161,3 +161,72 @@ func TestTheDemoEventSavesAndLoads(t *testing.T) {
 		t.Errorf("Start over should bring back the two fixtures and the fixture's day, got %d and %q", len(v.Disciplines), v.Info.Welcome)
 	}
 }
+
+// The demo's mats are the event's (phase 2): the same plan, queues and moves as a real
+// event, so the board, the score keeper and the screens can be tried in a browser tab.
+func TestTheDemoRunsTheEventsMats(t *testing.T) {
+	e := demo.NewEvent()
+	res := e.Request("GET", "/api/mats", nil)
+	var v httpapi.MatsView
+	if err := json.Unmarshal([]byte(res.Body), &v); err != nil || res.Status != 200 {
+		t.Fatalf("GET /api/mats: %d %v", res.Status, err)
+	}
+	if len(v.Mats) != 3 {
+		t.Fatalf("the longsword's three mats are the hall's, got %d", len(v.Mats))
+	}
+	if c := v.Mats[0].Current; c == nil || c.Discipline != "open-steel-longsword" || c.Match.Status != "running" {
+		t.Errorf("mat 1 should be on the longsword's match under way: %+v", c)
+	}
+	var sabre httpapi.ItemView
+	for _, it := range v.Items {
+		if it.ID == "open-sabre/pool-1" {
+			sabre = it
+		}
+	}
+	if sabre.Mat == 0 || sabre.Position < 2 {
+		t.Errorf("Sabre's first pool should queue behind the longsword's: %+v", sabre)
+	}
+
+	// The board moves it to the front of mat 3, behind nothing that is under way.
+	res = e.Request("PATCH", "/api/plan/items/open-sabre/pool-1", []byte(`{"mat":3,"index":0}`))
+	if res.Status != 200 || !res.Changed {
+		t.Fatalf("moving an item returned %d", res.Status)
+	}
+	s := snapIn(t, e, "open-sabre")
+	for _, p := range s.Pools {
+		if p.Number == 1 && p.Mat != 3 {
+			t.Errorf("Sabre's snapshot should say its pool 1 runs on mat 3, got %d", p.Mat)
+		}
+	}
+	if s.EventMats != 3 {
+		t.Errorf("Sabre's snapshot should know the hall has 3 mats, got %d", s.EventMats)
+	}
+
+	// A score keeper holding a match keeps it on the mat.
+	first := v.Mats[1].Queue[0]
+	e.Request("POST", "/api/clients/tab", []byte(`{"role":"scorekeeper","mat":2,"match":"`+first.Match.ID+`","discipline":"`+first.Discipline+`"}`))
+	json.Unmarshal([]byte(e.Request("GET", "/api/mats", nil).Body), &v)
+	if c := v.Mats[1].Current; c == nil || c.Match.ID != first.Match.ID {
+		t.Errorf("mat 2 should hold its score keeper's match: %+v", c)
+	}
+
+	// The plan survives the trip through localStorage. Mat 3's first pool is already
+	// fenced, so the move put Sabre's pool right behind it.
+	was := 0
+	for _, it := range v.Items {
+		if it.ID == "open-sabre/pool-1" {
+			was = it.Position
+		}
+	}
+	saved := e.Request("GET", "/api/demo/save", nil).Body
+	next := demo.NewEvent()
+	if r := next.Request("POST", "/api/demo/load", []byte(saved)); r.Status != 200 {
+		t.Fatalf("load: %d %s", r.Status, r.Body)
+	}
+	json.Unmarshal([]byte(next.Request("GET", "/api/mats", nil).Body), &v)
+	for _, it := range v.Items {
+		if it.ID == "open-sabre/pool-1" && (it.Mat != 3 || it.Position != was) {
+			t.Errorf("the move should survive a reload: %+v", it)
+		}
+	}
+}

@@ -42,8 +42,11 @@ type Client struct {
 	// at a screen and know which row it is.
 	Name string `json:"name"`
 	// Mat and Match are the score keeper's: which mat it sits at, which match it is on.
-	Mat   int    `json:"mat,omitempty"`
-	Match string `json:"match,omitempty"`
+	// In an event the mat is one of the event's, and Discipline says which discipline
+	// the match is in -- match ids repeat from one discipline to the next.
+	Mat        int    `json:"mat,omitempty"`
+	Match      string `json:"match,omitempty"`
+	Discipline string `json:"discipline,omitempty"`
 	// Target is the display's: what it has been told to show, e.g. "mat/1", "mats",
 	// "roster", "audience/2". Empty until the organizer assigns it.
 	Target   string    `json:"target,omitempty"`
@@ -71,8 +74,9 @@ func (p *presence) touch(c Client) (changedMat bool) {
 		p.clients[c.ID] = &c
 		return c.Role == "scorekeeper"
 	}
-	changedMat = prev.Role == "scorekeeper" && (prev.Mat != c.Mat || prev.Match != c.Match || !prev.Alive)
-	prev.Role, prev.Name, prev.Mat, prev.Match = c.Role, c.Name, c.Mat, c.Match
+	changedMat = prev.Role == "scorekeeper" && (prev.Mat != c.Mat || prev.Match != c.Match ||
+		prev.Discipline != c.Discipline || !prev.Alive)
+	prev.Role, prev.Name, prev.Mat, prev.Match, prev.Discipline = c.Role, c.Name, c.Mat, c.Match, c.Discipline
 	if c.Target != "" {
 		prev.Target = c.Target
 	}
