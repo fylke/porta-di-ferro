@@ -200,6 +200,35 @@ type StaffMember struct {
 	// Signup is the submission identifier they came in on, the same as a competitor's:
 	// importing the folder twice must not offer the same person twice.
 	Signup string `json:"signup,omitempty"`
+	// Person is who they are across the event (phase 5): the same person as their
+	// competitor entries, so they are never put on a mat while they are fencing.
+	Person string `json:"person,omitempty"`
+	// Disciplines are the disciplines, by slug, they will work. Empty is any discipline.
+	Disciplines []string `json:"disciplines,omitempty"`
+}
+
+// Staff is the event's staff and who works where (docs/proposals/one-event-many-
+// disciplines.md, phase 5; #5), kept in staff.json in the event folder: one person cannot
+// referee two mats at once, so staff belong to the event rather than to a discipline.
+type Staff struct {
+	Members []StaffMember `json:"members"`
+	// Crew is how many of each role a mat needs while it runs an item, by role id. A role
+	// left out takes the default (see staffing.DefaultCrew).
+	Crew map[string]int `json:"crew,omitempty"`
+	// Assignments are who works each item in each role.
+	Assignments []Assignment `json:"assignments,omitempty"`
+}
+
+// Assignment is one member working one role on one work item.
+type Assignment struct {
+	// Item is the work item, "open-sabre/pool-2".
+	Item string `json:"item"`
+	Role string `json:"role"`
+	// Slot tells apart two of the same role on one item: the two assistant referees.
+	Slot  int    `json:"slot"`
+	Staff string `json:"staff"`
+	// Pinned says the organizer chose this one; a suggestion keeps it.
+	Pinned bool `json:"pinned,omitempty"`
 }
 
 // Person is one human across an event: the competitor entries in every discipline that

@@ -47,6 +47,9 @@ type Coordinator struct {
 	// peopleMu serialises changes to the event's people. Never held while waiting for a
 	// discipline's lock (coordinator_people.go).
 	peopleMu sync.Mutex
+	// staffMu serialises changes to the event's staff. Taken after a discipline's lock and
+	// before the people's (coordinator_staff.go).
+	staffMu sync.Mutex
 
 	mu      sync.Mutex
 	order   []string
@@ -103,6 +106,7 @@ func NewCoordinator(folder *event.Folder, assets fs.FS) (*Coordinator, error) {
 	}
 	c.liftDisplays()
 	c.ensurePeople()
+	c.liftStaff()
 	go c.announce()
 	go c.sweep()
 	return c, nil
@@ -144,6 +148,7 @@ func (c *Coordinator) load(slug string) *worker {
 	w.srv.UseEvent(c)
 	w.srv.UseMats(c)
 	w.srv.UsePeople(c)
+	w.srv.UseStaff(c)
 	w.handler = w.srv.Handler()
 	w.unfollow = c.follow(w.srv, slug)
 	return w
@@ -387,6 +392,15 @@ func (c *Coordinator) Handler() http.Handler {
 	mux.HandleFunc("GET /api/people", c.getPeople)
 	mux.HandleFunc("GET /api/people/{id}", c.getPerson)
 	mux.HandleFunc("POST /api/people/{id}/{action}", c.postPerson)
+
+	mux.HandleFunc("GET /api/staff", c.getStaff)
+	mux.HandleFunc("POST /api/staff", c.addStaff)
+	mux.HandleFunc("PATCH /api/staff/{id}", c.patchStaff)
+	mux.HandleFunc("DELETE /api/staff/{id}", c.deleteMember)
+	mux.HandleFunc("PUT /api/staff/crew", c.putCrew)
+	mux.HandleFunc("PUT /api/staff/assignments", c.putAssignment)
+	mux.HandleFunc("POST /api/staff/suggest", c.suggestStaff)
+	mux.HandleFunc("POST /api/staff/apply", c.applyStaff)
 
 	mux.HandleFunc("GET /api/mats", c.getMats)
 	mux.HandleFunc("PUT /api/mats", c.putMats)

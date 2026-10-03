@@ -100,6 +100,9 @@ This is Milestone 1, scoped to run MSL's club event on 15 November 2026:
 - The day planned and forecast: before the draw from how many are expected, then re-timed from
   every finished match at each mat's own pace, with a suggested plan that keeps what you pinned,
   warnings when someone is due in two places at once, and "about 10:40" on everyone's page
+- Staff for the whole event: volunteers from the signup files or added by hand, assigned to the
+  mats in one role on one mat for blocks of time, never while they are fencing, with their duties
+  on their own page
 
 The full picture is in [`docs/design.md`](docs/design.md); the engineering decisions and
 what was ruled out are in [`docs/tech-stack.md`](docs/tech-stack.md).
@@ -129,6 +132,7 @@ internal/store/     JSON files, atomic writes, the append-only log
 internal/event/     the event folder: event.json, people.json, a folder per discipline
 internal/people/    who is the same person across disciplines
 internal/forecast/  the plan re-timed from the match logs, and suggested plans
+internal/staffing/  the event's staff, and who works which mat when
 internal/http/      the coordinator, each discipline's routes, SSE, the embedded bundle
 internal/watchdog/  restarts the server if it dies
 web/                Svelte 5 + Vite

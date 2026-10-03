@@ -100,6 +100,9 @@ type PersonView struct {
 	Entries []people.Entry `json:"entries"`
 	// MergedFrom are the people merged into this one, whose merge can be undone.
 	MergedFrom []PersonRef `json:"mergedFrom,omitempty"`
+	// Duties are their work as staff (phase 5), and Physician says they are on call.
+	Duties    []Duty `json:"duties,omitempty"`
+	Physician bool   `json:"physician,omitempty"`
 }
 
 // PersonRef names a person.
@@ -189,6 +192,17 @@ func (c *Coordinator) getPerson(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		writeErr(w, http.StatusNotFound, fmt.Errorf("nobody with id %q is in this event", r.PathValue("id")))
 		return
+	}
+	if sv, _, st, err := c.StaffingNow(); err == nil {
+		v.Duties, v.Physician = DutiesOf(v.ID, st, sv)
+		if len(v.Entries) == 0 {
+			// Somebody who only works: their name is on the staff list.
+			for _, m := range st.Members {
+				if m.Person == v.ID {
+					v.Name, v.Club = m.Name, m.Club
+				}
+			}
+		}
 	}
 	writeJSON(w, http.StatusOK, v)
 }

@@ -9,6 +9,7 @@
   import EventEditor from './EventEditor.svelte';
   import People from './People.svelte';
   import Planning from './Planning.svelte';
+  import Staff from './Staff.svelte';
   import Signup from './Signup.svelte';
   import LangToggle from './LangToggle.svelte';
   import { t } from '../lib/i18n.svelte';
@@ -132,6 +133,9 @@
     <Signup scope="event" info={view.info} onchange={() => void hall.refresh()} />
 
     <People />
+
+    <!-- Who works the mats, at event level (phase 5). -->
+    <Staff />
 
 
     <p class="dir">{t('The event’s files are in')} <span class="mono">{view.dir}</span></p>

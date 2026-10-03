@@ -358,6 +358,66 @@ export interface StaffMember {
   /** "head-ref", "assistant-ref", "score-keeper", "physician". */
   roles: string[];
   signup?: string;
+  /** Who they are across the event (phase 5). */
+  person?: string;
+  /** The disciplines, by slug, they will work. Empty or absent is any. */
+  disciplines?: string[];
+}
+
+/** One member working one role on one work item (phase 5). */
+export interface Assignment {
+  item: string;
+  role: string;
+  slot: number;
+  staff: string;
+  /** Chosen by hand: a suggestion keeps it. */
+  pinned?: boolean;
+}
+
+/** A work item as the staff panel lists it. */
+export interface StaffItem {
+  id: string;
+  discipline: string;
+  disciplineName: string;
+  kind: 'pool' | 'eliminations' | 'bronze' | 'final';
+  number?: number;
+  mat: number;
+  start: string;
+  end: string;
+  started?: boolean;
+  projected?: boolean;
+}
+
+/** The event's staff, the crew each mat needs, who works what, and what is missing or wrong. */
+export interface StaffingView {
+  members: StaffMember[];
+  crew: Record<string, number>;
+  assignments: Assignment[];
+  items: StaffItem[];
+  short: { item: string; role: string; slot: number }[];
+  warnings: { kind: 'fencing' | 'double' | 'role' | 'discipline'; item: string; role: string; staff: string; other?: string }[];
+  /** Members on call as physicians, by id. */
+  physicians: string[];
+}
+
+export interface StaffSuggestion {
+  assignments: Assignment[];
+  changes: number;
+  short: { item: string; role: string; slot: number }[];
+  signature: string;
+}
+
+/** One stretch of work for a member. */
+export interface Duty {
+  item: string;
+  discipline: string;
+  disciplineName: string;
+  kind: 'pool' | 'eliminations' | 'bronze' | 'final';
+  number?: number;
+  mat: number;
+  role: string;
+  start: string;
+  end: string;
 }
 
 /** One response file as the organizer sees it before deciding. */
@@ -441,6 +501,9 @@ export interface PersonView {
   entries: PersonEntry[];
   /** People merged into this one, whose merge can be undone. */
   mergedFrom?: { id: string; name: string }[];
+  /** Their work as staff (phase 5), and whether they are on call as a physician. */
+  duties?: Duty[];
+  physician?: boolean;
 }
 
 export interface PeopleView {
@@ -629,6 +692,22 @@ export const api = {
 
   /** Everybody in the event, and who might be the same person. */
   people: () => req<PeopleView>('GET', '/api/people'),
+
+  // The event's staff (phase 5).
+  staff: () => req<StaffingView>('GET', '/api/staff'),
+  /** want: somebody already in the event this member is. */
+  addStaff: (m: { name: string; club: string; roles: string[]; disciplines: string[]; want?: string }) =>
+    req<StaffingView>('POST', '/api/staff', m),
+  updateStaff: (id: string, patch: { name?: string; club?: string; roles?: string[]; disciplines?: string[] }) =>
+    req<StaffingView>('PATCH', `/api/staff/${id}`, patch),
+  /** Takes somebody off the event's staff altogether. */
+  removeMember: (id: string) => req<StaffingView>('DELETE', `/api/staff/${id}`),
+  setCrew: (crew: Record<string, number>) => req<StaffingView>('PUT', '/api/staff/crew', crew),
+  /** Puts somebody in a slot by hand, or empties it with staff "". */
+  assign: (a: { item: string; role: string; slot: number; staff: string }) =>
+    req<StaffingView>('PUT', '/api/staff/assignments', a),
+  suggestStaff: () => req<StaffSuggestion>('POST', '/api/staff/suggest'),
+  applyStaff: (signature: string) => req<StaffingView>('POST', '/api/staff/apply', { signature }),
   /** One person's entries across the event, by any id they have had. */
   person: (id: string) => req<PersonView>('GET', `/api/people/${encodeURIComponent(id)}`),
   mergePerson: (id: string, into: string) => req<PeopleView>('POST', `/api/people/${id}/merge`, { into }),

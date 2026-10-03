@@ -156,6 +156,27 @@ flowchart LR
 - **Where the hall sees it**: `GET /api/forecast` for the board and the planning panel; the event view's `programme`, which both landing pages list under the typed programme; and `Eta` on every pending match in a discipline's snapshot (filled through `EventMats.Hall`), which a person's page shows as "about 10:40". Times go out in the server's zone and are printed as written.
 
 
+### Staff (phase 5)
+
+Staff belong to the event (#5): one person cannot referee two mats at once, and must never be put on a mat while fencing. `staff.json` in the event folder holds the members -- each linked to a person of the event, with the roles they offered and the disciplines they will work -- the crew a mat needs, and the assignments. `internal/staffing` is pure; the coordinator and `demo.Event` both call it.
+
+```mermaid
+flowchart LR
+    Signup["signup import (offers to work)"] --> Members[(staff.json: members)]
+    Hand["added by hand"] --> Members
+    Members --> Assign["staffing.Assign"]
+    Forecast["forecast: each item's time and mat"] --> Assign
+    People["people: who fences in each item"] --> Assign
+    Assign -->|"suggest, then apply"| Assignments[(staff.json: assignments)]
+    Assignments --> Panel["staff panel: gaps and broken rules"]
+    Assignments --> Who["/who/{person}: duties beside fencing"]
+```
+
+- **Members.** A signup response offering to work is one member however many disciplines it offers; the same submission as a competitor entry is the same person, which is how their fencing is known. The organizer adds members by hand, picking the competitor they are when the desk suggests one. Each discipline's own staff list -- what every run kept in its tournament before -- is lifted into `staff.json` the first time the event opens, and a discipline's pages still list and remove its members (`EventStaff`).
+- **Assigning** (`staffing.Assign`) walks the items in the order the forecast runs them and fills each mat's crew (by default a head referee, two assistants and a score keeper; `PUT /api/staff/crew`), the scarcest role first. Never anyone fencing at the time or on another mat; only roles offered, in disciplines they work. Among those who may: whoever held this role on this mat just before, then this role anywhere, then this mat, else whoever has worked least; and past two and a half hours without a pause, anybody else free first. A physician is on call for the hall, not on a mat.
+- **The organizer's choices stand.** A slot chosen by hand (`PUT /api/staff/assignments`) is pinned, and the crew of an item under way is kept. `staffing.Check` reports every empty slot and every kept assignment that breaks a rule; nothing is refused. `POST /api/staff/suggest` writes nothing; `POST /api/staff/apply` works it out again and refuses a stale signature.
+- **Where it is seen.** The staff panel on the event admin (and a one-discipline admin page) lists members, the crew, and every item of the plan with a picker per slot. `GET /api/people/{person}` carries `duties` and `physician`, which a person's page lists beside their fencing; somebody who only works has a page too.
+
 ### 1b. The public demo
 
 The same client with no server under it (issue #88, [docs/demo.md](docs/demo.md)). Deployed to GitHub Pages from `main`; the production deployment above is unchanged.

@@ -297,9 +297,15 @@ func (s *Server) importSignups(files []signup.File, mine *string) (imported, err
 			return imported{}, err
 		}
 	}
-	staff := signup.ImportStaff(preview, t.Staff)
-	addedStaff := len(staff) - len(t.Staff)
-	if addedStaff > 0 {
+	addedStaff := 0
+	if s.staff != nil {
+		// Offers to work go on the event's staff, where one person is one member however
+		// many disciplines they offered.
+		if addedStaff, err = s.staff.AddStaff(s.self().Slug, preview.Rows); err != nil {
+			return imported{}, err
+		}
+	} else if staff := signup.ImportStaff(preview, t.Staff); len(staff) > len(t.Staff) {
+		addedStaff = len(staff) - len(t.Staff)
 		// Saved onto the stored tournament, not the one read for the check, which has the
 		// event's day laid over it and must not be written back here.
 		stored, err := s.store.Tournament()
@@ -327,6 +333,19 @@ func (s *Server) importSignups(files []signup.File, mine *string) (imported, err
 // else has to change and the draw does not stand in the way.
 func (s *Server) deleteStaff(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	if s.staff != nil {
+		found, err := s.staff.RemoveStaff(s.self().Slug, id)
+		switch {
+		case err != nil:
+			writeErr(w, http.StatusInternalServerError, err)
+		case !found:
+			writeErr(w, http.StatusNotFound, fmt.Errorf("no staff member %s", id))
+		default:
+			s.publishState()
+			writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+		}
+		return
+	}
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 	t, err := s.store.Tournament()
