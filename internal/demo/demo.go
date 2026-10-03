@@ -34,6 +34,7 @@ import (
 	httpapi "github.com/fylke/porta-di-ferro/internal/http"
 	"github.com/fylke/porta-di-ferro/internal/match"
 	"github.com/fylke/porta-di-ferro/internal/signup"
+	"github.com/fylke/porta-di-ferro/internal/staffing"
 	"github.com/fylke/porta-di-ferro/internal/store"
 	"github.com/fylke/porta-di-ferro/internal/tournament"
 	"github.com/fylke/porta-di-ferro/web"
@@ -169,6 +170,8 @@ func (d *Demo) merged() store.Tournament {
 		mine := t.Event.Signup.Tournament
 		t.Event = d.event.info
 		t.Event.Signup.Tournament = mine
+		// The staff are the event's (phase 5): this discipline's are those who work it.
+		t.Staff = staffing.For(d.event.staff.Members, d.slug)
 	}
 	return t
 }
@@ -334,6 +337,11 @@ func (d *Demo) Request(method, path string, body []byte) Response {
 		return d.patchCompetitor(parts[2], body)
 	case method == "DELETE" && len(parts) == 3 && parts[1] == "competitors":
 		return d.deleteCompetitor(parts[2])
+	case method == "DELETE" && len(parts) == 3 && parts[1] == "staff" && d.event != nil:
+		if !d.event.removeStaffFrom(d.slug, parts[2]) {
+			return fail(404, fmt.Errorf("no staff member %s", parts[2]))
+		}
+		return changed(map[string]bool{"ok": true})
 	case method == "DELETE" && len(parts) == 3 && parts[1] == "staff":
 		kept, found := httpapi.WithoutStaff(d.tournament.Staff, parts[2])
 		if !found {
@@ -442,8 +450,8 @@ func (d *Demo) signupImport(body []byte, confirm bool) Response {
 
 // checkSignups is signup.Check over this discipline, as the programme row mine.
 func (d *Demo) checkSignups(files []signup.File, mine string) signup.Preview {
-	def := signup.BuildDefinition(d.merged())
-	return signup.Check(def, mine, files, d.competitors, d.tournament.Staff)
+	t := d.merged()
+	return signup.Check(signup.BuildDefinition(t), mine, files, d.competitors, t.Staff)
 }
 
 // importSignups adds what the check calls new, each entry a person of the event's.
@@ -456,6 +464,9 @@ func (d *Demo) importSignups(files []signup.File, mine string) (added, addedStaf
 			c := d.competitors[i]
 			d.competitors[i].Person = d.event.personFor(c.Name, c.Club, c.Signup, "")
 		}
+	}
+	if d.event != nil {
+		return len(d.competitors) - before, d.event.addStaffFromSignup(d.slug, preview.Rows)
 	}
 	d.tournament.Staff = signup.ImportStaff(preview, d.tournament.Staff)
 	return len(d.competitors) - before, len(d.tournament.Staff) - staffBefore

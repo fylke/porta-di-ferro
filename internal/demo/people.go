@@ -67,7 +67,7 @@ func (e *Event) getPerson(id string) Response {
 	if !found {
 		return fail(404, fmt.Errorf("nobody with id %q is in this event", id))
 	}
-	return ok(v)
+	return ok(e.withDuties(v))
 }
 
 func (e *Event) postPerson(id, action string, body []byte) Response {
