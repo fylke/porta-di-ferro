@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	httpapi "github.com/fylke/porta-di-ferro/internal/http"
@@ -73,7 +74,25 @@ func (e *Event) mats() httpapi.MatsView {
 	e.withSessions(inputs)
 	view := httpapi.BuildMats(inputs, placed, n, e.held)
 	view.Upcoming = store.UpcomingOf(e.screens)
+	httpapi.NameMats(&view, e.plan)
 	return view
+}
+
+func (e *Event) putMat(mat string, body []byte) Response {
+	n, err := strconv.Atoi(mat)
+	_, mats := e.placements()
+	if err != nil || n < 1 || n > mats {
+		return fail(404, fmt.Errorf("there is no mat %s", mat))
+	}
+	var in store.MatSetting
+	if err := json.Unmarshal(body, &in); err != nil {
+		return fail(400, err)
+	}
+	if in, err = httpapi.CleanMat(in); err != nil {
+		return fail(400, err)
+	}
+	httpapi.SetMat(&e.plan, n, in)
+	return changed(e.mats())
 }
 
 func (e *Event) putScreens(body []byte) Response {

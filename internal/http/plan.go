@@ -335,6 +335,10 @@ type Slot struct {
 // MatView is one physical mat: everything queued on it, and what it is running now.
 type MatView struct {
 	Mat int `json:"mat"`
+	// Name is what the organizer calls the mat, if anything, and Away the times it is not
+	// available (#123).
+	Name string       `json:"name,omitempty"`
+	Away []store.Away `json:"away,omitempty"`
 	// Current is the match the mat is on: the one its live score keeper is holding, or
 	// the first match of its head item still to be fenced. Nil when the head item is
 	// waiting -- for a semi-final's feeders, say -- or the mat has nothing queued.

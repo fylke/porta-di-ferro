@@ -440,6 +440,16 @@ export const sv: Record<string, string> = {
   '{n} slots have nobody.': '{n} platser saknar folk.',
   'A mat needs': 'En matta behöver',
   'Add to the staff': 'Lägg till som funktionär',
+  'away {from}–{to}': 'borta {from}–{to}',
+  'The mats': 'Mattorna',
+  'A name the hall knows a mat by, and the times it is not available: no work is planned on it then.':
+    'Ett namn som hallen känner mattan under, och tiderna den inte finns: då planeras inget på den.',
+  'Name, if any': 'Namn, om något',
+  'Name of mat {n}': 'Namn på matta {n}',
+  away: 'borta',
+  'Away from': 'Borta från',
+  'Away until': 'Borta till',
+  'Add a time away': 'Lägg till en tid borta',
   'after the block before': 'efter blocket före',
   'The order of the day': 'Dagens ordning',
   'Disciplines in the same block run side by side; a block starts once every discipline of the blocks before it is done.':

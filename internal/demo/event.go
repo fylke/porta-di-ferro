@@ -155,6 +155,8 @@ func (e *Event) Request(method, path string, body []byte) Response {
 		return e.putMats(body)
 	case method == "PUT" && bare == "/api/screens":
 		return e.putScreens(body)
+	case method == "PUT" && len(parts) == 3 && parts[1] == "mats":
+		return e.putMat(parts[2], body)
 	case method == "PATCH" && strings.HasPrefix(bare, "/api/plan/items/"):
 		id, _ := itemPath(bare)
 		return e.patchItem(id, body)

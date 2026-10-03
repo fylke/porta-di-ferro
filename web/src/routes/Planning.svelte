@@ -37,7 +37,26 @@
     expected = { ...(f.expected ?? {}) };
   }
 
+  // Each mat's name and away times, as edited here before saving (#123).
+  let matEdits = $state<{ mat: number; name: string; away: { from: string; to: string }[] }[]>([]);
+  async function loadMats() {
+    try {
+      const view = await api.mats();
+      matEdits = view.mats.map((m) => ({ mat: m.mat, name: m.name ?? '', away: (m.away ?? []).map((a) => ({ ...a })) }));
+    } catch {
+      // The rest of the panel works without it.
+    }
+  }
+  function saveMat(i: number) {
+    const m = matEdits[i];
+    void run(async () => {
+      await api.setMat(m.mat, { name: m.name, away: m.away.filter((a) => a.from && a.to) });
+      forecast = await api.forecast();
+    }, t('Saved'));
+  }
+
   async function load() {
+    void loadMats();
     try {
       forecast = await api.forecast();
       if (!seeded) {
@@ -145,6 +164,31 @@
     </div>
   </form>
   <p class="dim small">{t('Breaks in the programme, such as lunch, stop the mats: give them a start and an end there.')}</p>
+
+  {#if matEdits.length > 0}
+    <!-- What each mat is called, and when it is not there (#123). -->
+    <h3>{t('The mats')}</h3>
+    <p class="dim small">{t('A name the hall knows a mat by, and the times it is not available: no work is planned on it then.')}</p>
+    <ul class="mats">
+      {#each matEdits as m, i (m.mat)}
+        <li>
+          <span class="strong">{t('Mat {n}', { n: m.mat })}</span>
+          <input class="mat-name" bind:value={m.name} placeholder={t('Name, if any')} aria-label={t('Name of mat {n}', { n: m.mat })} />
+          {#each m.away as a, j (j)}
+            <span class="away">
+              {t('away')}
+              <input type="time" bind:value={a.from} aria-label={t('Away from')} />
+              &ndash;
+              <input type="time" bind:value={a.to} aria-label={t('Away until')} />
+              <button class="quiet" onclick={() => (m.away = m.away.filter((_, k) => k !== j))}>&times;</button>
+            </span>
+          {/each}
+          <button class="quiet" onclick={() => (m.away = [...m.away, { from: '', to: '' }])}>{t('Add a time away')}</button>
+          <button class="save small-btn" disabled={busy} onclick={() => saveMat(i)}>{t('Save')}</button>
+        </li>
+      {/each}
+    </ul>
+  {/if}
 
   {#if disciplines.length > 1}
     <!-- Which disciplines run side by side and which one after another (#136). -->
@@ -364,6 +408,43 @@
   }
   .strong {
     font-weight: 700;
+  }
+  .mats {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.5rem;
+  }
+  .mats li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 0.7rem;
+    font-size: 0.9rem;
+  }
+  .mat-name {
+    padding: 0.35rem 0.5rem;
+    width: 12rem;
+    max-width: 100%;
+  }
+  .away {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    color: var(--ink-dim);
+  }
+  .away input {
+    padding: 0.2rem 0.3rem;
+  }
+  .quiet {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.82rem;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+  }
+  .small-btn {
+    padding: 0.35rem 0.8rem;
   }
   label.check {
     display: inline-flex;

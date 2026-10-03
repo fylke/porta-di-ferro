@@ -13,11 +13,13 @@
     forecast,
     items,
     mats,
+    matNames = {},
     name,
   }: {
     forecast: ForecastView;
     items: ItemView[];
     mats: number[];
+    matNames?: Record<number, string>;
     name: (id: string) => string;
   } = $props();
 
@@ -75,7 +77,7 @@
     </div>
     {#each mats as mat (mat)}
       <div class="row">
-        <span class="mat">{t('Mat {n}', { n: mat })}</span>
+        <span class="mat" title={matNames[mat] ?? ''}>{matNames[mat] || t('Mat {n}', { n: mat })}</span>
         <div class="lane">
           {#each forecast.items.filter((x) => x.mat === mat) as x (x.id)}
             {#if x.plannedStart && x.plannedStart !== x.start}

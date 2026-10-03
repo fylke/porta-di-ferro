@@ -97,6 +97,17 @@ type Input struct {
 	Now time.Time
 	// Anomalies are matches, by key, whose times are not to be learned from.
 	Anomalies map[string]bool
+	// MatBreaks are the times one mat is not available, by mat (#123): breaks for that
+	// mat alone.
+	MatBreaks map[int][]Break
+}
+
+// breaksOn is every break a mat keeps: the hall's and its own.
+func (in Input) breaksOn(mat int) []Break {
+	if len(in.MatBreaks[mat]) == 0 {
+		return in.Breaks
+	}
+	return append(append([]Break{}, in.Breaks...), in.MatBreaks[mat]...)
 }
 
 // Span is one item's times.
@@ -412,7 +423,7 @@ func simulate(in Input, pace map[int]Pace, live bool) (timeline, []Warning) {
 		if fencedOn[mat] {
 			at = at.Add(p.Changeover)
 		}
-		at = afterBreaks(at, in.Breaks)
+		at = afterBreaks(at, in.breaksOn(mat))
 		return timing{start: at, end: at.Add(p.Match), base: base}, true
 	}
 

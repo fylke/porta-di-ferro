@@ -152,6 +152,9 @@ export interface Slot {
 /** One physical mat of the event: everything queued on it, and what it is running. */
 export interface MatView {
   mat: number;
+  /** What the organizer calls the mat, and when it is not available (#123). */
+  name?: string;
+  away?: { from: string; to: string }[];
   /** The match the mat is on: its score keeper's, or the head item's next. */
   current?: Slot;
   /** Every match of every item on the mat, in running order, finished ones included. */
@@ -746,6 +749,9 @@ export const api = {
 
   /** The hall's mats: every queue across disciplines, and what each mat is running. */
   mats: () => req<MatsView>('GET', '/api/mats'),
+  /** One mat's name and the times it is not available (#123). */
+  setMat: (mat: number, setting: { name: string; away: { from: string; to: string }[] }) =>
+    req<MatsView>('PUT', `/api/mats/${mat}`, setting),
   /** What every mat screen shows of the matches to come. */
   setScreens: (screens: { upcoming: 'bottom' | 'list' | 'none' }) => req<MatsView>('PUT', '/api/screens', screens),
   /** How many mats the hall has. */

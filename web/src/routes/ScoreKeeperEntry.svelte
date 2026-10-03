@@ -52,7 +52,9 @@
     {#each mats as mat (mat)}
       {@const up = upNext(mat)}
       <button onclick={() => navigate(`/score/${mat}`)}>
-        <span class="n">{t('Mat {n}', { n: mat })}</span>
+        <span class="n">
+          {t('Mat {n}', { n: mat })}{#if live.view?.mats.find((m) => m.mat === mat)?.name} &middot; {live.view?.mats.find((m) => m.mat === mat)?.name}{/if}
+        </span>
         <span class="up">
           {#if up}
             {#if up.discipline}{up.discipline} &middot; {/if}{#if up.pool}{t('Pool {n}', { n: up.pool })} &middot; {/if}{up.red} {t('v')} {up.blue}

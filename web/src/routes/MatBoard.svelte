@@ -347,7 +347,7 @@
   {/if}
 
   {#if forecast && forecast.items.length > 0 && view}
-    <DayTimeline {forecast} items={view.items} mats={mats.map((m) => m.mat)} name={itemName} />
+    <DayTimeline {forecast} items={view.items} mats={mats.map((m) => m.mat)} matNames={Object.fromEntries(mats.map((m) => [m.mat, m.name ?? '']))} name={itemName} />
   {/if}
 
   {#if !view}
@@ -357,7 +357,10 @@
       {#each mats as m (m.mat)}
         {@const list = byMat.get(m.mat) ?? []}
         <div class="column" data-mat={m.mat}>
-          <h3>{t('Mat {n}', { n: m.mat })}</h3>
+          <h3>{t('Mat {n}', { n: m.mat })}{#if m.name} &middot; {m.name}{/if}</h3>
+          {#each m.away ?? [] as a (a.from)}
+            <p class="away">{t('away {from}–{to}', { from: a.from, to: a.to })}</p>
+          {/each}
           {#if m.current}
             <p class="now">
               <span class="disc">{m.current.disciplineName}</span>
@@ -508,6 +511,11 @@
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--ink-dim);
+  }
+  .away {
+    margin: 0 0 0.3rem;
+    font-size: 0.75rem;
+    color: var(--amber-bright);
   }
   .now {
     margin: 0 0 0.6rem;

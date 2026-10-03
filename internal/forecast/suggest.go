@@ -186,7 +186,7 @@ func Suggest(in Input, mats int) Suggestion {
 				if i > 0 {
 					s = s.Add(p.Changeover)
 				}
-				s = afterBreaks(s, in.Breaks)
+				s = afterBreaks(s, in.breaksOn(mat))
 				if start.IsZero() {
 					start = s
 				}

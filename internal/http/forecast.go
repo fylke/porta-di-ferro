@@ -141,6 +141,18 @@ func ForecastInput(inputs []MatsInput, placed map[string]store.Placement, plan s
 	for _, k := range plan.Anomalies {
 		out.Anomalies[k] = true
 	}
+	for i, ms := range plan.MatSettings {
+		for _, a := range ms.Away {
+			from, ok1 := ParseClock(day, a.From)
+			to, ok2 := ParseClock(day, a.To)
+			if ok1 && ok2 && to.After(from) {
+				if out.MatBreaks == nil {
+					out.MatBreaks = map[int][]forecast.Break{}
+				}
+				out.MatBreaks[i+1] = append(out.MatBreaks[i+1], forecast.Break{From: from, To: to})
+			}
+		}
+	}
 	for _, row := range ev.Schedule {
 		if row.Kind != "break" {
 			continue
@@ -216,6 +228,51 @@ func OrderOf(plan store.Plan, slugs []string, started func(WorkItem) bool) Place
 		Position:   func(slug string) int { return position[slug] },
 		FinalsLast: plan.FinalsLast,
 		Started:    started,
+	}
+}
+
+// NameMats gives the hall's mats their names and the times they are away (#123).
+func NameMats(view *MatsView, plan store.Plan) {
+	for i := range view.Mats {
+		n := view.Mats[i].Mat - 1
+		if n >= 0 && n < len(plan.MatSettings) {
+			view.Mats[i].Name = plan.MatSettings[n].Name
+			view.Mats[i].Away = plan.MatSettings[n].Away
+		}
+	}
+}
+
+// CleanMat checks one mat's setting from the planning panel.
+func CleanMat(m store.MatSetting) (store.MatSetting, error) {
+	m.Name = strings.TrimSpace(m.Name)
+	if len([]rune(m.Name)) > 30 {
+		return m, fmt.Errorf("a mat's name is at most 30 characters")
+	}
+	day := time.Now()
+	for i, a := range m.Away {
+		from, ok1 := ParseClock(day, a.From)
+		to, ok2 := ParseClock(day, a.To)
+		if !ok1 || !ok2 || !to.After(from) {
+			return m, fmt.Errorf("away from %q to %q: two times of day, the second later", a.From, a.To)
+		}
+		m.Away[i] = store.Away{From: strings.TrimSpace(a.From), To: strings.TrimSpace(a.To)}
+	}
+	return m, nil
+}
+
+// SetMat sets one mat's name and away times in the plan.
+func SetMat(plan *store.Plan, mat int, m store.MatSetting) {
+	for len(plan.MatSettings) < mat {
+		plan.MatSettings = append(plan.MatSettings, store.MatSetting{})
+	}
+	plan.MatSettings[mat-1] = m
+	// Nothing set past the last named mat need be kept.
+	for len(plan.MatSettings) > 0 {
+		last := plan.MatSettings[len(plan.MatSettings)-1]
+		if last.Name != "" || len(last.Away) > 0 {
+			break
+		}
+		plan.MatSettings = plan.MatSettings[:len(plan.MatSettings)-1]
 	}
 }
 

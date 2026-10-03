@@ -295,3 +295,16 @@ func TestASemiFinalWaitsForItsQuarterFinalsOnAnotherMat(t *testing.T) {
 		t.Errorf("the lanes waiting on each other is no plan out of order: %+v", r.Warnings)
 	}
 }
+
+// A mat away for part of the day waits it out; the others do not (#123).
+func TestAMatAwayWaitsItOut(t *testing.T) {
+	in := forecast.Input{Timings: tpl, MatBreaks: map[int][]forecast.Break{1: {{From: at("09:00"), To: at("10:00")}}},
+		Items: []forecast.Item{item("ls/pool-1", "ls", "pool", 1, 1, 2), item("ls/pool-2", "ls", "pool", 2, 1, 2)}}
+	r := forecast.Run(in)
+	if s := spanOf(r, "ls/pool-1"); hm(s.Start) != "10:00" {
+		t.Errorf("mat 1 is away until ten: %s", hm(s.Start))
+	}
+	if s := spanOf(r, "ls/pool-2"); hm(s.Start) != "09:00" {
+		t.Errorf("mat 2 is there from nine: %s", hm(s.Start))
+	}
+}

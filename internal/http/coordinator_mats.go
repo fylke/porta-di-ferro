@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -156,6 +157,7 @@ func (c *Coordinator) matsFrom(snaps []snapped) MatsView {
 	placed, mats := c.Placements()
 	view := BuildMats(inputs, placed, mats, c.held)
 	view.Upcoming = store.UpcomingOf(file.Screens)
+	NameMats(&view, file.Plan)
 	return view
 }
 
@@ -310,6 +312,31 @@ func (c *Coordinator) patchItem(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeJSON(w, http.StatusOK, c.MatsNow())
 	}
+}
+
+// putMat is one mat's name and the times it is not available (#123).
+func (c *Coordinator) putMat(w http.ResponseWriter, r *http.Request) {
+	n, err := strconv.Atoi(r.PathValue("mat"))
+	_, mats := c.Placements()
+	if err != nil || n < 1 || n > mats {
+		writeErr(w, http.StatusNotFound, fmt.Errorf("there is no mat %s", r.PathValue("mat")))
+		return
+	}
+	var in store.MatSetting
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	in, err = CleanMat(in)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	if err := c.changePlan(func(p *store.Plan) error { SetMat(p, n, in); return nil }); err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, c.MatsNow())
 }
 
 // putScreens is how every mat screen looks (#110).

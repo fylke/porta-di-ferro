@@ -38,7 +38,7 @@
 
 <main class="mode-{mode}">
   <div class="board">
-    <Scoreboard {mat} {match} {names} {elapsed} discipline={current?.disciplineName ?? ''} />
+    <Scoreboard {mat} {match} {names} {elapsed} discipline={current?.disciplineName ?? ''} matName={here?.name ?? ''} />
   </div>
   {#if mode === 'bottom'}
     <footer>

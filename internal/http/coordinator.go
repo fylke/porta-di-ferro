@@ -404,6 +404,7 @@ func (c *Coordinator) Handler() http.Handler {
 
 	mux.HandleFunc("GET /api/mats", c.getMats)
 	mux.HandleFunc("PUT /api/mats", c.putMats)
+	mux.HandleFunc("PUT /api/mats/{mat}", c.putMat)
 	mux.HandleFunc("GET /api/mats/stream", func(w http.ResponseWriter, r *http.Request) {
 		serveStream(w, r, c.matsHub)
 	})
