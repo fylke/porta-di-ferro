@@ -58,7 +58,7 @@
         <span class="dim">{t('No match up yet')}</span>
       </div>
     {:else}
-      {@render side(order[0])}
+      {@render side(order[0], 'first')}
 
       <div class="centre">
         <div class="mat">{matLabel}</div>
@@ -69,14 +69,14 @@
         {/if}
       </div>
 
-      {@render side(order[1])}
+      {@render side(order[1], 'second')}
     {/if}
   </section>
 </div>
 
-{#snippet side(which: Side)}
+{#snippet side(which: Side, place: 'first' | 'second')}
   {#if board}
-    <div class="side" style="--side-tint: var(--tint-{options[which]})">
+    <div class="side {place}" style="--side-tint: var(--tint-{options[which]})">
       <div class="name">{names[which]}</div>
       <div class="score mono">{board[which].score}</div>
       <div class="warns">
@@ -187,6 +187,45 @@
     font-size: clamp(0.9rem, 3vh, 1.8rem);
   }
 
+  /* A wide screen with one mat on it (#110): the clock across the top, centred, and the
+     two competitors side by side beneath it, each taking half the screen -- the scores
+     as large as the space allows, because they are read from across a hall. */
+  .board:not(.compact) {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    align-items: stretch;
+  }
+  .board:not(.compact) .centre {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    max-width: none;
+  }
+  .board:not(.compact) .side {
+    grid-row: 2;
+    align-content: center;
+  }
+  .board:not(.compact) .side.first {
+    grid-column: 1;
+  }
+  .board:not(.compact) .side.second {
+    grid-column: 2;
+  }
+  .board:not(.compact) .name {
+    font-size: clamp(1.2rem, min(7cqh, 4.5cqw), 5rem);
+  }
+  .board:not(.compact) .score {
+    font-size: clamp(4rem, min(48cqh, 28cqw), 32rem);
+  }
+  .board:not(.compact) .warns {
+    font-size: clamp(1rem, min(5cqh, 3cqw), 3rem);
+  }
+  .board:not(.compact) .time {
+    font-size: clamp(2rem, min(13cqh, 10cqw), 9rem);
+  }
+  .board:not(.compact) .result {
+    font-size: clamp(1.2rem, min(8cqh, 5cqw), 4rem);
+  }
+
   /* Three mats or more: one compact row each, like a departures board. Wide short rows
      stay legible at a distance in a way shrunken scoreboards do not. */
   .board.compact {
@@ -217,7 +256,7 @@
   }
 
   /* Taller than it is wide -- a phone held upright, or one of two mats on a portrait
-     tablet -- or simply narrow, like the audience board above its queue on a phone: the
+     tablet -- or simply narrow, like a mat screen beside its on-deck list on a phone: the
      competitors stack, first side on top, with the clock between them. Side by side, the
      two scores and the clock were three columns fighting for a third of a phone's width
      each and losing. The type follows the board here rather than the viewport height,
@@ -225,11 +264,27 @@
      stacks the same way, each side becoming one departures-board line. */
   @container scoreboard (orientation: portrait) or (max-width: 30rem) {
     .board,
-    .board.compact {
+    .board.compact,
+    .board:not(.compact) {
       grid-template-columns: minmax(0, 1fr);
       grid-template-rows: minmax(0, 1fr) auto minmax(0, 1fr);
       align-items: stretch;
       gap: clamp(0.4rem, 2cqh, 1rem);
+    }
+    .board .side.first,
+    .board:not(.compact) .side.first {
+      grid-column: 1;
+      grid-row: 1;
+    }
+    .board .centre,
+    .board:not(.compact) .centre {
+      grid-column: 1;
+      grid-row: 2;
+    }
+    .board .side.second,
+    .board:not(.compact) .side.second {
+      grid-column: 1;
+      grid-row: 3;
     }
     .side {
       align-content: center;
