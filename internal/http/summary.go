@@ -26,6 +26,18 @@ type EventView struct {
 	Dir         string              `json:"dir"`
 	// Programme is the fencing part of the day, as the forecast has it (phase 4).
 	Programme []ProgrammeRow `json:"programme"`
+	// Staff are the event's staff, for the landing page's list of everyone (#135): their
+	// names, as every discipline's snapshot already lists them, and their pages.
+	Staff []Entrant `json:"staff"`
+}
+
+// StaffEntrants is the staff as the landing page lists them.
+func StaffEntrants(members []store.StaffMember) []Entrant {
+	out := make([]Entrant, 0, len(members))
+	for _, m := range members {
+		out = append(out, Entrant{ID: m.ID, Name: m.Name, Club: m.Club, Person: m.Person})
+	}
+	return out
 }
 
 // DisciplineSummary is one discipline, compactly.

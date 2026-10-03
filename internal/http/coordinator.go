@@ -319,6 +319,8 @@ func (c *Coordinator) viewFrom(snaps []snapped, mats MatsView) EventView {
 	}
 	h := c.timesFrom(snaps)
 	view.Programme = ViewForecast(h.in, h.result, h.inputs, h.timings).Programme
+	st, _ := c.folder.Staff()
+	view.Staff = StaffEntrants(st.Members)
 	view.Name = strings.TrimSpace(view.Info.Signup.Name)
 	if view.Name == "" && len(view.Disciplines) == 1 {
 		view.Name = view.Disciplines[0].Name

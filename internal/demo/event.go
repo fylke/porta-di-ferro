@@ -116,6 +116,7 @@ func (e *Event) View() httpapi.EventView {
 	}
 	in, r, inputs := e.times()
 	view.Programme = httpapi.ViewForecast(in, r, inputs, e.timings()).Programme
+	view.Staff = httpapi.StaffEntrants(e.staff.Members)
 	view.Name = strings.TrimSpace(e.info.Signup.Name)
 	if view.Name == "" && len(view.Disciplines) == 1 {
 		view.Name = view.Disciplines[0].Name

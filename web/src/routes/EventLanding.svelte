@@ -30,6 +30,9 @@
   const info = $derived(view?.info ?? {});
 
   let query = $state('');
+  /** The whole list rather than a search: for browsing, not only finding (#135). */
+  let browsing = $state(false);
+  let showing = $state<'everyone' | 'fencers' | 'staff'>('everyone');
   const fold = (s: string) =>
     s
       .toLocaleLowerCase()
@@ -38,29 +41,35 @@
   // Somebody looking for their match knows their name, not which discipline the
   // organizer filed them under -- and may be in more than one, which is one person with
   // one page for the whole day (phase 3).
+  // The staff are in the list too: somebody looking for who referees their pool, or a
+  // volunteer for their own page. One person who fences and works is one row.
+  const searching = $derived(fold(query.trim()).length >= 2);
   const found = $derived.by(() => {
     const q = fold(query.trim());
-    if (q.length < 2 || !view) return [];
+    if ((!searching && !browsing) || !view) return [];
+    const matches = (name: string, club?: string) => !searching || fold(name).includes(q) || fold(club ?? '').includes(q);
     const byPerson = new Map<string, { key: string; href: string; name: string; club?: string; in: string[] }>();
-    for (const d of view.disciplines) {
-      for (const e of d.entrants) {
-        if (!fold(e.name).includes(q) && !fold(e.club ?? '').includes(q)) continue;
-        const key = e.person || `${d.slug}/${e.id}`;
-        const row = byPerson.get(key);
-        if (row) {
-          row.in.push(d.name);
-          continue;
+    const add = (key: string, href: string, name: string, club: string | undefined, where: string) => {
+      const row = byPerson.get(key);
+      if (row) row.in.push(where);
+      else byPerson.set(key, { key, href, name, club, in: [where] });
+    };
+    if (showing !== 'staff') {
+      for (const d of view.disciplines) {
+        for (const e of d.entrants) {
+          if (!matches(e.name, e.club)) continue;
+          add(e.person || `${d.slug}/${e.id}`, e.person ? `/who/${e.person}` : `/d/${d.slug}/who/${e.id}`, e.name, e.club, d.name);
         }
-        byPerson.set(key, {
-          key,
-          href: e.person ? `/who/${e.person}` : `/d/${d.slug}/who/${e.id}`,
-          name: e.name,
-          club: e.club,
-          in: [d.name],
-        });
       }
     }
-    return [...byPerson.values()].sort((a, b) => a.name.localeCompare(b.name)).slice(0, 30);
+    if (showing !== 'fencers') {
+      for (const m of view.staff ?? []) {
+        if (!m.person || !matches(m.name, m.club)) continue;
+        add(m.person, `/who/${m.person}`, m.name, m.club, t('Staff'));
+      }
+    }
+    const rows = [...byPerson.values()].sort((a, b) => a.name.localeCompare(b.name));
+    return searching && !browsing ? rows.slice(0, 30) : rows;
   });
 </script>
 
@@ -100,9 +109,19 @@
             placeholder={t('Your name, or your club')}
             aria-label={t('Find a name')}
           />
-          {#if query.trim().length >= 2}
+          <div class="browse">
+            <button class="quiet" aria-pressed={browsing} onclick={() => (browsing = !browsing)}>
+              {browsing ? t('Hide the list') : t('List everyone')}
+            </button>
+            {#if browsing || searching}
+              {#each [['everyone', t('Everyone')], ['fencers', t('Fencers')], ['staff', t('Staff')]] as [k, label] (k)}
+                <button class="chip" aria-pressed={showing === k} onclick={() => (showing = k as typeof showing)}>{label}</button>
+              {/each}
+            {/if}
+          </div>
+          {#if searching || browsing}
             {#if found.length === 0}
-              <p class="dim">{t('Nobody by that name is entered.')}</p>
+              <p class="dim">{searching ? t('Nobody by that name is entered.') : t('Nobody is entered yet.')}</p>
             {:else}
               <ul class="found">
                 {#each found as f (f.key)}
@@ -239,6 +258,23 @@
   input[type='search'] {
     width: 100%;
     box-sizing: border-box;
+  }
+  .browse {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+  }
+  .browse button {
+    padding: 0.3rem 0.7rem;
+    font-size: 0.82rem;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    color: var(--ink);
+  }
+  .browse .chip[aria-pressed='true'] {
+    border-color: var(--amber);
+    color: var(--amber-bright);
   }
   .found {
     list-style: none;

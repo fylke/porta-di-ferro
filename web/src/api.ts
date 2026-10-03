@@ -314,6 +314,8 @@ export interface DisciplineSummary {
 
 /** The whole event: the day around the fencing, and every discipline in it. */
 export interface EventView {
+  /** The event's staff, for the landing page's list of everyone (#135). */
+  staff?: { id: string; name: string; club?: string; person?: string }[];
   name: string;
   info: EventInfo;
   /** event.json could not be read; the disciplines run regardless. */

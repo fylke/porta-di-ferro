@@ -215,3 +215,14 @@ func TestAStaffMemberWhoMayBeSomebodyElseIsFlagged(t *testing.T) {
 		t.Errorf("two Bos kept apart are no longer a question: %v", v.Unsure)
 	}
 }
+
+// The landing page lists everyone, the staff too (#135): each with their page.
+func TestTheEventViewListsTheStaff(t *testing.T) {
+	h := openHall(t, t.TempDir())
+	h.must("POST", "/api/staff", map[string]any{"name": "Cleo", "club": "Gbg", "roles": []string{"head-ref"}}, nil)
+	var ev httpapi.EventView
+	h.must("GET", "/api/event", nil, &ev)
+	if len(ev.Staff) != 1 || ev.Staff[0].Name != "Cleo" || ev.Staff[0].Person == "" {
+		t.Errorf("the event view should list Cleo, with a page: %+v", ev.Staff)
+	}
+}
