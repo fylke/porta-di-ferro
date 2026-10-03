@@ -60,6 +60,7 @@ func (c *Coordinator) timesFrom(snaps []snapped) hallTimes {
 		inputs = append(inputs, MatsInput{Slug: s.w.slug, Name: s.snap.Instance.Name, Snapshot: s.snap,
 			Expected: file.Plan.Expected[s.w.slug]})
 	}
+	c.withSessions(inputs, file.Plan)
 	placed, _ := c.Placements()
 	timings := TimingsOr(file.Plan.Timings, c.defaults())
 	in := ForecastInput(inputs, placed, file.Plan, file.Event, timings, c.now())
@@ -80,6 +81,7 @@ func (c *Coordinator) ForecastNow() ForecastView {
 	v := ViewForecast(h.in, h.result, h.inputs, h.timings)
 	file, _ := c.folder.Read()
 	v.Expected = file.Plan.Expected
+	v.Sessions, v.FinalsLast = Sessions(file.Plan, c.slugs()), file.Plan.FinalsLast
 	return v
 }
 
@@ -150,6 +152,52 @@ func (c *Coordinator) keepTimings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"file": c.DefaultTimingsFile(), "timings": keep})
+}
+
+// putSessions is which block of the day each discipline runs in (#136).
+func (c *Coordinator) putSessions(w http.ResponseWriter, r *http.Request) {
+	var in map[string]int
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	known := map[string]bool{}
+	for _, s := range c.slugs() {
+		known[s] = true
+	}
+	err := c.changePlan(func(p *store.Plan) error {
+		if p.Sessions == nil {
+			p.Sessions = map[string]int{}
+		}
+		for slug, n := range in {
+			if !known[slug] || n < 1 || n > 20 {
+				return errors.New("a block is a discipline of this event and a number from 1 to 20")
+			}
+			p.Sessions[slug] = n
+		}
+		return nil
+	})
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, c.ForecastNow())
+}
+
+// putFinals holds every final to the end of the day, or lets them go (#136).
+func (c *Coordinator) putFinals(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Last bool `json:"last"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	if err := c.changePlan(func(p *store.Plan) error { p.FinalsLast = in.Last; return nil }); err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, c.ForecastNow())
 }
 
 // putExpected is how many each discipline expects, for planning before the entries.

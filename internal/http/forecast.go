@@ -78,10 +78,12 @@ func ForecastInput(inputs []MatsInput, placed map[string]store.Placement, plan s
 	ev store.Event, timings store.Timings, now time.Time) forecast.Input {
 
 	type item struct {
-		w     WorkItem
-		place store.Placement
-		views map[string]MatchView
-		who   map[string]string
+		w       WorkItem
+		place   store.Placement
+		views   map[string]MatchView
+		who     map[string]string
+		session int
+		held    bool
 	}
 	var items []item
 	var first time.Time
@@ -111,7 +113,8 @@ func ForecastInput(inputs []MatsInput, placed map[string]store.Placement, plan s
 		}
 		for _, w := range PlanItems(in.Slug, in.Snapshot.Tournament, Entrants(in.Snapshot.Competitors, in.Expected)) {
 			if p, ok := placed[w.ID()]; ok {
-				items = append(items, item{w: w, place: p, views: views, who: who})
+				items = append(items, item{w: w, place: p, views: views, who: who, session: in.Session,
+					held: in.FinalsLast && (w.Kind == ItemFinal || w.Kind == ItemBronze)})
 			}
 		}
 	}
@@ -150,7 +153,8 @@ func ForecastInput(inputs []MatsInput, placed map[string]store.Placement, plan s
 	}
 	for _, it := range items {
 		fi := forecast.Item{ID: it.w.ID(), Discipline: it.w.Discipline, Kind: it.w.Kind,
-			Mat: it.place.Mat, Seq: it.place.Seq, Projected: it.w.Projected, Pinned: it.place.Pinned, NotBefore: clock(it.place.NotBefore)}
+			Mat: it.place.Mat, Seq: it.place.Seq, Projected: it.w.Projected, Pinned: it.place.Pinned, NotBefore: clock(it.place.NotBefore),
+			Session: it.session, Held: it.held}
 		people := map[string]bool{}
 		for _, id := range it.w.Matches {
 			m := forecast.Match{Key: it.w.Discipline + "/" + id}
@@ -181,6 +185,35 @@ func parseAt(s string, loc *time.Location) time.Time {
 		return time.Time{}
 	}
 	return t.In(loc)
+}
+
+// Sessions is the block of the day each discipline runs in (#136): the organizer's, or,
+// for a discipline not given one, a block of its own in the event's order -- one
+// discipline after another.
+func Sessions(plan store.Plan, slugs []string) map[string]int {
+	out := map[string]int{}
+	for i, slug := range slugs {
+		out[slug] = i + 1
+		if n := plan.Sessions[slug]; n > 0 {
+			out[slug] = n
+		}
+	}
+	return out
+}
+
+// OrderOf is the order of the day for placing work (#136).
+func OrderOf(plan store.Plan, slugs []string, started func(WorkItem) bool) PlaceOrder {
+	sessions := Sessions(plan, slugs)
+	position := map[string]int{}
+	for i, s := range slugs {
+		position[s] = i
+	}
+	return PlaceOrder{
+		Session:    func(slug string) int { return sessions[slug] },
+		Position:   func(slug string) int { return position[slug] },
+		FinalsLast: plan.FinalsLast,
+		Started:    started,
+	}
 }
 
 // --- what the pages read ------------------------------------------------------------------
@@ -241,6 +274,10 @@ type ForecastView struct {
 	Live bool `json:"live"`
 	// Expected is how many each discipline expects, by slug, for the planning panel.
 	Expected map[string]int `json:"expected,omitempty"`
+	// Sessions are the blocks of the day in force, by slug, and FinalsLast says the
+	// finals are held to the end (#136).
+	Sessions   map[string]int `json:"sessions,omitempty"`
+	FinalsLast bool           `json:"finalsLast,omitempty"`
 }
 
 func stamp(t time.Time) string {

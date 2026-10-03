@@ -414,6 +414,8 @@ func (c *Coordinator) Handler() http.Handler {
 	mux.HandleFunc("POST /api/plan/timings/learn", c.learnTimings)
 	mux.HandleFunc("POST /api/plan/timings/default", c.keepTimings)
 	mux.HandleFunc("PUT /api/plan/expected", c.putExpected)
+	mux.HandleFunc("PUT /api/plan/sessions", c.putSessions)
+	mux.HandleFunc("PUT /api/plan/finals", c.putFinals)
 	mux.HandleFunc("GET /api/plan/report", c.getReport)
 	mux.HandleFunc("PUT /api/plan/anomalies", c.putAnomaly)
 	mux.HandleFunc("POST /api/plan/suggest", c.suggest)

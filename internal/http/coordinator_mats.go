@@ -59,8 +59,10 @@ func (c *Coordinator) placementsLocked() (map[string]store.Placement, int) {
 	file, _ := c.folder.Read()
 	var items []WorkItem
 	var tournaments []store.Tournament
-	var failed []string
+	var failed, slugs []string
+	stores := map[string]*store.Store{}
 	for _, w := range c.snapshotWorkers() {
+		slugs = append(slugs, w.slug)
 		if w.srv == nil {
 			failed = append(failed, w.slug+"/")
 			continue
@@ -76,7 +78,21 @@ func (c *Coordinator) placementsLocked() (map[string]store.Placement, int) {
 			continue
 		}
 		tournaments = append(tournaments, t)
+		stores[w.slug] = w.srv.store
 		items = append(items, PlanItems(w.slug, t, Entrants(comps, file.Plan.Expected[w.slug]))...)
+	}
+	// Under way is any match of the item with a log: nothing goes in front of it.
+	started := func(it WorkItem) bool {
+		st := stores[it.Discipline]
+		if st == nil {
+			return false
+		}
+		for _, id := range it.Matches {
+			if evs, err := st.Events(id, 0); err == nil && len(evs) > 0 {
+				return true
+			}
+		}
+		return false
 	}
 	mats := MatCount(file.Plan, tournaments)
 	// A discipline that cannot be read keeps its placements for when it can be again,
@@ -95,7 +111,7 @@ func (c *Coordinator) placementsLocked() (map[string]store.Placement, int) {
 			active.Items[id] = p
 		}
 	}
-	placed, changed := Place(items, active, mats)
+	placed, changed := PlaceIn(items, active, mats, OrderOf(file.Plan, slugs, started))
 	for id, p := range kept {
 		placed[id] = p
 	}
@@ -106,6 +122,15 @@ func (c *Coordinator) placementsLocked() (map[string]store.Placement, int) {
 		})
 	}
 	return placed, mats
+}
+
+// withSessions gives every discipline its block of the day (#136).
+func (c *Coordinator) withSessions(inputs []MatsInput, plan store.Plan) {
+	sessions := Sessions(plan, c.slugs())
+	for i := range inputs {
+		inputs[i].Session = sessions[inputs[i].Slug]
+		inputs[i].FinalsLast = plan.FinalsLast
+	}
 }
 
 // held is the match a live score keeper is holding on a mat.
@@ -127,6 +152,7 @@ func (c *Coordinator) matsFrom(snaps []snapped) MatsView {
 		inputs = append(inputs, MatsInput{Slug: s.w.slug, Name: s.snap.Instance.Name, Snapshot: s.snap,
 			Expected: file.Plan.Expected[s.w.slug]})
 	}
+	c.withSessions(inputs, file.Plan)
 	placed, mats := c.Placements()
 	view := BuildMats(inputs, placed, mats, c.held)
 	view.Upcoming = store.UpcomingOf(file.Screens)
