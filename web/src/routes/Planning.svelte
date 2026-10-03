@@ -173,7 +173,7 @@
       {#each matEdits as m, i (m.mat)}
         <li>
           <span class="strong">{t('Mat {n}', { n: m.mat })}</span>
-          <input class="mat-name" bind:value={m.name} placeholder={t('Name, if any')} aria-label={t('Name of mat {n}', { n: m.mat })} />
+          <input class="mat-name" bind:value={m.name} placeholder={t('Main hall, say')} aria-label={t('Name of mat {n}', { n: m.mat })} />
           {#each m.away as a, j (j)}
             <span class="away">
               {t('away')}

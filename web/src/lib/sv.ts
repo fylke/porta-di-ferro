@@ -462,7 +462,7 @@ export const sv: Record<string, string> = {
   'The mats': 'Mattorna',
   'A name the hall knows a mat by, and the times it is not available: no work is planned on it then.':
     'Ett namn som hallen känner mattan under, och tiderna den inte finns: då planeras inget på den.',
-  'Name, if any': 'Namn, om något',
+  'Main hall, say': 'Stora hallen, t.ex.',
   'Name of mat {n}': 'Namn på matta {n}',
   away: 'borta',
   'Away from': 'Borta från',
