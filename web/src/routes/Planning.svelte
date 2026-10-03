@@ -87,6 +87,13 @@
     void run(async () => (forecast = await api.setExpected({ [slug]: Math.max(0, Math.round(n || 0)) })));
   }
 
+  function setSession(slug: string, n: number) {
+    void run(async () => (forecast = await api.setSessions({ [slug]: n })));
+  }
+  function setFinalsLast(last: boolean) {
+    void run(async () => (forecast = await api.setFinalsLast(last)));
+  }
+
   function learn() {
     void run(async () => {
       forecast = await api.learnTimings();
@@ -138,6 +145,31 @@
     </div>
   </form>
   <p class="dim small">{t('Breaks in the programme, such as lunch, stop the mats: give them a start and an end there.')}</p>
+
+  {#if disciplines.length > 1}
+    <!-- Which disciplines run side by side and which one after another (#136). -->
+    <h3>{t('The order of the day')}</h3>
+    <p class="dim small">
+      {t('Disciplines in the same block run side by side; a block starts once every discipline of the blocks before it is done.')}
+    </p>
+    <ul class="expected">
+      {#each disciplines as d (d.slug)}
+        <li>
+          <span class="strong">{d.name || t('Unnamed')}</span>
+          <label>
+            {t('Block')}
+            <select value={forecast?.sessions?.[d.slug] ?? 1} disabled={busy} onchange={(e) => setSession(d.slug, Number(e.currentTarget.value))}>
+              {#each disciplines as _, i (i)}<option value={i + 1}>{i + 1}</option>{/each}
+            </select>
+          </label>
+        </li>
+      {/each}
+    </ul>
+    <label class="check">
+      <input type="checkbox" checked={forecast?.finalsLast ?? false} disabled={busy} onchange={(e) => setFinalsLast(e.currentTarget.checked)} />
+      {t('Every final at the end of the day, one after another on mat 1')}
+    </label>
+  {/if}
 
   {#if disciplines.length > 0}
     <h3>{t('Before the entries are in')}</h3>
@@ -332,6 +364,13 @@
   }
   .strong {
     font-weight: 700;
+  }
+  label.check {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.6rem;
+    font-size: 0.9rem;
   }
   .summary {
     margin: 1rem 0 0.3rem;

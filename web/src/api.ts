@@ -169,8 +169,11 @@ export interface ItemView {
   number?: number;
   mat: number;
   position: number;
-  /** "planned" is an item not drawn yet: what the draw would make (phase 4). */
-  status: 'waiting' | 'ready' | 'running' | 'done' | 'planned';
+  /**
+   * "planned" is an item not drawn yet (phase 4); "queued" waits for an earlier block of
+   * the day to finish (#136).
+   */
+  status: 'waiting' | 'ready' | 'running' | 'done' | 'planned' | 'queued';
   done: number;
   total: number;
   movable: boolean;
@@ -232,6 +235,9 @@ export interface ForecastView {
   live: boolean;
   /** How many each discipline expects, by slug. */
   expected?: Record<string, number>;
+  /** The block of the day each discipline runs in, and whether every final is held to the end (#136). */
+  sessions?: Record<string, number>;
+  finalsLast?: boolean;
 }
 
 /** A suggested plan: what moves, and when the day would end with it and without it. */
@@ -757,6 +763,10 @@ export const api = {
   learnTimings: () => req<ForecastView>('POST', '/api/plan/timings/learn'),
   keepTimings: () => req<{ file: string; timings: Timings }>('POST', '/api/plan/timings/default'),
   setExpected: (expected: Record<string, number>) => req<ForecastView>('PUT', '/api/plan/expected', expected),
+  /** Which block of the day each discipline runs in (#136). */
+  setSessions: (sessions: Record<string, number>) => req<ForecastView>('PUT', '/api/plan/sessions', sessions),
+  /** Holds every final to the end of the day, one after another on mat 1. */
+  setFinalsLast: (last: boolean) => req<ForecastView>('PUT', '/api/plan/finals', { last }),
   report: () => req<ReportView>('GET', '/api/plan/report'),
   setAnomaly: (key: string, anomaly: boolean) => req<ReportView>('PUT', '/api/plan/anomalies', { key, anomaly }),
   /** A suggested plan. Writes nothing. */

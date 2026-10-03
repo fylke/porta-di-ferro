@@ -200,6 +200,8 @@
         return t('waiting for results');
       case 'planned':
         return t('not drawn yet');
+      case 'queued':
+        return t('after the block before');
       default:
         return '';
     }

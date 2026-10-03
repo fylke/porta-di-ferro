@@ -440,6 +440,12 @@ export const sv: Record<string, string> = {
   '{n} slots have nobody.': '{n} platser saknar folk.',
   'A mat needs': 'En matta behöver',
   'Add to the staff': 'Lägg till som funktionär',
+  'after the block before': 'efter blocket före',
+  'The order of the day': 'Dagens ordning',
+  'Disciplines in the same block run side by side; a block starts once every discipline of the blocks before it is done.':
+    'Discipliner i samma block går sida vid sida; ett block börjar när alla discipliner i blocken före är klara.',
+  Block: 'Block',
+  'Every final at the end of the day, one after another on mat 1': 'Alla finaler sist på dagen, en i taget på matta 1',
   'Fold away': 'Fäll ihop',
   'Fold away {what}': 'Fäll ihop {what}',
   Show: 'Visa',
