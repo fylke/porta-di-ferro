@@ -2,7 +2,8 @@
   import { onMount, untrack } from "svelte";
   import { keepAwake } from "../lib/wakelock";
   import { t } from "../lib/i18n.svelte";
-  import { Live, nameLookup, roundLabel } from "./lib-display.svelte";
+  import { Live, nameLookup } from "./lib-display.svelte";
+  import BracketTree from "./BracketTree.svelte";
 
   /**
    * Every match in a discipline and where it stands. The screen competitors check. The
@@ -54,19 +55,7 @@
     {#if live.snapshot?.bracket}
       <section class="bracket">
         <h2>{t("Eliminations")}</h2>
-        <ol>
-          {#each live.snapshot.bracket.matches as m (m.id)}
-            <li class={m.status}>
-              <span class="n">{roundLabel(m)}</span>
-              <span class="red">{m.red ? name(m.red) : "—"}</span>
-              <span class="score mono">
-                {#if m.status === "pending"}v{:else}{m.state.red.score}–{m.state
-                    .blue.score}{/if}
-              </span>
-              <span class="blue">{m.blue ? name(m.blue) : "—"}</span>
-            </li>
-          {/each}
-        </ol>
+        <BracketTree matches={live.snapshot.bracket.matches} {name} />
         {#if live.snapshot.bracket.podium.first}
           <p class="podium">
             <strong>1.</strong>
@@ -96,12 +85,6 @@
   }
   .bracket {
     grid-column: 1 / -1;
-  }
-  .bracket .n {
-    min-width: 7.5rem;
-    font-size: 0.8em;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
   }
   .podium {
     margin: 0.6rem 0 0;

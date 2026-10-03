@@ -445,6 +445,8 @@ export const sv: Record<string, string> = {
   '{n} slots have nobody.': '{n} platser saknar folk.',
   'A mat needs': 'En matta behöver',
   'Add to the staff': 'Lägg till som funktionär',
+  'Winner of {match}': 'Vinnaren i {match}',
+  'Loser of {match}': 'Förloraren i {match}',
   'Added as the same person as the competitor, so they are never put on a mat while fencing.':
     'Läggs till som samma person som fäktaren, så hen aldrig sätts på en matta medan hen fäktas.',
   'Already entered as a competitor. Is this them?': 'Redan anmäld som fäktare. Är det hen?',
