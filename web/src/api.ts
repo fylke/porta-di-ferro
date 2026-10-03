@@ -409,6 +409,8 @@ export interface StaffingView {
   warnings: { kind: 'fencing' | 'double' | 'role' | 'discipline'; item: string; role: string; staff: string; other?: string }[];
   /** Members on call as physicians, by id. */
   physicians: string[];
+  /** Members whose person may be somebody else in the event too, by id (#133). */
+  unsure?: string[];
 }
 
 export interface StaffSuggestion {

@@ -440,6 +440,10 @@ export const sv: Record<string, string> = {
   '{n} slots have nobody.': '{n} platser saknar folk.',
   'A mat needs': 'En matta behöver',
   'Add to the staff': 'Lägg till som funktionär',
+  '{names} may be the same person as somebody else in the event. Merge them or keep them apart under People before suggesting, or a suggestion could put them on a mat while they fence.':
+    '{names} kan vara samma person som någon annan i tävlingen. Slå ihop dem eller håll isär dem under Personer innan du föreslår, annars kan ett förslag sätta dem på en matta medan de fäktas.',
+  'Maybe two people: see People': 'Kanske två personer: se Personer',
+  'two records?': 'två poster?',
   'away {from}–{to}': 'borta {from}–{to}',
   'The mats': 'Mattorna',
   'A name the hall knows a mat by, and the times it is not available: no work is planned on it then.':

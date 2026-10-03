@@ -73,13 +73,34 @@ type StaffingView struct {
 	Short       []ShortView         `json:"short"`
 	Warnings    []StaffWarning      `json:"warnings"`
 	Physicians  []string            `json:"physicians"`
+	// Unsure are the members, by id, whose person may be somebody else in the event too
+	// (#133): two records of one human, one fencing and one on the staff, and a
+	// suggestion could put them on a mat while they fence. The People panel settles it.
+	Unsure []string `json:"unsure"`
+}
+
+// UnsureOf is the members whose person is in one of the groups of possible duplicates.
+func UnsureOf(members []store.StaffMember, duplicates [][]string) []string {
+	maybe := map[string]bool{}
+	for _, g := range duplicates {
+		for _, id := range g {
+			maybe[id] = true
+		}
+	}
+	out := []string{}
+	for _, m := range members {
+		if m.Person != "" && maybe[m.Person] {
+			out = append(out, m.ID)
+		}
+	}
+	return out
 }
 
 // ViewStaffing is the staff as they stand, checked against the plan.
 func ViewStaffing(si staffing.Input, st store.Staff, mats MatsView) StaffingView {
 	res := staffing.Check(si)
 	v := StaffingView{Members: st.Members, Crew: staffing.CrewOf(st.Crew), Assignments: st.Assignments,
-		Items: []StaffItem{}, Short: []ShortView{}, Warnings: []StaffWarning{}, Physicians: []string{}}
+		Items: []StaffItem{}, Short: []ShortView{}, Warnings: []StaffWarning{}, Physicians: []string{}, Unsure: []string{}}
 	if v.Members == nil {
 		v.Members = []store.StaffMember{}
 	}

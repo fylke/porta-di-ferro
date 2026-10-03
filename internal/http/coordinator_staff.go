@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/fylke/porta-di-ferro/internal/signup"
+	"github.com/fylke/porta-di-ferro/internal/people"
 	"github.com/fylke/porta-di-ferro/internal/staffing"
 	"github.com/fylke/porta-di-ferro/internal/store"
 )
@@ -136,7 +137,11 @@ func (c *Coordinator) StaffingNow() (StaffingView, staffing.Input, store.Staff, 
 		return StaffingView{}, staffing.Input{}, st, err
 	}
 	si := StaffInput(h.in, h.result, st)
-	return ViewStaffing(si, st, view), si, st, nil
+	v := ViewStaffing(si, st, view)
+	if reg, err := c.folder.People(); err == nil {
+		v.Unsure = UnsureOf(st.Members, people.Duplicates(reg, c.entriesByPerson(reg)))
+	}
+	return v, si, st, nil
 }
 
 func (c *Coordinator) staffingResponse(w http.ResponseWriter, code int) {

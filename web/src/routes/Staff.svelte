@@ -247,6 +247,18 @@
   {/if}
   {#if want}<p class="hint">{t('Added as the same person as the competitor, so they are never put on a mat while fencing.')}</p>{/if}
 
+  {#if view && (view.unsure ?? []).length > 0}
+    <!-- Two records of one human defeat "never while fencing" (#133). -->
+    <p class="warn" role="status">
+      {t('{names} may be the same person as somebody else in the event. Merge them or keep them apart under People before suggesting, or a suggestion could put them on a mat while they fence.', {
+        names: view.members
+          .filter((m) => view?.unsure?.includes(m.id))
+          .map((m) => m.name)
+          .join(', '),
+      })}
+    </p>
+  {/if}
+
   {#if view && view.members.length > 0}
     <div class="scroller">
       <table class="members">
@@ -264,6 +276,7 @@
               <td>
                 {#if m.person}<a href="/who/{m.person}" target="_blank" rel="noreferrer">{m.name}</a>{:else}{m.name}{/if}
                 {#if m.club}<span class="hint">{m.club}</span>{/if}
+                {#if view.unsure?.includes(m.id)}<span class="unsure" title={t('Maybe two people: see People')}>{t('two records?')}</span>{/if}
               </td>
               {#each ROLES as r (r)}
                 <td class="c">
@@ -496,6 +509,11 @@
     font-size: 0.8rem;
     background: var(--panel-2);
     border: 1px solid var(--line);
+  }
+  .unsure {
+    margin-left: 0.4rem;
+    font-size: 0.75rem;
+    color: var(--amber-bright);
   }
   .suggest-people {
     margin: 0.5rem 0;
