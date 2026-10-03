@@ -275,6 +275,43 @@ func (f *Folder) SavePeople(p []store.Person) error {
 	return store.WriteJSONAtomic(f.dir, "people.json", p)
 }
 
+// Staff is the event's staff and their assignments (phase 5). A missing file is nobody.
+func (f *Folder) Staff() (store.Staff, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out store.Staff
+	b, err := os.ReadFile(filepath.Join(f.dir, "staff.json"))
+	if errors.Is(err, fs.ErrNotExist) {
+		return store.Staff{Members: []store.StaffMember{}}, nil
+	}
+	if err != nil {
+		return out, err
+	}
+	if err := json.Unmarshal(b, &out); err != nil {
+		return out, fmt.Errorf("staff.json: %w", err)
+	}
+	if out.Members == nil {
+		out.Members = []store.StaffMember{}
+	}
+	return out, nil
+}
+
+// SaveStaff replaces the staff.
+func (f *Folder) SaveStaff(s store.Staff) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if s.Members == nil {
+		s.Members = []store.StaffMember{}
+	}
+	return store.WriteJSONAtomic(f.dir, "staff.json", s)
+}
+
+// HasStaff says the event has its own staff.json yet.
+func (f *Folder) HasStaff() bool {
+	_, err := os.Stat(filepath.Join(f.dir, "staff.json"))
+	return err == nil
+}
+
 // HasDisplays says the event has its own displays.json yet.
 func (f *Folder) HasDisplays() bool {
 	_, err := os.Stat(filepath.Join(f.dir, "displays.json"))

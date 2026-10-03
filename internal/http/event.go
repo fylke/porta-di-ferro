@@ -53,6 +53,12 @@ func (s *Server) tournament() (store.Tournament, error) {
 	ev, _ := s.event.EventInfo()
 	ev.Signup.Tournament = mine
 	t.Event = ev
+	// The staff are the event's (phase 5): this discipline's are those who work it.
+	if s.staff != nil {
+		if staff, err := s.staff.StaffFor(s.self().Slug); err == nil {
+			t.Staff = staff
+		}
+	}
 	return t, nil
 }
 

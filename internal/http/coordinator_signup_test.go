@@ -12,13 +12,22 @@ import (
 // share by the same check it runs on its own.
 
 func reply(t *testing.T, name, submission string, entries ...string) map[string]string {
+	return replyStaffing(t, name, submission, nil, entries...)
+}
+
+// replyStaffing is a response that also offers to work the disciplines named in staff.
+func replyStaffing(t *testing.T, name, submission string, staff []string, entries ...string) map[string]string {
 	t.Helper()
-	body, err := json.Marshal(map[string]any{
+	res := map[string]any{
 		"format": "porta.signup.response", "version": 1, "definitionId": "msl-open-2026",
 		"submissionId": submission,
 		"participant":  map[string]string{"name": name, "club": "Example HEMA"},
 		"entries":      entries,
-	})
+	}
+	if len(staff) > 0 {
+		res["staff"] = map[string]any{"tournaments": staff, "roles": []string{"head-ref", "assistant-ref"}}
+	}
+	body, err := json.Marshal(res)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +68,7 @@ func TestOneImportForTheWholeEvent(t *testing.T) {
 	}
 
 	files := []map[string]string{
-		reply(t, "Ada", "sub-1", "longsword"),
+		replyStaffing(t, "Ada", "sub-1", []string{"open-sabre"}, "longsword"),
 		reply(t, "Bo", "sub-2", "longsword", "open-sabre"),
 		reply(t, "Cilla", "sub-3", "rapier-and-dagger"),
 	}
@@ -88,6 +97,10 @@ func TestOneImportForTheWholeEvent(t *testing.T) {
 	}
 	if a, b := h.personOf(ls, "Bo"), h.personOf("open-sabre", "Bo"); a == "" || a != b {
 		t.Errorf("Bo should be one person in both: %q %q", a, b)
+	}
+	// Ada fences longsword and offered to referee Sabre: one person, on the event's staff.
+	if st := h.staff(); len(st.Members) != 1 || st.Members[0].Person != h.personOf(ls, "Ada") {
+		t.Errorf("Ada's offer to work Sabre should be a member of the event's staff, the same person: %+v", st.Members)
 	}
 	h.must("POST", "/api/event/signup/import", map[string]any{"files": files}, &done)
 	if done.Added != 0 {

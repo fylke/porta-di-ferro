@@ -32,6 +32,7 @@ type Server struct {
 	mats EventMats
 	// people is the event's registry, when the discipline's entries are linked to it.
 	people EventPeople
+	staff  EventStaff
 
 	// writeMu serialises writes. One organizer and at most four mats: a single lock is
 	// simpler than anything cleverer and cannot be got wrong.
