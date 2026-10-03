@@ -133,6 +133,28 @@ flowchart LR
 - **One signup for the event.** `/api/event/signup/…` serves the event's definition and app, and previews and imports a folder across every discipline. Each discipline takes its share through the same `signup.Check` it runs on its own, as the programme row it chose, or else the row named like it (`httpapi.RowFor`); the preview says per response which disciplines it goes into, and the ready check lists rows that nobody takes. With one discipline an unset row still means everything, and a discipline's own `/api/d/{slug}/signup/…` still works.
 - **The person's page** (`Person.svelte`) fetches the person and stacks one live `PersonEntry` per discipline. The old `/who/c7` loads the discipline, and moves on to `/who/{person}` once it knows who that is.
 
+### The plan's times (phase 4)
+
+Three timelines, kept apart: the **plan** (where each item runs, the organizer's), the **actual** (the match logs) and the **forecast** (the plan re-timed from the actual). `internal/forecast` is pure; `httpapi.ForecastInput` builds its input from the disciplines' snapshots and the plan, and the coordinator and `demo.Event` both call it.
+
+```mermaid
+flowchart LR
+    Logs["match logs: StartedAt, EndedAt"] --> Pace["each mat's pace:<br/>template blended with its own and the hall's matches"]
+    Plan["plan: mats, order, pins, not-before,<br/>timings, expected entrants"] --> Run["forecast.Run"]
+    Pace --> Run
+    Breaks["programme breaks"] --> Run
+    Run --> Board["mat board: times, drift, timeline, warnings"]
+    Run --> Hall["derived programme, Eta on every match"]
+    Plan --> Suggest["forecast.Suggest (writes nothing)"]
+    Suggest -->|"apply, re-checked by signature"| Plan
+```
+
+- **Timings** (`store.Timings` in the plan): a match, the changeover, the pause before a discipline's eliminations, the day's start and the venue's close. Zero fields fall back to `porta-timings.json` beside the event folder, the organizer's template for new events, and then to the built-in one. The measured day (`GET /api/plan/report`) can be written back into them (`POST /api/plan/timings/learn`) and kept for new events (`POST /api/plan/timings/default`), leaving out matches marked as anomalies.
+- **Projected work**: a discipline with entrants, or the number it expects (`PUT /api/plan/expected`), and no draw yet has the items `tournament.Generate` and `tournament.Bracket` would give it over stand-in entrants (`httpapi.ProjectedItems`). They are planned cards on the board, after all real work; a mat never waits on one; a place the organizer gave one (a move, a hold, an applied suggestion) is the drawn item's.
+- **The forecast** simulates each mat match by match: logged matches where the logs put them, the rest at the mat's pace, around programme breaks, after what each item waits for (eliminations after the discipline's pools plus the pause, the final after the eliminations), not before an item's hold time, and once the day is live never before now. The same run on the template from the day's start is the planned day, drawn as a ghost. It warns of a person in two items at once, an item placed before what it waits for, and a day ending after the venue closes.
+- **Suggestions** (`POST /api/plan/suggest`) are greedy list scheduling: what is under way stays, pinned items keep their mat, the rest go in priority order to the mat where each can start soonest. The order never depends on the current plan, so suggesting again after applying moves nothing. `POST /api/plan/apply` works it out again and refuses a stale signature.
+- **Where the hall sees it**: `GET /api/forecast` for the board and the planning panel; the event view's `programme`, which both landing pages list under the typed programme; and `Eta` on every pending match in a discipline's snapshot (filled through `EventMats.Hall`), which a person's page shows as "about 10:40". Times go out in the server's zone and are printed as written.
+
 
 ### 1b. The public demo
 

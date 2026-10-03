@@ -127,6 +127,12 @@ and the sabre's pools queued behind on the first two. The event admin's mat boar
 any card by drag or menu, and the score keeper and the screens follow their mat from one
 discipline to the next. The plan is part of what the demo keeps between tabs.
 
+The day has a past: the fixture's fenced matches carry the times they were fenced at,
+counted back from the moment the demo opened, so the mat board forecasts the rest of the
+day from each mat's real pace, the landing page lists the fencing with its times, and a
+person's page says about when each match still to come is expected. The planned day starts
+when the first match did, and the wasm module tells times in the visitor's own zone.
+
 **Play the rest** finishes every open match in every discipline, so the brackets and the
 podiums can be reached without scoring by hand. **Start over** rebuilds the event. Neither
 exists in the application.
