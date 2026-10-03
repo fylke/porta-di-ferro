@@ -9,6 +9,8 @@
   import Schedule from './Schedule.svelte';
   import FencingProgramme from './FencingProgramme.svelte';
   import Standings from './Standings.svelte';
+  import FoldButton from './FoldButton.svelte';
+  import { Folds } from '../lib/folds.svelte';
   import { dhref, discipline } from '../router.svelte';
   import { hall } from '../lib/event.svelte';
 
@@ -65,6 +67,8 @@
   });
   const fencing = $derived((hall.view?.programme ?? []).filter((r) => r.discipline === snapshot?.instance.slug));
 
+  const folds = new Folds(`${discipline()}/landing-page`);
+
   const started = $derived(
     (snapshot?.pools ?? []).some((p) => p.matches.some((m) => m.status !== 'pending')),
   );
@@ -100,7 +104,11 @@
       </section>
 
       <section class="people">
-        <h2>{t('Competitors')} <span class="count">{roster.length}</span></h2>
+        <h2>
+          <FoldButton open={folds.open('roster')} label={t('Competitors')} ontoggle={() => folds.toggle('roster')} />
+          {t('Competitors')} <span class="count">{roster.length}</span>
+        </h2>
+        {#if folds.open('roster')}
         <p class="dim hint">{t('Tap a name for that person’s matches.')}</p>
         <ul
           class="roster"
@@ -124,6 +132,7 @@
             <li class="dim">{t('Nobody is entered yet.')}</li>
           {/if}
         </ul>
+        {/if}
       </section>
 
       <section class="mats">

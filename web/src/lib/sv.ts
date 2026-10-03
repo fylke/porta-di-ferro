@@ -162,7 +162,6 @@ export const sv: Record<string, string> = {
   '{n} min ago': 'för {n} min sedan',
   'Nothing yet': 'Inget ännu',
   'Mat {n} scoreboard': 'Resultattavla matta {n}',
-  'Mat {n} audience display': 'Publikskärm matta {n}',
   'Every mat': 'Alla mattor',
   'Mats {a} and {b}': 'Mattorna {a} och {b}',
   'Match roster': 'Matchlista',
@@ -376,10 +375,7 @@ export const sv: Record<string, string> = {
   'No more matches on mat {n}': 'Inga fler matcher på matta {n}',
   'Reconnecting…': 'Återansluter…',
   'No mats are set up yet.': 'Inga mattor är inställda ännu.',
-  'Last match on mat {n}': 'Sista matchen på matta {n}',
   'On deck': 'På tur',
-  'Nothing after the next match.': 'Inget efter nästa match.',
-  'Nothing more on this mat.': 'Inget mer på den här mattan.',
   'Waiting for the organizer': 'Väntar på arrangören',
   'This screen is registered. The organizer picks what it shows from the organizer page, under Screens.':
     'Skärmen är registrerad. Arrangören väljer vad den visar från arrangörssidan, under Skärmar.',
@@ -404,7 +400,6 @@ export const sv: Record<string, string> = {
   'One tab, every screen': 'En flik, alla skärmar',
   "At an event these open on the score keepers' tablets and the hall screens, over the venue wifi. Here they open in this tab, off the same tournament. Try one:":
     'På ett stevne öppnas de här på sekretariatens surfplattor och hallens skärmar, över lokalens wifi. Här öppnas de i den här fliken, mot samma tävling. Prova en:',
-  Audience: 'Publik',
   // --- the three views (issue #98) ------------------------------------------------------
   // Landing page, info sheet and admin.
   'Landing page': 'Startsida',
@@ -445,6 +440,13 @@ export const sv: Record<string, string> = {
   '{n} slots have nobody.': '{n} platser saknar folk.',
   'A mat needs': 'En matta behöver',
   'Add to the staff': 'Lägg till som funktionär',
+  'Fold away': 'Fäll ihop',
+  'Fold away {what}': 'Fäll ihop {what}',
+  Show: 'Visa',
+  'Show {what}': 'Visa {what}',
+  'Mat screens show what comes next': 'Mattskärmarna visar vad som kommer härnäst',
+  'the next match, along the bottom': 'nästa match, längs nederkanten',
+  'the next few matches, down the right': 'de närmaste matcherna, längs högerkanten',
   'Winner of {match}': 'Vinnaren i {match}',
   'Loser of {match}': 'Förloraren i {match}',
   'Added as the same person as the competitor, so they are never put on a mat while fencing.':

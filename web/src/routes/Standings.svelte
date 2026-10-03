@@ -2,6 +2,8 @@
   import type { Snapshot } from '../api';
   import { nameLookup } from './lib-display.svelte';
   import BracketTree from './BracketTree.svelte';
+  import FoldButton from './FoldButton.svelte';
+  import { Folds } from '../lib/folds.svelte';
   import { t } from '../lib/i18n.svelte';
 
   /**
@@ -15,6 +17,10 @@
    * that changed shape at that moment would look broken.
    */
   let { snapshot }: { snapshot: Snapshot | null } = $props();
+
+  // What this viewer has folded away, per discipline (#110).
+  // svelte-ignore state_referenced_locally
+  const folds = new Folds(`${snapshot?.instance.slug ?? ''}/landing`);
 
   const name = $derived(nameLookup(snapshot));
   const fmt = (n: number) => (Number.isFinite(n) ? n.toFixed(2) : '0.00');
@@ -40,8 +46,8 @@
 {#if bracket}
   <!-- The bracket as it is drawn on paper (#112). -->
   <div class="bracket">
-    <h3>{t('Eliminations')}</h3>
-    <BracketTree matches={bracket.matches} {name} />
+    <h3><FoldButton open={folds.open('bracket')} label={t('Eliminations')} ontoggle={() => folds.toggle('bracket')} />{t('Eliminations')}</h3>
+    {#if folds.open('bracket')}<BracketTree matches={bracket.matches} {name} />{/if}
   </div>
 {/if}
 
@@ -50,11 +56,13 @@
     {@const started = pool.matches.some((m) => m.status !== 'pending')}
     <section>
       <h3>
+        <FoldButton open={folds.open(`pool-${pool.number}`)} label={t('Pool {n}', { n: pool.number })} ontoggle={() => folds.toggle(`pool-${pool.number}`)} />
         {t('Pool {n}', { n: pool.number })}
         <span class="meta">{t('mat {n}', { n: pool.mat })}</span>
         <span class="meta">{pool.complete ? t('complete') : started ? t('in progress') : t('not started')}</span>
       </h3>
 
+      {#if folds.open(`pool-${pool.number}`)}
       {#if started}
         <div class="scroller">
         <table>
@@ -98,6 +106,7 @@
           </li>
         {/each}
       </ol>
+      {/if}
     </section>
   {/each}
 </div>

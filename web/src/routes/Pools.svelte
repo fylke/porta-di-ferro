@@ -2,6 +2,8 @@
   import { api, type MatchView, type Snapshot } from '../api';
   import { nameLookup } from './lib-display.svelte';
   import MatchEditor from './MatchEditor.svelte';
+  import FoldButton from './FoldButton.svelte';
+  import { Folds } from '../lib/folds.svelte';
   import { t } from '../lib/i18n.svelte';
 
   /**
@@ -14,6 +16,10 @@
   const name = $derived(nameLookup(snapshot));
   const fmt = (n: number) => (Number.isFinite(n) ? n.toFixed(2) : '0.00');
   const mats = $derived(Array.from({ length: snapshot.tournament.mats }, (_, i) => i + 1));
+
+  // Pools the organizer has folded away (#110), per discipline.
+  // svelte-ignore state_referenced_locally
+  const folds = new Folds(`${snapshot.instance.slug ?? ''}/admin`);
 
   // The match whose log is open in the editor (design §7 item 1).
   let editing = $state<MatchView | null>(null);
@@ -38,6 +44,7 @@
   {/if}
   <section>
     <h2>
+      <FoldButton open={folds.open(`pool-${pool.number}`)} label={t('Pool {n}', { n: pool.number })} ontoggle={() => folds.toggle(`pool-${pool.number}`)} />
       {t('Pool {n}', { n: pool.number })}
       <span class="meta">{pool.complete ? t('complete') : t('in progress')}</span>
       {#if pool.overridden}
@@ -56,6 +63,7 @@
       </span>
     </h2>
 
+    {#if folds.open(`pool-${pool.number}`)}
     <div class="split">
       <ol class="matches">
         {#each pool.matches as m (m.id)}
@@ -100,6 +108,7 @@
         </tbody>
       </table>
     </div>
+    {/if}
   </section>
 {/each}
 

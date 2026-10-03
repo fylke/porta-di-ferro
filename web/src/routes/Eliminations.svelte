@@ -3,6 +3,8 @@
   import { nameLookup } from './lib-display.svelte';
   import MatchEditor from './MatchEditor.svelte';
   import BracketTree from './BracketTree.svelte';
+  import FoldButton from './FoldButton.svelte';
+  import { Folds } from '../lib/folds.svelte';
   import { t } from '../lib/i18n.svelte';
 
   /**
@@ -14,6 +16,8 @@
   let { snapshot, onchange }: { snapshot: Snapshot; onchange: () => void } = $props();
 
   const name = $derived(nameLookup(snapshot));
+  // svelte-ignore state_referenced_locally
+  const folds = new Folds(`${snapshot.instance.slug ?? ''}/admin`);
   const bracket = $derived(snapshot.bracket ?? null);
   const fmt = (n: number) => (Number.isFinite(n) ? n.toFixed(2) : '0.00');
   const toGo = $derived(
@@ -79,7 +83,11 @@
 
 {#if snapshot.pools.length > 0}
   <section>
-    <h2>{t('Eliminations')} <span class="meta">{t('top {n}, single elimination, sudden death', { n: cut })}</span></h2>
+    <h2>
+      <FoldButton open={folds.open('eliminations')} label={t('Eliminations')} ontoggle={() => folds.toggle('eliminations')} />
+      {t('Eliminations')} <span class="meta">{t('top {n}, single elimination, sudden death', { n: cut })}</span>
+    </h2>
+    {#if folds.open('eliminations')}
 
     {#if !snapshot.poolsComplete && !bracket}
       <p class="dim">
@@ -161,6 +169,7 @@
           {#if bracket.podium.third}<span><strong>3.</strong> {name(bracket.podium.third)}</span>{/if}
         </p>
       {/if}
+    {/if}
     {/if}
   </section>
 {/if}
