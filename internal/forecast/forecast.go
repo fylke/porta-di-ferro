@@ -197,7 +197,8 @@ func Paces(in Input) map[int]Pace {
 	for _, it := range in.Items {
 		s := byMat[it.Mat]
 		if s == nil {
-			out[it.Mat] = hall
+			// Nothing measured on this mat: the hall's pace, from none of its own.
+			out[it.Mat] = Pace{Match: hall.Match, Changeover: hall.Changeover}
 			continue
 		}
 		out[it.Mat] = Pace{Match: blend(s.match, hall.Match), Changeover: blend(s.gap, hall.Changeover), Samples: len(s.match)}

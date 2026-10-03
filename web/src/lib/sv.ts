@@ -498,6 +498,8 @@ export const sv: Record<string, string> = {
   'Use these as the timings': 'Använd dessa som tider',
   'free at {time}': 'ledig {time}',
   'from 1 match': 'räknat på 1 match',
+  'at the hall’s pace': 'i hallens tempo',
+  'Fencing, as it stands': 'Fäktningen, som det ser ut nu',
   'from {n} matches': 'räknat på {n} matcher',
   'mat {from} to mat {to}': 'matta {from} till matta {to}',
   'place {from} to {to} on mat {mat}': 'plats {from} till {to} på matta {mat}',

@@ -389,7 +389,7 @@
                   {#if disciplines > 1}<span class="disc">{it.disciplineName}</span>{/if}
                   <span class="name">{label(it)}</span>
                   <span class="meta">
-                    {it.done}/{it.total}{#if statusLabel(it)} &middot; {statusLabel(it)}{/if}
+                    {it.done}/{it.total}{#if statusLabel(it)}{' '}&middot; {statusLabel(it)}{/if}
                   </span>
                   {#if span(it) && it.status !== 'done'}
                     <span class="meta when">

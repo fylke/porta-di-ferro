@@ -94,6 +94,10 @@ func TestASlowMatPushesOnlyItself(t *testing.T) {
 	if p := r.Pace[2]; p.Match > 5*time.Minute {
 		t.Errorf("mat 2's pace should stay near four minutes: %+v", p)
 	}
+	idle := forecast.Run(forecast.Input{Timings: tpl, Items: []forecast.Item{slow, item("x/pool-1", "x", "pool", 3, 1, 2)}})
+	if p := idle.Pace[3]; p.Samples != 0 || p.Match <= 4*time.Minute {
+		t.Errorf("a mat with nothing measured goes at the hall's pace, from no matches of its own: %+v", p)
+	}
 	ls2, sa2 := spanOf(r, "ls/pool-2"), spanOf(r, "sa/pool-2")
 	if !ls2.Start.After(ls2.PlannedStart.Add(30 * time.Minute)) {
 		t.Errorf("mat 1 is running late, so its next pool should be well behind plan: %s vs %s", hm(ls2.Start), hm(ls2.PlannedStart))

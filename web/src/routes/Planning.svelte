@@ -179,7 +179,7 @@
         {#each forecast.pace as p (p.mat)}
           <li>
             {t('Mat {n}', { n: p.mat })}: {t('{time} a match', { time: mmss(p.match) })}
-            <span class="dim-inline">{p.samples === 1 ? t('from 1 match') : t('from {n} matches', { n: p.samples })}</span>
+            <span class="dim-inline">{p.samples === 0 ? t('at the hall’s pace') : p.samples === 1 ? t('from 1 match') : t('from {n} matches', { n: p.samples })}</span>
           </li>
         {/each}
       </ul>

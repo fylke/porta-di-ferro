@@ -28,6 +28,7 @@
 </script>
 
 {#if rows.length > 0}
+  <h3>{t('Fencing, as it stands')}</h3>
   <ol class="fencing">
     {#each rows as r (`${r.discipline}/${r.stage}`)}
       <li class:done={r.done}>
@@ -45,9 +46,17 @@
 {/if}
 
 <style>
+  h3 {
+    margin: 1rem 0 0;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+  }
   .fencing {
     list-style: none;
-    margin: 0.6rem 0 0;
+    margin: 0.4rem 0 0;
     padding: 0;
     display: grid;
     gap: 0.35rem;
