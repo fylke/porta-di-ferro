@@ -1,14 +1,15 @@
 # Design Proposal: One Event, Many Disciplines
 
-> **Status: accepted; phases 1–4 built.** The maintainers took every recommendation (§15).
+> **Status: accepted; phases 1–5 built.** The maintainers took every recommendation (§15).
 > Phase 1 — one event, one address — phase 2 — physical mats, work items and the mat board —
-> phase 3 — people, one signup for the event, `/who/{person}` — and phase 4 — the forecast,
-> suggestions with pins, planning before the draw — are built: see
+> phase 3 — people, one signup for the event, `/who/{person}` — phase 4 — the forecast,
+> suggestions with pins, planning before the draw — and phase 5 — staff at event level, assigned
+> around fencing times and the plan — are built: see
 > [docs/architecture.md](../architecture.md) §1a for what they became. Mat availability and
 > named mats from §6's API table are not built; programme breaks stop every mat. The bronze match and the
 > final are items of their own by default (§15, 4). The event's signup lives at
 > `/api/event/signup/…`, so a one-discipline event's `/api/signup/…` still answers as its
-> discipline. Phase 5 is not. It answers issue #102 and the comments on it, and deliberately goes past the issue's original scope: the comments asked for
+> discipline. It answers issue #102 and the comments on it, and deliberately goes past the issue's original scope: the comments asked for
 > mats to be treated as a shared resource and for a planning view across disciplines, and both
 > change the architecture enough that they have to be designed together with the landing page,
 > not after it. Related issues: #4 (add a discipline), #5 (staff), #6 (timetable), #64 (event

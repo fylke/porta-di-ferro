@@ -133,6 +133,12 @@ day from each mat's real pace, the landing page lists the fencing with its times
 person's page says about when each match still to come is expected. The planned day starts
 when the first match did, and the wasm module tells times in the visitor's own zone.
 
+The event has ten volunteers, already put to work by the staff suggestion: referees, a
+short supply of assistants, score keepers, a physician on call, and Clara, who fences the
+longsword and referees the sabre, so her page shows her duties beside her matches and the
+suggestion never puts her on a mat while she fences. The staff are part of what the demo
+keeps between tabs.
+
 **Play the rest** finishes every open match in every discipline, so the brackets and the
 podiums can be reached without scoring by hand. **Start over** rebuilds the event. Neither
 exists in the application.
