@@ -700,6 +700,8 @@ export const sv: Record<string, string> = {
   'Import {what}': 'Importera {what}',
   '1 competitor': '1 fäktare',
   '{n} competitors': '{n} fäktare',
+  '1 entry': '1 anmälan',
+  '{n} entries': '{n} anmälningar',
   '1 staff member': '1 funktionär',
   '{n} staff': '{n} funktionärer',
   '{a} and {b}': '{a} och {b}',

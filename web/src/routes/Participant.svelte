@@ -56,15 +56,24 @@
   );
 
   // The fencing part of the programme, as the forecast has it (phase 4): this discipline's
-  // rows of the event's. Looked at again as the tournament moves, but not on every
-  // exchange -- a minute is precise enough for "about 10:40".
+  // rows of the event's. Looked at again as the tournament moves: at most every few
+  // seconds, and once more after the last change, so it never lags the event's page by
+  // more than that (#128). Not a second stream: a phone holds this discipline's only.
+  const LOOK_MS = 5000;
   let lastLook = 0;
-  $effect(() => {
-    void snapshot;
-    if (Date.now() - lastLook < 60000) return;
+  let pending: ReturnType<typeof setTimeout> | undefined;
+  function look() {
+    pending = undefined;
     lastLook = Date.now();
     void hall.refresh();
+  }
+  $effect(() => {
+    void snapshot;
+    const wait = LOOK_MS - (Date.now() - lastLook);
+    if (wait <= 0) look();
+    else pending ??= setTimeout(look, wait);
   });
+  onMount(() => () => clearTimeout(pending));
   const fencing = $derived((hall.view?.programme ?? []).filter((r) => r.discipline === snapshot?.instance.slug));
 
   const folds = new Folds(`${discipline()}/landing-page`);
