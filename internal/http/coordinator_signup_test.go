@@ -107,3 +107,35 @@ func TestOneImportForTheWholeEvent(t *testing.T) {
 		t.Errorf("importing the same folder twice should add nobody, added %d", done.Added)
 	}
 }
+
+// A discipline's own import, in an event of several, takes only its own programme row --
+// and with no row, refuses rather than importing every response (#126).
+func TestADisciplinesOwnImportTakesOnlyItsRow(t *testing.T) {
+	h, ls := twoDisciplines(t)
+	h.must("POST", "/api/disciplines", map[string]string{"name": "Rapier"}, nil)
+	h.must("PUT", "/api/event/info", map[string]any{
+		"signup": map[string]any{"definitionId": "msl-open-2026", "name": "MSL Open"},
+		"schedule": []map[string]any{
+			{"at": "09:30", "label": "Open Steel Longsword", "kind": "discipline", "tournament": "longsword"},
+			{"at": "13:00", "label": "Open Sabre", "kind": "discipline"},
+		},
+	}, nil)
+	files := []map[string]string{
+		reply(t, "Ada", "sub-1", "longsword"),
+		reply(t, "Bo", "sub-2", "open-sabre"),
+	}
+	if code := h.do("POST", "/api/d/rapier/signup/import", map[string]any{"files": files}, nil); code != 409 {
+		t.Errorf("Rapier has no row; its own import must not take everybody, got %d", code)
+	}
+	if code := h.do("POST", "/api/d/rapier/signup/preview", map[string]any{"files": files}, nil); code != 409 {
+		t.Errorf("nor preview as if it would, got %d", code)
+	}
+	var done struct {
+		Added int `json:"added"`
+	}
+	h.must("POST", "/api/d/open-sabre/signup/import", map[string]any{"files": files}, &done)
+	if done.Added != 1 {
+		t.Errorf("Sabre takes its own row, named like it, and only Bo: added %d", done.Added)
+	}
+	_ = ls
+}
