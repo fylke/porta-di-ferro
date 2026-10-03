@@ -440,6 +440,8 @@ export const sv: Record<string, string> = {
   '{n} slots have nobody.': '{n} platser saknar folk.',
   'A mat needs': 'En matta behöver',
   'Add to the staff': 'Lägg till som funktionär',
+  'Fold the demo strip away': 'Fäll undan demoremsan',
+  'What this demo is': 'Vad den här demon är',
   'Hide the list': 'Dölj listan',
   'List everyone': 'Lista alla',
   Fencers: 'Fäktare',
