@@ -25,7 +25,7 @@ func StaffInput(in forecast.Input, r forecast.Result, st store.Staff) staffing.I
 		s := spans[it.ID]
 		started := false
 		for _, m := range it.Matches {
-			started = started || !m.Started.IsZero()
+			started = started || m.Done || !m.Started.IsZero()
 		}
 		out.Items = append(out.Items, staffing.Item{ID: it.ID, Discipline: it.Discipline, Mat: s.Mat,
 			Start: s.Start, End: s.End, Started: started, People: it.People})

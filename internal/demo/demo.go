@@ -815,6 +815,17 @@ func (d *Demo) replaceEvents(id string, body []byte) Response {
 // playOut finishes every match that is still open, so a visitor can get to the bracket
 // and the podium without scoring forty matches by hand. Demo-only: there is no such
 // thing at a real event, and the button that calls it says so.
+// stampNow logs a match played out at the press of a button as fenced just now, as a
+// score keeper's would be: a match whose log has no times looks unfenced to anything that
+// reads them.
+func stampNow(events []match.Event) []match.Event {
+	at := time.Now().UTC().Format("2006-01-02T15:04:05.000Z07:00")
+	for i := range events {
+		events[i].At = at
+	}
+	return events
+}
+
 func (d *Demo) playOut() Response {
 	snap, err := d.snapshot()
 	if err != nil {
@@ -827,7 +838,7 @@ func (d *Demo) playOut() Response {
 				continue
 			}
 			seed++
-			d.logs[m.ID] = playMatch(d.rules, m.ID, seed, false)
+			d.logs[m.ID] = stampNow(playMatch(d.rules, m.ID, seed, false))
 			delete(d.lastEvent, m.ID)
 		}
 	}
@@ -849,7 +860,7 @@ func (d *Demo) playOut() Response {
 			}
 			seed++
 			// Decisive: a drawn semi-final leaves the final with nobody in it.
-			d.logs[m.ID] = playMatch(d.rules, m.ID, seed, true)
+			d.logs[m.ID] = stampNow(playMatch(d.rules, m.ID, seed, true))
 			delete(d.lastEvent, m.ID)
 			played = true
 		}

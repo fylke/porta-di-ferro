@@ -49,7 +49,16 @@ type Match struct {
 	Key string
 	// Started and Ended are zero until the log says so.
 	Started, Ended time.Time
+	// Done says the match is finished even when its log carries no times -- events posted
+	// without them. It is not fenced again, and it teaches the pace nothing.
+	Done bool
 }
+
+// finished says a match is over, by its times or by its result.
+func (m Match) finished() bool { return m.Done || !m.Ended.IsZero() }
+
+// begun says a match has started, by its times or by its result.
+func (m Match) begun() bool { return m.Done || !m.Started.IsZero() }
 
 // Item is one work item, placed.
 type Item struct {
@@ -142,7 +151,7 @@ func Run(in Input) Result {
 	live := false
 	for _, it := range in.Items {
 		for _, m := range it.Matches {
-			live = live || !m.Started.IsZero()
+			live = live || m.begun()
 		}
 	}
 	pace := Paces(in)
@@ -302,6 +311,9 @@ func simulate(in Input, pace map[int]Pace, live bool) (timeline, []Warning) {
 		for _, m := range it.Matches {
 			var start, end time.Time
 			switch {
+			case actual && m.Done && m.Ended.IsZero():
+				// Finished, at a time nobody wrote down: it takes no more of the mat.
+				continue
 			case actual && !m.Ended.IsZero():
 				start, end = m.Started, m.Ended
 				if start.IsZero() {
@@ -408,7 +420,7 @@ func overlaps(items []Item, tl timeline) []Warning {
 	for _, it := range items {
 		done := len(it.Matches) > 0
 		for _, m := range it.Matches {
-			done = done && !m.Ended.IsZero()
+			done = done && m.finished()
 		}
 		if done {
 			continue

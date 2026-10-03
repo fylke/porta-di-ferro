@@ -206,3 +206,20 @@ func TestASuggestionSpreadsTheWork(t *testing.T) {
 		t.Errorf("the moves should say what goes to mat 2, and when it would start: %+v", s.Moves)
 	}
 }
+
+// A match finished without times in its log -- events posted without them -- is done: it
+// is not fenced again, and the day is live (found when the demo played a day out).
+func TestAFinishedMatchWithoutTimesIsDone(t *testing.T) {
+	p := item("ls/pool-1", "ls", "pool", 1, 1, 3)
+	for i := range p.Matches {
+		p.Matches[i].Done = true
+	}
+	next := item("ls/pool-2", "ls", "pool", 1, 2, 2)
+	r := forecast.Run(forecast.Input{Timings: tpl, Now: at("11:00"), Items: []forecast.Item{p, next}})
+	if _, again := r.Matches["ls/pool-1#1"]; again {
+		t.Error("a finished match must not be expected again")
+	}
+	if got := hm(r.Matches["ls/pool-2#1"]); got != "11:00" {
+		t.Errorf("with the first pool done the day is live, and the next starts now: %s", got)
+	}
+}
