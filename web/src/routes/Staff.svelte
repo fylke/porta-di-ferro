@@ -71,7 +71,7 @@
     s
       .toLocaleLowerCase()
       .normalize('NFD')
-      .replace(/[̀-ͯ]/g, '')
+      .replace(/[\u0300-\u036f]/g, '')
       .trim();
 
   /** Somebody entered as a competitor with the name being typed: the same person, if the organizer says so. */
@@ -233,7 +233,7 @@
         <span class="hint">{t('None ticked: any discipline.')}</span>
       </fieldset>
     {/if}
-    <button class="save" type="submit" disabled={busy}>{t('Add')}</button>
+    <button class="save" type="submit" disabled={busy}>{t('Add to the staff')}</button>
   </form>
   {#if suggestions.length > 0}
     <div class="suggest-people">
