@@ -223,3 +223,57 @@ func TestAFinishedMatchWithoutTimesIsDone(t *testing.T) {
 		t.Errorf("with the first pool done the day is live, and the next starts now: %s", got)
 	}
 }
+
+// Blocks of the day (#136): the sabre runs after the longsword is done, not interleaved.
+func TestABlockWaitsForTheOneBefore(t *testing.T) {
+	ls1, ls2 := item("ls/pool-1", "ls", "pool", 1, 1, 3), item("ls/elim-1", "ls", "eliminations", 1, 2, 2)
+	sa := item("sa/pool-1", "sa", "pool", 2, 1, 3)
+	ls1.Session, ls2.Session, sa.Session = 1, 1, 2
+	r := forecast.Run(forecast.Input{Timings: tpl, Items: []forecast.Item{ls1, ls2, sa}})
+	if s, e := spanOf(r, "sa/pool-1"), spanOf(r, "ls/elim-1"); s.Start.Before(e.End) {
+		t.Errorf("the sabre's block starts once the longsword's is done: sabre %s, longsword ends %s", hm(s.Start), hm(e.End))
+	}
+	// The same block runs side by side.
+	sa.Session = 1
+	r = forecast.Run(forecast.Input{Timings: tpl, Items: []forecast.Item{ls1, ls2, sa}})
+	if s := spanOf(r, "sa/pool-1"); hm(s.Start) != "09:00" {
+		t.Errorf("in one block the sabre runs beside the longsword: %s", hm(s.Start))
+	}
+}
+
+// Finals held to the end of the day run after everything else, the later blocks' first,
+// on mat 1; and a suggestion never puts a fencer in two places at once.
+func TestHeldFinalsAndNoDoubleBooking(t *testing.T) {
+	lsPool, saPool := item("ls/pool-1", "ls", "pool", 1, 1, 3), item("sa/pool-1", "sa", "pool", 2, 1, 3)
+	lsPool.Session, saPool.Session = 1, 1
+	lsPool.People, saPool.People = []string{"astrid"}, []string{"astrid"}
+	lsFinal, saFinal := item("ls/final", "ls", "final", 2, 2, 1), item("sa/final", "sa", "final", 1, 2, 1)
+	lsFinal.Session, saFinal.Session = 1, 2
+	lsFinal.Held, saFinal.Held = true, true
+	saPool.Session = 2
+	in := forecast.Input{Timings: tpl, Items: []forecast.Item{lsPool, saPool, lsFinal, saFinal}}
+	r := forecast.Run(in)
+	for _, id := range []string{"ls/final", "sa/final"} {
+		if spanOf(r, id).Start.Before(spanOf(r, "sa/pool-1").End) {
+			t.Errorf("%s is held until everything else is done", id)
+		}
+	}
+	s := forecast.Suggest(in, 2)
+	if got := s.Order[1]; len(got) < 2 || got[len(got)-2] != "sa/final" || got[len(got)-1] != "ls/final" {
+		t.Errorf("the finals go last on mat 1, the sabre's then the longsword's: %v", s.Order)
+	}
+
+	// Astrid in two pools of one block: the suggestion puts them one after the other.
+	saPool.Session = 1
+	in.Items = []forecast.Item{lsPool, saPool}
+	s = forecast.Suggest(in, 2)
+	if got := s.Order[1]; len(got) != 2 || got[0] != "ls/pool-1" || got[1] != "sa/pool-1" {
+		t.Errorf("Astrid fences both pools: the sabre's should queue behind the longsword's on its mat, so no timing can overlap them: %v", s.Order)
+	}
+	applied := in
+	applied.Items = []forecast.Item{lsPool, saPool}
+	applied.Items[1].Mat, applied.Items[1].Seq = 1, 2
+	if r := forecast.Run(applied); len(r.Warnings) != 0 {
+		t.Errorf("the suggested plan should forecast no overlap: %+v", r.Warnings)
+	}
+}

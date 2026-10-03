@@ -70,7 +70,12 @@ type Item struct {
 	// Projected items are not drawn yet; their matches have no logs.
 	Projected bool
 	// Pinned items were put on their mat by hand; a suggestion keeps them there.
-	Pinned    bool
+	Pinned bool
+	// Session is the block of the day the item's discipline runs in (#136): it waits for
+	// every item of the blocks before. Held is a bronze match or final held to the end of
+	// the day, after everything else.
+	Session int
+	Held    bool
 	NotBefore time.Time
 	// People are everyone fencing in the item, by person, for the overlap check.
 	People []string
@@ -284,16 +289,24 @@ func simulate(in Input, pace map[int]Pace, live bool) (timeline, []Warning) {
 		if c, ok := cursor[mat]; ok && c.After(ready) {
 			ready = c
 		}
-		ids, afterPools := deps(it)
+		wait, pause := deps(it)
 		if !ignoreDeps {
-			var latest time.Time
-			for _, id := range ids {
+			var latest, pools time.Time
+			for _, id := range wait {
 				if s := tl.items[id]; s.end.After(latest) {
 					latest = s.end
 				}
 			}
-			if afterPools && !latest.IsZero() {
-				latest = latest.Add(in.Timings.BeforeElims)
+			for _, id := range pause {
+				if s := tl.items[id]; s.end.After(pools) {
+					pools = s.end
+				}
+			}
+			if !pools.IsZero() {
+				pools = pools.Add(in.Timings.BeforeElims)
+			}
+			if pools.After(latest) {
+				latest = pools
 			}
 			if latest.After(ready) {
 				ready = latest
@@ -357,7 +370,8 @@ func simulate(in Input, pace map[int]Pace, live bool) (timeline, []Warning) {
 		for _, mat := range mats {
 			for head[mat] < len(queues[mat]) {
 				it := queues[mat][head[mat]]
-				ids, _ := deps(it)
+				wait, pause := deps(it)
+				ids := append(append([]string{}, wait...), pause...)
 				blocked := false
 				for _, id := range ids {
 					if _, ok := tl.items[id]; !ok {
