@@ -123,9 +123,90 @@ func (f *Folder) Reslug(old, name string) (string, error) {
 			}
 		}
 		file.Aliases[old] = slug
+		// The plan names the discipline's work by slug (#125).
+		items := map[string]store.Placement{}
+		for k, v := range file.Plan.Items {
+			items[moveKey(k, old, slug)] = v
+		}
+		if file.Plan.Items != nil {
+			file.Plan.Items = items
+		}
+		if n, ok := file.Plan.Expected[old]; ok {
+			delete(file.Plan.Expected, old)
+			file.Plan.Expected[slug] = n
+		}
+		for i, k := range file.Plan.Anomalies {
+			file.Plan.Anomalies[i] = moveKey(k, old, slug)
+		}
 		return nil
 	})
-	return slug, err
+	if err != nil {
+		return slug, err
+	}
+	return slug, f.moveKeys(old, slug)
+}
+
+// moveKey is "old/rest" as "slug/rest"; any other key is left as it is.
+func moveKey(key, old, slug string) string {
+	if rest, ok := strings.CutPrefix(key, old+"/"); ok {
+		return slug + "/" + rest
+	}
+	return key
+}
+
+// moveKeys carries the rest of what the event keeps about a discipline to its new slug:
+// staff assignments and the disciplines members work, the entries a merge would give back,
+// and screens showing one of its pages (#125). A file the event has not made yet is left
+// unmade.
+func (f *Folder) moveKeys(old, slug string) error {
+	if f.HasStaff() {
+		st, err := f.Staff()
+		if err != nil {
+			return err
+		}
+		for i := range st.Assignments {
+			st.Assignments[i].Item = moveKey(st.Assignments[i].Item, old, slug)
+		}
+		for i, m := range st.Members {
+			for j, d := range m.Disciplines {
+				if d == old {
+					st.Members[i].Disciplines[j] = slug
+				}
+			}
+		}
+		if err := f.SaveStaff(st); err != nil {
+			return err
+		}
+	}
+	if _, err := os.Stat(filepath.Join(f.dir, "people.json")); err == nil {
+		people, err := f.People()
+		if err != nil {
+			return err
+		}
+		for i := range people {
+			for j, k := range people[i].Moved {
+				people[i].Moved[j] = moveKey(k, old, slug)
+			}
+		}
+		if err := f.SavePeople(people); err != nil {
+			return err
+		}
+	}
+	if f.HasDisplays() {
+		d, err := f.Displays()
+		if err != nil {
+			return err
+		}
+		for id, target := range d {
+			if rest, ok := strings.CutPrefix(target, "d/"+old+"/"); ok {
+				d[id] = "d/" + slug + "/" + rest
+			}
+		}
+		if err := f.SaveDisplays(d); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Resolve is the discipline a slug means now: itself, or what it was moved to.

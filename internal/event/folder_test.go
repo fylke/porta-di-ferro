@@ -250,6 +250,63 @@ func TestAnUnnamedDisciplineMovesWhenNamed(t *testing.T) {
 	}
 }
 
+// Everything the event keeps about a discipline goes with it when it moves (#125): the
+// plan's placements, expected entrants and anomalies, staff assignments and the disciplines
+// members work, the merges people remember, and what the screens show.
+func TestWhatTheEventKeepsMovesWithTheDiscipline(t *testing.T) {
+	f, _ := event.Open(t.TempDir())
+	first, _ := f.Create("")
+	other, _ := f.Create("Rapier")
+	_, err := f.Update(func(file *event.File) error {
+		file.Plan.Items = map[string]store.Placement{
+			first + "/pool-1": {Mat: 2, Seq: 1, Pinned: true},
+			other + "/pool-1": {Mat: 1, Seq: 1},
+		}
+		file.Plan.Expected = map[string]int{first: 14, other: 6}
+		file.Plan.Anomalies = []string{first + "/p1m2", other + "/p1m1"}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = f.SaveStaff(store.Staff{
+		Members:     []store.StaffMember{{ID: "st-1", Name: "Dag", Disciplines: []string{first, other}}},
+		Assignments: []store.Assignment{{Item: first + "/pool-1", Role: "head-ref", Slot: 1, Staff: "st-1"}},
+	})
+	_ = f.SavePeople([]store.Person{{ID: "pr-a", MergedInto: "pr-b", Moved: []string{first + "/c3", other + "/c1"}}, {ID: "pr-b"}})
+	_ = f.SaveDisplays(map[string]string{"screen-1": "d/" + first + "/roster", "screen-2": "mat/1"})
+
+	slug, err := f.Reslug(first, "Open Sabre")
+	if err != nil {
+		t.Fatal(err)
+	}
+	file, _ := f.Read()
+	if p, ok := file.Plan.Items[slug+"/pool-1"]; !ok || p.Mat != 2 || !p.Pinned {
+		t.Errorf("the placement, pin and all, should move: %+v", file.Plan.Items)
+	}
+	if _, ok := file.Plan.Items[other+"/pool-1"]; !ok || len(file.Plan.Items) != 2 {
+		t.Errorf("another discipline's placement stays as it is: %+v", file.Plan.Items)
+	}
+	if file.Plan.Expected[slug] != 14 || file.Plan.Expected[other] != 6 || len(file.Plan.Expected) != 2 {
+		t.Errorf("expected entrants should move: %+v", file.Plan.Expected)
+	}
+	if !reflect.DeepEqual(file.Plan.Anomalies, []string{slug + "/p1m2", other + "/p1m1"}) {
+		t.Errorf("anomalies should move: %v", file.Plan.Anomalies)
+	}
+	st, _ := f.Staff()
+	if st.Assignments[0].Item != slug+"/pool-1" || !reflect.DeepEqual(st.Members[0].Disciplines, []string{slug, other}) {
+		t.Errorf("staff should follow: %+v", st)
+	}
+	people, _ := f.People()
+	if !reflect.DeepEqual(people[0].Moved, []string{slug + "/c3", other + "/c1"}) {
+		t.Errorf("a merge should still know which entries to give back: %v", people[0].Moved)
+	}
+	d, _ := f.Displays()
+	if d["screen-1"] != "d/"+slug+"/roster" || d["screen-2"] != "mat/1" {
+		t.Errorf("a screen on the discipline's roster should follow it: %v", d)
+	}
+}
+
 func TestABrokenEventFileIsAnError(t *testing.T) {
 	dir := t.TempDir()
 	write(t, filepath.Join(dir, "event.json"), `{"welcome": `)
