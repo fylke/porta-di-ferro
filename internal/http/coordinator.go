@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/fylke/porta-di-ferro/internal/event"
@@ -63,6 +64,12 @@ type Coordinator struct {
 
 	// Clock is the time the forecast is made at; nil is the wall clock. For tests.
 	Clock func() time.Time
+
+	// hall is the mats and the forecast as last worked out, for every discipline's
+	// snapshot to read rather than each working them out again (#124).
+	hall hallCache
+	// rev counts the coordinator's own changes: the plan's template, say.
+	rev atomic.Uint64
 }
 
 // worker is one discipline as the coordinator holds it. Not a process, thread or actor:

@@ -103,3 +103,27 @@ func TestMatchIDsCannotEscapeTheDirectory(t *testing.T) {
 		}
 	}
 }
+
+// Every write moves the revision, and a retried push that writes nothing does not (#124).
+func TestEveryWriteMovesTheRevision(t *testing.T) {
+	s, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	r0 := s.Revision()
+	if err := s.SaveCompetitors([]store.Competitor{{ID: "c1", Name: "Ada"}}); err != nil {
+		t.Fatal(err)
+	}
+	r1 := s.Revision()
+	batch := []match.Event{{Seq: 1, Type: match.TypeTimer, Timer: &match.Timer{Action: match.TimerStart}}}
+	if _, err := s.Append("p1-m1", batch); err != nil {
+		t.Fatal(err)
+	}
+	r2 := s.Revision()
+	if _, err := s.Append("p1-m1", batch); err != nil {
+		t.Fatal(err)
+	}
+	if r1 == r0 || r2 == r1 || s.Revision() != r2 {
+		t.Errorf("revisions %d, %d, %d, %d: each write moves it, the retry does not", r0, r1, r2, s.Revision())
+	}
+}

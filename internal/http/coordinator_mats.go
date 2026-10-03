@@ -219,6 +219,7 @@ func (c *Coordinator) MoveItem(id string, mat, index int, move string) error {
 
 // republish tells every discipline's pages to redraw, and the event's.
 func (c *Coordinator) republish() {
+	c.rev.Add(1)
 	for _, w := range c.snapshotWorkers() {
 		if w.srv != nil {
 			w.srv.PublishState()

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/fylke/porta-di-ferro/internal/match"
@@ -24,7 +25,14 @@ type Store struct {
 	// a no-op without a read of the whole log. The primary key is (match, seq), which is
 	// what makes retries idempotent with no deduplication logic anywhere (design §3).
 	seen map[string]map[int]bool
+	// rev counts the writes through this Store, so a picture built from it can tell it is
+	// still current without reading it again (#124).
+	rev atomic.Uint64
 }
+
+// Revision changes with every write through the Store. Not with a hand edit: a cache
+// keyed on it must still expire.
+func (s *Store) Revision() uint64 { return s.rev.Load() }
 
 // Open prepares a tournament directory, creating it if it is not there yet.
 func Open(dir string) (*Store, error) {
@@ -43,6 +51,7 @@ func (s *Store) path(name string) string { return filepath.Join(s.dir, name) }
 // writeAtomic replaces a file rather than writing into it, so a crash mid-write leaves
 // the previous version intact instead of a half-file.
 func (s *Store) writeAtomic(name string, v any) error {
+	defer s.rev.Add(1)
 	return WriteJSONAtomic(s.dir, name, v)
 }
 
@@ -240,6 +249,7 @@ func (s *Store) Append(id string, events []match.Event) ([]match.Event, error) {
 	if len(fresh) == 0 {
 		return fresh, nil
 	}
+	defer s.rev.Add(1)
 
 	f, err := os.OpenFile(s.path(rel), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {

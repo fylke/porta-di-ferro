@@ -3,9 +3,12 @@ package httpapi
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/fylke/porta-di-ferro/internal/event"
@@ -70,9 +73,58 @@ func (c *Coordinator) timesFrom(snaps []snapped) hallTimes {
 // Hall is, for a discipline's snapshot, which match each of the event's mats is on when
 // it is this discipline's, and when each of its matches still to come is expected.
 func (c *Coordinator) Hall(slug string) (map[int]string, map[string]string) {
+	view, result := c.hallNow()
+	return CurrentFrom(view, slug), EtasFor(result, slug)
+}
+
+// hallCache is the hall worked out once per change (#124). A republish asks every
+// discipline for its snapshot, and every snapshot asks for the hall: without it, one
+// exchange cost every discipline's snapshot once per discipline, and a forecast each.
+type hallCache struct {
+	mu     sync.Mutex
+	key    string
+	at     time.Time
+	view   MatsView
+	result forecast.Result
+}
+
+// hallMaxAge is how long the hall is kept even when nothing that writes has changed: what
+// it cannot see -- a hand-edited file, the clock moving a live match on -- shows within it.
+const hallMaxAge = time.Second
+
+// hallKey is everything the hall is worked out from that can change without a read: every
+// write through the event's files and the disciplines' stores, and who holds which match.
+func (c *Coordinator) hallKey() string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%d/%d/%d", c.folder.Revision(), c.rev.Load(), c.now().Unix())
+	for _, w := range c.snapshotWorkers() {
+		if w.srv == nil {
+			fmt.Fprintf(&b, "|%s:-", w.slug)
+		} else {
+			fmt.Fprintf(&b, "|%s:%d", w.slug, w.srv.store.Revision())
+		}
+	}
+	for mat := 1; mat <= maxMats; mat++ {
+		if d, m := c.held(mat); m != "" {
+			fmt.Fprintf(&b, "|%d=%s/%s", mat, d, m)
+		}
+	}
+	return b.String()
+}
+
+// hallNow is the hall's mats and forecast, from the cache while it is current.
+func (c *Coordinator) hallNow() (MatsView, forecast.Result) {
+	c.hall.mu.Lock()
+	defer c.hall.mu.Unlock()
+	key, now := c.hallKey(), time.Now()
+	if key == c.hall.key && now.Sub(c.hall.at) < hallMaxAge && !c.hall.at.After(now) {
+		return c.hall.view, c.hall.result
+	}
 	snaps := c.snapshots()
-	view := c.matsFrom(snaps)
-	return CurrentFrom(view, slug), EtasFor(c.timesFrom(snaps).result, slug)
+	c.hall.view, c.hall.result = c.matsFrom(snaps), c.timesFrom(snaps).result
+	// Keyed on what it was before: a write while it was worked out may not be in it.
+	c.hall.key, c.hall.at = key, now
+	return c.hall.view, c.hall.result
 }
 
 // ForecastNow is the forecast as the board reads it.

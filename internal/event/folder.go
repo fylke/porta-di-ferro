@@ -28,6 +28,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/fylke/porta-di-ferro/internal/signup"
@@ -227,7 +228,12 @@ func (f *Folder) Resolve(slug string) string {
 type Folder struct {
 	dir string
 	mu  sync.Mutex
+	// rev counts the writes through this Folder (#124).
+	rev atomic.Uint64
 }
+
+// Revision changes with every write through the Folder.
+func (f *Folder) Revision() uint64 { return f.rev.Load() }
 
 // Open prepares an event folder, creating it if it is not there, and moves a tournament
 // folder from before events existed into its place as the event's first discipline.
@@ -288,6 +294,7 @@ func (f *Folder) Update(change func(*File) error) (File, error) {
 		return File{}, err
 	}
 	file.Signup.Tournament = ""
+	defer f.rev.Add(1)
 	if err := store.WriteJSONAtomic(f.dir, infoFile, file); err != nil {
 		return File{}, err
 	}
