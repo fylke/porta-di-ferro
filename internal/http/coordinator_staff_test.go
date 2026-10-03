@@ -1,16 +1,18 @@
 package httpapi_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	httpapi "github.com/fylke/porta-di-ferro/internal/http"
 )
 
-func (h *hall) staff() httpapi.StaffView {
+func (h *hall) staff() httpapi.StaffingView {
 	h.t.Helper()
-	var v httpapi.StaffView
+	var v httpapi.StaffingView
 	h.must("GET", "/api/staff", nil, &v)
 	return v
 }
@@ -60,7 +62,7 @@ func TestStaffByHand(t *testing.T) {
 	astrid := h.personOf(ls, "Astrid")
 
 	// Astrid fences longsword and referees sabre: the desk says she is the same person.
-	var v httpapi.StaffView
+	var v httpapi.StaffingView
 	if code := h.do("POST", "/api/staff", map[string]any{"name": "Astrid", "club": "Gbg", "roles": []string{"head-ref", "juggler"},
 		"disciplines": []string{"open-sabre"}, "want": astrid}, &v); code != 201 {
 		t.Fatalf("adding staff returned %d", code)
@@ -87,5 +89,107 @@ func TestStaffByHand(t *testing.T) {
 	}
 	if code := h.do("DELETE", "/api/staff/"+m.ID, nil, nil); code != 404 {
 		t.Errorf("removing somebody not there is a 404, got %d", code)
+	}
+}
+
+type drawnState struct {
+	Competitors []struct {
+		ID     string `json:"id"`
+		Name   string `json:"name"`
+		Person string `json:"person"`
+	} `json:"competitors"`
+	Tournament struct {
+		Pools []struct {
+			Number      int      `json:"number"`
+			Competitors []string `json:"competitors"`
+		} `json:"pools"`
+	} `json:"tournament"`
+}
+
+// The staff on the plan: suggested, applied, checked, chosen by hand, and on a person's page.
+func TestStaffingThePlan(t *testing.T) {
+	h, ls := twoDisciplines(t)
+	h.c.Clock = func() time.Time { return time.Date(2026, 11, 14, 8, 0, 0, 0, time.Local) }
+	h.draw("/api/d/"+ls, 8, 2)
+	h.must("PUT", "/api/staff/crew", map[string]int{"assistant-ref": 0, "score-keeper": 0}, nil)
+	if code := h.do("PUT", "/api/staff/crew", map[string]int{"juggler": 1}, nil); code != 400 {
+		t.Errorf("a role that is not one should be refused, got %d", code)
+	}
+	var s drawnState
+	h.must("GET", "/api/d/"+ls+"/state", nil, &s)
+	astrid := s.Competitors[0]
+	ownPool := ""
+	for _, p := range s.Tournament.Pools {
+		for _, c := range p.Competitors {
+			if c == astrid.ID {
+				ownPool = fmt.Sprintf("%s/pool-%d", ls, p.Number)
+			}
+		}
+	}
+	for _, name := range []string{"Bo", "Cia"} {
+		h.must("POST", "/api/staff", map[string]any{"name": name, "roles": []string{"head-ref"}}, nil)
+	}
+	// One of the longsword's own fencers referees too.
+	var v httpapi.StaffingView
+	h.must("POST", "/api/staff", map[string]any{"name": astrid.Name, "roles": []string{"head-ref"}, "want": astrid.Person}, &v)
+	astridStaff, bo := "", ""
+	for _, m := range v.Members {
+		switch {
+		case m.Person == astrid.Person:
+			astridStaff = m.ID
+		case m.Name == "Bo":
+			bo = m.Person
+		}
+	}
+	if len(v.Items) == 0 || len(v.Short) == 0 || v.Crew["head-ref"] != 1 || v.Crew["assistant-ref"] != 0 {
+		t.Fatalf("with nobody assigned every item is short of its head referee: %+v", v)
+	}
+
+	var sug httpapi.StaffSuggestion
+	h.must("POST", "/api/staff/suggest", nil, &sug)
+	if sug.Changes == 0 || sug.Signature == "" {
+		t.Fatalf("a suggestion should fill the slots: %+v", sug)
+	}
+	if len(h.staff().Assignments) != 0 {
+		t.Error("a suggestion writes nothing")
+	}
+	if code := h.do("POST", "/api/staff/apply", map[string]string{"signature": "stale"}, nil); code != 409 {
+		t.Errorf("a stale suggestion should be refused, got %d", code)
+	}
+	h.must("POST", "/api/staff/apply", map[string]string{"signature": sug.Signature}, &v)
+	if len(v.Assignments) == 0 {
+		t.Fatal("applied, the slots should be filled")
+	}
+	for _, w := range v.Warnings {
+		t.Errorf("a suggestion never puts anyone on a mat while they fence or work elsewhere: %+v", w)
+	}
+	for _, a := range v.Assignments {
+		if a.Staff == astridStaff && a.Item == ownPool {
+			t.Errorf("Astrid must not referee the pool she fences in: %+v", a)
+		}
+	}
+
+	// By hand: Astrid on her own pool is kept, and reported.
+	h.must("PUT", "/api/staff/assignments", map[string]any{"item": ownPool, "role": "head-ref", "slot": 1, "staff": astridStaff}, &v)
+	reported := false
+	for _, w := range v.Warnings {
+		reported = reported || (w.Kind == "fencing" && w.Staff == astridStaff && w.Item == ownPool)
+	}
+	if !reported {
+		t.Errorf("Astrid refereeing the pool she fences in should be reported: %+v", v.Warnings)
+	}
+	if code := h.do("PUT", "/api/staff/assignments", map[string]any{"item": ownPool, "role": "head-ref", "slot": 1, "staff": "st-nobody"}, nil); code != 400 {
+		t.Errorf("somebody not on the staff cannot be assigned, got %d", code)
+	}
+
+	// Her page shows her duty beside her fencing; a member who only works has a page too.
+	var pv httpapi.PersonView
+	h.must("GET", "/api/people/"+astrid.Person, nil, &pv)
+	if len(pv.Duties) == 0 || pv.Duties[0].Role != "head-ref" || pv.Duties[0].Start == "" || len(pv.Entries) != 1 {
+		t.Errorf("Astrid's page should list her refereeing beside her entry: %+v", pv)
+	}
+	h.must("GET", "/api/people/"+bo, nil, &pv)
+	if pv.Name != "Bo" || len(pv.Entries) != 0 || len(pv.Duties) == 0 {
+		t.Errorf("Bo only works, and his page says who he is and what he does: %+v", pv)
 	}
 }

@@ -126,22 +126,26 @@ func (c *Coordinator) liftStaff() {
 
 // --- the staff, over HTTP ---------------------------------------------------------------
 
-// StaffView is the event's staff as the staff panel reads it.
-type StaffView struct {
-	Members     []store.StaffMember `json:"members"`
-	Crew        map[string]int      `json:"crew"`
-	Assignments []store.Assignment  `json:"assignments"`
+// StaffingNow is the staff as they stand, checked against the plan as forecast.
+func (c *Coordinator) StaffingNow() (StaffingView, staffing.Input, store.Staff, error) {
+	snaps := c.snapshots()
+	view := c.matsFrom(snaps)
+	h := c.timesFrom(snaps)
+	st, err := c.folder.Staff()
+	if err != nil {
+		return StaffingView{}, staffing.Input{}, st, err
+	}
+	si := StaffInput(h.in, h.result, st)
+	return ViewStaffing(si, st, view), si, st, nil
 }
 
-func viewStaff(st store.Staff) StaffView {
-	v := StaffView{Members: st.Members, Crew: staffing.CrewOf(st.Crew), Assignments: st.Assignments}
-	if v.Members == nil {
-		v.Members = []store.StaffMember{}
+func (c *Coordinator) staffingResponse(w http.ResponseWriter, code int) {
+	v, _, _, err := c.StaffingNow()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
 	}
-	if v.Assignments == nil {
-		v.Assignments = []store.Assignment{}
-	}
-	return v
+	writeJSON(w, code, v)
 }
 
 // changeStaff makes a change to the staff under its lock and tells every page.
@@ -163,12 +167,99 @@ func (c *Coordinator) changeStaff(change func(*store.Staff) error) (store.Staff,
 }
 
 func (c *Coordinator) getStaff(w http.ResponseWriter, r *http.Request) {
-	st, err := c.folder.Staff()
+	c.staffingResponse(w, http.StatusOK)
+}
+
+// putCrew is how many of each role a mat needs.
+func (c *Coordinator) putCrew(w http.ResponseWriter, r *http.Request) {
+	var in map[string]int
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	_, err := c.changeStaff(func(st *store.Staff) error {
+		crew := staffing.CrewOf(st.Crew)
+		for role, n := range in {
+			if _, ok := crew[role]; !ok || n < 0 || n > 6 {
+				return fmt.Errorf("a mat needs between 0 and 6 of %q", role)
+			}
+			crew[role] = n
+		}
+		st.Crew = crew
+		return nil
+	})
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	c.staffingResponse(w, http.StatusOK)
+}
+
+// putAssignment puts somebody in a slot by hand, or empties it.
+func (c *Coordinator) putAssignment(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Item  string `json:"item"`
+		Role  string `json:"role"`
+		Slot  int    `json:"slot"`
+		Staff string `json:"staff"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	_, err := c.changeStaff(func(st *store.Staff) error {
+		next, err := SetAssignment(*st, in.Item, in.Role, in.Slot, in.Staff)
+		*st = next
+		return err
+	})
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	c.staffingResponse(w, http.StatusOK)
+}
+
+// suggestStaff proposes who works where. It writes nothing.
+func (c *Coordinator) suggestStaff(w http.ResponseWriter, r *http.Request) {
+	_, si, _, err := c.StaffingNow()
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, viewStaff(st))
+	writeJSON(w, http.StatusOK, SuggestStaff(si))
+}
+
+// applyStaff takes a suggestion: worked out again, and refused when it is no longer the
+// one the organizer looked at.
+func (c *Coordinator) applyStaff(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Signature string `json:"signature"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	_, si, _, err := c.StaffingNow()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	s := SuggestStaff(si)
+	if s.Signature != in.Signature {
+		writeJSON(w, http.StatusConflict, map[string]any{
+			"error":      "the staff or the plan changed since that suggestion; here is a new one",
+			"suggestion": s,
+		})
+		return
+	}
+	if _, err := c.changeStaff(func(st *store.Staff) error {
+		st.Assignments = s.Assignments
+		return nil
+	}); err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	c.staffingResponse(w, http.StatusOK)
 }
 
 // memberIn is a member as the panel sends it, with the person the desk picked.
@@ -194,15 +285,14 @@ func (c *Coordinator) addStaff(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
-	st, err := c.changeStaff(func(st *store.Staff) error {
+	if _, err := c.changeStaff(func(st *store.Staff) error {
 		st.Members = append(st.Members, m)
 		return nil
-	})
-	if err != nil {
+	}); err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, viewStaff(st))
+	c.staffingResponse(w, http.StatusCreated)
 }
 
 // patchStaff changes a member's name, club, roles or disciplines.
@@ -218,7 +308,7 @@ func (c *Coordinator) patchStaff(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	st, err := c.changeStaff(func(st *store.Staff) error {
+	_, err := c.changeStaff(func(st *store.Staff) error {
 		for i, m := range st.Members {
 			if m.ID != id {
 				continue
@@ -251,7 +341,7 @@ func (c *Coordinator) patchStaff(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 		writeErr(w, http.StatusBadRequest, err)
 	default:
-		writeJSON(w, http.StatusOK, viewStaff(st))
+		c.staffingResponse(w, http.StatusOK)
 	}
 }
 
@@ -261,7 +351,7 @@ func (e errNoMember) Error() string { return fmt.Sprintf("no staff member %s", s
 
 func (c *Coordinator) deleteMember(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	st, err := c.changeStaff(func(st *store.Staff) error {
+	_, err := c.changeStaff(func(st *store.Staff) error {
 		next, found := staffing.Without(*st, id)
 		if !found {
 			return errNoMember(id)
@@ -276,6 +366,6 @@ func (c *Coordinator) deleteMember(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 		writeErr(w, http.StatusInternalServerError, err)
 	default:
-		writeJSON(w, http.StatusOK, viewStaff(st))
+		c.staffingResponse(w, http.StatusOK)
 	}
 }

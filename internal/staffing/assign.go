@@ -82,7 +82,13 @@ type span struct {
 func overlaps(a0, a1, b0, b1 time.Time) bool { return a0.Before(b1) && b0.Before(a1) }
 
 // Assign staffs every item.
-func Assign(in Input) Result {
+func Assign(in Input) Result { return run(in, true) }
+
+// Check is the assignments as they are, judged: every slot left empty and every rule
+// broken, with nothing filled in or taken away.
+func Check(in Input) Result { return run(in, false) }
+
+func run(in Input, fill bool) Result {
 	crew := CrewOf(in.Crew)
 	items := append([]Item{}, in.Items...)
 	sort.SliceStable(items, func(i, j int) bool {
@@ -119,7 +125,7 @@ func Assign(in Input) Result {
 		if _, known := members[a.Staff]; !ok || !known {
 			continue
 		}
-		if a.Pinned || it.Started {
+		if a.Pinned || it.Started || !fill {
 			kept[key(a.Item, a.Role, a.Slot)] = a
 		}
 	}
@@ -199,6 +205,10 @@ func Assign(in Input) Result {
 		for _, role := range MatRoles {
 			for slot := 1; slot <= crew[role]; slot++ {
 				if _, ok := kept[key(it.ID, role, slot)]; ok {
+					continue
+				}
+				if !fill {
+					out.Short = append(out.Short, Short{Item: it.ID, Role: role, Slot: slot})
 					continue
 				}
 				best, bestScore := "", 0.0
