@@ -277,3 +277,21 @@ func TestHeldFinalsAndNoDoubleBooking(t *testing.T) {
 		t.Errorf("the suggested plan should forecast no overlap: %+v", r.Warnings)
 	}
 }
+
+// A semi-final waits for the quarter-finals that feed it, wherever they run (#120): a slow
+// mat 2 holds up mat 1's semi-final.
+func TestASemiFinalWaitsForItsQuarterFinalsOnAnotherMat(t *testing.T) {
+	e1 := item("ls/elim-1", "ls", "eliminations", 1, 1, 0)
+	e2 := item("ls/elim-2", "ls", "eliminations", 2, 1, 0)
+	e1.Matches = []forecast.Match{{Key: "ls/qf1"}, {Key: "ls/qf3"}, {Key: "ls/sf1", After: []string{"ls/qf1", "ls/qf2"}}}
+	e2.Matches = []forecast.Match{{Key: "ls/qf2"}, {Key: "ls/qf4"}, {Key: "ls/sf2", After: []string{"ls/qf3", "ls/qf4"}}}
+	e2.NotBefore = at("10:00") // mat 2 starts late
+	r := forecast.Run(forecast.Input{Timings: tpl, Items: []forecast.Item{e1, e2}})
+	qf2End := at("10:04")
+	if got := r.Matches["ls/sf1"]; got.Before(qf2End) {
+		t.Errorf("the first semi-final needs the winner of quarter-final 2, which ends at 10:04 on mat 2; it is timed at %s", hm(got))
+	}
+	if len(r.Warnings) != 0 {
+		t.Errorf("the lanes waiting on each other is no plan out of order: %+v", r.Warnings)
+	}
+}

@@ -158,6 +158,9 @@ func ForecastInput(inputs []MatsInput, placed map[string]store.Placement, plan s
 		people := map[string]bool{}
 		for _, id := range it.w.Matches {
 			m := forecast.Match{Key: it.w.Discipline + "/" + id}
+			for _, from := range it.w.Feeders[id] {
+				m.After = append(m.After, it.w.Discipline+"/"+from)
+			}
 			if v, ok := it.views[id]; ok {
 				m.Started, m.Ended = parseAt(v.StartedAt, now.Location()), parseAt(v.EndedAt, now.Location())
 				m.Done = v.Status == "complete"

@@ -3,6 +3,7 @@ package httpapi
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/fylke/porta-di-ferro/internal/store"
 	"github.com/fylke/porta-di-ferro/internal/tournament"
@@ -46,6 +47,9 @@ type WorkItem struct {
 	Matches []string `json:"matches"`
 	// Projected says the item is not drawn yet: what the draw would make (projected.go).
 	Projected bool `json:"projected,omitempty"`
+	// Feeders are, for each bracket match, the matches that decide who fences in it, by
+	// id: what the forecast waits for (#120).
+	Feeders map[string][]string `json:"-"`
 }
 
 // ID is the item's name across the event: "open-sabre/pool-3".
@@ -104,6 +108,14 @@ func ItemsOf(slug string, t store.Tournament) []WorkItem {
 			bracket = append(bracket, it)
 		}
 		it.Matches = append(it.Matches, m.ID)
+		for _, feed := range []string{m.FeedRed, m.FeedBlue} {
+			if _, from, ok := strings.Cut(feed, ":"); ok && from != "" {
+				if it.Feeders == nil {
+					it.Feeders = map[string][]string{}
+				}
+				it.Feeders[m.ID] = append(it.Feeders[m.ID], from)
+			}
+		}
 	}
 	// The eliminations first, in lane order, then the bronze match before the final.
 	rank := func(it *WorkItem) int {
