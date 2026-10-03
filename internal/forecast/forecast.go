@@ -77,8 +77,8 @@ type Item struct {
 	// Session is the block of the day the item's discipline runs in (#136): it waits for
 	// every item of the blocks before. Held is a bronze match or final held to the end of
 	// the day, after everything else.
-	Session int
-	Held    bool
+	Session   int
+	Held      bool
 	NotBefore time.Time
 	// People are everyone fencing in the item, by person, for the overlap check.
 	People []string
