@@ -61,7 +61,7 @@ type Item struct {
 	// Projected items are not drawn yet; their matches have no logs.
 	Projected bool
 	// Pinned items were put on their mat by hand; a suggestion keeps them there.
-	Pinned bool
+	Pinned    bool
 	NotBefore time.Time
 	// People are everyone fencing in the item, by person, for the overlap check.
 	People []string
