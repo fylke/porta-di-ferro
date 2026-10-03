@@ -13,6 +13,7 @@
   import Disciplines from './Disciplines.svelte';
   import MatBoard from './MatBoard.svelte';
   import Planning from './Planning.svelte';
+  import Staff from './Staff.svelte';
   import EventEditor from './EventEditor.svelte';
   import Signup from './Signup.svelte';
   import LangToggle from './LangToggle.svelte';
@@ -188,6 +189,7 @@
     <!-- Before the draw the board shows the day as it would be (phase 4). -->
     {#if !multi && (drawn || snapshot.competitors.length > 0)}<MatBoard />{/if}
     {#if !multi}<Planning />{/if}
+    {#if !multi}<Staff />{/if}
 
     <Pools {snapshot} onchange={refresh} />
   {/if}

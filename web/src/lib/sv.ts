@@ -440,6 +440,47 @@ export const sv: Record<string, string> = {
   'No such competitor': 'Ingen sådan fäktare',
   'That name is not in this tournament. It may be in another discipline.':
     'Det namnet finns inte i den här tävlingen. Det kan finnas i en annan disciplin.',
+  // The event's staff (phase 5).
+  '1 slot has nobody.': '1 plats saknar folk.',
+  '{n} slots have nobody.': '{n} platser saknar folk.',
+  'A mat needs': 'En matta behöver',
+  'Added as the same person as the competitor, so they are never put on a mat while fencing.':
+    'Läggs till som samma person som fäktaren, så hen aldrig sätts på en matta medan hen fäktas.',
+  'Already entered as a competitor. Is this them?': 'Redan anmäld som fäktare. Är det hen?',
+  'Anyone chosen by hand stays where they are, and so does the crew of a mat already fencing.':
+    'Den som valts för hand stannar där hen är, och det gör även laget på en matta som redan fäktas.',
+  'Chosen by hand': 'Valt för hand',
+  'Every slot is filled.': 'Alla platser är tillsatta.',
+  'None ticked: any discipline.': 'Ingen ikryssad: vilken disciplin som helst.',
+  'Nothing to change.': 'Inget att ändra.',
+  'On call as physician all day.': 'Jourhavande läkare hela dagen.',
+  'On call as physician: {names}': 'Jourhavande läkare: {names}',
+  Roles: 'Roller',
+  'Suggest who works where': 'Föreslå vem som arbetar var',
+  'Suggested staffing': 'Föreslagen bemanning',
+  'The staff or the plan changed since; this is a new suggestion.':
+    'Funktionärerna eller planen har ändrats sedan dess; det här är ett nytt förslag.',
+  'This fills or changes 1 slot.': 'Det här tillsätter eller ändrar 1 plats.',
+  'This fills or changes {n} slots.': 'Det här tillsätter eller ändrar {n} platser.',
+  What: 'Vad',
+  When: 'När',
+  'Who works the mats. Staff come in with the signup files or are added here. A suggestion fills every slot, never with somebody fencing at the time or on another mat, and keeps people in one role on one mat for as long as it can.':
+    'Vem som arbetar vid mattorna. Funktionärer kommer in med anmälningsfilerna eller läggs till här. Ett förslag tillsätter varje plats, aldrig med någon som fäktas samtidigt eller står vid en annan matta, och håller folk i en roll vid en matta så länge det går.',
+  'Who works what': 'Vem gör vad',
+  Working: 'Arbetar',
+  Works: 'Arbetar med',
+  nobody: 'ingen',
+  '{name} as {role}': '{name} som {role}',
+  '{name} is {role} on {item} while fencing in {other}.': '{name} är {role} i {item} samtidigt som hen fäktas i {other}.',
+  '{name} is {role} on {item} while working {other}.': '{name} är {role} i {item} samtidigt som hen arbetar i {other}.',
+  '{name} is {role} on {item}, a discipline they did not offer to work.':
+    '{name} är {role} i {item}, en disciplin hen inte erbjöd sig att arbeta med.',
+  '{name} is {role} on {item}, which they did not offer to do.': '{name} är {role} i {item}, vilket hen inte erbjöd sig att göra.',
+  '{n} on the staff': '{n} funktionärer',
+  '{n} would still have nobody: there are not enough staff free at the time.':
+    '{n} skulle fortfarande sakna folk: det finns inte tillräckligt många lediga funktionärer då.',
+  '{role} on {item}': '{role} i {item}',
+
   // The plan and the forecast (phase 4).
   '(planned {time})': '(planerat {time})',
   '+{n} min': '+{n} min',

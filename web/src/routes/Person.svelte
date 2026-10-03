@@ -6,6 +6,8 @@
   import { t } from '../lib/i18n.svelte';
   import LangToggle from './LangToggle.svelte';
   import PersonEntry from './PersonEntry.svelte';
+  import { clockOf } from '../lib/clock-of-day';
+  import { itemLabel, roleLabel } from '../lib/items';
 
   /**
    * One person's day (issue #98, and across the event since phase 3): every discipline
@@ -113,7 +115,25 @@
         {person.club ?? ''}
         {#if withdrawnEverywhere && !headings}<span class="tag">{t('withdrawn')}</span>{/if}
       </p>
-      {#if person.entries.length === 0}
+      {#if (person.duties?.length ?? 0) > 0 || person.physician}
+        <!-- Their work as staff (phase 5), beside their fencing. -->
+        <section class="duties">
+          <h2>{t('Working')}</h2>
+          {#if person.physician}<p class="oncall">{t('On call as physician all day.')}</p>{/if}
+          <ol>
+            {#each person.duties ?? [] as d (`${d.item}/${d.role}`)}
+              <li>
+                <span class="when mono">{clockOf(d.start)}–{clockOf(d.end)}</span>
+                <span class="what">
+                  <span class="strong">{roleLabel(d.role)}</span>
+                  <span class="dim">&middot; {d.disciplineName} {itemLabel(d.kind, d.number).toLocaleLowerCase()} &middot; {t('mat {n}', { n: d.mat })}</span>
+                </span>
+              </li>
+            {/each}
+          </ol>
+        </section>
+      {/if}
+      {#if person.entries.length === 0 && !(person.duties?.length ?? 0) && !person.physician}
         <p class="dim">{t('Not entered in anything just now.')}</p>
       {/if}
       {#each person.entries as e (`${e.discipline}/${e.competitor}`)}
@@ -178,5 +198,45 @@
   }
   .dim {
     color: var(--ink-dim);
+  }
+  .duties {
+    background: var(--panel);
+    border-radius: var(--radius);
+    padding: 1rem 1.1rem;
+    margin-bottom: 1.2rem;
+  }
+  .duties h2 {
+    margin: 0 0 0.6rem;
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+  .duties ol {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.35rem;
+  }
+  .duties li {
+    display: grid;
+    grid-template-columns: 6.5rem minmax(0, 1fr);
+    gap: 0.5rem;
+    align-items: baseline;
+  }
+  .duties .when {
+    color: var(--ink-dim);
+    font-variant-numeric: tabular-nums;
+  }
+  .duties .what {
+    overflow-wrap: anywhere;
+  }
+  .strong {
+    font-weight: 700;
+  }
+  .oncall {
+    margin: 0 0 0.5rem;
   }
 </style>
