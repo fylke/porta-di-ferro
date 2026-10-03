@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -267,5 +269,43 @@ func TestBlocksOfTheDay(t *testing.T) {
 	}
 	if fin := timesOf(f, ls+"/final"); fin.Start == "" || fin.Start < timesOf(f, "open-sabre/pool-1").End {
 		t.Errorf("the longsword's final is held until everything else is done: %+v", fin)
+	}
+}
+
+// Typing names at the desk writes nothing to the plan (#129): an undrawn discipline's
+// projected items are placed on every read, and only a place the organizer chose for one
+// is written down.
+func TestProjectedItemsAreNotWrittenDown(t *testing.T) {
+	h := openHall(t, t.TempDir())
+	var ev httpapi.EventView
+	h.must("GET", "/api/event", nil, &ev)
+	h.draw("/api/d/"+ev.Disciplines[0].Slug, 8, 2)
+	h.must("POST", "/api/disciplines", map[string]string{"name": "Open Sabre"}, nil)
+	add := func(from, to int) {
+		for i := from; i < to; i++ {
+			h.must("POST", "/api/d/open-sabre/competitors", map[string]string{"name": fmt.Sprintf("Sabreur %d", i), "club": fmt.Sprintf("Club %d", i%3)}, nil)
+			h.mats()
+		}
+	}
+	add(0, 4)
+	before, err := os.ReadFile(filepath.Join(h.dir, "event.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	add(4, 14)
+	v := h.mats()
+	if it := itemOf(v, "open-sabre/pool-2"); !it.Projected {
+		t.Fatalf("fourteen sabreurs should be projected into more than one pool: %+v", it)
+	}
+	after, _ := os.ReadFile(filepath.Join(h.dir, "event.json"))
+	if string(after) != string(before) {
+		t.Errorf("entering sabreurs rewrote event.json:\n%s\n---\n%s", before, after)
+	}
+
+	// Pinned, a projected item is the organizer's choice, and kept.
+	h.must("PATCH", "/api/plan/items/open-sabre/pool-2", map[string]any{"pinned": true}, nil)
+	after, _ = os.ReadFile(filepath.Join(h.dir, "event.json"))
+	if !strings.Contains(string(after), "open-sabre/pool-2") || strings.Contains(string(after), "open-sabre/pool-1") {
+		t.Errorf("only the pinned projected item should be written down:\n%s", after)
 	}
 }

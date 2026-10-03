@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"strconv"
 	"strings"
@@ -82,6 +83,12 @@ func (c *Coordinator) placementsLocked() (map[string]store.Placement, int) {
 		stores[w.slug] = w.srv.store
 		items = append(items, PlanItems(w.slug, t, Entrants(comps, file.Plan.Expected[w.slug]))...)
 	}
+	c.projected = map[string]bool{}
+	for _, it := range items {
+		if it.Projected {
+			c.projected[it.ID()] = true
+		}
+	}
 	// Under way is any match of the item with a log: nothing goes in front of it.
 	started := func(it WorkItem) bool {
 		st := stores[it.Discipline]
@@ -117,12 +124,24 @@ func (c *Coordinator) placementsLocked() (map[string]store.Placement, int) {
 		placed[id] = p
 	}
 	if changed {
-		_, _ = c.folder.Update(func(f *event.File) error {
-			f.Plan.Items = placed
-			return nil
-		})
+		_ = c.savePlacementsLocked(placed)
 	}
 	return placed, mats
+}
+
+// savePlacementsLocked writes the placements down, as much of them as is kept (#129), and
+// only when that differs from what is there. The caller holds planMu.
+func (c *Coordinator) savePlacementsLocked(placed map[string]store.Placement) error {
+	next := Persisted(placed, c.projected)
+	file, _ := c.folder.Read()
+	if maps.Equal(next, Persisted(file.Plan.Items, c.projected)) && len(next) == len(file.Plan.Items) {
+		return nil
+	}
+	_, err := c.folder.Update(func(f *event.File) error {
+		f.Plan.Items = next
+		return nil
+	})
+	return err
 }
 
 // withSessions gives every discipline its block of the day (#136).
@@ -186,10 +205,7 @@ func (c *Coordinator) MoveItem(id string, mat, index int, move string) error {
 		next, changed, err = Move(view, placed, id, mat, index, mats)
 	}
 	if err == nil && changed {
-		_, err = c.folder.Update(func(f *event.File) error {
-			f.Plan.Items = next
-			return nil
-		})
+		err = c.savePlacementsLocked(next)
 	}
 	c.planMu.Unlock()
 	if err != nil {

@@ -628,6 +628,37 @@ func Move(view MatsView, placed map[string]store.Placement, id string, mat, inde
 	return next, true, nil
 }
 
+// Persisted is what of the placements is written down (#129): every drawn item, and an
+// undrawn discipline's projected item only where the organizer chose its place. The rest
+// is placed again on every read, so typing names at the desk -- which changes how many
+// pools there would be -- writes nothing. Each mat's places are counted from 1 again
+// without the projected items, so their coming and going does not renumber the others.
+func Persisted(placed map[string]store.Placement, projected map[string]bool) map[string]store.Placement {
+	out := make(map[string]store.Placement, len(placed))
+	queues := map[int][]string{}
+	for id, p := range placed {
+		if projected[id] && !p.Pinned && p.NotBefore == "" && !p.Planned {
+			continue
+		}
+		out[id] = p
+		queues[p.Mat] = append(queues[p.Mat], id)
+	}
+	for _, q := range queues {
+		sort.Slice(q, func(i, j int) bool {
+			if out[q[i]].Seq != out[q[j]].Seq {
+				return out[q[i]].Seq < out[q[j]].Seq
+			}
+			return q[i] < q[j]
+		})
+		for i, id := range q {
+			p := out[id]
+			p.Seq = i + 1
+			out[id] = p
+		}
+	}
+	return out
+}
+
 // Step moves an item one place earlier or later on its own mat, as the arrows on a card
 // and on a pool's header do.
 func Step(view MatsView, placed map[string]store.Placement, id string, earlier bool, mats int) (map[string]store.Placement, bool, error) {

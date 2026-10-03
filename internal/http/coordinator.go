@@ -44,6 +44,9 @@ type Coordinator struct {
 	presence *presence
 	// planMu serialises changes to the plan.
 	planMu sync.Mutex
+	// projected are the work items, by id, of disciplines not drawn yet, as the last
+	// placing found them: what is not written down unless chosen (#129). Under planMu.
+	projected map[string]bool
 	// peopleMu serialises changes to the event's people. Never held while waiting for a
 	// discipline's lock (coordinator_people.go).
 	peopleMu sync.Mutex

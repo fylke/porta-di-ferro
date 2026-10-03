@@ -299,10 +299,7 @@ func (c *Coordinator) flagItem(id string, pinned *bool, notBefore *string) error
 	placed, _ := c.placementsLocked()
 	next, err := SetItemFlags(placed, id, pinned, notBefore)
 	if err == nil {
-		_, err = c.folder.Update(func(f *event.File) error {
-			f.Plan.Items = next
-			return nil
-		})
+		err = c.savePlacementsLocked(next)
 	}
 	c.planMu.Unlock()
 	if err == nil {
@@ -344,11 +341,7 @@ func (c *Coordinator) applySuggestion(w http.ResponseWriter, r *http.Request) {
 	}
 	c.planMu.Lock()
 	placed, _ := c.placementsLocked()
-	next := ApplySuggestion(placed, s)
-	_, err := c.folder.Update(func(f *event.File) error {
-		f.Plan.Items = next
-		return nil
-	})
+	err := c.savePlacementsLocked(ApplySuggestion(placed, s))
 	c.planMu.Unlock()
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
