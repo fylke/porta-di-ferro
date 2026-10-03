@@ -117,6 +117,7 @@ func NewCoordinator(folder *event.Folder, assets fs.FS) (*Coordinator, error) {
 	c.liftDisplays()
 	c.ensurePeople()
 	c.liftStaff()
+	c.prunePeople()
 	go c.announce()
 	go c.sweep()
 	return c, nil
