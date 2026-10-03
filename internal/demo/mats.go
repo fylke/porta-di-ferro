@@ -27,7 +27,7 @@ func (e *Event) placements() (map[string]store.Placement, int) {
 	var tournaments []store.Tournament
 	for _, d := range e.disciplines {
 		tournaments = append(tournaments, d.tournament)
-		items = append(items, httpapi.ItemsOf(d.slug, d.tournament)...)
+		items = append(items, httpapi.PlanItems(d.slug, d.tournament, httpapi.Entrants(d.competitors, e.plan.Expected[d.slug]))...)
 	}
 	mats := httpapi.MatCount(e.plan, tournaments)
 	placed, changed := httpapi.Place(items, e.plan, mats)
@@ -55,7 +55,8 @@ func (e *Event) mats() httpapi.MatsView {
 		if err != nil {
 			continue
 		}
-		inputs = append(inputs, httpapi.MatsInput{Slug: d.slug, Name: d.tournament.Discipline, Snapshot: snap})
+		inputs = append(inputs, httpapi.MatsInput{Slug: d.slug, Name: d.tournament.Discipline, Snapshot: snap,
+			Expected: e.plan.Expected[d.slug]})
 	}
 	return httpapi.BuildMats(inputs, placed, n, e.held)
 }
@@ -86,12 +87,25 @@ func (e *Event) moveItem(id string, mat, index int, move string) error {
 
 func (e *Event) patchItem(id string, body []byte) Response {
 	var in struct {
-		Mat   int    `json:"mat"`
-		Index *int   `json:"index"`
-		Move  string `json:"move"`
+		Mat       int     `json:"mat"`
+		Index     *int    `json:"index"`
+		Move      string  `json:"move"`
+		Pinned    *bool   `json:"pinned"`
+		NotBefore *string `json:"notBefore"`
 	}
 	if err := json.Unmarshal(body, &in); err != nil {
 		return fail(400, err)
+	}
+	if in.Pinned != nil || in.NotBefore != nil {
+		placed, _ := e.placements()
+		next, err := httpapi.SetItemFlags(placed, id, in.Pinned, in.NotBefore)
+		if err != nil {
+			return fail(400, err)
+		}
+		e.plan.Items = next
+		if in.Move == "" && in.Mat <= 0 {
+			return changed(e.mats())
+		}
 	}
 	index := -1
 	if in.Index != nil {

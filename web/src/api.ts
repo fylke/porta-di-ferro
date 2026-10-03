@@ -48,6 +48,11 @@ export interface MatchView {
   sinceMs?: number;
   /** How the match is presented: colours and display sides, read from the log. */
   options: Options;
+  /** When the match started and ended, by its log (phase 4). */
+  startedAt?: string;
+  endedAt?: string;
+  /** When the forecast expects a match still to come to start, in the hall's zone. */
+  eta?: string;
 }
 
 export interface Standing {
@@ -164,10 +169,97 @@ export interface ItemView {
   number?: number;
   mat: number;
   position: number;
-  status: 'waiting' | 'ready' | 'running' | 'done';
+  /** "planned" is an item not drawn yet: what the draw would make (phase 4). */
+  status: 'waiting' | 'ready' | 'running' | 'done' | 'planned';
   done: number;
   total: number;
   movable: boolean;
+  projected?: boolean;
+  /** Put on its mat by hand: a suggestion keeps it there. */
+  pinned?: boolean;
+  /** The earliest it may start, "16:30". */
+  notBefore?: string;
+}
+
+/** How long things take, in seconds, and the day's start and close as "HH:MM" (phase 4). */
+export interface Timings {
+  match?: number;
+  changeover?: number;
+  beforeElims?: number;
+  start?: string;
+  close?: string;
+}
+
+/** One work item's forecast and planned times, as RFC 3339 in the hall's zone. */
+export interface ItemTimes {
+  id: string;
+  mat: number;
+  start: string;
+  end: string;
+  plannedStart: string;
+  plannedEnd: string;
+}
+
+export interface Warning {
+  kind: 'overlap' | 'dependency' | 'overrun';
+  items?: string[];
+  person?: string;
+  personName?: string;
+  from?: string;
+  to?: string;
+}
+
+/** One stage of a discipline in the derived programme. */
+export interface ProgrammeRow {
+  discipline: string;
+  name: string;
+  stage: 'pools' | 'eliminations' | 'final';
+  start: string;
+  end: string;
+  mats: number[];
+  done?: boolean;
+}
+
+/** The plan re-timed against what has happened. */
+export interface ForecastView {
+  items: ItemTimes[];
+  end?: string;
+  plannedEnd?: string;
+  pace: { mat: number; match: number; changeover: number; samples: number }[];
+  warnings: Warning[];
+  programme: ProgrammeRow[];
+  timings: Timings;
+  live: boolean;
+  /** How many each discipline expects, by slug. */
+  expected?: Record<string, number>;
+}
+
+/** A suggested plan: what moves, and when the day would end with it and without it. */
+export interface SuggestionView {
+  moves: { id: string; fromMat: number; fromPosition: number; toMat: number; toPosition: number; start: string }[];
+  end: string;
+  before: string;
+  signature: string;
+}
+
+/** The measured day: every fenced match, and what a template learned from it would say. */
+export interface ReportView {
+  matches: {
+    key: string;
+    discipline: string;
+    disciplineName: string;
+    match: string;
+    red: string;
+    blue: string;
+    mat: number;
+    started: string;
+    seconds: number;
+    changeover: number;
+    anomaly: boolean;
+  }[];
+  match: number;
+  changeover: number;
+  samples: number;
 }
 
 /** The hall: every mat, and every work item placed on them. */
@@ -217,6 +309,8 @@ export interface EventView {
   infoError?: string;
   disciplines: DisciplineSummary[];
   dir: string;
+  /** The fencing part of the day, as the forecast has it (phase 4). */
+  programme?: ProgrammeRow[];
 }
 
 /** One line of the day's agenda. `at` is free text: "after the pools" is a valid time. */
@@ -570,6 +664,22 @@ export const api = {
   /** Moves a work item: to a place on a mat, or a step along its own. */
   moveItem: (id: string, to: { mat: number; index?: number } | { move: 'up' | 'down' }) =>
     req<MatsView>('PATCH', `/api/plan/items/${id.split('/').map(encodeURIComponent).join('/')}`, to),
+  /** Pins or unpins a work item, or holds it until a time ("" lets it go). */
+  flagItem: (id: string, flags: { pinned?: boolean; notBefore?: string }) =>
+    req<MatsView>('PATCH', `/api/plan/items/${id.split('/').map(encodeURIComponent).join('/')}`, flags),
+
+  // The plan's times (phase 4).
+  forecast: () => req<ForecastView>('GET', '/api/forecast'),
+  setTimings: (t: Timings) => req<ForecastView>('PUT', '/api/plan/timings', t),
+  learnTimings: () => req<ForecastView>('POST', '/api/plan/timings/learn'),
+  keepTimings: () => req<{ file: string; timings: Timings }>('POST', '/api/plan/timings/default'),
+  setExpected: (expected: Record<string, number>) => req<ForecastView>('PUT', '/api/plan/expected', expected),
+  report: () => req<ReportView>('GET', '/api/plan/report'),
+  setAnomaly: (key: string, anomaly: boolean) => req<ReportView>('PUT', '/api/plan/anomalies', { key, anomaly }),
+  /** A suggested plan. Writes nothing. */
+  suggest: () => req<SuggestionView>('POST', '/api/plan/suggest'),
+  /** Applies the suggestion with this signature; a 409 carries a fresh one. */
+  applySuggestion: (signature: string) => req<ForecastView>('POST', '/api/plan/apply', { signature }),
 
   // The devices at the mats belong to the event, whatever discipline they are scoring.
   presence: () => req<Presence>('GET', '/api/presence'),

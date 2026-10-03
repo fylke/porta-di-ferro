@@ -7,6 +7,7 @@
   import { fitRows, type Layout } from '../lib/fit';
   import LangToggle from './LangToggle.svelte';
   import Schedule from './Schedule.svelte';
+  import FencingProgramme from './FencingProgramme.svelte';
   import Standings from './Standings.svelte';
   import { dhref, discipline } from '../router.svelte';
   import { hall } from '../lib/event.svelte';
@@ -52,6 +53,18 @@
     [...(snapshot?.competitors ?? [])].sort((a, b) => a.name.localeCompare(b.name)),
   );
 
+  // The fencing part of the programme, as the forecast has it (phase 4): this discipline's
+  // rows of the event's. Looked at again as the tournament moves, but not on every
+  // exchange -- a minute is precise enough for "about 10:40".
+  let lastLook = 0;
+  $effect(() => {
+    void snapshot;
+    if (Date.now() - lastLook < 60000) return;
+    lastLook = Date.now();
+    void hall.refresh();
+  });
+  const fencing = $derived((hall.view?.programme ?? []).filter((r) => r.discipline === snapshot?.instance.slug));
+
   const started = $derived(
     (snapshot?.pools ?? []).some((p) => p.matches.some((m) => m.status !== 'pending')),
   );
@@ -83,6 +96,7 @@
       <section class="schedule">
         <h2>{t('Programme')}</h2>
         <Schedule items={event.schedule ?? []} />
+        <FencingProgramme rows={fencing} names={false} />
       </section>
 
       <section class="people">

@@ -30,6 +30,9 @@ type Event struct {
 	keepers map[string]keeper
 	// people is the event's registry of people (phase 3): people.json, in memory.
 	people []store.Person
+	// defaults is the template the visitor kept for new events (phase 4): the file beside
+	// the event folder, in memory.
+	defaults store.Timings
 }
 
 // NewEvent builds the event a visitor arrives in: the longsword halfway through its pools
@@ -54,11 +57,13 @@ func (e *Event) Reset() {
 	e.plan = store.Plan{}
 	e.keepers = nil
 	e.people = nil
+	e.defaults = store.Timings{}
 	e.adopt(longsword)
 	e.adopt(sabre)
 	// Astrid and Greta signed up for both on one response each, so they are one person in
 	// both; Bo was typed in at each desk, so he is two until the organizer says otherwise.
 	e.ensurePeople()
+	e.startAtFirstMatch()
 }
 
 func (e *Event) adopt(d *Demo) {
@@ -92,6 +97,8 @@ func (e *Event) View() httpapi.EventView {
 		s.Mats = httpapi.SummaryMats(mats, d.slug)
 		view.Disciplines = append(view.Disciplines, s)
 	}
+	in, r, inputs := e.times()
+	view.Programme = httpapi.ViewForecast(in, r, inputs, e.timings()).Programme
 	view.Name = strings.TrimSpace(e.info.Signup.Name)
 	if view.Name == "" && len(view.Disciplines) == 1 {
 		view.Name = view.Disciplines[0].Name
@@ -109,6 +116,9 @@ func (e *Event) Request(method, path string, body []byte) Response {
 	parts := strings.Split(strings.TrimPrefix(bare, "/"), "/")
 
 	if res, found := e.peopleRequest(method, bare, parts, body); found {
+		return res
+	}
+	if res, found := e.planRequest(method, bare, body); found {
 		return res
 	}
 
@@ -345,6 +355,7 @@ type savedEvent struct {
 	Info        store.Event       `json:"info"`
 	Plan        store.Plan        `json:"plan"`
 	People      []store.Person    `json:"people"`
+	Defaults    store.Timings     `json:"defaults,omitempty"`
 	Disciplines []savedDiscipline `json:"disciplines"`
 }
 
@@ -356,7 +367,7 @@ type savedDiscipline struct {
 
 // Save is the whole event as JSON: the day, and every discipline's own save.
 func (e *Event) Save() ([]byte, error) {
-	out := savedEvent{Format: eventSaveFormat, Info: e.info, Plan: e.plan, People: e.people}
+	out := savedEvent{Format: eventSaveFormat, Info: e.info, Plan: e.plan, People: e.people, Defaults: e.defaults}
 	for _, d := range e.disciplines {
 		state, err := d.Save()
 		if err != nil {
@@ -397,7 +408,7 @@ func (e *Event) Load(b []byte) error {
 		}
 		next.adopt(d)
 	}
-	e.info, e.plan, e.disciplines, e.keepers, e.people = next.info, next.plan, nil, nil, in.People
+	e.info, e.plan, e.disciplines, e.keepers, e.people, e.defaults = next.info, next.plan, nil, nil, in.People, in.Defaults
 	for _, d := range next.disciplines {
 		e.adopt(d)
 	}

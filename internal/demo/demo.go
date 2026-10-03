@@ -198,6 +198,9 @@ func (d *Demo) snapshot() (httpapi.Snapshot, error) {
 		// Which match each of the event's mats is on, when it is this discipline's: the
 		// hall's to say, built from the placed snapshots, as the coordinator does.
 		snap.Mats = httpapi.CurrentFrom(d.event.mats(), d.slug)
+		// When each match still to come is expected (phase 4).
+		_, r, _ := d.event.times()
+		httpapi.ApplyEtas(&snap, httpapi.EtasFor(r, d.slug))
 	}
 	return snap, err
 }

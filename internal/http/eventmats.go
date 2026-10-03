@@ -16,9 +16,10 @@ type EventMats interface {
 	Placements() (map[string]store.Placement, int)
 	// MoveItem moves one item: to a mat at an index, or a step "up" or "down".
 	MoveItem(id string, mat, index int, move string) error
-	// CurrentMats is, for every mat of the event, the match it is on if that match is
-	// this discipline's, and "" if it is another's or nobody's.
-	CurrentMats(slug string) map[int]string
+	// Hall is, for every mat of the event, the match it is on if that match is this
+	// discipline's ("" if it is another's or nobody's), and when each of this
+	// discipline's matches still to come is expected to start (phase 4).
+	Hall(slug string) (map[int]string, map[string]string)
 }
 
 // UseMats puts this discipline's work on the event's mats. Called once, before it serves.

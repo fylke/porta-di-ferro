@@ -273,3 +273,103 @@ func TestASnapshotSpeaksTheEventsMats(t *testing.T) {
 		t.Errorf("EventMats should say 4 and the discipline's own Mats be emptied: %d %v", snap.EventMats, snap.Mats)
 	}
 }
+
+// The day planned before the draw is the drawn day's: a projected item's placement, which
+// has no stamp, is taken over by the real item of the same name (phase 4).
+func TestThePlannedDaySurvivesTheDraw(t *testing.T) {
+	ls := discipline("ls", "drawn", []pool{{1, 1, 2, ""}, {2, 2, 2, ""}}, nil, nil, nil)
+	plan := store.Plan{Items: map[string]store.Placement{
+		"ls/pool-1": {Mat: 2, Seq: 1, Pinned: true, NotBefore: "10:00"},
+		"ls/pool-2": {Mat: 1, Seq: 1},
+	}}
+	placed, changed := httpapi.Place(items(ls), plan, 2)
+	if !changed {
+		t.Error("taking over a projected placement should be written down")
+	}
+	if p := placed["ls/pool-1"]; p.Mat != 2 || p.Stamp != "drawn" || !p.Pinned || p.NotBefore != "10:00" {
+		t.Errorf("pool 1 should stay where it was planned, pinned and held: %+v", p)
+	}
+}
+
+// A card moved by hand is pinned, so a suggestion keeps it on that mat.
+func TestAMoveByHandPins(t *testing.T) {
+	ls := discipline("ls", "d", []pool{{1, 1, 2, ""}, {2, 1, 2, ""}}, nil, nil, nil)
+	placed, _ := httpapi.Place(items(ls), store.Plan{}, 2)
+	view := httpapi.BuildMats([]httpapi.MatsInput{ls}, placed, 2, func(int) (string, string) { return "", "" })
+	next, _, _ := httpapi.Move(view, placed, "ls/pool-2", 2, 0, 2)
+	if !next["ls/pool-2"].Pinned || next["ls/pool-1"].Pinned {
+		t.Errorf("only the moved item should be pinned: %+v", next)
+	}
+}
+
+// Before the draw a discipline has the work the draw would give it, under the names the
+// real items will have (phase 4, planning mode).
+func TestUndrawnWorkIsProjected(t *testing.T) {
+	tn := store.Defaults()
+	tn.Mats, tn.MinPoolSize, tn.MaxPoolSize = 2, 5, 7
+	got := []string{}
+	for _, it := range httpapi.ProjectedItems("sa", tn, 14) {
+		if !it.Projected || it.Stamp != "" {
+			t.Errorf("a projected item should say so and have no stamp: %+v", it)
+		}
+		got = append(got, fmt.Sprintf("%s@%d:%d", it.Key, it.Lane, len(it.Matches)))
+	}
+	want := []string{"pool-1@1:21", "pool-2@2:21", "elim-1@1:3", "elim-2@2:3", "bronze@2:1", "final@1:1"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("fourteen entrants should project two pools of seven and a bracket of eight:\n got %v\nwant %v", got, want)
+	}
+	if n := len(httpapi.ProjectedItems("sa", tn, 1)); n != 0 {
+		t.Errorf("one entrant is nothing to plan, got %d items", n)
+	}
+
+	// Drawn pools leave only the bracket projected; a drawn bracket leaves nothing.
+	ls := discipline("ls", "d", []pool{{1, 1, 3, ""}}, nil, nil, nil)
+	if its := httpapi.ProjectedItems("ls", ls.Snapshot.Tournament, 2); len(its) != 1 || its[0].Key != "final" {
+		t.Errorf("with the pools drawn only the bracket is still to come: %+v", its)
+	}
+	ls = discipline("ls", "d", []pool{{1, 1, 3, ""}}, eightBracket(), nil, nil)
+	if its := httpapi.ProjectedItems("ls", ls.Snapshot.Tournament, 8); len(its) != 0 {
+		t.Errorf("with everything drawn nothing is projected: %+v", its)
+	}
+}
+
+// A mat never waits on work that is not drawn yet: a projected pool ahead of a drawn one
+// is planned time, not the mat's current match.
+func TestAMatDoesNotWaitOnProjectedWork(t *testing.T) {
+	ls := discipline("ls", "d", []pool{{1, 1, 2, ""}}, eightBracket(), nil, nil)
+	sa := ls
+	sa.Slug, sa.Name = "sa", "sa"
+	sa.Snapshot.Tournament = store.Tournament{Mats: 1, MinPoolSize: 4, MaxPoolSize: 7}
+	sa.Snapshot.Pools, sa.Snapshot.Bracket = nil, nil
+	sa.Expected = 6
+	plan := store.Plan{Items: map[string]store.Placement{"sa/pool-1": {Mat: 1, Seq: 1}}}
+	all := append(items(ls), httpapi.PlanItems("sa", sa.Snapshot.Tournament, 6)...)
+	placed, _ := httpapi.Place(all, plan, 2)
+	view := httpapi.BuildMats([]httpapi.MatsInput{ls, sa}, placed, 2, func(int) (string, string) { return "", "" })
+	if cur := view.Mats[0].Current; cur == nil || cur.Discipline != "ls" {
+		t.Errorf("mat 1 should be on the longsword's pool, not waiting for the sabre's draw: %+v", cur)
+	}
+	planned := 0
+	for _, it := range view.Items {
+		if it.Discipline == "sa" {
+			planned++
+			if !it.Projected || it.Status != "planned" || !it.Movable || it.Total == 0 {
+				t.Errorf("a projected item is planned, movable and counts its matches: %+v", it)
+			}
+		}
+	}
+	if planned == 0 {
+		t.Error("the sabre's projected work should be on the board")
+	}
+}
+
+// Only what the organizer placed survives the draw; the projection's own guesses give way
+// to the real draw's lanes.
+func TestTheProjectionsOwnPlacementsGiveWay(t *testing.T) {
+	ls := discipline("ls", "drawn", []pool{{1, 1, 2, ""}, {2, 2, 2, ""}}, nil, nil, nil)
+	plan := store.Plan{Items: map[string]store.Placement{"ls/pool-2": {Mat: 1, Seq: 1}}}
+	placed, _ := httpapi.Place(items(ls), plan, 2)
+	if p := placed["ls/pool-2"]; p.Mat != 2 || p.Stamp != "drawn" {
+		t.Errorf("pool 2 should go to its drawn lane, mat 2: %+v", p)
+	}
+}

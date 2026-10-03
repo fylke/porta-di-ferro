@@ -16,11 +16,17 @@ package main
 import (
 	"encoding/json"
 	"syscall/js"
+	"time"
 
 	"github.com/fylke/porta-di-ferro/internal/demo"
 )
 
 func main() {
+	// A browser gives Go no zone, so it would tell every time in UTC. The forecast prints
+	// times of day (phase 4); they are the visitor's.
+	offset := js.Global().Get("Date").New().Call("getTimezoneOffset").Int()
+	time.Local = time.FixedZone("", -offset*60)
+
 	d := demo.NewEvent()
 
 	api := js.Global().Get("Object").New()

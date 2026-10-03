@@ -54,6 +54,9 @@ type Coordinator struct {
 
 	changed chan struct{}
 	stop    chan struct{}
+
+	// Clock is the time the forecast is made at; nil is the wall clock. For tests.
+	Clock func() time.Time
 }
 
 // worker is one discipline as the coordinator holds it. Not a process, thread or actor:
@@ -298,6 +301,8 @@ func (c *Coordinator) viewFrom(snaps []snapped, mats MatsView) EventView {
 		}
 		view.Disciplines = append(view.Disciplines, d)
 	}
+	h := c.timesFrom(snaps)
+	view.Programme = ViewForecast(h.in, h.result, h.inputs, h.timings).Programme
 	view.Name = strings.TrimSpace(view.Info.Signup.Name)
 	if view.Name == "" && len(view.Disciplines) == 1 {
 		view.Name = view.Disciplines[0].Name
@@ -389,6 +394,15 @@ func (c *Coordinator) Handler() http.Handler {
 		serveStream(w, r, c.matsHub)
 	})
 	mux.HandleFunc("GET /api/plan", c.getMats)
+	mux.HandleFunc("GET /api/forecast", c.getForecast)
+	mux.HandleFunc("PUT /api/plan/timings", c.putTimings)
+	mux.HandleFunc("POST /api/plan/timings/learn", c.learnTimings)
+	mux.HandleFunc("POST /api/plan/timings/default", c.keepTimings)
+	mux.HandleFunc("PUT /api/plan/expected", c.putExpected)
+	mux.HandleFunc("GET /api/plan/report", c.getReport)
+	mux.HandleFunc("PUT /api/plan/anomalies", c.putAnomaly)
+	mux.HandleFunc("POST /api/plan/suggest", c.suggest)
+	mux.HandleFunc("POST /api/plan/apply", c.applySuggestion)
 	mux.HandleFunc("PATCH /api/plan/items/{id...}", c.patchItem)
 
 	// The devices at the mats are the event's, whatever discipline they are scoring.

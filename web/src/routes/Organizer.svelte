@@ -12,6 +12,7 @@
   import Screens from './Screens.svelte';
   import Disciplines from './Disciplines.svelte';
   import MatBoard from './MatBoard.svelte';
+  import Planning from './Planning.svelte';
   import EventEditor from './EventEditor.svelte';
   import Signup from './Signup.svelte';
   import LangToggle from './LangToggle.svelte';
@@ -184,7 +185,9 @@
 
     <!-- The mat board, for dragging pools between mats (#101). With several disciplines it
          is on the event's page, where it shows all of them. -->
-    {#if !multi && drawn}<MatBoard />{/if}
+    <!-- Before the draw the board shows the day as it would be (phase 4). -->
+    {#if !multi && (drawn || snapshot.competitors.length > 0)}<MatBoard />{/if}
+    {#if !multi}<Planning />{/if}
 
     <Pools {snapshot} onchange={refresh} />
   {/if}

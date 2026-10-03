@@ -240,6 +240,32 @@ type Plan struct {
 	Mats int `json:"mats,omitempty"`
 	// Items is each work item's placement, by "slug/key": "open-sabre/pool-3".
 	Items map[string]Placement `json:"items,omitempty"`
+	// Timings are how long things take, for the forecast (phase 4). Zero fields take the
+	// defaults: see Timings.
+	Timings Timings `json:"timings,omitempty"`
+	// Expected is how many each discipline expects to enter, by slug, for planning the day
+	// before the entries are in (#64). The forecast uses it while it is more than are
+	// entered and the pools are not drawn.
+	Expected map[string]int `json:"expected,omitempty"`
+	// Anomalies are matches whose times are not to be learned from -- a long injury
+	// break, a score keeper who forgot to end the match -- by "slug/match" (#64).
+	Anomalies []string `json:"anomalies,omitempty"`
+}
+
+// Timings are how long fencing takes, in seconds, and when the day starts and ends, as
+// "HH:MM". The template the forecast starts from, until the day's own pace replaces it,
+// and what the measured times can be written back into for the next event (#64).
+type Timings struct {
+	// Match is one match, from its first event to its last.
+	Match int `json:"match,omitempty"`
+	// Changeover is the gap between one match ending and the next starting on a mat.
+	Changeover int `json:"changeover,omitempty"`
+	// BeforeElims is the pause between a discipline's last pool and its eliminations:
+	// ranking, the draw, the call to the mats.
+	BeforeElims int `json:"beforeElims,omitempty"`
+	// Start is when the first match of the day starts; Close is when the venue closes.
+	Start string `json:"start,omitempty"`
+	Close string `json:"close,omitempty"`
 }
 
 // Placement is one work item's mat and its place in that mat's queue.
@@ -250,6 +276,15 @@ type Placement struct {
 	// BracketAt. A redraw makes new items of the same names, which are placed afresh
 	// rather than inheriting where the old ones had been moved.
 	Stamp string `json:"stamp,omitempty"`
+	// Pinned says the organizer put the item here, so a suggested plan keeps it on this
+	// mat (phase 4).
+	Pinned bool `json:"pinned,omitempty"`
+	// NotBefore is the earliest the item may start, "HH:MM": a final held for 16:30.
+	NotBefore string `json:"notBefore,omitempty"`
+	// Planned says the organizer settled this place by applying a suggestion. Like a pin it
+	// keeps a projected item where it is and hands the place to the drawn item; unlike a
+	// pin, the next suggestion may move it.
+	Planned bool `json:"planned,omitempty"`
 }
 
 // Defaults returns the MVP tournament setup: two mats, pools of four to seven.

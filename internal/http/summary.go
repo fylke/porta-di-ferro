@@ -24,6 +24,8 @@ type EventView struct {
 	InfoError   string              `json:"infoError,omitempty"`
 	Disciplines []DisciplineSummary `json:"disciplines"`
 	Dir         string              `json:"dir"`
+	// Programme is the fencing part of the day, as the forecast has it (phase 4).
+	Programme []ProgrammeRow `json:"programme"`
 }
 
 // DisciplineSummary is one discipline, compactly.

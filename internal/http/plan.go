@@ -44,6 +44,8 @@ type WorkItem struct {
 	Stamp string `json:"stamp,omitempty"`
 	// Matches are the item's match ids, in the order its mat runs them.
 	Matches []string `json:"matches"`
+	// Projected says the item is not drawn yet: what the draw would make (projected.go).
+	Projected bool `json:"projected,omitempty"`
 }
 
 // ID is the item's name across the event: "open-sabre/pool-3".
@@ -138,28 +140,59 @@ func MatCount(plan store.Plan, tournaments []store.Tournament) int {
 // exists -- goes to the end of the queue of the mat its lane maps to, so a discipline on
 // its own runs exactly as it always did. Reports whether anything differs from the plan,
 // so the caller writes only then.
+//
+// Projected items (phase 4) keep a place only once the organizer has given them one --
+// moved or held to a time. Until then they go after every real item, worked out afresh
+// each time, so the projected bracket of a discipline never sits in front of the pools
+// it has just drawn. A placement the organizer made for a projected item is the real
+// item's once it is drawn. So is a place from a suggestion the organizer applied.
 func Place(items []WorkItem, plan store.Plan, mats int) (map[string]store.Placement, bool) {
 	if mats < 1 {
 		mats = 1
 	}
 	placed := make(map[string]store.Placement, len(items))
 	top := map[int]int{}
-	var fresh []WorkItem
+	var fresh, later []WorkItem
 	for _, it := range items {
 		p, ok := plan.Items[it.ID()]
-		if ok && p.Stamp == it.Stamp && p.Mat >= 1 && p.Mat <= mats {
+		chosen := p.Pinned || p.NotBefore != "" || p.Planned
+		switch {
+		case !ok || p.Mat < 1 || p.Mat > mats:
+		case p.Stamp == it.Stamp && (!it.Projected || chosen):
+			placed[it.ID()] = p
+			top[p.Mat] = max(top[p.Mat], p.Seq)
+			continue
+		case p.Stamp == "" && it.Stamp != "" && chosen:
+			// Planned before the draw, by hand: the drawn item takes it over.
+			p.Stamp = it.Stamp
 			placed[it.ID()] = p
 			top[p.Mat] = max(top[p.Mat], p.Seq)
 			continue
 		}
-		fresh = append(fresh, it)
+		if it.Projected {
+			later = append(later, it)
+		} else {
+			fresh = append(fresh, it)
+		}
 	}
-	for _, it := range fresh {
+	for _, it := range append(fresh, later...) {
 		mat := (max(it.Lane, 1)-1)%mats + 1
 		top[mat]++
 		placed[it.ID()] = store.Placement{Mat: mat, Seq: top[mat], Stamp: it.Stamp}
 	}
-	return placed, len(fresh) > 0 || len(placed) != len(plan.Items)
+	return placed, !samePlacements(placed, plan.Items)
+}
+
+func samePlacements(a, b map[string]store.Placement) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, v := range a {
+		if w, ok := b[k]; !ok || w != v {
+			return false
+		}
+	}
+	return true
 }
 
 // --- the mats as the hall sees them ---------------------------------------------------
@@ -169,6 +202,8 @@ type MatsInput struct {
 	Slug     string
 	Name     string
 	Snapshot Snapshot
+	// Expected is how many the discipline expects to enter, for its projected items.
+	Expected int
 }
 
 // Slot is one match in a mat's queue, with the discipline it belongs to and the names in
@@ -214,6 +249,11 @@ type ItemView struct {
 	// Movable is false for an item under way or finished: a mat never changes what it
 	// is running in the middle of an item (§9, rules that keep it safe).
 	Movable bool `json:"movable"`
+	// Projected says the item is not drawn yet; Status is then "planned".
+	Projected bool `json:"projected,omitempty"`
+	// Pinned and NotBefore are the organizer's, from the plan (phase 4).
+	Pinned    bool   `json:"pinned,omitempty"`
+	NotBefore string `json:"notBefore,omitempty"`
 }
 
 // MatsView is the whole hall: every mat, and every work item on them.
@@ -254,12 +294,19 @@ func BuildMats(inputs []MatsInput, placed map[string]store.Placement, mats int,
 				views[m.ID] = m
 			}
 		}
-		for _, it := range ItemsOf(in.Slug, in.Snapshot.Tournament) {
+		entrants := Entrants(in.Snapshot.Competitors, in.Expected)
+		for _, it := range PlanItems(in.Slug, in.Snapshot.Tournament, entrants) {
 			p, ok := placed[it.ID()]
 			if !ok {
 				continue
 			}
 			e := &entry{item: it, place: p, name: in.Name}
+			if it.Projected {
+				e.status, e.done = "planned", 0
+				e.slots = nil
+				all = append(all, e)
+				continue
+			}
 			running := false
 			for _, id := range it.Matches {
 				m, ok := views[id]
@@ -311,14 +358,20 @@ func BuildMats(inputs []MatsInput, placed map[string]store.Placement, mats int,
 				continue
 			}
 			position++
+			total := len(e.slots)
+			if e.item.Projected {
+				total = len(e.item.Matches)
+			}
 			out.Items = append(out.Items, ItemView{
 				ID: e.item.ID(), Discipline: e.item.Discipline, DisciplineName: e.name,
 				Kind: e.item.Kind, Number: e.item.Number, Mat: mat, Position: position,
-				Status: e.status, Done: e.done, Total: len(e.slots),
-				Movable: e.status == "ready" || e.status == "waiting",
+				Status: e.status, Done: e.done, Total: total,
+				Movable:   e.status == "ready" || e.status == "waiting" || e.status == "planned",
+				Projected: e.item.Projected, Pinned: e.place.Pinned, NotBefore: e.place.NotBefore,
 			})
 			mv.Queue = append(mv.Queue, e.slots...)
-			if head == nil && e.status != "done" {
+			// Work that is not drawn yet is never what a mat waits for.
+			if head == nil && e.status != "done" && !e.item.Projected {
 				head = e
 			}
 		}
@@ -419,6 +472,12 @@ func Move(view MatsView, placed map[string]store.Placement, id string, mat, inde
 		p.Mat, p.Seq = mat, i+1
 		next[itemID] = p
 	}
+	if changed {
+		// Put there by hand, so a suggested plan keeps it on this mat (phase 4).
+		p := next[id]
+		p.Pinned = true
+		next[id] = p
+	}
 	if !changed {
 		return placed, false, nil
 	}
@@ -485,7 +544,7 @@ func OnEventMats(snap *Snapshot, slug string, placed map[string]store.Placement,
 	snap.Mats = map[int]string{}
 }
 
-// CurrentFrom is what CurrentMats answers, from a view of the hall already built.
+// CurrentFrom is the Mats half of what Hall answers, from a view of the hall already built.
 func CurrentFrom(view MatsView, slug string) map[int]string {
 	out := map[int]string{}
 	for _, m := range view.Mats {

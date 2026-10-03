@@ -70,8 +70,13 @@ func (c *Coordinator) placementsLocked() (map[string]store.Placement, int) {
 			failed = append(failed, w.slug+"/")
 			continue
 		}
+		comps, err := w.srv.store.Competitors()
+		if err != nil {
+			failed = append(failed, w.slug+"/")
+			continue
+		}
 		tournaments = append(tournaments, t)
-		items = append(items, ItemsOf(w.slug, t)...)
+		items = append(items, PlanItems(w.slug, t, Entrants(comps, file.Plan.Expected[w.slug]))...)
 	}
 	mats := MatCount(file.Plan, tournaments)
 	// A discipline that cannot be read keeps its placements for when it can be again,
@@ -113,21 +118,17 @@ func (c *Coordinator) held(mat int) (string, string) {
 
 // matsFrom lays every readable discipline's items on the mats.
 func (c *Coordinator) matsFrom(snaps []snapped) MatsView {
+	file, _ := c.folder.Read()
 	var inputs []MatsInput
 	for _, s := range snaps {
 		if s.err != nil {
 			continue
 		}
-		inputs = append(inputs, MatsInput{Slug: s.w.slug, Name: s.snap.Instance.Name, Snapshot: s.snap})
+		inputs = append(inputs, MatsInput{Slug: s.w.slug, Name: s.snap.Instance.Name, Snapshot: s.snap,
+			Expected: file.Plan.Expected[s.w.slug]})
 	}
 	placed, mats := c.Placements()
 	return BuildMats(inputs, placed, mats, c.held)
-}
-
-// CurrentMats is every mat of the hall, with the match it is on when that match is the
-// discipline's. For a discipline's snapshot, so its Mats means what it always did.
-func (c *Coordinator) CurrentMats(slug string) map[int]string {
-	return CurrentFrom(c.MatsNow(), slug)
 }
 
 // MatsNow is the hall's mats as they stand.
@@ -242,13 +243,26 @@ func (c *Coordinator) putMats(w http.ResponseWriter, r *http.Request) {
 // {"move": "up"} one step along its own.
 func (c *Coordinator) patchItem(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Mat   int    `json:"mat"`
-		Index *int   `json:"index"`
-		Move  string `json:"move"`
+		Mat       int     `json:"mat"`
+		Index     *int    `json:"index"`
+		Move      string  `json:"move"`
+		Pinned    *bool   `json:"pinned"`
+		NotBefore *string `json:"notBefore"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
+	}
+	// The card menu's pin and hold-until (phase 4), on their own or with a move.
+	if in.Pinned != nil || in.NotBefore != nil {
+		if err := c.flagItem(r.PathValue("id"), in.Pinned, in.NotBefore); err != nil {
+			writeErr(w, http.StatusBadRequest, err)
+			return
+		}
+		if in.Move == "" && in.Mat <= 0 {
+			writeJSON(w, http.StatusOK, c.MatsNow())
+			return
+		}
 	}
 	index := -1
 	if in.Index != nil {
