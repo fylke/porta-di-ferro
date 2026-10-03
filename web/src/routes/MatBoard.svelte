@@ -357,7 +357,7 @@
       {#each mats as m (m.mat)}
         {@const list = byMat.get(m.mat) ?? []}
         <div class="column" data-mat={m.mat}>
-          <h3>{t('Mat {n}', { n: m.mat })}{#if m.name} &middot; {m.name}{/if}</h3>
+          <h3>{t('Mat {n}', { n: m.mat })}{#if m.name}{' · '}{m.name}{/if}</h3>
           {#each m.away ?? [] as a (a.from)}
             <p class="away">{t('away {from}–{to}', { from: a.from, to: a.to })}</p>
           {/each}
