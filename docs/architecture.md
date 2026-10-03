@@ -26,7 +26,7 @@ flowchart TB
     subgraph Clients["Venue LAN Clients (Browsers)"]
         OrgUI["Organizer Web Client\n(/)"]
         ScoreUI["Score Keeper Client\n(/score/:mat)"]
-        DisplaySingle["Mat / Audience Display\n(/display/mat/:n, /display/audience/:n)"]
+        DisplaySingle["Mat Display\n(/display/mat/:n)"]
         DisplayMulti["Multi-Mat / Roster / Assigned\n(/display/mats, /display/roster, /display)"]
     end
 
@@ -103,7 +103,7 @@ flowchart LR
     M1 --> Feed["/api/mats and its stream"]
     M2 --> Feed
     Feed --> SK["score keeper at a mat"]
-    Feed --> D["mat, audience and all-mats displays"]
+    Feed --> D["mat and all-mats displays"]
 ```
 
 - **Placing.** A new item — pools just drawn, a bracket just drawn, a redraw (the item's `Stamp` changes) — goes to the end of the mat its lane maps to (`httpapi.Place`). With one discipline and no mat count set, the event has that discipline's mats and every item lands where it always ran, so a one-discipline event is unchanged.
@@ -360,7 +360,7 @@ sequenceDiagram
     O->>S: DELETE /api/quarantine/M (after looking)
 ```
 
-Displays: a screen opens `/display`, heartbeats with role `display`, and renders whatever `target` comes back (`mat/1`, `audience/2`, `mats`, `mats/1,2`, `roster`). The organizer sets it with `PUT /api/clients/{id}/target`; assignments are kept in `displays.json`.
+Displays: a screen opens `/display`, heartbeats with role `display`, and renders whatever `target` comes back (`mat/1`, `mats`, `mats/1,2`, `roster`; an old `audience/2` shows mat 2's scoreboard). The organizer sets it with `PUT /api/clients/{id}/target`; assignments are kept in `displays.json`.
 
 ---
 

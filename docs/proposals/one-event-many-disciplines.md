@@ -445,7 +445,7 @@ in option D, to the right `httpapi.Server` in memory through `http.StripPrefix`.
 | `/admin` | the organizer | the event: disciplines, mats, the mat board, people, signup, welcome, wifi | per discipline |
 | `/admin/{discipline}` | the organizer | one discipline's competitors, pools, bracket, match editor — today's `/admin` | — |
 | `/score`, `/score/{mat}` | score keepers | pick a physical mat; then whatever that mat is running, in any discipline | per discipline |
-| `/display/mat/{mat}`, `/display/audience/{mat}` | screens | one physical mat, following it across disciplines | per discipline |
+| `/display/mat/{mat}` | screens | one physical mat, following it across disciplines | per discipline |
 | `/display/mats`, `/display/roster` | screens | every mat, or the coming matches, labelled by discipline | per discipline |
 | `/display` | screens | whatever the organizer assigns | per discipline |
 

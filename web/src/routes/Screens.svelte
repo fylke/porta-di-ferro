@@ -42,7 +42,6 @@
   const targets = $derived([
     { value: '', label: t('Nothing yet') },
     ...matNumbers.map((m) => ({ value: `mat/${m}`, label: t('Mat {n} scoreboard', { n: m }) })),
-    ...matNumbers.map((m) => ({ value: `audience/${m}`, label: t('Mat {n} audience display', { n: m }) })),
     { value: 'mats', label: t('Every mat') },
     // A screen between two mats: the pairs, when there are pairs to make.
     ...(matNumbers.length >= 3 ? [{ value: 'mats/1,2', label: t('Mats {a} and {b}', { a: 1, b: 2 }) }] : []),
@@ -101,6 +100,18 @@
   {#if error}<p class="err">{error}</p>{/if}
 
   <h3>{t('Screens')}</h3>
+  <!-- One choice for every mat screen in the hall (#110). -->
+  <label class="upcoming">
+    {t('Mat screens show what comes next')}
+    <select
+      value={mats.view?.upcoming ?? 'bottom'}
+      onchange={(e) => void run(() => api.setScreens({ upcoming: e.currentTarget.value as 'bottom' | 'list' | 'none' }))}
+    >
+      <option value="bottom">{t('the next match, along the bottom')}</option>
+      <option value="list">{t('the next few matches, down the right')}</option>
+      <option value="none">{t('nothing')}</option>
+    </select>
+  </label>
   {#if displays.length === 0}
     <p class="dim">
       {t('None yet. Open')} <span class="mono">/display</span> {t('on a screen and it appears here, waiting to be told what to show.')}
@@ -224,5 +235,16 @@
   }
   .err {
     color: var(--amber-bright);
+  }
+  .upcoming {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 0.7rem;
+    margin: 0 0 0.8rem;
+    font-size: 0.9rem;
+  }
+  .upcoming select {
+    padding: 0.3rem 0.5rem;
   }
 </style>

@@ -4,7 +4,6 @@
   import DisplayMat from './DisplayMat.svelte';
   import DisplayMats from './DisplayMats.svelte';
   import DisplayRoster from './DisplayRoster.svelte';
-  import Audience from './Audience.svelte';
   import LangToggle from './LangToggle.svelte';
   import { t } from '../lib/i18n.svelte';
 
@@ -31,9 +30,11 @@
   const shown = $derived.by((): { kind: string; mat: number; ids: string; slug: string } => {
     const none = { kind: '', mat: 0, ids: '', slug: '' };
     const [kind, arg = '', rest = ''] = target.split('/');
+    // "audience/2" was a view of its own until #110; a screen still told to show one gets
+    // that mat's scoreboard.
     if (kind === 'mat' || kind === 'audience') {
       const mat = Number(arg);
-      return Number.isInteger(mat) && mat > 0 ? { ...none, kind, mat } : none;
+      return Number.isInteger(mat) && mat > 0 ? { ...none, kind: 'mat', mat } : none;
     }
     if (kind === 'mats') return { ...none, kind, ids: arg };
     if (kind === 'roster') return { ...none, kind };
@@ -44,8 +45,6 @@
 
 {#if shown.kind === 'mat'}
   <DisplayMat mat={shown.mat} />
-{:else if shown.kind === 'audience'}
-  <Audience mat={shown.mat} />
 {:else if shown.kind === 'mats'}
   <DisplayMats ids={shown.ids} />
 {:else if shown.kind === 'roster'}

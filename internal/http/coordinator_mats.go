@@ -128,7 +128,9 @@ func (c *Coordinator) matsFrom(snaps []snapped) MatsView {
 			Expected: file.Plan.Expected[s.w.slug]})
 	}
 	placed, mats := c.Placements()
-	return BuildMats(inputs, placed, mats, c.held)
+	view := BuildMats(inputs, placed, mats, c.held)
+	view.Upcoming = store.UpcomingOf(file.Screens)
+	return view
 }
 
 // MatsNow is the hall's mats as they stand.
@@ -284,6 +286,28 @@ func (c *Coordinator) patchItem(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// putScreens is how every mat screen looks (#110).
+func (c *Coordinator) putScreens(w http.ResponseWriter, r *http.Request) {
+	var in store.Screens
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	if store.UpcomingOf(in) != in.Upcoming {
+		writeErr(w, http.StatusBadRequest, fmt.Errorf("upcoming is one of %v", store.UpcomingChoices))
+		return
+	}
+	if _, err := c.folder.Update(func(f *event.File) error {
+		f.Screens = in
+		return nil
+	}); err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	c.poke()
+	writeJSON(w, http.StatusOK, c.MatsNow())
+}
+
 // --- the devices at the mats ------------------------------------------------------------
 
 // QuarantinedIn is an event set aside, with the discipline its match is in.
@@ -382,7 +406,7 @@ func (c *Coordinator) release(w http.ResponseWriter, r *http.Request) {
 }
 
 // assignDisplay is the organizer telling a screen what to show: "mat/1", "mats",
-// "audience/2", or a discipline's page such as "d/open-sabre/roster". Kept in the event's
+// "mats/1,2", or a discipline's page such as "d/open-sabre/roster". Kept in the event's
 // displays.json, so a hall of screens survives the organizer's laptop rebooting.
 func (c *Coordinator) assignDisplay(w http.ResponseWriter, r *http.Request) {
 	var in struct {

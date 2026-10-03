@@ -59,6 +59,8 @@ type File struct {
 	Aliases map[string]string `json:"aliases,omitempty"`
 	// Plan is the event's mats and where each discipline's work runs on them.
 	Plan store.Plan `json:"plan,omitempty"`
+	// Screens is how the mat screens look (#110).
+	Screens store.Screens `json:"screens,omitempty"`
 }
 
 // Placeholder says a slug is what a discipline got for having no name yet: "discipline",

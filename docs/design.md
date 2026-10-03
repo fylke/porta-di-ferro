@@ -847,7 +847,9 @@ Deliberate, and listed so nobody is surprised on the day:
      colour-coding per competitor. During pools this is what tells a competitor whether there is time
      to refill a water bottle or take a jacket off
 
-   *(Built, at `/display/audience/N`. The result stays up because **the mat follows its score
+   *(Built as the mat display, `/display/mat/N`; the separate audience view it started as was
+   retired in #110, and the organizer chooses under Screens whether what comes next runs along
+   the bottom or down the side. The result stays up because **the mat follows its score
    keeper**: the server points a mat at whatever match the live score keeper is holding, finished or
    not, until *Next match* is pressed — so every display shows the winner for exactly as long as the
    score keeper does, and none of them has to guess.)*

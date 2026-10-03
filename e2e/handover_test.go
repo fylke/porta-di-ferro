@@ -215,16 +215,16 @@ func TestServerAssignedDisplays(t *testing.T) {
 	if c.Target != "" {
 		t.Fatalf("a new screen should have no target, has %q", c.Target)
 	}
-	s.mustDo(t, "PUT", "/api/clients/screen1/target", map[string]string{"target": "audience/1"}, nil)
+	s.mustDo(t, "PUT", "/api/clients/screen1/target", map[string]string{"target": "mat/2"}, nil)
 	s.mustDo(t, "POST", "/api/clients/screen1", map[string]any{"role": "display", "name": "Screen 1"}, &c)
-	if c.Target != "audience/1" {
+	if c.Target != "mat/2" {
 		t.Errorf("the next heartbeat should carry the assignment, got %q", c.Target)
 	}
 	var p presence
 	s.mustDo(t, "GET", "/api/presence", nil, &p)
 	found := false
 	for _, x := range p.Clients {
-		if x.ID == "screen1" && x.Role == "display" && x.Target == "audience/1" && x.Alive {
+		if x.ID == "screen1" && x.Role == "display" && x.Target == "mat/2" && x.Alive {
 			found = true
 		}
 	}

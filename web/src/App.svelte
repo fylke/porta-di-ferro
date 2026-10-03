@@ -15,7 +15,6 @@
   import DisplayMats from './routes/DisplayMats.svelte';
   import DisplayRoster from './routes/DisplayRoster.svelte';
   import PrintPools from './routes/PrintPools.svelte';
-  import Audience from './routes/Audience.svelte';
   import DisplayAssigned from './routes/DisplayAssigned.svelte';
   import { t } from './lib/i18n.svelte';
 
@@ -79,7 +78,8 @@
 {:else if matMatch}
   <DisplayMat mat={Number(matMatch.n)} />
 {:else if audienceMatch}
-  <Audience mat={Number(audienceMatch.n)} />
+  <!-- The audience view was retired in #110; its old address shows the mat's scoreboard. -->
+  <DisplayMat mat={Number(audienceMatch.n)} />
 {:else if route('/display')}
   <DisplayAssigned />
 {:else if route('/display/mats')}
