@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"sort"
 
 	"github.com/fylke/porta-di-ferro/internal/people"
@@ -72,6 +74,46 @@ func (c *Coordinator) ensurePeople() {
 	}
 	c.peopleMu.Unlock()
 	c.applyLinks(links)
+}
+
+// prunePeople drops the people nobody needs any more, when the event opens (#127). Not
+// while any discipline cannot be read: its entries may be the ones that need them.
+func (c *Coordinator) prunePeople() {
+	for _, w := range c.snapshotWorkers() {
+		if w.srv == nil {
+			return
+		}
+	}
+	keep := map[string]bool{}
+	if st, err := c.folder.Staff(); err == nil {
+		for _, m := range st.Members {
+			keep[m.Person] = true
+		}
+	} else {
+		return
+	}
+	// A retired discipline is a folder to move back by hand: its entries keep their people.
+	retired, _ := filepath.Glob(filepath.Join(c.folder.Dir(), "retired", "*", "competitors.json"))
+	for _, name := range retired {
+		var comps []store.Competitor
+		b, err := os.ReadFile(name)
+		if err != nil || json.Unmarshal(b, &comps) != nil {
+			return
+		}
+		for _, comp := range comps {
+			keep[comp.Person] = true
+		}
+	}
+	c.peopleMu.Lock()
+	defer c.peopleMu.Unlock()
+	reg, err := c.folder.People()
+	if err != nil {
+		return
+	}
+	rosters, _ := c.rosters()
+	if next := people.Prune(reg, rosters, keep); len(next) != len(reg) {
+		_ = c.folder.SavePeople(next)
+	}
 }
 
 // applyLinks points entries at people, discipline by discipline.

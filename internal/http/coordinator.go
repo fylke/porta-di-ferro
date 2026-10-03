@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/fylke/porta-di-ferro/internal/event"
@@ -44,6 +45,9 @@ type Coordinator struct {
 	presence *presence
 	// planMu serialises changes to the plan.
 	planMu sync.Mutex
+	// projected are the work items, by id, of disciplines not drawn yet, as the last
+	// placing found them: what is not written down unless chosen (#129). Under planMu.
+	projected map[string]bool
 	// peopleMu serialises changes to the event's people. Never held while waiting for a
 	// discipline's lock (coordinator_people.go).
 	peopleMu sync.Mutex
@@ -60,6 +64,12 @@ type Coordinator struct {
 
 	// Clock is the time the forecast is made at; nil is the wall clock. For tests.
 	Clock func() time.Time
+
+	// hall is the mats and the forecast as last worked out, for every discipline's
+	// snapshot to read rather than each working them out again (#124).
+	hall hallCache
+	// rev counts the coordinator's own changes: the plan's template, say.
+	rev atomic.Uint64
 }
 
 // worker is one discipline as the coordinator holds it. Not a process, thread or actor:
@@ -107,6 +117,7 @@ func NewCoordinator(folder *event.Folder, assets fs.FS) (*Coordinator, error) {
 	c.liftDisplays()
 	c.ensurePeople()
 	c.liftStaff()
+	c.prunePeople()
 	go c.announce()
 	go c.sweep()
 	return c, nil
@@ -308,6 +319,8 @@ func (c *Coordinator) viewFrom(snaps []snapped, mats MatsView) EventView {
 	}
 	h := c.timesFrom(snaps)
 	view.Programme = ViewForecast(h.in, h.result, h.inputs, h.timings).Programme
+	st, _ := c.folder.Staff()
+	view.Staff = StaffEntrants(st.Members)
 	view.Name = strings.TrimSpace(view.Info.Signup.Name)
 	if view.Name == "" && len(view.Disciplines) == 1 {
 		view.Name = view.Disciplines[0].Name
@@ -404,6 +417,7 @@ func (c *Coordinator) Handler() http.Handler {
 
 	mux.HandleFunc("GET /api/mats", c.getMats)
 	mux.HandleFunc("PUT /api/mats", c.putMats)
+	mux.HandleFunc("PUT /api/mats/{mat}", c.putMat)
 	mux.HandleFunc("GET /api/mats/stream", func(w http.ResponseWriter, r *http.Request) {
 		serveStream(w, r, c.matsHub)
 	})
@@ -414,6 +428,8 @@ func (c *Coordinator) Handler() http.Handler {
 	mux.HandleFunc("POST /api/plan/timings/learn", c.learnTimings)
 	mux.HandleFunc("POST /api/plan/timings/default", c.keepTimings)
 	mux.HandleFunc("PUT /api/plan/expected", c.putExpected)
+	mux.HandleFunc("PUT /api/plan/sessions", c.putSessions)
+	mux.HandleFunc("PUT /api/plan/finals", c.putFinals)
 	mux.HandleFunc("GET /api/plan/report", c.getReport)
 	mux.HandleFunc("PUT /api/plan/anomalies", c.putAnomaly)
 	mux.HandleFunc("POST /api/plan/suggest", c.suggest)

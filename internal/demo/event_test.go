@@ -37,11 +37,12 @@ func snapIn(t *testing.T, e *demo.Event, slug string) httpapi.Snapshot {
 	return s
 }
 
-func TestTheDemoIsAnEventOfTwoDisciplines(t *testing.T) {
+func TestTheDemoIsAnEventOfThreeDisciplines(t *testing.T) {
 	e := demo.NewEvent()
 	v := view(t, e)
-	if len(v.Disciplines) != 2 || v.Disciplines[0].Slug != "open-steel-longsword" || v.Disciplines[1].Slug != "open-sabre" {
-		t.Fatalf("the demo should hold the longsword and the sabre, got %+v", v.Disciplines)
+	if len(v.Disciplines) != 3 || v.Disciplines[0].Slug != "open-steel-longsword" || v.Disciplines[1].Slug != "open-sabre" ||
+		v.Disciplines[2].Slug != "sword-and-buckler" {
+		t.Fatalf("the demo should hold the longsword, the sabre and the sword and buckler, got %d", len(v.Disciplines))
 	}
 	if v.Name != "Stångebroslaget" || v.Info.Welcome == "" {
 		t.Errorf("the day should be the event's: %q, %q", v.Name, v.Info.Welcome)
@@ -72,9 +73,10 @@ func TestTheDemoIsAnEventOfTwoDisciplines(t *testing.T) {
 	}
 
 	if res := e.Request("GET", "/api/state", nil); res.Status != 409 {
-		t.Errorf("with two disciplines the unprefixed path should not guess, got %d", res.Status)
+		t.Errorf("with several disciplines the unprefixed path should not guess, got %d", res.Status)
 	}
 	e.Request("DELETE", "/api/disciplines/open-sabre", nil)
+	e.Request("DELETE", "/api/disciplines/sword-and-buckler", nil)
 	if res := e.Request("GET", "/api/state", nil); res.Status != 200 {
 		t.Errorf("with one, the unprefixed path should answer as it, got %d", res.Status)
 	}
@@ -135,7 +137,7 @@ func TestTheDemoEventSavesAndLoads(t *testing.T) {
 		t.Fatalf("load returned %d: %s", r.Status, r.Body)
 	}
 	after := view(t, next)
-	if after.Info.Welcome != "Kept" || len(after.Disciplines) != 3 {
+	if after.Info.Welcome != "Kept" || len(after.Disciplines) != 4 {
 		t.Fatalf("the event should come back whole: %q, %d disciplines", after.Info.Welcome, len(after.Disciplines))
 	}
 	a, _ := json.Marshal(before.Disciplines)
@@ -150,15 +152,15 @@ func TestTheDemoEventSavesAndLoads(t *testing.T) {
 	if r := next.Request("POST", "/api/demo/load", []byte(single.Body)); r.Status != 400 {
 		t.Errorf("a single-tournament save should be refused, got %d", r.Status)
 	}
-	if len(view(t, next).Disciplines) != 3 {
+	if len(view(t, next).Disciplines) != 4 {
 		t.Error("a refused load still changed the event")
 	}
 
 	if r := next.Request("POST", "/api/demo/reset", nil); r.Status != 200 {
 		t.Fatalf("reset returned %d", r.Status)
 	}
-	if v := view(t, next); len(v.Disciplines) != 2 || v.Info.Welcome == "Kept" {
-		t.Errorf("Start over should bring back the two fixtures and the fixture's day, got %d and %q", len(v.Disciplines), v.Info.Welcome)
+	if v := view(t, next); len(v.Disciplines) != 3 || v.Info.Welcome == "Kept" {
+		t.Errorf("Start over should bring back the three fixtures and the fixture's day, got %d and %q", len(v.Disciplines), v.Info.Welcome)
 	}
 }
 

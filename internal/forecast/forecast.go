@@ -49,6 +49,9 @@ type Match struct {
 	Key string
 	// Started and Ended are zero until the log says so.
 	Started, Ended time.Time
+	// After are the matches that decide who fences in this one, by key: a semi-final's
+	// quarter-finals, wherever they run (#120).
+	After []string
 	// Done says the match is finished even when its log carries no times -- events posted
 	// without them. It is not fenced again, and it teaches the pace nothing.
 	Done bool
@@ -70,7 +73,12 @@ type Item struct {
 	// Projected items are not drawn yet; their matches have no logs.
 	Projected bool
 	// Pinned items were put on their mat by hand; a suggestion keeps them there.
-	Pinned    bool
+	Pinned bool
+	// Session is the block of the day the item's discipline runs in (#136): it waits for
+	// every item of the blocks before. Held is a bronze match or final held to the end of
+	// the day, after everything else.
+	Session   int
+	Held      bool
 	NotBefore time.Time
 	// People are everyone fencing in the item, by person, for the overlap check.
 	People []string
@@ -89,6 +97,17 @@ type Input struct {
 	Now time.Time
 	// Anomalies are matches, by key, whose times are not to be learned from.
 	Anomalies map[string]bool
+	// MatBreaks are the times one mat is not available, by mat (#123): breaks for that
+	// mat alone.
+	MatBreaks map[int][]Break
+}
+
+// breaksOn is every break a mat keeps: the hall's and its own.
+func (in Input) breaksOn(mat int) []Break {
+	if len(in.MatBreaks[mat]) == 0 {
+		return in.Breaks
+	}
+	return append(append([]Break{}, in.Breaks...), in.MatBreaks[mat]...)
 }
 
 // Span is one item's times.
@@ -253,133 +272,234 @@ type timeline struct {
 // live -- nothing still to come starts before now.
 func simulate(in Input, pace map[int]Pace, live bool) (timeline, []Warning) {
 	actual := pace != nil
-	queues := map[int][]Item{}
+	type step struct {
+		item  Item
+		index int // the match's place in its item; -1 for an item with no matches
+	}
+	queues := map[int][]step{}
 	var mats []int
+	byMat := map[int][]Item{}
 	for _, it := range in.Items {
-		if _, ok := queues[it.Mat]; !ok {
+		if _, ok := byMat[it.Mat]; !ok {
 			mats = append(mats, it.Mat)
 		}
-		queues[it.Mat] = append(queues[it.Mat], it)
+		byMat[it.Mat] = append(byMat[it.Mat], it)
 	}
 	sort.Ints(mats)
-	for _, q := range queues {
-		sort.SliceStable(q, func(i, j int) bool { return q[i].Seq < q[j].Seq })
+	for _, mat := range mats {
+		items := byMat[mat]
+		sort.SliceStable(items, func(i, j int) bool { return items[i].Seq < items[j].Seq })
+		for _, it := range items {
+			if len(it.Matches) == 0 {
+				queues[mat] = append(queues[mat], step{it, -1})
+			}
+			for i := range it.Matches {
+				queues[mat] = append(queues[mat], step{it, i})
+			}
+		}
 	}
 
 	deps := dependencies(in.Items)
-
 	tl := timeline{items: map[string]span{}, matches: map[string]time.Time{}}
 	cursor := map[int]time.Time{}
 	fencedOn := map[int]bool{}
 	head := map[int]int{}
+	ends := map[string]time.Time{} // when each match ends, by key, for the matches it feeds
+	left := map[string]int{}       // matches still to time, by item
+	for _, it := range in.Items {
+		left[it.ID] = max(len(it.Matches), 1)
+	}
+	itemReady := map[string]time.Time{}
+	warned := map[string]bool{}
 	var warnings []Warning
 
-	place := func(mat int, it Item, ignoreDeps bool) {
+	paceOn := func(mat int) Timings {
 		p := in.Timings
 		if actual {
 			pc := pace[mat]
 			p.Match, p.Changeover = pc.Match, pc.Changeover
 		}
-		ready := in.Timings.Start
-		if c, ok := cursor[mat]; ok && c.After(ready) {
-			ready = c
+		return p
+	}
+
+	// ready says when an item may begin on a mat: after what it waits for, its hold, the
+	// day's start, and -- once the day is live -- now. False when what it waits for is
+	// not timed yet.
+	ready := func(mat int, it Item, ignore bool) (time.Time, bool) {
+		at := in.Timings.Start
+		if c, ok := cursor[mat]; ok && c.After(at) {
+			at = c
 		}
-		ids, afterPools := deps(it)
-		if !ignoreDeps {
-			var latest time.Time
-			for _, id := range ids {
+		if !ignore {
+			wait, pause := deps(it)
+			var latest, pools time.Time
+			for _, id := range wait {
+				if left[id] > 0 {
+					return at, false
+				}
 				if s := tl.items[id]; s.end.After(latest) {
 					latest = s.end
 				}
 			}
-			if afterPools && !latest.IsZero() {
-				latest = latest.Add(in.Timings.BeforeElims)
-			}
-			if latest.After(ready) {
-				ready = latest
-			}
-		}
-		if it.NotBefore.After(ready) {
-			ready = it.NotBefore
-		}
-		if actual && live && !in.Now.IsZero() && in.Now.After(ready) {
-			ready = in.Now
-		}
-
-		var first, last time.Time
-		at := ready
-		for _, m := range it.Matches {
-			var start, end time.Time
-			switch {
-			case actual && m.Done && m.Ended.IsZero():
-				// Finished, at a time nobody wrote down: it takes no more of the mat.
-				continue
-			case actual && !m.Ended.IsZero():
-				start, end = m.Started, m.Ended
-				if start.IsZero() {
-					start = end.Add(-p.Match)
+			for _, id := range pause {
+				if left[id] > 0 {
+					return at, false
 				}
-			case actual && !m.Started.IsZero():
-				start, end = m.Started, m.Started.Add(p.Match)
-				if live && in.Now.After(end) {
-					end = in.Now
+				if s := tl.items[id]; s.end.After(pools) {
+					pools = s.end
 				}
-			default:
-				start = at
-				if fencedOn[mat] {
-					start = start.Add(p.Changeover)
-				}
-				start = afterBreaks(start, in.Breaks)
-				end = start.Add(p.Match)
-				tl.matches[m.Key] = start
 			}
-			if first.IsZero() || start.Before(first) {
-				first = start
+			if !pools.IsZero() {
+				pools = pools.Add(in.Timings.BeforeElims)
 			}
-			if end.After(last) {
-				last = end
+			if pools.After(latest) {
+				latest = pools
 			}
-			if end.After(at) {
-				at = end
+			if latest.After(at) {
+				at = latest
 			}
-			fencedOn[mat] = true
 		}
-		if first.IsZero() {
-			first, last = ready, ready
+		if it.NotBefore.After(at) {
+			at = it.NotBefore
 		}
-		tl.items[it.ID] = span{start: first, end: last}
-		cursor[mat] = last
+		if actual && live && !in.Now.IsZero() && in.Now.After(at) {
+			at = in.Now
+		}
+		return at, true
 	}
 
-	remaining := len(in.Items)
-	for remaining > 0 {
-		progress := false
-		for _, mat := range mats {
-			for head[mat] < len(queues[mat]) {
-				it := queues[mat][head[mat]]
-				ids, _ := deps(it)
-				blocked := false
-				for _, id := range ids {
-					if _, ok := tl.items[id]; !ok {
-						blocked = true
-					}
-				}
-				if blocked {
-					break
-				}
-				place(mat, it, false)
-				head[mat]++
-				remaining--
-				progress = true
+	// when is when the step at the head of a mat would start and end, or false when it
+	// cannot be timed yet: its item waits, or a match that feeds it is not timed (#120).
+	type timing struct {
+		start, end time.Time
+		base       time.Time // when the item may begin, for its later matches
+		skip       bool      // finished at a time nobody wrote down
+		logged     bool
+	}
+	when := func(mat int, st step, ignore bool) (timing, bool) {
+		p := paceOn(mat)
+		base, begun := itemReady[st.item.ID]
+		if !begun {
+			var ok bool
+			if base, ok = ready(mat, st.item, ignore); !ok {
+				return timing{}, false
 			}
 		}
-		if progress {
+		if st.index < 0 {
+			return timing{start: base, end: base, base: base}, true
+		}
+		m := st.item.Matches[st.index]
+		switch {
+		case actual && m.Done && m.Ended.IsZero():
+			return timing{skip: true, base: base}, true
+		case actual && !m.Ended.IsZero():
+			start := m.Started
+			if start.IsZero() {
+				start = m.Ended.Add(-p.Match)
+			}
+			return timing{start: start, end: m.Ended, base: base, logged: true}, true
+		case actual && !m.Started.IsZero():
+			end := m.Started.Add(p.Match)
+			if live && in.Now.After(end) {
+				end = in.Now
+			}
+			return timing{start: m.Started, end: end, base: base, logged: true}, true
+		}
+		at := base
+		if c, ok := cursor[mat]; ok && c.After(at) {
+			at = c
+		}
+		if !ignore {
+			for _, f := range m.After {
+				e, ok := ends[f]
+				if !ok {
+					return timing{}, false
+				}
+				if e.After(at) {
+					at = e
+				}
+			}
+		}
+		if fencedOn[mat] {
+			at = at.Add(p.Changeover)
+		}
+		at = afterBreaks(at, in.breaksOn(mat))
+		return timing{start: at, end: at.Add(p.Match), base: base}, true
+	}
+
+	commit := func(mat int, st step, tm timing) {
+		it := st.item
+		if _, ok := itemReady[it.ID]; !ok {
+			itemReady[it.ID] = tm.base
+		}
+		end := tm.end
+		if tm.skip {
+			end = cursor[mat]
+			if end.IsZero() {
+				end = itemReady[it.ID]
+			}
+		} else {
+			if st.index >= 0 && !tm.logged {
+				tl.matches[it.Matches[st.index].Key] = tm.start
+			}
+			s, seen := tl.items[it.ID]
+			if !seen || tm.start.Before(s.start) {
+				s.start = tm.start
+			}
+			if tm.end.After(s.end) {
+				s.end = tm.end
+			}
+			tl.items[it.ID] = s
+			if tm.end.After(cursor[mat]) {
+				cursor[mat] = tm.end
+			}
+			if st.index >= 0 {
+				fencedOn[mat] = true
+			}
+		}
+		if st.index >= 0 {
+			ends[it.Matches[st.index].Key] = end
+		}
+		left[it.ID]--
+		if left[it.ID] == 0 {
+			if _, seen := tl.items[it.ID]; !seen {
+				r := itemReady[it.ID]
+				tl.items[it.ID] = span{start: r, end: r}
+			}
+		}
+		head[mat]++
+	}
+
+	for {
+		// The step that can start soonest, across the mats.
+		best, bestAt := -1, timing{}
+		pending := false
+		for _, mat := range mats {
+			if head[mat] >= len(queues[mat]) {
+				continue
+			}
+			pending = true
+			tm, ok := when(mat, queues[mat][head[mat]], false)
+			if !ok {
+				continue
+			}
+			if best < 0 || (!tm.skip && tm.start.Before(bestAt.start)) || tm.skip {
+				best, bestAt = mat, tm
+				if tm.skip {
+					break
+				}
+			}
+		}
+		if !pending {
+			break
+		}
+		if best >= 0 {
+			commit(best, queues[best][head[best]], bestAt)
 			continue
 		}
-		// Every mat's next item waits for something queued behind another wait: the plan
+		// Every mat's next match waits for something queued behind another wait: the plan
 		// has an item before what it depends on. Time it anyway, on the mat that is free
 		// soonest, and say so.
-		best := -1
 		for _, mat := range mats {
 			if head[mat] >= len(queues[mat]) {
 				continue
@@ -388,11 +508,13 @@ func simulate(in Input, pace map[int]Pace, live bool) (timeline, []Warning) {
 				best = mat
 			}
 		}
-		it := queues[best][head[best]]
-		place(best, it, true)
-		head[best]++
-		remaining--
-		warnings = append(warnings, Warning{Kind: "dependency", Items: []string{it.ID}})
+		st := queues[best][head[best]]
+		tm, _ := when(best, st, true)
+		commit(best, st, tm)
+		if !warned[st.item.ID] {
+			warned[st.item.ID] = true
+			warnings = append(warnings, Warning{Kind: "dependency", Items: []string{st.item.ID}})
+		}
 	}
 	return tl, warnings
 }

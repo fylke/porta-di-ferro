@@ -144,6 +144,7 @@ func copyFile(from, to string) error {
 func (s *Store) RetireMatches(ids []string) ([]string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	defer s.rev.Add(1)
 
 	stamp := time.Now().Format("20060102-150405.000")
 	var backups []string

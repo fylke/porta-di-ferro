@@ -21,6 +21,7 @@
     elapsed,
     compact = false,
     discipline = '',
+    matName = '',
   }: {
     mat: number;
     match: MatchView | null;
@@ -29,9 +30,12 @@
     compact?: boolean;
     /** Which discipline, when there is more than one running: a screen must never be silently on the wrong one. */
     discipline?: string;
+    /** What the organizer calls the mat (#123). */
+    matName?: string;
   } = $props();
 
-  const matLabel = $derived(discipline ? `${discipline} · ${t('Mat {n}', { n: mat })}` : t('Mat {n}', { n: mat }));
+  const matText = $derived(matName ? `${t('Mat {n}', { n: mat })} · ${matName}` : t('Mat {n}', { n: mat }));
+  const matLabel = $derived(discipline ? `${discipline} · ${matText}` : matText);
 
   const board = $derived(match?.state ?? null);
   // Colours and sides come from the match log, so a scoreboard shows exactly what the

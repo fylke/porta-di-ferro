@@ -15,6 +15,7 @@
   import DisplayMats from './routes/DisplayMats.svelte';
   import DisplayRoster from './routes/DisplayRoster.svelte';
   import PrintPools from './routes/PrintPools.svelte';
+  import PrintMatCodes from './routes/PrintMatCodes.svelte';
   import DisplayAssigned from './routes/DisplayAssigned.svelte';
   import { t } from './lib/i18n.svelte';
 
@@ -44,7 +45,7 @@
   // the hall, never of one discipline, so their addresses never ask which discipline.
   const matPage = $derived(
     !!scoreMatch || !!matMatch || !!audienceMatch || route('/score') !== null || route('/display') !== null ||
-      route('/display/mats') !== null,
+      route('/display/mats') !== null || route('/print/mats') !== null,
   );
   onMount(() => void hall.load());
 </script>
@@ -88,6 +89,8 @@
   <DisplayRoster />
 {:else if route('/print/pools')}
   <PrintPools />
+{:else if route('/print/mats')}
+  <PrintMatCodes />
 {:else}
   <main class="missing">
     <h1>{t('Nothing here')}</h1>

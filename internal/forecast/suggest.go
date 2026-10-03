@@ -80,12 +80,22 @@ func Suggest(in Input, mats int) Suggestion {
 		return fixed[i].Seq < fixed[j].Seq
 	})
 	ends := map[string]time.Time{}
+	// When each person is busy fencing, so nothing is suggested that puts them in two
+	// places at once (#136).
+	type busySpan struct {
+		start, end time.Time
+		mat        int
+	}
+	busy := map[string][]busySpan{}
 	for _, it := range fixed {
 		order[it.Mat] = append(order[it.Mat], it.ID)
 		s := done.items[it.ID]
 		ends[it.ID] = s.end
 		if s.end.After(cursor[it.Mat]) {
 			cursor[it.Mat] = s.end
+		}
+		for _, p := range it.People {
+			busy[p] = append(busy[p], busySpan{s.start, s.end, it.Mat})
 		}
 	}
 
@@ -95,10 +105,12 @@ func Suggest(in Input, mats int) Suggestion {
 		remaining[it.Discipline] += len(it.Matches)
 	}
 	rank := func(it Item) int {
-		switch it.Kind {
-		case KindPool:
+		switch {
+		case it.Held:
+			return 3
+		case it.Kind == KindPool:
 			return 0
-		case KindEliminations:
+		case it.Kind == KindEliminations:
 			return 1
 		}
 		return 2
@@ -114,13 +126,24 @@ func Suggest(in Input, mats int) Suggestion {
 		if rank(a) != rank(b) {
 			return rank(a) < rank(b)
 		}
+		// The finals held to the end run the later blocks' first, so the first
+		// discipline's final closes the day (#136).
+		if a.Held && b.Held {
+			if a.Session != b.Session {
+				return a.Session > b.Session
+			}
+			return index[a.ID] < index[b.ID]
+		}
 		if remaining[a.Discipline] != remaining[b.Discipline] {
 			return remaining[a.Discipline] > remaining[b.Discipline]
 		}
 		return index[a.ID] < index[b.ID]
 	})
 
-	timeOn := func(mat int, it Item) (time.Time, time.Time) {
+	// timeOn is when an item would run on a mat, and -- when somebody in it is fencing
+	// elsewhere at that time -- the mat of the clash: waiting for a fencer is not
+	// something a queue can promise, so such a place is a last resort.
+	timeOn := func(mat int, it Item) (time.Time, time.Time, int) {
 		p := pace[mat]
 		if p.Match <= 0 {
 			p = Pace{Match: in.Timings.Match, Changeover: in.Timings.Changeover}
@@ -129,15 +152,23 @@ func Suggest(in Input, mats int) Suggestion {
 		if c := cursor[mat]; c.After(ready) {
 			ready = c.Add(p.Changeover)
 		}
-		ids, afterPools := deps(it)
-		var latest time.Time
-		for _, id := range ids {
+		wait, pause := deps(it)
+		var latest, pools time.Time
+		for _, id := range wait {
 			if e := ends[id]; e.After(latest) {
 				latest = e
 			}
 		}
-		if afterPools && !latest.IsZero() {
-			latest = latest.Add(in.Timings.BeforeElims)
+		for _, id := range pause {
+			if e := ends[id]; e.After(pools) {
+				pools = e
+			}
+		}
+		if !pools.IsZero() {
+			pools = pools.Add(in.Timings.BeforeElims)
+		}
+		if pools.After(latest) {
+			latest = pools
 		}
 		if latest.After(ready) {
 			ready = latest
@@ -148,29 +179,49 @@ func Suggest(in Input, mats int) Suggestion {
 		if live && in.Now.After(ready) {
 			ready = in.Now
 		}
-		start, at := time.Time{}, ready
-		for i := range it.Matches {
-			s := at
-			if i > 0 {
-				s = s.Add(p.Changeover)
+		lay := func(ready time.Time) (time.Time, time.Time) {
+			start, at := time.Time{}, ready
+			for i := range it.Matches {
+				s := at
+				if i > 0 {
+					s = s.Add(p.Changeover)
+				}
+				s = afterBreaks(s, in.breaksOn(mat))
+				if start.IsZero() {
+					start = s
+				}
+				at = s.Add(p.Match)
 			}
-			s = afterBreaks(s, in.Breaks)
 			if start.IsZero() {
-				start = s
+				start = ready
 			}
-			at = s.Add(p.Match)
+			return start, at
 		}
-		if start.IsZero() {
-			start = ready
+		// Later, until nobody in it is fencing somewhere else at the time.
+		clashMat := 0
+		for tries := 0; ; tries++ {
+			start, end := lay(ready)
+			var clash time.Time
+			for _, person := range it.People {
+				for _, b := range busy[person] {
+					if b.start.Before(end) && start.Before(b.end) && b.end.After(clash) {
+						clash, clashMat = b.end, b.mat
+					}
+				}
+			}
+			if clash.IsZero() || tries > 50 {
+				return start, end, clashMat
+			}
+			ready = clash.Add(p.Changeover)
 		}
-		return start, at
 	}
 
 	placedAt := map[string]time.Time{}
 	for len(free) > 0 {
 		pick := -1
 		for i, it := range free {
-			ids, _ := deps(it)
+			wait, pause := deps(it)
+			ids := append(append([]string{}, wait...), pause...)
 			ready := true
 			for _, id := range ids {
 				if _, ok := ends[id]; !ok {
@@ -189,25 +240,51 @@ func Suggest(in Input, mats int) Suggestion {
 		free = append(free[:pick], free[pick+1:]...)
 
 		candidates := []int{}
-		if it.Pinned && it.Mat >= 1 && it.Mat <= mats {
+		switch {
+		case it.Pinned && it.Mat >= 1 && it.Mat <= mats:
 			candidates = append(candidates, it.Mat)
-		} else {
+		case it.Held:
+			// The finals are held for mat 1, one after another (#136).
+			candidates = append(candidates, 1)
+		default:
 			for m := 1; m <= mats; m++ {
 				candidates = append(candidates, m)
 			}
 		}
 		best, bestStart, bestEnd := 0, time.Time{}, time.Time{}
+		clashes := map[int]int{}
 		for _, m := range candidates {
-			s, e := timeOn(m, it)
+			s, e, clash := timeOn(m, it)
+			if clash != 0 {
+				clashes[m] = clash
+				continue
+			}
 			// Soonest wins; on a tie the mat it is on already, so nothing moves for nothing.
 			if best == 0 || s.Before(bestStart) || (s.Equal(bestStart) && m == it.Mat && best != it.Mat) {
 				best, bestStart, bestEnd = m, s, e
 			}
 		}
+		if best == 0 {
+			// Every mat would have to wait for one of its fencers: queue it behind the
+			// clash, on that mat, where it cannot start before they are free.
+			for _, m := range candidates {
+				if c := clashes[m]; c != 0 {
+					best = c
+					break
+				}
+			}
+			if best == 0 {
+				best = candidates[0]
+			}
+			bestStart, bestEnd, _ = timeOn(best, it)
+		}
 		order[best] = append(order[best], it.ID)
 		ends[it.ID] = bestEnd
 		cursor[best] = bestEnd
 		placedAt[it.ID] = bestStart
+		for _, p := range it.People {
+			busy[p] = append(busy[p], busySpan{bestStart, bestEnd, best})
+		}
 	}
 
 	out := Suggestion{Order: order, Before: before.End}
@@ -245,10 +322,12 @@ func position(items []Item, it Item) int {
 	return n
 }
 
-// dependencies says what each item waits for: a discipline's eliminations wait for all its
-// pools, and its bronze match and final for its eliminations -- or for its pools, when its
-// bracket is a final alone. afterPools says the pause before the bracket applies.
-func dependencies(items []Item) func(Item) ([]string, bool) {
+// dependencies says what each item waits for. Within a discipline: its eliminations wait
+// for all its pools, and its bronze match and final for its eliminations -- or for its
+// pools, when its bracket is a final alone; pause lists the pools, after which the break
+// before the bracket applies. Across the event (#136): an item waits for every item of the
+// blocks before its own, and a held final for everything that is not held.
+func dependencies(items []Item) func(Item) (wait, pause []string) {
 	byDisc := map[string]map[string][]string{}
 	for _, it := range items {
 		if byDisc[it.Discipline] == nil {
@@ -256,17 +335,27 @@ func dependencies(items []Item) func(Item) ([]string, bool) {
 		}
 		byDisc[it.Discipline][it.Kind] = append(byDisc[it.Discipline][it.Kind], it.ID)
 	}
-	return func(it Item) ([]string, bool) {
+	return func(it Item) ([]string, []string) {
 		k := byDisc[it.Discipline]
+		var wait, pause []string
 		switch it.Kind {
 		case KindEliminations:
-			return k[KindPool], true
+			pause = k[KindPool]
 		case KindBronze, KindFinal:
 			if len(k[KindEliminations]) > 0 {
-				return k[KindEliminations], false
+				wait = append(wait, k[KindEliminations]...)
+			} else {
+				pause = k[KindPool]
 			}
-			return k[KindPool], true
 		}
-		return nil, false
+		for _, o := range items {
+			if o.Held || o.ID == it.ID {
+				continue
+			}
+			if it.Held || o.Session < it.Session {
+				wait = append(wait, o.ID)
+			}
+		}
+		return wait, pause
 	}
 }

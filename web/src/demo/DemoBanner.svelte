@@ -23,7 +23,29 @@
    */
   const onAdmin = $derived(!!route('/admin'));
   let busy = $state(false);
-  let open = $state(false);
+
+  // Folded to its "Demo" tab at any size, phone held either way (#137): open to begin with
+  // only where there is room for the whole strip, and as the visitor last left it after.
+  const KEY = 'porta.demo.banner';
+  const roomy = '(min-width: 761px) and (min-height: 501px)';
+  function opened(): boolean {
+    try {
+      const saved = localStorage.getItem(KEY);
+      if (saved) return saved === 'open';
+    } catch {
+      // No storage: the screen's size decides.
+    }
+    return typeof matchMedia === 'function' && matchMedia(roomy).matches;
+  }
+  let open = $state(opened());
+  function toggle() {
+    open = !open;
+    try {
+      localStorage.setItem(KEY, open ? 'open' : 'closed');
+    } catch {
+      // Remembered for this page only.
+    }
+  }
 
   function run(fn: () => void) {
     busy = true;
@@ -39,7 +61,7 @@
 </script>
 
 <aside class="demo" class:open aria-label={t('Demo')}>
-  <button class="toggle" onclick={() => (open = !open)} aria-expanded={open}>
+  <button class="toggle" onclick={toggle} aria-expanded={open} title={open ? t('Fold the demo strip away') : t('What this demo is')}>
     <span class="dot" aria-hidden="true"></span>
     {t('Demo')}
   </button>
@@ -66,9 +88,9 @@
 
 <style>
   /* Fixed to the bottom and out of the way of the score keeper's confirm button, which is
-     the one control that must never be competed with. Collapsed to a tab on a phone,
-     because the score keeper client is the screen most likely to be opened on one and it
-     is laid out to the pixel. */
+     the one control that must never be competed with. Folds to a tab at any size --
+     the score keeper client is the screen most likely to be opened on a phone, either way
+     up, and it is laid out to the pixel. */
   .demo {
     position: fixed;
     left: 0;
@@ -86,7 +108,8 @@
     max-width: 100%;
   }
   .toggle {
-    display: none;
+    display: inline-flex;
+    flex: none;
     align-items: center;
     gap: 0.4rem;
     background: none;
@@ -141,17 +164,18 @@
     white-space: nowrap;
   }
 
-  @media (max-width: 760px) {
+  .demo:not(.open) .what,
+  .demo:not(.open) .actions {
+    display: none;
+  }
+  .demo:not(.open) {
+    padding: 0.3rem 0.6rem;
+  }
+
+  @media (max-width: 760px), (max-height: 500px) {
     .demo {
       padding: 0.3rem 0.6rem;
       gap: 0.5rem;
-    }
-    .toggle {
-      display: inline-flex;
-    }
-    .what,
-    .actions {
-      display: none;
     }
     .demo.open {
       right: 0;

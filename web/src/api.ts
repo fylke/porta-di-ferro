@@ -152,6 +152,9 @@ export interface Slot {
 /** One physical mat of the event: everything queued on it, and what it is running. */
 export interface MatView {
   mat: number;
+  /** What the organizer calls the mat, and when it is not available (#123). */
+  name?: string;
+  away?: { from: string; to: string }[];
   /** The match the mat is on: its score keeper's, or the head item's next. */
   current?: Slot;
   /** Every match of every item on the mat, in running order, finished ones included. */
@@ -169,8 +172,11 @@ export interface ItemView {
   number?: number;
   mat: number;
   position: number;
-  /** "planned" is an item not drawn yet: what the draw would make (phase 4). */
-  status: 'waiting' | 'ready' | 'running' | 'done' | 'planned';
+  /**
+   * "planned" is an item not drawn yet (phase 4); "queued" waits for an earlier block of
+   * the day to finish (#136).
+   */
+  status: 'waiting' | 'ready' | 'running' | 'done' | 'planned' | 'queued';
   done: number;
   total: number;
   movable: boolean;
@@ -232,6 +238,9 @@ export interface ForecastView {
   live: boolean;
   /** How many each discipline expects, by slug. */
   expected?: Record<string, number>;
+  /** The block of the day each discipline runs in, and whether every final is held to the end (#136). */
+  sessions?: Record<string, number>;
+  finalsLast?: boolean;
 }
 
 /** A suggested plan: what moves, and when the day would end with it and without it. */
@@ -305,6 +314,8 @@ export interface DisciplineSummary {
 
 /** The whole event: the day around the fencing, and every discipline in it. */
 export interface EventView {
+  /** The event's staff, for the landing page's list of everyone (#135). */
+  staff?: { id: string; name: string; club?: string; person?: string }[];
   name: string;
   info: EventInfo;
   /** event.json could not be read; the disciplines run regardless. */
@@ -400,6 +411,8 @@ export interface StaffingView {
   warnings: { kind: 'fencing' | 'double' | 'role' | 'discipline'; item: string; role: string; staff: string; other?: string }[];
   /** Members on call as physicians, by id. */
   physicians: string[];
+  /** Members whose person may be somebody else in the event too, by id (#133). */
+  unsure?: string[];
 }
 
 export interface StaffSuggestion {
@@ -740,6 +753,9 @@ export const api = {
 
   /** The hall's mats: every queue across disciplines, and what each mat is running. */
   mats: () => req<MatsView>('GET', '/api/mats'),
+  /** One mat's name and the times it is not available (#123). */
+  setMat: (mat: number, setting: { name: string; away: { from: string; to: string }[] }) =>
+    req<MatsView>('PUT', `/api/mats/${mat}`, setting),
   /** What every mat screen shows of the matches to come. */
   setScreens: (screens: { upcoming: 'bottom' | 'list' | 'none' }) => req<MatsView>('PUT', '/api/screens', screens),
   /** How many mats the hall has. */
@@ -757,6 +773,10 @@ export const api = {
   learnTimings: () => req<ForecastView>('POST', '/api/plan/timings/learn'),
   keepTimings: () => req<{ file: string; timings: Timings }>('POST', '/api/plan/timings/default'),
   setExpected: (expected: Record<string, number>) => req<ForecastView>('PUT', '/api/plan/expected', expected),
+  /** Which block of the day each discipline runs in (#136). */
+  setSessions: (sessions: Record<string, number>) => req<ForecastView>('PUT', '/api/plan/sessions', sessions),
+  /** Holds every final to the end of the day, one after another on mat 1. */
+  setFinalsLast: (last: boolean) => req<ForecastView>('PUT', '/api/plan/finals', { last }),
   report: () => req<ReportView>('GET', '/api/plan/report'),
   setAnomaly: (key: string, anomaly: boolean) => req<ReportView>('PUT', '/api/plan/anomalies', { key, anomaly }),
   /** A suggested plan. Writes nothing. */

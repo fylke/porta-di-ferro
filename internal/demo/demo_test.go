@@ -366,8 +366,10 @@ func TestWhatTheDemoCannotDoItRefuses(t *testing.T) {
 		t.Errorf("a browser tab is on no LAN; want an empty list, got %d %s", res.Status, res.Body)
 	}
 	e := demo.NewEvent()
-	if res := e.Request("DELETE", "/api/disciplines/open-sabre", nil); res.Status != 200 {
-		t.Fatalf("taking Sabre out returned %d", res.Status)
+	for _, slug := range []string{"open-sabre", "sword-and-buckler"} {
+		if res := e.Request("DELETE", "/api/disciplines/"+slug, nil); res.Status != 200 {
+			t.Fatalf("taking %s out returned %d", slug, res.Status)
+		}
 	}
 	if res := e.Request("DELETE", "/api/disciplines/open-steel-longsword", nil); res.Status != 400 {
 		t.Errorf("an event keeps at least one discipline; want 400, got %d", res.Status)

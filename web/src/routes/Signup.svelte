@@ -238,7 +238,10 @@
   function howMany(competitors: number, staffCount: number): string {
     const parts: string[] = [];
     if (competitors > 0 || staffCount === 0) {
-      parts.push(competitors === 1 ? t('1 competitor') : t('{n} competitors', { n: competitors }));
+      // The event's import counts entries: one response entering two disciplines is two
+      // of them and one person (#128).
+      if (scope === 'event') parts.push(competitors === 1 ? t('1 entry') : t('{n} entries', { n: competitors }));
+      else parts.push(competitors === 1 ? t('1 competitor') : t('{n} competitors', { n: competitors }));
     }
     if (staffCount > 0) {
       parts.push(staffCount === 1 ? t('1 staff member') : t('{n} staff', { n: staffCount }));

@@ -281,3 +281,48 @@ func EntriesOf(people []store.Person, rosters []Roster, names map[string]string)
 	}
 	return out
 }
+
+// Prune drops the people nobody needs any more (#127): a competitor removed -- a typo
+// fixed by removing and entering again -- leaves their person behind, and people.json
+// would grow with every one. Dropped is a person no entry points at, who came in on no
+// signup, who was merged into nobody and nobody into them, and whom keep does not name:
+// the staff, and the entries of retired disciplines. Whoever was kept apart from them
+// forgets it.
+func Prune(people []store.Person, rosters []Roster, keep map[string]bool) []store.Person {
+	used := map[string]bool{}
+	for id := range keep {
+		used[id] = true
+	}
+	for _, r := range rosters {
+		for _, c := range r.Competitors {
+			used[c.Person] = true
+		}
+	}
+	for _, p := range people {
+		if p.MergedInto != "" {
+			used[p.MergedInto] = true
+		}
+	}
+	gone := map[string]bool{}
+	var out []store.Person
+	for _, p := range people {
+		if !used[p.ID] && p.Signup == "" && p.MergedInto == "" {
+			gone[p.ID] = true
+			continue
+		}
+		out = append(out, p)
+	}
+	if len(gone) == 0 {
+		return people
+	}
+	for i, p := range out {
+		var apart []string
+		for _, id := range p.Apart {
+			if !gone[id] {
+				apart = append(apart, id)
+			}
+		}
+		out[i].Apart = apart
+	}
+	return out
+}

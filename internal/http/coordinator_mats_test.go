@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -65,13 +67,13 @@ func TestTheMatsAreTheEvents(t *testing.T) {
 	sabre := itemOf(v, "open-sabre/pool-1")
 	behind := 0
 	for _, it := range v.Items {
-		// The longsword's drawn work; its bracket, not drawn yet, is planned after Sabre's.
-		if it.Mat == 1 && it.Discipline == ls && !it.Projected {
+		// A discipline added later runs after the longsword, bracket and all (#136).
+		if it.Mat == 1 && it.Discipline == ls {
 			behind++
 		}
 	}
-	if sabre.Mat != 1 || sabre.Position != behind+1 {
-		t.Fatalf("Sabre's first pool should queue behind the longsword's %d on mat 1: %+v", behind, sabre)
+	if sabre.Mat != 1 || sabre.Position != behind+1 || sabre.Status != "queued" {
+		t.Fatalf("Sabre's first pool should queue behind all %d of the longsword's on mat 1, waiting its turn: %+v", behind, sabre)
 	}
 	q := v.Mats[0].Queue
 	if q[0].Discipline != ls || q[len(q)-1].Discipline != "open-sabre" {
@@ -233,5 +235,77 @@ func TestTheScreensShowWhatComesNext(t *testing.T) {
 	}
 	if code := h.do("PUT", "/api/screens", map[string]string{"upcoming": "ticker"}, nil); code != 400 {
 		t.Errorf("a choice that is not one should be refused, got %d", code)
+	}
+}
+
+// Blocks of the day (#136): a discipline added later runs after the first unless the
+// organizer puts them in one block, when the second's pools run beside the first's.
+func TestBlocksOfTheDay(t *testing.T) {
+	h := openHall(t, t.TempDir())
+	var ev httpapi.EventView
+	h.must("GET", "/api/event", nil, &ev)
+	ls := ev.Disciplines[0].Slug
+	h.draw("/api/d/"+ls, 12, 2)
+	h.must("POST", "/api/disciplines", map[string]string{"name": "Open Sabre"}, nil)
+	h.must("PUT", "/api/plan/sessions", map[string]int{"open-sabre": 1}, nil)
+	h.draw("/api/d/open-sabre", 8, 2)
+	v := h.mats()
+	sabre, elims := itemOf(v, "open-sabre/pool-1"), itemOf(v, ls+"/elim-1")
+	if sabre.Status == "queued" {
+		t.Errorf("in one block Sabre's pools run beside the longsword's: %+v", sabre)
+	}
+	if elims.Mat == sabre.Mat && elims.Position < sabre.Position {
+		t.Errorf("Sabre's pools go before the block's eliminations: pools at %d, eliminations at %d", sabre.Position, elims.Position)
+	}
+	if code := h.do("PUT", "/api/plan/sessions", map[string]int{"nope": 1}, nil); code != 400 {
+		t.Errorf("a block for a discipline not in the event should be refused, got %d", code)
+	}
+
+	// Finals at the end, on mat 1.
+	var f httpapi.ForecastView
+	h.must("PUT", "/api/plan/finals", map[string]bool{"last": true}, &f)
+	if !f.FinalsLast || f.Sessions["open-sabre"] != 1 || f.Sessions[ls] != 1 {
+		t.Errorf("the forecast should say what is in force: %+v %v", f.FinalsLast, f.Sessions)
+	}
+	if fin := timesOf(f, ls+"/final"); fin.Start == "" || fin.Start < timesOf(f, "open-sabre/pool-1").End {
+		t.Errorf("the longsword's final is held until everything else is done: %+v", fin)
+	}
+}
+
+// Typing names at the desk writes nothing to the plan (#129): an undrawn discipline's
+// projected items are placed on every read, and only a place the organizer chose for one
+// is written down.
+func TestProjectedItemsAreNotWrittenDown(t *testing.T) {
+	h := openHall(t, t.TempDir())
+	var ev httpapi.EventView
+	h.must("GET", "/api/event", nil, &ev)
+	h.draw("/api/d/"+ev.Disciplines[0].Slug, 8, 2)
+	h.must("POST", "/api/disciplines", map[string]string{"name": "Open Sabre"}, nil)
+	add := func(from, to int) {
+		for i := from; i < to; i++ {
+			h.must("POST", "/api/d/open-sabre/competitors", map[string]string{"name": fmt.Sprintf("Sabreur %d", i), "club": fmt.Sprintf("Club %d", i%3)}, nil)
+			h.mats()
+		}
+	}
+	add(0, 4)
+	before, err := os.ReadFile(filepath.Join(h.dir, "event.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	add(4, 14)
+	v := h.mats()
+	if it := itemOf(v, "open-sabre/pool-2"); !it.Projected {
+		t.Fatalf("fourteen sabreurs should be projected into more than one pool: %+v", it)
+	}
+	after, _ := os.ReadFile(filepath.Join(h.dir, "event.json"))
+	if string(after) != string(before) {
+		t.Errorf("entering sabreurs rewrote event.json:\n%s\n---\n%s", before, after)
+	}
+
+	// Pinned, a projected item is the organizer's choice, and kept.
+	h.must("PATCH", "/api/plan/items/open-sabre/pool-2", map[string]any{"pinned": true}, nil)
+	after, _ = os.ReadFile(filepath.Join(h.dir, "event.json"))
+	if !strings.Contains(string(after), "open-sabre/pool-2") || strings.Contains(string(after), "open-sabre/pool-1") {
+		t.Errorf("only the pinned projected item should be written down:\n%s", after)
 	}
 }

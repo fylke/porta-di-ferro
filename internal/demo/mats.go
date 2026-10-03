@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	httpapi "github.com/fylke/porta-di-ferro/internal/http"
@@ -30,7 +31,19 @@ func (e *Event) placements() (map[string]store.Placement, int) {
 		items = append(items, httpapi.PlanItems(d.slug, d.tournament, httpapi.Entrants(d.competitors, e.plan.Expected[d.slug]))...)
 	}
 	mats := httpapi.MatCount(e.plan, tournaments)
-	placed, changed := httpapi.Place(items, e.plan, mats)
+	started := func(it httpapi.WorkItem) bool {
+		d := e.find(it.Discipline)
+		if d == nil {
+			return false
+		}
+		for _, id := range it.Matches {
+			if len(d.logs[id]) > 0 {
+				return true
+			}
+		}
+		return false
+	}
+	placed, changed := httpapi.PlaceIn(items, e.plan, mats, httpapi.OrderOf(e.plan, e.slugs(), started))
 	if changed {
 		e.plan.Items = placed
 	}
@@ -58,9 +71,28 @@ func (e *Event) mats() httpapi.MatsView {
 		inputs = append(inputs, httpapi.MatsInput{Slug: d.slug, Name: d.tournament.Discipline, Snapshot: snap,
 			Expected: e.plan.Expected[d.slug]})
 	}
+	e.withSessions(inputs)
 	view := httpapi.BuildMats(inputs, placed, n, e.held)
 	view.Upcoming = store.UpcomingOf(e.screens)
+	httpapi.NameMats(&view, e.plan)
 	return view
+}
+
+func (e *Event) putMat(mat string, body []byte) Response {
+	n, err := strconv.Atoi(mat)
+	_, mats := e.placements()
+	if err != nil || n < 1 || n > mats {
+		return fail(404, fmt.Errorf("there is no mat %s", mat))
+	}
+	var in store.MatSetting
+	if err := json.Unmarshal(body, &in); err != nil {
+		return fail(400, err)
+	}
+	if in, err = httpapi.CleanMat(in); err != nil {
+		return fail(400, err)
+	}
+	httpapi.SetMat(&e.plan, n, in)
+	return changed(e.mats())
 }
 
 func (e *Event) putScreens(body []byte) Response {
@@ -73,6 +105,15 @@ func (e *Event) putScreens(body []byte) Response {
 	}
 	e.screens = in
 	return changed(e.mats())
+}
+
+// withSessions gives every discipline its block of the day (#136).
+func (e *Event) withSessions(inputs []httpapi.MatsInput) {
+	sessions := httpapi.Sessions(e.plan, e.slugs())
+	for i := range inputs {
+		inputs[i].Session = sessions[inputs[i].Slug]
+		inputs[i].FinalsLast = e.plan.FinalsLast
+	}
 }
 
 // moveItem is the mat board's move, and a discipline's pool controls in the event.

@@ -3,6 +3,7 @@
   import { api } from '../api';
   import { hall } from '../lib/event.svelte';
   import { LanAddress, describeNetwork } from '../lib/lan.svelte';
+  import { hallURL, qrSrc } from '../lib/qr';
   import Disciplines from './Disciplines.svelte';
   import MatBoard from './MatBoard.svelte';
   import Screens from './Screens.svelte';
@@ -41,6 +42,8 @@
   const view = $derived(hall.view);
   const clientURL = $derived(lan.clientURL);
   const landingURL = $derived(clientURL ? `${clientURL}/` : '');
+  // The score keepers' page, for the code a tablet scans (#138).
+  const scoreURL = $derived(hallURL(clientURL) ? `${hallURL(clientURL)}/score` : '');
 </script>
 
 <main>
@@ -93,13 +96,6 @@
           <p class="hint warn">{t('This PC is not on a network another device could reach, so there is no address to hand out. Join it to the venue wifi and reload this page. Scoring on this PC still works.')}</p>
         {/if}
 
-        <!-- One address for every tablet: it picks a physical mat and follows it through
-             whatever disciplines the plan puts there (phase 2). -->
-        <h3>{t('Score keepers')}</h3>
-        <p class="links">
-          <a href="/score">{clientURL ? `${clientURL}/score` : '/score'}</a>
-          <a class="quiet" href="/display/mats" target="_blank" rel="noreferrer">{t('Displays')}</a>
-        </p>
         <h3>{t('Each discipline')}</h3>
         <ul class="perdiscipline">
           {#each view.disciplines.filter((d) => !d.error) as d (d.slug)}
@@ -112,7 +108,26 @@
         </ul>
       </div>
       {#if landingURL}
-        <img class="qr" alt={t('QR code for {url}', { url: landingURL })} src="/api/qr.png?url={encodeURIComponent(landingURL)}" />
+        <img class="qr" alt={t('QR code for {url}', { url: landingURL })} src={qrSrc(landingURL)} />
+      {/if}
+    </section>
+
+    <!-- One address for every tablet: it picks a physical mat and follows it through
+         whatever disciplines the plan puts there (phase 2). The code is for the tablets to
+         scan (#138); a code per mat, printed, skips the question. -->
+    <section class="join">
+      <div>
+        <h2>{t('Score keepers')}</h2>
+        <p class="url">{scoreURL || '/score'}</p>
+        <p class="hint">{t('Every score keeper’s tablet scans this, picks its mat once and follows it through every discipline.')}</p>
+        <p class="links">
+          <a href="/score">{t('Score keeper')}</a>
+          <a href="/print/mats" target="_blank" rel="noreferrer">{t('Print a code for each mat')}</a>
+          <a class="quiet" href="/display/mats" target="_blank" rel="noreferrer">{t('Displays')}</a>
+        </p>
+      </div>
+      {#if scoreURL}
+        <img class="qr" alt={t('QR code for {url}', { url: scoreURL })} src={qrSrc(scoreURL)} />
       {/if}
     </section>
 

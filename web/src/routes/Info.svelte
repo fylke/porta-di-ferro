@@ -3,6 +3,7 @@
   import { api, type Address } from '../api';
   import { hall } from '../lib/event.svelte';
   import { t, lang } from '../lib/i18n.svelte';
+  import { hallURL, qrSrc } from '../lib/qr';
   import LangToggle from './LangToggle.svelte';
   import Schedule from './Schedule.svelte';
 
@@ -37,19 +38,15 @@
   const event = $derived(hall.view?.info ?? {});
   const wifi = $derived(event.wifi ?? {});
 
-  // Substituted at build time: false in the real application, and everything behind it
-  // goes with it.
-  const demo = import.meta.env.VITE_DEMO === 'true';
-
   // The address a phone should open. Never this page's own origin when that is localhost:
   // the whole point is an address another device can reach.
   const port = $derived(window.location.port ? `:${window.location.port}` : '');
   const here = $derived(addresses.find((a) => a.ip === window.location.hostname));
   const chosen = $derived(here ?? addresses[0] ?? null);
-  // The demo has no LAN to enumerate, and its landing page really is this origin -- so
-  // there the page's own address is the honest one to print rather than nothing.
+  // The demo has no LAN to enumerate, and its landing page really is this origin and the
+  // path it is published under -- so there that is the honest one to print (hallURL).
   const landing = $derived(
-    chosen ? `http://${chosen.ip}${port}/` : demo ? window.location.origin + '/' : '',
+    chosen ? `http://${chosen.ip}${port}/` : hallURL('') ? `${hallURL('')}/` : '',
   );
 
   /**
@@ -69,13 +66,7 @@
     return out + ';';
   });
 
-  /**
-   * The server renders these; the demo has no server, and an <img> load does not go
-   * through the shim that stands in for one, so there the module hands back a data URL.
-   * VITE_DEMO is a build-time constant, so the branch is gone from the real bundle.
-   */
-  const qr = (payload: string) =>
-    demo && window.portaQR ? window.portaQR(payload) : `/api/qr.png?url=${encodeURIComponent(payload)}`;
+  const qr = qrSrc;
   const pdfURL = $derived(
     `/api/info.pdf?lang=${lang.current}&url=${encodeURIComponent(landing)}`,
   );

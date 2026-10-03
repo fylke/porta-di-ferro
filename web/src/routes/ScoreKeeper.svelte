@@ -547,9 +547,9 @@
           {:else if live.stale}
             {t('Offline · schedule from {time}', { time: new Date(live.cachedAt).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' }) })}
           {:else if view.round}
-            {#if slot?.disciplineName}{slot.disciplineName} &middot; {/if}{t('Mat {n}', { n: mat })} &middot; {roundLabel(view)}
+            {#if slot?.disciplineName}{slot.disciplineName}{' · '}{/if}{t('Mat {n}', { n: mat })} &middot; {roundLabel(view)}
           {:else}
-            {#if slot?.disciplineName}{slot.disciplineName} &middot; {/if}{t('Mat {n}', { n: mat })} &middot; {t('pool {n}', { n: view.pool })}
+            {#if slot?.disciplineName}{slot.disciplineName}{' · '}{/if}{t('Mat {n}', { n: mat })} &middot; {t('pool {n}', { n: view.pool })}
           {/if}
         </div>
       </div>

@@ -186,3 +186,28 @@ func TestSuggestAndApply(t *testing.T) {
 		t.Errorf("suggesting again straight after applying should move nothing: %+v", again.Moves)
 	}
 }
+
+// Mats with names, and times they are not there (#123).
+func TestMatsHaveNamesAndAwayTimes(t *testing.T) {
+	h := openHall(t, filepath.Join(t.TempDir(), "event"))
+	h.c.Clock = func() time.Time { return time.Date(2026, 11, 14, 8, 0, 0, 0, time.Local) }
+	var ev httpapi.EventView
+	h.must("GET", "/api/event", nil, &ev)
+	ls := ev.Disciplines[0].Slug
+	h.must("PUT", "/api/plan/timings", map[string]any{"start": "09:00"}, nil)
+	h.draw("/api/d/"+ls, 8, 2)
+	var v httpapi.MatsView
+	h.must("PUT", "/api/mats/1", map[string]any{"name": "Main hall", "away": []map[string]string{{"from": "09:00", "to": "10:30"}}}, &v)
+	if v.Mats[0].Name != "Main hall" || len(v.Mats[0].Away) != 1 || v.Mats[1].Name != "" {
+		t.Errorf("mat 1 should be named and away until half past ten: %+v", v.Mats[:2])
+	}
+	if p := timesOf(h.forecast(), ls+"/pool-1"); clockOf(p.Start) < "10:30" {
+		t.Errorf("mat 1's pool waits until the mat is back: %+v", p)
+	}
+	if code := h.do("PUT", "/api/mats/1", map[string]any{"away": []map[string]string{{"from": "11:00", "to": "10:00"}}}, nil); code != 400 {
+		t.Errorf("an away time ending before it starts should be refused, got %d", code)
+	}
+	if code := h.do("PUT", "/api/mats/9", map[string]any{"name": "Nowhere"}, nil); code != 404 {
+		t.Errorf("there is no mat 9, got %d", code)
+	}
+}

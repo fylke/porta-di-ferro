@@ -75,3 +75,28 @@ func TestAMergeCanBeUndone(t *testing.T) {
 		t.Error("a person cannot be merged into themselves")
 	}
 }
+
+// A person nobody needs is dropped when the event opens (#127); anyone with an entry, a
+// signup, a merge or a staff place is kept.
+func TestPeopleNobodyNeedsAreDropped(t *testing.T) {
+	reg := []store.Person{
+		{ID: "pr-typo", Name: "Astird", Apart: []string{"pr-entry"}},
+		{ID: "pr-entry", Name: "Astrid", Apart: []string{"pr-typo"}},
+		{ID: "pr-signup", Name: "Bo", Signup: "sub-1"},
+		{ID: "pr-merged", Name: "Bo B", MergedInto: "pr-into"},
+		{ID: "pr-into", Name: "Bo Berg"},
+		{ID: "pr-staff", Name: "Cleo"},
+	}
+	rosters := []people.Roster{{Discipline: "ls", Competitors: []store.Competitor{{ID: "c1", Name: "Astrid", Person: "pr-entry"}}}}
+	got := people.Prune(reg, rosters, map[string]bool{"pr-staff": true})
+	var ids []string
+	for _, p := range got {
+		ids = append(ids, p.ID)
+	}
+	if want := []string{"pr-entry", "pr-signup", "pr-merged", "pr-into", "pr-staff"}; !reflect.DeepEqual(ids, want) {
+		t.Errorf("kept %v, want %v", ids, want)
+	}
+	if len(got[0].Apart) != 0 {
+		t.Errorf("Astrid should forget being kept apart from a person who is gone: %v", got[0].Apart)
+	}
+}

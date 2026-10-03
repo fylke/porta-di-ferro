@@ -3,9 +3,12 @@ package httpapi
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/fylke/porta-di-ferro/internal/event"
@@ -60,6 +63,7 @@ func (c *Coordinator) timesFrom(snaps []snapped) hallTimes {
 		inputs = append(inputs, MatsInput{Slug: s.w.slug, Name: s.snap.Instance.Name, Snapshot: s.snap,
 			Expected: file.Plan.Expected[s.w.slug]})
 	}
+	c.withSessions(inputs, file.Plan)
 	placed, _ := c.Placements()
 	timings := TimingsOr(file.Plan.Timings, c.defaults())
 	in := ForecastInput(inputs, placed, file.Plan, file.Event, timings, c.now())
@@ -69,9 +73,58 @@ func (c *Coordinator) timesFrom(snaps []snapped) hallTimes {
 // Hall is, for a discipline's snapshot, which match each of the event's mats is on when
 // it is this discipline's, and when each of its matches still to come is expected.
 func (c *Coordinator) Hall(slug string) (map[int]string, map[string]string) {
+	view, result := c.hallNow()
+	return CurrentFrom(view, slug), EtasFor(result, slug)
+}
+
+// hallCache is the hall worked out once per change (#124). A republish asks every
+// discipline for its snapshot, and every snapshot asks for the hall: without it, one
+// exchange cost every discipline's snapshot once per discipline, and a forecast each.
+type hallCache struct {
+	mu     sync.Mutex
+	key    string
+	at     time.Time
+	view   MatsView
+	result forecast.Result
+}
+
+// hallMaxAge is how long the hall is kept even when nothing that writes has changed: what
+// it cannot see -- a hand-edited file, the clock moving a live match on -- shows within it.
+const hallMaxAge = time.Second
+
+// hallKey is everything the hall is worked out from that can change without a read: every
+// write through the event's files and the disciplines' stores, and who holds which match.
+func (c *Coordinator) hallKey() string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%d/%d/%d", c.folder.Revision(), c.rev.Load(), c.now().Unix())
+	for _, w := range c.snapshotWorkers() {
+		if w.srv == nil {
+			fmt.Fprintf(&b, "|%s:-", w.slug)
+		} else {
+			fmt.Fprintf(&b, "|%s:%d", w.slug, w.srv.store.Revision())
+		}
+	}
+	for mat := 1; mat <= maxMats; mat++ {
+		if d, m := c.held(mat); m != "" {
+			fmt.Fprintf(&b, "|%d=%s/%s", mat, d, m)
+		}
+	}
+	return b.String()
+}
+
+// hallNow is the hall's mats and forecast, from the cache while it is current.
+func (c *Coordinator) hallNow() (MatsView, forecast.Result) {
+	c.hall.mu.Lock()
+	defer c.hall.mu.Unlock()
+	key, now := c.hallKey(), time.Now()
+	if key == c.hall.key && now.Sub(c.hall.at) < hallMaxAge && !c.hall.at.After(now) {
+		return c.hall.view, c.hall.result
+	}
 	snaps := c.snapshots()
-	view := c.matsFrom(snaps)
-	return CurrentFrom(view, slug), EtasFor(c.timesFrom(snaps).result, slug)
+	c.hall.view, c.hall.result = c.matsFrom(snaps), c.timesFrom(snaps).result
+	// Keyed on what it was before: a write while it was worked out may not be in it.
+	c.hall.key, c.hall.at = key, now
+	return c.hall.view, c.hall.result
 }
 
 // ForecastNow is the forecast as the board reads it.
@@ -80,6 +133,7 @@ func (c *Coordinator) ForecastNow() ForecastView {
 	v := ViewForecast(h.in, h.result, h.inputs, h.timings)
 	file, _ := c.folder.Read()
 	v.Expected = file.Plan.Expected
+	v.Sessions, v.FinalsLast = Sessions(file.Plan, c.slugs()), file.Plan.FinalsLast
 	return v
 }
 
@@ -150,6 +204,52 @@ func (c *Coordinator) keepTimings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"file": c.DefaultTimingsFile(), "timings": keep})
+}
+
+// putSessions is which block of the day each discipline runs in (#136).
+func (c *Coordinator) putSessions(w http.ResponseWriter, r *http.Request) {
+	var in map[string]int
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	known := map[string]bool{}
+	for _, s := range c.slugs() {
+		known[s] = true
+	}
+	err := c.changePlan(func(p *store.Plan) error {
+		if p.Sessions == nil {
+			p.Sessions = map[string]int{}
+		}
+		for slug, n := range in {
+			if !known[slug] || n < 1 || n > 20 {
+				return errors.New("a block is a discipline of this event and a number from 1 to 20")
+			}
+			p.Sessions[slug] = n
+		}
+		return nil
+	})
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, c.ForecastNow())
+}
+
+// putFinals holds every final to the end of the day, or lets them go (#136).
+func (c *Coordinator) putFinals(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Last bool `json:"last"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	if err := c.changePlan(func(p *store.Plan) error { p.FinalsLast = in.Last; return nil }); err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, c.ForecastNow())
 }
 
 // putExpected is how many each discipline expects, for planning before the entries.
@@ -251,10 +351,7 @@ func (c *Coordinator) flagItem(id string, pinned *bool, notBefore *string) error
 	placed, _ := c.placementsLocked()
 	next, err := SetItemFlags(placed, id, pinned, notBefore)
 	if err == nil {
-		_, err = c.folder.Update(func(f *event.File) error {
-			f.Plan.Items = next
-			return nil
-		})
+		err = c.savePlacementsLocked(next)
 	}
 	c.planMu.Unlock()
 	if err == nil {
@@ -296,11 +393,7 @@ func (c *Coordinator) applySuggestion(w http.ResponseWriter, r *http.Request) {
 	}
 	c.planMu.Lock()
 	placed, _ := c.placementsLocked()
-	next := ApplySuggestion(placed, s)
-	_, err := c.folder.Update(func(f *event.File) error {
-		f.Plan.Items = next
-		return nil
-	})
+	err := c.savePlacementsLocked(ApplySuggestion(placed, s))
 	c.planMu.Unlock()
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)

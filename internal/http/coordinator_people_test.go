@@ -168,3 +168,28 @@ func TestEntriesFromBeforePeopleAreLinked(t *testing.T) {
 		t.Errorf("the people should be kept in the event folder: %v", err)
 	}
 }
+
+// A typo fixed by removing the entry and entering it again leaves a person nobody needs;
+// the next time the event opens, they are gone (#127).
+func TestARemovedEntrysPersonIsDroppedOnOpening(t *testing.T) {
+	dir := t.TempDir()
+	h := openHall(t, dir)
+	var ev httpapi.EventView
+	h.must("GET", "/api/event", nil, &ev)
+	ls := ev.Disciplines[0].Slug
+	var typo struct {
+		ID string `json:"id"`
+	}
+	h.must("POST", "/api/d/"+ls+"/competitors", map[string]string{"name": "Astird", "club": "Gbg"}, &typo)
+	gone := h.personOf(ls, "Astird")
+	h.must("DELETE", "/api/d/"+ls+"/competitors/"+typo.ID, nil, nil)
+	h.must("POST", "/api/d/"+ls+"/competitors", map[string]string{"name": "Astrid", "club": "Gbg"}, nil)
+	kept := h.personOf(ls, "Astrid")
+	h.stop()
+
+	h = openHall(t, dir)
+	b, _ := os.ReadFile(filepath.Join(dir, "people.json"))
+	if strings.Contains(string(b), gone) || !strings.Contains(string(b), kept) {
+		t.Errorf("people.json should keep Astrid and drop the typo's person %s:\n%s", gone, b)
+	}
+}

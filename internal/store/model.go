@@ -279,6 +279,30 @@ type Plan struct {
 	// Anomalies are matches whose times are not to be learned from -- a long injury
 	// break, a score keeper who forgot to end the match -- by "slug/match" (#64).
 	Anomalies []string `json:"anomalies,omitempty"`
+	// Sessions are the blocks of the day the disciplines run in, by slug (#136). The
+	// disciplines of one block run side by side; a block starts once every discipline of
+	// the blocks before it is done. A discipline with no block of its own runs in a block
+	// of its own, in the event's order -- one discipline after another.
+	Sessions map[string]int `json:"sessions,omitempty"`
+	// FinalsLast holds every discipline's bronze match and final to the end of the day,
+	// one after another on mat 1 (#136).
+	FinalsLast bool `json:"finalsLast,omitempty"`
+	// MatSettings are each mat's name and the times it is not available, mat 1 first
+	// (#123). A mat with none is "Mat n", there all day.
+	MatSettings []MatSetting `json:"matSettings,omitempty"`
+}
+
+// MatSetting is one mat's name, and when it is not there: shared with a children's class
+// until noon, say.
+type MatSetting struct {
+	Name string `json:"name,omitempty"`
+	Away []Away `json:"away,omitempty"`
+}
+
+// Away is a time a mat is not available, as times of day.
+type Away struct {
+	From string `json:"from"`
+	To   string `json:"to"`
 }
 
 // Timings are how long fencing takes, in seconds, and when the day starts and ends, as

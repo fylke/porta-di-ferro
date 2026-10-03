@@ -3,6 +3,7 @@ package httpapi
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/fylke/porta-di-ferro/internal/store"
 	"github.com/fylke/porta-di-ferro/internal/tournament"
@@ -46,6 +47,9 @@ type WorkItem struct {
 	Matches []string `json:"matches"`
 	// Projected says the item is not drawn yet: what the draw would make (projected.go).
 	Projected bool `json:"projected,omitempty"`
+	// Feeders are, for each bracket match, the matches that decide who fences in it, by
+	// id: what the forecast waits for (#120).
+	Feeders map[string][]string `json:"-"`
 }
 
 // ID is the item's name across the event: "open-sabre/pool-3".
@@ -104,6 +108,14 @@ func ItemsOf(slug string, t store.Tournament) []WorkItem {
 			bracket = append(bracket, it)
 		}
 		it.Matches = append(it.Matches, m.ID)
+		for _, feed := range []string{m.FeedRed, m.FeedBlue} {
+			if _, from, ok := strings.Cut(feed, ":"); ok && from != "" {
+				if it.Feeders == nil {
+					it.Feeders = map[string][]string{}
+				}
+				it.Feeders[m.ID] = append(it.Feeders[m.ID], from)
+			}
+		}
 	}
 	// The eliminations first, in lane order, then the bronze match before the final.
 	rank := func(it *WorkItem) int {
@@ -147,26 +159,71 @@ func MatCount(plan store.Plan, tournaments []store.Tournament) int {
 // it has just drawn. A placement the organizer made for a projected item is the real
 // item's once it is drawn. So is a place from a suggestion the organizer applied.
 func Place(items []WorkItem, plan store.Plan, mats int) (map[string]store.Placement, bool) {
+	return PlaceIn(items, plan, mats, PlaceOrder{})
+}
+
+// PlaceOrder is what places new work in the order of the day (#136): the block each
+// discipline runs in, its place in the event, whether finals are held to the end, and
+// which items have started -- nothing is ever put in front of one of those.
+type PlaceOrder struct {
+	Session    func(slug string) int
+	Position   func(slug string) int
+	FinalsLast bool
+	Started    func(it WorkItem) bool
+}
+
+// Held says an item is held to the end of the day: a bronze match or final, with finals
+// last.
+func (o PlaceOrder) Held(it WorkItem) bool {
+	return o.FinalsLast && (it.Kind == ItemFinal || it.Kind == ItemBronze)
+}
+
+// key is where an item belongs in the day: by block, and within a block the pools before
+// the eliminations before the bronze matches and finals, so disciplines side by side run
+// stage by stage; the held finals after everything -- the later blocks' first, so the
+// first discipline's final closes the day.
+func (o PlaceOrder) key(it WorkItem) int {
+	session, position := 0, 0
+	if o.Session != nil {
+		session = o.Session(it.Discipline)
+	}
+	if o.Position != nil {
+		position = o.Position(it.Discipline)
+	}
+	if !o.Held(it) {
+		stage := map[string]int{ItemPool: 0, ItemEliminations: 1, ItemBronze: 2, ItemFinal: 3}[it.Kind]
+		return session*10 + stage
+	}
+	final := 0
+	if it.Kind == ItemFinal {
+		final = 1
+	}
+	return 1_000_000 + (999-session)*10_000 + position*10 + final
+}
+
+// PlaceIn is Place in the order of the day: new work goes after whatever on its mat comes
+// before it in the day -- its block, then the held finals -- and never in front of an item
+// already under way. A mat's queue is renumbered only where something was put in.
+func PlaceIn(items []WorkItem, plan store.Plan, mats int, o PlaceOrder) (map[string]store.Placement, bool) {
 	if mats < 1 {
 		mats = 1
 	}
 	placed := make(map[string]store.Placement, len(items))
-	top := map[int]int{}
+	byID := map[string]WorkItem{}
 	var fresh, later []WorkItem
 	for _, it := range items {
+		byID[it.ID()] = it
 		p, ok := plan.Items[it.ID()]
 		chosen := p.Pinned || p.NotBefore != "" || p.Planned
 		switch {
 		case !ok || p.Mat < 1 || p.Mat > mats:
 		case p.Stamp == it.Stamp && (!it.Projected || chosen):
 			placed[it.ID()] = p
-			top[p.Mat] = max(top[p.Mat], p.Seq)
 			continue
 		case p.Stamp == "" && it.Stamp != "" && chosen:
 			// Planned before the draw, by hand: the drawn item takes it over.
 			p.Stamp = it.Stamp
 			placed[it.ID()] = p
-			top[p.Mat] = max(top[p.Mat], p.Seq)
 			continue
 		}
 		if it.Projected {
@@ -175,10 +232,63 @@ func Place(items []WorkItem, plan store.Plan, mats int) (map[string]store.Placem
 			fresh = append(fresh, it)
 		}
 	}
-	for _, it := range append(fresh, later...) {
-		mat := (max(it.Lane, 1)-1)%mats + 1
-		top[mat]++
-		placed[it.ID()] = store.Placement{Mat: mat, Seq: top[mat], Stamp: it.Stamp}
+
+	queues := map[int][]string{}
+	for id, p := range placed {
+		queues[p.Mat] = append(queues[p.Mat], id)
+	}
+	for mat := range queues {
+		q := queues[mat]
+		sort.SliceStable(q, func(i, j int) bool {
+			if placed[q[i]].Seq != placed[q[j]].Seq {
+				return placed[q[i]].Seq < placed[q[j]].Seq
+			}
+			return q[i] < q[j]
+		})
+	}
+	started := map[string]bool{}
+	isStarted := func(id string) bool {
+		if o.Started == nil {
+			return false
+		}
+		v, ok := started[id]
+		if !ok {
+			v = o.Started(byID[id])
+			started[id] = v
+		}
+		return v
+	}
+
+	touched := map[int]bool{}
+	for _, list := range [][]WorkItem{fresh, later} {
+		sort.SliceStable(list, func(i, j int) bool { return o.key(list[i]) < o.key(list[j]) })
+		for _, it := range list {
+			mat := (max(it.Lane, 1)-1)%mats + 1
+			if o.Held(it) {
+				mat = 1
+			}
+			q := queues[mat]
+			k := o.key(it)
+			at := 0
+			for i, id := range q {
+				if o.key(byID[id]) <= k || isStarted(id) {
+					at = i + 1
+				}
+			}
+			q = append(q, "")
+			copy(q[at+1:], q[at:])
+			q[at] = it.ID()
+			queues[mat] = q
+			placed[it.ID()] = store.Placement{Mat: mat, Stamp: it.Stamp}
+			touched[mat] = true
+		}
+	}
+	for mat := range touched {
+		for i, id := range queues[mat] {
+			p := placed[id]
+			p.Seq = i + 1
+			placed[id] = p
+		}
 	}
 	return placed, !samePlacements(placed, plan.Items)
 }
@@ -204,6 +314,11 @@ type MatsInput struct {
 	Snapshot Snapshot
 	// Expected is how many the discipline expects to enter, for its projected items.
 	Expected int
+	// Session is the block of the day the discipline runs in, and FinalsLast says the
+	// finals are held to the end (#136). A mat waits rather than start an item before its
+	// block is open.
+	Session    int
+	FinalsLast bool
 }
 
 // Slot is one match in a mat's queue, with the discipline it belongs to and the names in
@@ -220,6 +335,10 @@ type Slot struct {
 // MatView is one physical mat: everything queued on it, and what it is running now.
 type MatView struct {
 	Mat int `json:"mat"`
+	// Name is what the organizer calls the mat, if anything, and Away the times it is not
+	// available (#123).
+	Name string       `json:"name,omitempty"`
+	Away []store.Away `json:"away,omitempty"`
 	// Current is the match the mat is on: the one its live score keeper is holding, or
 	// the first match of its head item still to be fenced. Nil when the head item is
 	// waiting -- for a semi-final's feeders, say -- or the mat has nothing queued.
@@ -242,7 +361,8 @@ type ItemView struct {
 	Mat            int    `json:"mat"`
 	// Position is the item's place in its mat's queue, from 1.
 	Position int `json:"position"`
-	// Status is "waiting" (its matches cannot start yet), "ready", "running" or "done".
+	// Status is "waiting" (its matches cannot start yet), "queued" (its block of the day
+	// is not open yet, #136), "ready", "running", "done", or "planned" (not drawn yet).
 	Status string `json:"status"`
 	Done   int    `json:"done"`
 	Total  int    `json:"total"`
@@ -278,6 +398,8 @@ func BuildMats(inputs []MatsInput, placed map[string]store.Placement, mats int,
 		status   string
 		done     int
 		playable []int
+		session  int
+		held     bool
 	}
 	var all []*entry
 	for _, in := range inputs {
@@ -302,7 +424,8 @@ func BuildMats(inputs []MatsInput, placed map[string]store.Placement, mats int,
 			if !ok {
 				continue
 			}
-			e := &entry{item: it, place: p, name: in.Name}
+			e := &entry{item: it, place: p, name: in.Name, session: in.Session,
+				held: in.FinalsLast && (it.Kind == ItemFinal || it.Kind == ItemBronze)}
 			if it.Projected {
 				e.status, e.done = "planned", 0
 				e.slots = nil
@@ -350,6 +473,25 @@ func BuildMats(inputs []MatsInput, placed map[string]store.Placement, mats int,
 		return all[i].place.Seq < all[j].place.Seq
 	})
 
+	// An item whose block is not open yet -- something of an earlier block is not done,
+	// or, for a held final, anything that is not held -- waits, and so does its mat (#136).
+	for _, e := range all {
+		if e.status == "done" || e.status == "running" {
+			continue
+		}
+		for _, o := range all {
+			if o == e || o.held || o.status == "done" {
+				continue
+			}
+			if e.held || o.session < e.session {
+				if !e.item.Projected {
+					e.status = "queued"
+				}
+				break
+			}
+		}
+	}
+
 	out := MatsView{Mats: make([]MatView, 0, mats), Items: []ItemView{}}
 	for mat := 1; mat <= mats; mat++ {
 		mv := MatView{Mat: mat, Queue: []Slot{}}
@@ -368,7 +510,7 @@ func BuildMats(inputs []MatsInput, placed map[string]store.Placement, mats int,
 				ID: e.item.ID(), Discipline: e.item.Discipline, DisciplineName: e.name,
 				Kind: e.item.Kind, Number: e.item.Number, Mat: mat, Position: position,
 				Status: e.status, Done: e.done, Total: total,
-				Movable:   e.status == "ready" || e.status == "waiting" || e.status == "planned",
+				Movable:   e.status == "ready" || e.status == "waiting" || e.status == "planned" || e.status == "queued",
 				Projected: e.item.Projected, Pinned: e.place.Pinned, NotBefore: e.place.NotBefore,
 			})
 			mv.Queue = append(mv.Queue, e.slots...)
@@ -388,7 +530,7 @@ func BuildMats(inputs []MatsInput, placed map[string]store.Placement, mats int,
 				}
 			}
 		}
-		if head != nil {
+		if head != nil && head.status != "queued" {
 			if mv.Current == nil && len(head.playable) > 0 {
 				s := head.slots[head.playable[0]]
 				mv.Current = &s
@@ -484,6 +626,37 @@ func Move(view MatsView, placed map[string]store.Placement, id string, mat, inde
 		return placed, false, nil
 	}
 	return next, true, nil
+}
+
+// Persisted is what of the placements is written down (#129): every drawn item, and an
+// undrawn discipline's projected item only where the organizer chose its place. The rest
+// is placed again on every read, so typing names at the desk -- which changes how many
+// pools there would be -- writes nothing. Each mat's places are counted from 1 again
+// without the projected items, so their coming and going does not renumber the others.
+func Persisted(placed map[string]store.Placement, projected map[string]bool) map[string]store.Placement {
+	out := make(map[string]store.Placement, len(placed))
+	queues := map[int][]string{}
+	for id, p := range placed {
+		if projected[id] && !p.Pinned && p.NotBefore == "" && !p.Planned {
+			continue
+		}
+		out[id] = p
+		queues[p.Mat] = append(queues[p.Mat], id)
+	}
+	for _, q := range queues {
+		sort.Slice(q, func(i, j int) bool {
+			if out[q[i]].Seq != out[q[j]].Seq {
+				return out[q[i]].Seq < out[q[j]].Seq
+			}
+			return q[i] < q[j]
+		})
+		for i, id := range q {
+			p := out[id]
+			p.Seq = i + 1
+			out[id] = p
+		}
+	}
+	return out
 }
 
 // Step moves an item one place earlier or later on its own mat, as the arrows on a card

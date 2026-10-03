@@ -99,13 +99,14 @@ other difference is behind `fetch`.
 
 ## The event
 
-Stångebroslaget, with two disciplines, at the addresses a real event gives them
+Stångebroslaget, with three disciplines, at the addresses a real event gives them
 (`demo.Event`, the demo's stand-in for the server's coordinator).
 
 **Open steel Longsword**: thirty-two entrants across six Nordic clubs, three mats, pools of five and six, about
-halfway through the pools. Mat 1 is two thirds into its first pool with a match under
-way, mat 2 is halfway into its second, and mat 3 is between its two, so many fencers have
-two matches left. The eliminations are not drawn yet.
+partway through the pools. Mat 1 is two thirds into its first pool with a match under
+way; the other mats started at the same time and fenced at the same pace, as many matches
+as fit in that morning, so no mat is ahead of the plan or behind it from the first look.
+The eliminations are not drawn yet.
 
 None of that is a stored snapshot. `internal/demo/fixture.go` holds a list of names, and
 everything after it — the pools, the club spread, the running order, the colours, the mat
@@ -115,20 +116,25 @@ have gone stale the first time the draw changed. The seed is fixed, so every vis
 the same tournament.
 
 **Open Sabre**: fourteen entrants in two pools of seven on two mats, drawn and waiting
-for the 15:00 slot in the programme. Astrid, Bo and Greta are in both, which is the
+for the afternoon block. Astrid, Bo and Greta are in both, which is the
 normal case at a club open and what the landing page's name search is for. Astrid and
 Greta signed up for both on one response, so each is one person with one page for the day;
 Bo was typed in at both desks, so the event admin's People panel asks whether the two Bos
 are one person. The people are part of what the demo keeps between tabs. A visitor can
 add a discipline of their own from the event admin; it starts empty.
 
-The mats are the event's, as at a real event: three of them, the longsword on all three
-and the sabre's pools queued behind on the first two. The event admin's mat board moves
+**Sword and buckler**: ten entrants, drawn on two mats and run beside the sabre in the
+same block. None of its fencers is in the sabre, so the two can run side by side.
+
+The mats are the event's, as at a real event: three of them, and the day in blocks the
+planning panel sets: the longsword first on all three, then the sabre and the sword and
+buckler side by side, and every bronze match and final at the end, one after another on
+mat 1. The event admin's mat board moves
 any card by drag or menu, and the score keeper and the screens follow their mat from one
 discipline to the next. The plan is part of what the demo keeps between tabs.
 
 The day has a past: the fixture's fenced matches carry the times they were fenced at,
-counted back from the moment the demo opened, so the mat board forecasts the rest of the
+every mat starting at one time and counted back from the moment the demo opened, so the mat board forecasts the rest of the
 day from each mat's real pace, the landing page lists the fencing with its times, and a
 person's page says about when each match still to come is expected. The planned day starts
 when the first match did, and the wasm module tells times in the visitor's own zone.

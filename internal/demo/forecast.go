@@ -33,6 +33,7 @@ func (e *Event) times() (forecast.Input, forecast.Result, []httpapi.MatsInput) {
 		inputs = append(inputs, httpapi.MatsInput{Slug: d.slug, Name: d.tournament.Discipline, Snapshot: snap,
 			Expected: e.plan.Expected[d.slug]})
 	}
+	e.withSessions(inputs)
 	in := httpapi.ForecastInput(inputs, placed, e.plan, e.info, e.timings(), time.Now())
 	return in, forecast.Run(in), inputs
 }
@@ -41,7 +42,15 @@ func (e *Event) forecastView() httpapi.ForecastView {
 	in, r, inputs := e.times()
 	v := httpapi.ViewForecast(in, r, inputs, e.timings())
 	v.Expected = e.plan.Expected
+	v.Sessions, v.FinalsLast = httpapi.Sessions(e.plan, e.slugs()), e.plan.FinalsLast
 	return v
+}
+
+// applyPlanSuggestion lays the mats out as the suggestion would.
+func (e *Event) applyPlanSuggestion() {
+	in, _, _ := e.times()
+	placed, mats := e.placements()
+	e.plan.Items = httpapi.ApplySuggestion(placed, forecast.Suggest(in, mats))
 }
 
 // startAtFirstMatch starts the planned day when the fixture's first match started, so a
@@ -126,6 +135,30 @@ func (e *Event) planRequest(method, bare string, body []byte) (Response, bool) {
 		e.plan.Anomalies = httpapi.SetAnomaly(e.plan.Anomalies, in.Key, in.Anomaly)
 		fin, _, inputs := e.times()
 		return changed(httpapi.ViewReport(forecast.Measure(fin), inputs)), true
+	case method == "PUT" && bare == "/api/plan/sessions":
+		var in map[string]int
+		if err := json.Unmarshal(body, &in); err != nil {
+			return fail(400, err), true
+		}
+		if e.plan.Sessions == nil {
+			e.plan.Sessions = map[string]int{}
+		}
+		for slug, n := range in {
+			if e.find(slug) == nil || n < 1 || n > 20 {
+				return fail(400, errors.New("a block is a discipline of this event and a number from 1 to 20")), true
+			}
+			e.plan.Sessions[slug] = n
+		}
+		return changed(e.forecastView()), true
+	case method == "PUT" && bare == "/api/plan/finals":
+		var in struct {
+			Last bool `json:"last"`
+		}
+		if err := json.Unmarshal(body, &in); err != nil {
+			return fail(400, err), true
+		}
+		e.plan.FinalsLast = in.Last
+		return changed(e.forecastView()), true
 	case method == "POST" && bare == "/api/plan/suggest":
 		in, _, _ := e.times()
 		_, mats := e.placements()

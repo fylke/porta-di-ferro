@@ -21,9 +21,12 @@
     multi?: boolean;
   } = $props();
 
-  // A fresh look at who is entered elsewhere, for the suggestions below.
+  // Who is entered elsewhere, for the suggestions below: followed, so a name typed at
+  // another discipline's desk a moment ago is offered here (#128).
   onMount(() => {
-    if (multi) void hall.refresh();
+    if (!multi) return;
+    hall.follow();
+    return () => hall.unfollow();
   });
 
   const fold = (s: string) =>

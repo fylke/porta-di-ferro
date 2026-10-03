@@ -52,6 +52,7 @@ func NewEvent() *Event {
 func (e *Event) Reset() {
 	longsword := newDiscipline("open-steel-longsword", fixture)
 	sabre := newDiscipline("open-sabre", sabreFixture)
+	buckler := newDiscipline("sword-and-buckler", bucklerFixture)
 	// The day was the longsword's own before events existed; it is the event's now, and
 	// the discipline keeps only which programme row it is, as a migrated folder does.
 	e.info = longsword.tournament.Event
@@ -64,10 +65,17 @@ func (e *Event) Reset() {
 	e.defaults = store.Timings{}
 	e.adopt(longsword)
 	e.adopt(sabre)
+	e.adopt(buckler)
+	// The day in blocks, as the issue that asked for them drew it (#136): the longsword;
+	// then the sabre and the sword and buckler side by side; then every final on mat 1.
+	e.plan.Sessions = map[string]int{"open-steel-longsword": 1, "open-sabre": 2, "sword-and-buckler": 2}
+	e.plan.FinalsLast = true
 	// Astrid and Greta signed up for both on one response each, so they are one person in
 	// both; Bo was typed in at each desk, so he is two until the organizer says otherwise.
 	e.ensurePeople()
 	e.startAtFirstMatch()
+	// The mats as an organizer would have laid them out: the suggestion, applied.
+	e.applyPlanSuggestion()
 	// The volunteers, already put to work: the suggestion applied, as an organizer would
 	// have done before the doors opened.
 	e.seedStaff()
@@ -108,6 +116,7 @@ func (e *Event) View() httpapi.EventView {
 	}
 	in, r, inputs := e.times()
 	view.Programme = httpapi.ViewForecast(in, r, inputs, e.timings()).Programme
+	view.Staff = httpapi.StaffEntrants(e.staff.Members)
 	view.Name = strings.TrimSpace(e.info.Signup.Name)
 	if view.Name == "" && len(view.Disciplines) == 1 {
 		view.Name = view.Disciplines[0].Name
@@ -147,6 +156,8 @@ func (e *Event) Request(method, path string, body []byte) Response {
 		return e.putMats(body)
 	case method == "PUT" && bare == "/api/screens":
 		return e.putScreens(body)
+	case method == "PUT" && len(parts) == 3 && parts[1] == "mats":
+		return e.putMat(parts[2], body)
 	case method == "PATCH" && strings.HasPrefix(bare, "/api/plan/items/"):
 		id, _ := itemPath(bare)
 		return e.patchItem(id, body)
@@ -415,6 +426,8 @@ func (e *Event) Load(b []byte) error {
 			build = fixture
 		case "open-sabre":
 			build = sabreFixture
+		case "sword-and-buckler":
+			build = bucklerFixture
 		}
 		// Loaded and checked on its own, then put in the event: checked inside a half-built
 		// event, its snapshot would place the event's items with the disciplines not yet

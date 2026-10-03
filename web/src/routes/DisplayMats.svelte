@@ -52,6 +52,7 @@
     {@const current = matOf(live.view, mat)?.current ?? null}
     <Scoreboard
       {mat}
+      matName={live.view?.mats.find((m) => m.mat === mat)?.name ?? ''}
       match={current?.match ?? null}
       names={{ red: current?.red ?? '', blue: current?.blue ?? '' }}
       elapsed={slotElapsed(current, live.receivedAt, clock.now)}

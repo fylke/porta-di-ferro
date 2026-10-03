@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -59,8 +61,10 @@ func (c *Coordinator) placementsLocked() (map[string]store.Placement, int) {
 	file, _ := c.folder.Read()
 	var items []WorkItem
 	var tournaments []store.Tournament
-	var failed []string
+	var failed, slugs []string
+	stores := map[string]*store.Store{}
 	for _, w := range c.snapshotWorkers() {
+		slugs = append(slugs, w.slug)
 		if w.srv == nil {
 			failed = append(failed, w.slug+"/")
 			continue
@@ -76,7 +80,27 @@ func (c *Coordinator) placementsLocked() (map[string]store.Placement, int) {
 			continue
 		}
 		tournaments = append(tournaments, t)
+		stores[w.slug] = w.srv.store
 		items = append(items, PlanItems(w.slug, t, Entrants(comps, file.Plan.Expected[w.slug]))...)
+	}
+	c.projected = map[string]bool{}
+	for _, it := range items {
+		if it.Projected {
+			c.projected[it.ID()] = true
+		}
+	}
+	// Under way is any match of the item with a log: nothing goes in front of it.
+	started := func(it WorkItem) bool {
+		st := stores[it.Discipline]
+		if st == nil {
+			return false
+		}
+		for _, id := range it.Matches {
+			if evs, err := st.Events(id, 0); err == nil && len(evs) > 0 {
+				return true
+			}
+		}
+		return false
 	}
 	mats := MatCount(file.Plan, tournaments)
 	// A discipline that cannot be read keeps its placements for when it can be again,
@@ -95,17 +119,38 @@ func (c *Coordinator) placementsLocked() (map[string]store.Placement, int) {
 			active.Items[id] = p
 		}
 	}
-	placed, changed := Place(items, active, mats)
+	placed, changed := PlaceIn(items, active, mats, OrderOf(file.Plan, slugs, started))
 	for id, p := range kept {
 		placed[id] = p
 	}
 	if changed {
-		_, _ = c.folder.Update(func(f *event.File) error {
-			f.Plan.Items = placed
-			return nil
-		})
+		_ = c.savePlacementsLocked(placed)
 	}
 	return placed, mats
+}
+
+// savePlacementsLocked writes the placements down, as much of them as is kept (#129), and
+// only when that differs from what is there. The caller holds planMu.
+func (c *Coordinator) savePlacementsLocked(placed map[string]store.Placement) error {
+	next := Persisted(placed, c.projected)
+	file, _ := c.folder.Read()
+	if maps.Equal(next, Persisted(file.Plan.Items, c.projected)) && len(next) == len(file.Plan.Items) {
+		return nil
+	}
+	_, err := c.folder.Update(func(f *event.File) error {
+		f.Plan.Items = next
+		return nil
+	})
+	return err
+}
+
+// withSessions gives every discipline its block of the day (#136).
+func (c *Coordinator) withSessions(inputs []MatsInput, plan store.Plan) {
+	sessions := Sessions(plan, c.slugs())
+	for i := range inputs {
+		inputs[i].Session = sessions[inputs[i].Slug]
+		inputs[i].FinalsLast = plan.FinalsLast
+	}
 }
 
 // held is the match a live score keeper is holding on a mat.
@@ -127,9 +172,11 @@ func (c *Coordinator) matsFrom(snaps []snapped) MatsView {
 		inputs = append(inputs, MatsInput{Slug: s.w.slug, Name: s.snap.Instance.Name, Snapshot: s.snap,
 			Expected: file.Plan.Expected[s.w.slug]})
 	}
+	c.withSessions(inputs, file.Plan)
 	placed, mats := c.Placements()
 	view := BuildMats(inputs, placed, mats, c.held)
 	view.Upcoming = store.UpcomingOf(file.Screens)
+	NameMats(&view, file.Plan)
 	return view
 }
 
@@ -158,10 +205,7 @@ func (c *Coordinator) MoveItem(id string, mat, index int, move string) error {
 		next, changed, err = Move(view, placed, id, mat, index, mats)
 	}
 	if err == nil && changed {
-		_, err = c.folder.Update(func(f *event.File) error {
-			f.Plan.Items = next
-			return nil
-		})
+		err = c.savePlacementsLocked(next)
 	}
 	c.planMu.Unlock()
 	if err != nil {
@@ -175,6 +219,7 @@ func (c *Coordinator) MoveItem(id string, mat, index int, move string) error {
 
 // republish tells every discipline's pages to redraw, and the event's.
 func (c *Coordinator) republish() {
+	c.rev.Add(1)
 	for _, w := range c.snapshotWorkers() {
 		if w.srv != nil {
 			w.srv.PublishState()
@@ -284,6 +329,31 @@ func (c *Coordinator) patchItem(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeJSON(w, http.StatusOK, c.MatsNow())
 	}
+}
+
+// putMat is one mat's name and the times it is not available (#123).
+func (c *Coordinator) putMat(w http.ResponseWriter, r *http.Request) {
+	n, err := strconv.Atoi(r.PathValue("mat"))
+	_, mats := c.Placements()
+	if err != nil || n < 1 || n > mats {
+		writeErr(w, http.StatusNotFound, fmt.Errorf("there is no mat %s", r.PathValue("mat")))
+		return
+	}
+	var in store.MatSetting
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	in, err = CleanMat(in)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	if err := c.changePlan(func(p *store.Plan) error { SetMat(p, n, in); return nil }); err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, c.MatsNow())
 }
 
 // putScreens is how every mat screen looks (#110).

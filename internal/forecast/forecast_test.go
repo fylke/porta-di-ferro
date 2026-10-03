@@ -223,3 +223,88 @@ func TestAFinishedMatchWithoutTimesIsDone(t *testing.T) {
 		t.Errorf("with the first pool done the day is live, and the next starts now: %s", got)
 	}
 }
+
+// Blocks of the day (#136): the sabre runs after the longsword is done, not interleaved.
+func TestABlockWaitsForTheOneBefore(t *testing.T) {
+	ls1, ls2 := item("ls/pool-1", "ls", "pool", 1, 1, 3), item("ls/elim-1", "ls", "eliminations", 1, 2, 2)
+	sa := item("sa/pool-1", "sa", "pool", 2, 1, 3)
+	ls1.Session, ls2.Session, sa.Session = 1, 1, 2
+	r := forecast.Run(forecast.Input{Timings: tpl, Items: []forecast.Item{ls1, ls2, sa}})
+	if s, e := spanOf(r, "sa/pool-1"), spanOf(r, "ls/elim-1"); s.Start.Before(e.End) {
+		t.Errorf("the sabre's block starts once the longsword's is done: sabre %s, longsword ends %s", hm(s.Start), hm(e.End))
+	}
+	// The same block runs side by side.
+	sa.Session = 1
+	r = forecast.Run(forecast.Input{Timings: tpl, Items: []forecast.Item{ls1, ls2, sa}})
+	if s := spanOf(r, "sa/pool-1"); hm(s.Start) != "09:00" {
+		t.Errorf("in one block the sabre runs beside the longsword: %s", hm(s.Start))
+	}
+}
+
+// Finals held to the end of the day run after everything else, the later blocks' first,
+// on mat 1; and a suggestion never puts a fencer in two places at once.
+func TestHeldFinalsAndNoDoubleBooking(t *testing.T) {
+	lsPool, saPool := item("ls/pool-1", "ls", "pool", 1, 1, 3), item("sa/pool-1", "sa", "pool", 2, 1, 3)
+	lsPool.Session, saPool.Session = 1, 1
+	lsPool.People, saPool.People = []string{"astrid"}, []string{"astrid"}
+	lsFinal, saFinal := item("ls/final", "ls", "final", 2, 2, 1), item("sa/final", "sa", "final", 1, 2, 1)
+	lsFinal.Session, saFinal.Session = 1, 2
+	lsFinal.Held, saFinal.Held = true, true
+	saPool.Session = 2
+	in := forecast.Input{Timings: tpl, Items: []forecast.Item{lsPool, saPool, lsFinal, saFinal}}
+	r := forecast.Run(in)
+	for _, id := range []string{"ls/final", "sa/final"} {
+		if spanOf(r, id).Start.Before(spanOf(r, "sa/pool-1").End) {
+			t.Errorf("%s is held until everything else is done", id)
+		}
+	}
+	s := forecast.Suggest(in, 2)
+	if got := s.Order[1]; len(got) < 2 || got[len(got)-2] != "sa/final" || got[len(got)-1] != "ls/final" {
+		t.Errorf("the finals go last on mat 1, the sabre's then the longsword's: %v", s.Order)
+	}
+
+	// Astrid in two pools of one block: the suggestion puts them one after the other.
+	saPool.Session = 1
+	in.Items = []forecast.Item{lsPool, saPool}
+	s = forecast.Suggest(in, 2)
+	if got := s.Order[1]; len(got) != 2 || got[0] != "ls/pool-1" || got[1] != "sa/pool-1" {
+		t.Errorf("Astrid fences both pools: the sabre's should queue behind the longsword's on its mat, so no timing can overlap them: %v", s.Order)
+	}
+	applied := in
+	applied.Items = []forecast.Item{lsPool, saPool}
+	applied.Items[1].Mat, applied.Items[1].Seq = 1, 2
+	if r := forecast.Run(applied); len(r.Warnings) != 0 {
+		t.Errorf("the suggested plan should forecast no overlap: %+v", r.Warnings)
+	}
+}
+
+// A semi-final waits for the quarter-finals that feed it, wherever they run (#120): a slow
+// mat 2 holds up mat 1's semi-final.
+func TestASemiFinalWaitsForItsQuarterFinalsOnAnotherMat(t *testing.T) {
+	e1 := item("ls/elim-1", "ls", "eliminations", 1, 1, 0)
+	e2 := item("ls/elim-2", "ls", "eliminations", 2, 1, 0)
+	e1.Matches = []forecast.Match{{Key: "ls/qf1"}, {Key: "ls/qf3"}, {Key: "ls/sf1", After: []string{"ls/qf1", "ls/qf2"}}}
+	e2.Matches = []forecast.Match{{Key: "ls/qf2"}, {Key: "ls/qf4"}, {Key: "ls/sf2", After: []string{"ls/qf3", "ls/qf4"}}}
+	e2.NotBefore = at("10:00") // mat 2 starts late
+	r := forecast.Run(forecast.Input{Timings: tpl, Items: []forecast.Item{e1, e2}})
+	qf2End := at("10:04")
+	if got := r.Matches["ls/sf1"]; got.Before(qf2End) {
+		t.Errorf("the first semi-final needs the winner of quarter-final 2, which ends at 10:04 on mat 2; it is timed at %s", hm(got))
+	}
+	if len(r.Warnings) != 0 {
+		t.Errorf("the lanes waiting on each other is no plan out of order: %+v", r.Warnings)
+	}
+}
+
+// A mat away for part of the day waits it out; the others do not (#123).
+func TestAMatAwayWaitsItOut(t *testing.T) {
+	in := forecast.Input{Timings: tpl, MatBreaks: map[int][]forecast.Break{1: {{From: at("09:00"), To: at("10:00")}}},
+		Items: []forecast.Item{item("ls/pool-1", "ls", "pool", 1, 1, 2), item("ls/pool-2", "ls", "pool", 2, 1, 2)}}
+	r := forecast.Run(in)
+	if s := spanOf(r, "ls/pool-1"); hm(s.Start) != "10:00" {
+		t.Errorf("mat 1 is away until ten: %s", hm(s.Start))
+	}
+	if s := spanOf(r, "ls/pool-2"); hm(s.Start) != "09:00" {
+		t.Errorf("mat 2 is there from nine: %s", hm(s.Start))
+	}
+}

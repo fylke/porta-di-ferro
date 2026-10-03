@@ -37,7 +37,26 @@
     expected = { ...(f.expected ?? {}) };
   }
 
+  // Each mat's name and away times, as edited here before saving (#123).
+  let matEdits = $state<{ mat: number; name: string; away: { from: string; to: string }[] }[]>([]);
+  async function loadMats() {
+    try {
+      const view = await api.mats();
+      matEdits = view.mats.map((m) => ({ mat: m.mat, name: m.name ?? '', away: (m.away ?? []).map((a) => ({ ...a })) }));
+    } catch {
+      // The rest of the panel works without it.
+    }
+  }
+  function saveMat(i: number) {
+    const m = matEdits[i];
+    void run(async () => {
+      await api.setMat(m.mat, { name: m.name, away: m.away.filter((a) => a.from && a.to) });
+      forecast = await api.forecast();
+    }, t('Saved'));
+  }
+
   async function load() {
+    void loadMats();
     try {
       forecast = await api.forecast();
       if (!seeded) {
@@ -85,6 +104,13 @@
 
   function saveExpected(slug: string, n: number) {
     void run(async () => (forecast = await api.setExpected({ [slug]: Math.max(0, Math.round(n || 0)) })));
+  }
+
+  function setSession(slug: string, n: number) {
+    void run(async () => (forecast = await api.setSessions({ [slug]: n })));
+  }
+  function setFinalsLast(last: boolean) {
+    void run(async () => (forecast = await api.setFinalsLast(last)));
   }
 
   function learn() {
@@ -138,6 +164,56 @@
     </div>
   </form>
   <p class="dim small">{t('Breaks in the programme, such as lunch, stop the mats: give them a start and an end there.')}</p>
+
+  {#if matEdits.length > 0}
+    <!-- What each mat is called, and when it is not there (#123). -->
+    <h3>{t('The mats')}</h3>
+    <p class="dim small">{t('A name the hall knows a mat by, and the times it is not available: no work is planned on it then.')}</p>
+    <ul class="mats">
+      {#each matEdits as m, i (m.mat)}
+        <li>
+          <span class="strong">{t('Mat {n}', { n: m.mat })}</span>
+          <input class="mat-name" bind:value={m.name} placeholder={t('Main hall, say')} aria-label={t('Name of mat {n}', { n: m.mat })} />
+          {#each m.away as a, j (j)}
+            <span class="away">
+              {t('away')}
+              <input type="time" bind:value={a.from} aria-label={t('Away from')} />
+              &ndash;
+              <input type="time" bind:value={a.to} aria-label={t('Away until')} />
+              <button class="quiet" onclick={() => (m.away = m.away.filter((_, k) => k !== j))}>&times;</button>
+            </span>
+          {/each}
+          <button class="quiet" onclick={() => (m.away = [...m.away, { from: '', to: '' }])}>{t('Add a time away')}</button>
+          <button class="save small-btn" disabled={busy} onclick={() => saveMat(i)}>{t('Save')}</button>
+        </li>
+      {/each}
+    </ul>
+  {/if}
+
+  {#if disciplines.length > 1}
+    <!-- Which disciplines run side by side and which one after another (#136). -->
+    <h3>{t('The order of the day')}</h3>
+    <p class="dim small">
+      {t('Disciplines in the same block run side by side; a block starts once every discipline of the blocks before it is done.')}
+    </p>
+    <ul class="expected">
+      {#each disciplines as d (d.slug)}
+        <li>
+          <span class="strong">{d.name || t('Unnamed')}</span>
+          <label>
+            {t('Block')}
+            <select value={forecast?.sessions?.[d.slug] ?? 1} disabled={busy} onchange={(e) => setSession(d.slug, Number(e.currentTarget.value))}>
+              {#each disciplines as _, i (i)}<option value={i + 1}>{i + 1}</option>{/each}
+            </select>
+          </label>
+        </li>
+      {/each}
+    </ul>
+    <label class="check">
+      <input type="checkbox" checked={forecast?.finalsLast ?? false} disabled={busy} onchange={(e) => setFinalsLast(e.currentTarget.checked)} />
+      {t('Every final at the end of the day, one after another on mat 1')}
+    </label>
+  {/if}
 
   {#if disciplines.length > 0}
     <h3>{t('Before the entries are in')}</h3>
@@ -332,6 +408,50 @@
   }
   .strong {
     font-weight: 700;
+  }
+  .mats {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.5rem;
+  }
+  .mats li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 0.7rem;
+    font-size: 0.9rem;
+  }
+  .mat-name {
+    padding: 0.35rem 0.5rem;
+    width: 12rem;
+    max-width: 100%;
+  }
+  .away {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    color: var(--ink-dim);
+  }
+  .away input {
+    padding: 0.2rem 0.3rem;
+  }
+  .quiet {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.82rem;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+  }
+  .small-btn {
+    padding: 0.35rem 0.8rem;
+  }
+  label.check {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.6rem;
+    font-size: 0.9rem;
   }
   .summary {
     margin: 1rem 0 0.3rem;

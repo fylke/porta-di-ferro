@@ -2,7 +2,9 @@ package demo_test
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/fylke/porta-di-ferro/internal/demo"
 	httpapi "github.com/fylke/porta-di-ferro/internal/http"
@@ -52,5 +54,86 @@ func TestTheDemoForecastsItsDay(t *testing.T) {
 	_ = json.Unmarshal([]byte(e.Request("GET", "/api/plan/report", nil).Body), &rep)
 	if rep.Samples == 0 || len(rep.Matches) == 0 {
 		t.Errorf("the measured day should have the fixture's matches: %+v", rep)
+	}
+}
+
+// The demo's day as #136 drew it: the longsword, then the sabre and the sword and buckler
+// side by side, then every final on mat 1 -- and nobody due in two places at once.
+func TestTheDemoDayRunsInBlocks(t *testing.T) {
+	e := demo.NewEvent()
+	var v httpapi.ForecastView
+	_ = json.Unmarshal([]byte(e.Request("GET", "/api/forecast", nil).Body), &v)
+	for _, w := range v.Warnings {
+		if w.Kind == "overlap" {
+			t.Errorf("nobody should be due in two places at once: %+v", w)
+		}
+	}
+	end := func(prefix string) (last string) {
+		for _, it := range v.Items {
+			if strings.HasPrefix(it.ID, prefix) && it.End > last && !isFinal(it.ID) {
+				last = it.End
+			}
+		}
+		return last
+	}
+	longsword := end("open-steel-longsword/")
+	for _, it := range v.Items {
+		later := strings.HasPrefix(it.ID, "open-sabre/") || strings.HasPrefix(it.ID, "sword-and-buckler/")
+		if later && !isFinal(it.ID) && it.Start < longsword {
+			t.Errorf("%s should wait for the longsword to finish: starts %s, longsword ends %s", it.ID, it.Start, longsword)
+		}
+	}
+	var mats httpapi.MatsView
+	_ = json.Unmarshal([]byte(e.Request("GET", "/api/mats", nil).Body), &mats)
+	var finals []string
+	for _, it := range mats.Items {
+		if it.Kind == "final" {
+			if it.Mat != 1 {
+				t.Errorf("finals are held for mat 1: %s on mat %d", it.ID, it.Mat)
+			}
+			finals = append(finals, it.ID)
+		}
+	}
+	if len(finals) != 3 || finals[len(finals)-1] != "open-steel-longsword/final" {
+		t.Errorf("the longsword's final closes the day: %v", finals)
+	}
+}
+
+func isFinal(id string) bool {
+	return strings.HasSuffix(id, "/final") || strings.HasSuffix(id, "/bronze")
+}
+
+// Every mat of the demo started its day at one time, and none is late from the first look
+// (#131): a mat that fenced fewer matches was slower, not late to start.
+func TestTheDemoMatsStartTogether(t *testing.T) {
+	e := demo.NewEvent()
+	var v httpapi.ForecastView
+	_ = json.Unmarshal([]byte(e.Request("GET", "/api/forecast", nil).Body), &v)
+	first := map[int]httpapi.ItemTimes{}
+	for _, it := range v.Items {
+		if !strings.HasPrefix(it.ID, "open-steel-longsword/pool-") {
+			continue
+		}
+		if f, ok := first[it.Mat]; !ok || it.Start < f.Start {
+			first[it.Mat] = it
+		}
+	}
+	if len(first) < 2 {
+		t.Fatalf("the longsword's pools should be on several mats: %+v", first)
+	}
+	minutes := func(at string) int {
+		when, err := time.Parse(time.RFC3339, at)
+		if err != nil {
+			t.Fatalf("%q is no time: %v", at, err)
+		}
+		return when.Hour()*60 + when.Minute()
+	}
+	for mat, it := range first {
+		if d := minutes(it.Start) - minutes(first[1].Start); d < -1 || d > 1 {
+			t.Errorf("mat %d started at %s, mat 1 at %s: every mat starts together", mat, it.Start, first[1].Start)
+		}
+		if late := minutes(it.Start) - minutes(it.PlannedStart); late > 5 {
+			t.Errorf("mat %d's first pool is %d minutes late from the outset: %+v", mat, late, it)
+		}
 	}
 }

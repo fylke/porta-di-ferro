@@ -193,3 +193,36 @@ func TestStaffingThePlan(t *testing.T) {
 		t.Errorf("Bo only works, and his page says who he is and what he does: %+v", pv)
 	}
 }
+
+// Bo typed in at the desk and again on the staff is two records of one human: the staff
+// panel says so, until the People panel settles it (#133).
+func TestAStaffMemberWhoMayBeSomebodyElseIsFlagged(t *testing.T) {
+	h := openHall(t, t.TempDir())
+	var ev httpapi.EventView
+	h.must("GET", "/api/event", nil, &ev)
+	ls := ev.Disciplines[0].Slug
+	h.must("POST", "/api/d/"+ls+"/competitors", map[string]string{"name": "Bo Berg", "club": "Gbg"}, nil)
+	h.must("POST", "/api/staff", map[string]any{"name": "Bo Berg", "roles": []string{"head-ref"}}, nil)
+	h.must("POST", "/api/staff", map[string]any{"name": "Cleo", "roles": []string{"head-ref"}}, nil)
+	v := h.staff()
+	if len(v.Unsure) != 1 || v.Members[0].Name != "Bo Berg" || v.Unsure[0] != v.Members[0].ID {
+		t.Fatalf("Bo on the staff may be Bo fencing, and only Bo: %v of %+v", v.Unsure, v.Members)
+	}
+	// Kept apart, the question is answered.
+	fencer := h.personOf(ls, "Bo Berg")
+	h.must("POST", "/api/people/"+fencer+"/apart", map[string]string{"other": v.Members[0].Person}, nil)
+	if v := h.staff(); len(v.Unsure) != 0 {
+		t.Errorf("two Bos kept apart are no longer a question: %v", v.Unsure)
+	}
+}
+
+// The landing page lists everyone, the staff too (#135): each with their page.
+func TestTheEventViewListsTheStaff(t *testing.T) {
+	h := openHall(t, t.TempDir())
+	h.must("POST", "/api/staff", map[string]any{"name": "Cleo", "club": "Gbg", "roles": []string{"head-ref"}}, nil)
+	var ev httpapi.EventView
+	h.must("GET", "/api/event", nil, &ev)
+	if len(ev.Staff) != 1 || ev.Staff[0].Name != "Cleo" || ev.Staff[0].Person == "" {
+		t.Errorf("the event view should list Cleo, with a page: %+v", ev.Staff)
+	}
+}
