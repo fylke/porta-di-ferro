@@ -156,6 +156,7 @@ func ForecastInput(inputs []MatsInput, placed map[string]store.Placement, plan s
 			m := forecast.Match{Key: it.w.Discipline + "/" + id}
 			if v, ok := it.views[id]; ok {
 				m.Started, m.Ended = parseAt(v.StartedAt, now.Location()), parseAt(v.EndedAt, now.Location())
+				m.Done = v.Status == "complete"
 				for _, c := range []string{v.Red, v.Blue} {
 					if c != "" {
 						people[it.who[c]] = true
@@ -283,7 +284,7 @@ func ViewForecast(in forecast.Input, r forecast.Result, inputs []MatsInput, timi
 	}
 	for _, it := range in.Items {
 		for _, m := range it.Matches {
-			out.Live = out.Live || !m.Started.IsZero()
+			out.Live = out.Live || m.Done || !m.Started.IsZero()
 		}
 	}
 	out.Programme = programme(in, r, inputs)
@@ -322,7 +323,7 @@ func programme(in forecast.Input, r forecast.Result, inputs []MatsInput) []Progr
 		row := rows[k]
 		done := len(it.Matches) > 0
 		for _, m := range it.Matches {
-			done = done && !m.Ended.IsZero()
+			done = done && (m.Done || !m.Ended.IsZero())
 		}
 		if row == nil {
 			row = &ProgrammeRow{Discipline: it.Discipline, Name: nameOf[it.Discipline], Stage: stage,

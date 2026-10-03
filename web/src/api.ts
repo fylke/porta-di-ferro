@@ -107,7 +107,7 @@ export interface Client {
   match?: string;
   /** Which discipline the score keeper's match is in: match ids repeat across them. */
   discipline?: string;
-  /** A display's assignment: "mat/1", "mats", "audience/2", "d/{slug}/roster". Empty until set. */
+  /** A display's assignment: "mat/1", "mats", "mats/1,2", "d/{slug}/roster". Empty until set. */
   target?: string;
   lastSeen: string;
   alive: boolean;
@@ -266,6 +266,8 @@ export interface ReportView {
 export interface MatsView {
   mats: MatView[];
   items: ItemView[];
+  /** What the mat screens show of the matches to come (#110). */
+  upcoming?: 'bottom' | 'list' | 'none';
 }
 
 /** What one of a discipline's mats is running or has up next, for the event's pages. */
@@ -738,6 +740,8 @@ export const api = {
 
   /** The hall's mats: every queue across disciplines, and what each mat is running. */
   mats: () => req<MatsView>('GET', '/api/mats'),
+  /** What every mat screen shows of the matches to come. */
+  setScreens: (screens: { upcoming: 'bottom' | 'list' | 'none' }) => req<MatsView>('PUT', '/api/screens', screens),
   /** How many mats the hall has. */
   setMats: (count: number) => req<MatsView>('PUT', '/api/mats', { count }),
   /** Moves a work item: to a place on a mat, or a step along its own. */

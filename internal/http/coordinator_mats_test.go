@@ -218,3 +218,20 @@ func TestTheMatsStreamFollowsEveryDiscipline(t *testing.T) {
 		}
 	}
 }
+
+// What every mat screen shows of what comes next is one choice for the hall (#110), carried
+// to the screens on the mats stream.
+func TestTheScreensShowWhatComesNext(t *testing.T) {
+	h := openHall(t, t.TempDir())
+	if v := h.mats(); v.Upcoming != "bottom" {
+		t.Errorf("the next match along the bottom is the default, got %q", v.Upcoming)
+	}
+	var v httpapi.MatsView
+	h.must("PUT", "/api/screens", map[string]string{"upcoming": "list"}, &v)
+	if v.Upcoming != "list" || h.mats().Upcoming != "list" {
+		t.Errorf("the choice should stick: %q", v.Upcoming)
+	}
+	if code := h.do("PUT", "/api/screens", map[string]string{"upcoming": "ticker"}, nil); code != 400 {
+		t.Errorf("a choice that is not one should be refused, got %d", code)
+	}
+}

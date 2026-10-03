@@ -65,8 +65,10 @@
     <span class="name">{name}</span>
   </header>
 
+  <!-- The score centred over the point buttons, the warnings stacked beside it so they
+       never push it off centre (#110). -->
   <div class="score mono" aria-label={t('score')}>
-    {score}
+    <span class="num">{score}</span>
     {#if warnings > 0}
       <span class="warnings" aria-label={t('{n} warnings', { n: warnings })}>
         {#each { length: warnings } as _, i (i)}<WarningTriangle />{/each}
@@ -120,9 +122,11 @@
 
   header {
     display: flex;
+    justify-content: center;
     align-items: baseline;
     gap: 0.6rem;
     min-width: 0;
+    text-align: center;
   }
   .label {
     font-weight: 800;
@@ -144,18 +148,25 @@
     font-size: clamp(2.5rem, 9vh, 5rem);
     font-weight: 800;
     line-height: 1;
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
     align-items: center;
     gap: 0.5rem;
+  }
+  .num {
+    grid-column: 2;
   }
   /* Amber, distinct from both competitor colours and conventional for the meaning. One
      triangle per warning: the count is what matters, because the score keeper needs to see
      whether the next one costs a point or ends the match. */
   .warnings {
+    grid-column: 3;
+    justify-self: start;
     display: inline-flex;
+    flex-direction: column;
     align-items: center;
-    gap: 0.2rem;
-    font-size: 0.4em;
+    gap: 0.1rem;
+    font-size: 0.32em;
     color: var(--amber-bright);
   }
 

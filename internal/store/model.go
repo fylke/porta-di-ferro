@@ -297,6 +297,28 @@ type Timings struct {
 	Close string `json:"close,omitempty"`
 }
 
+// Screens is how the hall's mat screens look (#110), set by the organizer for every screen
+// at once.
+type Screens struct {
+	// Upcoming is what a mat screen shows of the matches after the current one: "bottom"
+	// (the next match along the foot), "list" (the next few down the right-hand side) or
+	// "none". Empty is "bottom".
+	Upcoming string `json:"upcoming,omitempty"`
+}
+
+// UpcomingChoices are the values Screens.Upcoming takes.
+var UpcomingChoices = []string{"bottom", "list", "none"}
+
+// UpcomingOf is the choice in force.
+func UpcomingOf(s Screens) string {
+	for _, c := range UpcomingChoices {
+		if s.Upcoming == c {
+			return c
+		}
+	}
+	return "bottom"
+}
+
 // Placement is one work item's mat and its place in that mat's queue.
 type Placement struct {
 	Mat int `json:"mat"`

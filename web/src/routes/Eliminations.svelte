@@ -1,7 +1,10 @@
 <script lang="ts">
   import { api, type MatchView, type Snapshot } from '../api';
-  import { nameLookup, roundLabel } from './lib-display.svelte';
+  import { nameLookup } from './lib-display.svelte';
   import MatchEditor from './MatchEditor.svelte';
+  import BracketTree from './BracketTree.svelte';
+  import FoldButton from './FoldButton.svelte';
+  import { Folds } from '../lib/folds.svelte';
   import { t } from '../lib/i18n.svelte';
 
   /**
@@ -13,6 +16,8 @@
   let { snapshot, onchange }: { snapshot: Snapshot; onchange: () => void } = $props();
 
   const name = $derived(nameLookup(snapshot));
+  // svelte-ignore state_referenced_locally
+  const folds = new Folds(`${snapshot.instance.slug ?? ''}/admin`);
   const bracket = $derived(snapshot.bracket ?? null);
   const fmt = (n: number) => (Number.isFinite(n) ? n.toFixed(2) : '0.00');
   const toGo = $derived(
@@ -65,15 +70,6 @@
     }
   }
 
-  const rounds = $derived.by(() => {
-    if (!bracket) return [];
-    const order = ['quarter', 'semi', 'bronze', 'final'] as const;
-    return order
-      .map((r) => ({ round: r, matches: bracket.matches.filter((m) => m.round === r) }))
-      .filter((g) => g.matches.length > 0);
-  });
-  const heading = (round: string) =>
-    round === 'quarter' ? t('Quarter-finals') : round === 'semi' ? t('Semi-finals') : round === 'bronze' ? t('Bronze match') : t('Final');
 </script>
 
 {#if editing}
@@ -87,7 +83,11 @@
 
 {#if snapshot.pools.length > 0}
   <section>
-    <h2>{t('Eliminations')} <span class="meta">{t('top {n}, single elimination, sudden death', { n: cut })}</span></h2>
+    <h2>
+      <FoldButton open={folds.open('eliminations')} label={t('Eliminations')} ontoggle={() => folds.toggle('eliminations')} />
+      {t('Eliminations')} <span class="meta">{t('top {n}, single elimination, sudden death', { n: cut })}</span>
+    </h2>
+    {#if folds.open('eliminations')}
 
     {#if !snapshot.poolsComplete && !bracket}
       <p class="dim">
@@ -159,27 +159,8 @@
     {/if}
 
     {#if bracket}
-      <div class="rounds">
-        {#each rounds as g (g.round)}
-          <div class="round">
-            <h3>{heading(g.round)}</h3>
-            <ol>
-              {#each g.matches as m (m.id)}
-                <li class={m.status}>
-                  <span class="n">{roundLabel(m)} &middot; {t('mat {n}', { n: m.mat })}</span>
-                  <span class="red">{m.red ? name(m.red) : '—'}</span>
-                  <span class="score mono">
-                    {#if m.status === 'pending'}v{:else}{m.state.red.score}–{m.state.blue.score}{/if}
-                  </span>
-                  <span class="blue">{m.blue ? name(m.blue) : '—'}</span>
-                  {#if m.red && m.blue}
-                    <button class="edit" title={t("Edit this match's log")} aria-label={t('Edit the log of {match}', { match: roundLabel(m) })} onclick={() => (editing = m)}>&#9998;</button>
-                  {/if}
-                </li>
-              {/each}
-            </ol>
-          </div>
-        {/each}
+      <div class="bracket-wrap">
+        <BracketTree matches={bracket.matches} {name} onedit={(m) => (editing = m)} />
       </div>
       {#if bracket.podium.first}
         <p class="podium">
@@ -188,6 +169,7 @@
           {#if bracket.podium.third}<span><strong>3.</strong> {name(bracket.podium.third)}</span>{/if}
         </p>
       {/if}
+    {/if}
     {/if}
   </section>
 {/if}
@@ -300,67 +282,8 @@
     line-height: 1.5;
     color: var(--amber-bright);
   }
-  .rounds {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
-    gap: 1rem;
-    margin-top: 0.8rem;
-  }
-  ol {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: grid;
-    gap: 0.35rem;
-  }
-  li {
-    display: grid;
-    grid-template-columns: 1fr auto 1fr auto;
-    grid-template-rows: auto auto;
-    gap: 0.1rem 0.5rem;
-    align-items: baseline;
-    padding: 0.4rem 0.5rem;
-    border-radius: 6px;
-    background: var(--panel-2);
-    font-size: 0.92rem;
-  }
-  li .n {
-    grid-column: 1 / -1;
-    font-size: 0.7rem;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--ink-dim);
-  }
-  .red {
-    color: var(--red-bright);
-    font-weight: 700;
-    text-align: right;
-  }
-  .blue {
-    color: var(--blue-bright);
-    font-weight: 700;
-  }
-  .score {
-    color: var(--ink-dim);
-  }
-  li.complete .red,
-  li.complete .blue {
-    color: var(--ink);
-  }
-  li.running .score {
-    color: var(--amber-bright);
-  }
-  .edit {
-    padding: 0.1rem 0.4rem;
-    font-size: 0.85rem;
-    background: none;
-    border: 1px solid transparent;
-    color: var(--ink-dim);
-    opacity: 0.6;
-  }
-  .edit:hover {
-    opacity: 1;
-    border-color: var(--line);
+  .bracket-wrap {
+    margin-top: 0.9rem;
   }
   .podium {
     margin: 0.9rem 0 0;

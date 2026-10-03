@@ -1,6 +1,9 @@
 <script lang="ts">
   import type { Snapshot } from '../api';
-  import { nameLookup, roundLabel } from './lib-display.svelte';
+  import { nameLookup } from './lib-display.svelte';
+  import BracketTree from './BracketTree.svelte';
+  import FoldButton from './FoldButton.svelte';
+  import { Folds } from '../lib/folds.svelte';
   import { t } from '../lib/i18n.svelte';
 
   /**
@@ -15,27 +18,16 @@
    */
   let { snapshot }: { snapshot: Snapshot | null } = $props();
 
+  // What this viewer has folded away, per discipline (#110).
+  // svelte-ignore state_referenced_locally
+  const folds = new Folds(`${snapshot?.instance.slug ?? ''}/landing`);
+
   const name = $derived(nameLookup(snapshot));
   const fmt = (n: number) => (Number.isFinite(n) ? n.toFixed(2) : '0.00');
   const pools = $derived(snapshot?.pools ?? []);
   const bracket = $derived(snapshot?.bracket ?? null);
   const podium = $derived(bracket?.podium ?? null);
 
-  const rounds = $derived.by(() => {
-    if (!bracket) return [];
-    const order = ['quarter', 'semi', 'bronze', 'final'] as const;
-    return order
-      .map((r) => ({ round: r, matches: bracket.matches.filter((m) => m.round === r) }))
-      .filter((g) => g.matches.length > 0);
-  });
-  const heading = (round: string) =>
-    round === 'quarter'
-      ? t('Quarter-finals')
-      : round === 'semi'
-        ? t('Semi-finals')
-        : round === 'bronze'
-          ? t('Bronze match')
-          : t('Final');
 </script>
 
 {#if pools.length === 0}
@@ -52,24 +44,10 @@
 {/if}
 
 {#if bracket}
+  <!-- The bracket as it is drawn on paper (#112). -->
   <div class="bracket">
-    {#each rounds as g (g.round)}
-      <div class="round">
-        <h3>{heading(g.round)}</h3>
-        {#each g.matches as m (m.id)}
-          <div class="bmatch" class:done={m.status === 'complete'}>
-            <span class="n">{roundLabel(m)} &middot; {t('mat {n}', { n: m.mat })}</span>
-            <span class="pair">
-              <span class="red">{m.red ? name(m.red) : '—'}</span>
-              <span class="score mono">
-                {#if m.status === 'pending'}{t('v')}{:else}{m.state.red.score}–{m.state.blue.score}{/if}
-              </span>
-              <span class="blue">{m.blue ? name(m.blue) : '—'}</span>
-            </span>
-          </div>
-        {/each}
-      </div>
-    {/each}
+    <h3><FoldButton open={folds.open('bracket')} label={t('Eliminations')} ontoggle={() => folds.toggle('bracket')} />{t('Eliminations')}</h3>
+    {#if folds.open('bracket')}<BracketTree matches={bracket.matches} {name} />{/if}
   </div>
 {/if}
 
@@ -78,11 +56,13 @@
     {@const started = pool.matches.some((m) => m.status !== 'pending')}
     <section>
       <h3>
+        <FoldButton open={folds.open(`pool-${pool.number}`)} label={t('Pool {n}', { n: pool.number })} ontoggle={() => folds.toggle(`pool-${pool.number}`)} />
         {t('Pool {n}', { n: pool.number })}
         <span class="meta">{t('mat {n}', { n: pool.mat })}</span>
         <span class="meta">{pool.complete ? t('complete') : started ? t('in progress') : t('not started')}</span>
       </h3>
 
+      {#if folds.open(`pool-${pool.number}`)}
       {#if started}
         <div class="scroller">
         <table>
@@ -126,6 +106,7 @@
           </li>
         {/each}
       </ol>
+      {/if}
     </section>
   {/each}
 </div>
@@ -181,39 +162,15 @@
   }
 
   .bracket {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
-    min-width: 0;
-    gap: 0.8rem;
     margin-bottom: 1.2rem;
+    min-width: 0;
   }
-  .round h3 {
+  .bracket h3 {
     font-size: 0.72rem;
     font-weight: 800;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--ink-dim);
-  }
-  .bmatch {
-    display: grid;
-    gap: 0.15rem;
-    padding: 0.45rem 0.55rem;
-    border-radius: 6px;
-    background: var(--panel-2);
-    margin-bottom: 0.35rem;
-  }
-  .bmatch .n {
-    font-size: 0.68rem;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--ink-dim);
-  }
-  .pair {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-    gap: 0.45rem;
-    align-items: baseline;
-    font-size: 0.9rem;
   }
 
   .scroller {

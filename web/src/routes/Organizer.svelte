@@ -143,8 +143,7 @@
           <p class="hint">
             {t('Spare screens open')} <span class="mono">{clientURL}/display</span>
             {t('and are told what to show from here, under Screens — or go straight to')}
-            <span class="mono">{clientURL}/display/mats</span>,
-            <span class="mono">{clientURL}/display/audience/1</span> {t('or')}
+            <span class="mono">{clientURL}/display/mats</span> {t('or')}
             <span class="mono">{clientURL}{dhref('/display/roster')}</span>. {t('Any device on the venue wifi can reach them.')}
           </p>
         {/if}
@@ -153,7 +152,6 @@
           {#each { length: snapshot.eventMats ?? snapshot.tournament.mats } as _, i (i)}
             <a href="/display/mat/{i + 1}">{t('Mat {n}', { n: i + 1 })}</a>
           {/each}
-          {#if demo}<a href="/display/audience/1">{t('Audience')}</a>{/if}
         </p>
       </div>
       {#if scoreURL}

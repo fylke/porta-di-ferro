@@ -46,8 +46,9 @@ installer below. [How the demo works](docs/demo.md).
 6. At each mat, open the address on a tablet or phone and pick the mat. That is the score
    keeper client.
 7. Put a spare screen on `/display` and choose what it shows from the organizer page — or go
-   straight to `/display/mats` for the scoreboards, `/display/audience/1` for the audience
-   display with the on-deck list, or `/display/roster` for the match list. Any browser on the
+   straight to `/display/mat/1` for one mat's scoreboard, `/display/mats` for all of them, or
+   `/display/roster` for the match list. Under Screens you choose whether the mat screens show
+   the next match along the bottom, the next few down the right, or nothing. Any browser on the
    venue wifi can open them — a spectator's phone included.
 8. To hand a mat to another tablet, pick *Hand over this mat* in the `…` menu; the new tablet
    picks the mat and carries on. If a tablet dies mid-match, the new one takes over and
@@ -67,7 +68,6 @@ day, a pool can be run on paper and entered afterwards.
 | `/score` | Score keeper — pick a mat |
 | `/display/mat/1`, `/display/mat/2` | One mat's scoreboard |
 | `/display/mats` | Every mat on one screen; `?ids=1,2` for a subset — with four mats, one screen between mats 1 and 2 and another between 3 and 4 beats one screen for the hall |
-| `/display/audience/1` | The audience display for a mat: the scoreboard, the result when decided, the next match, and the on-deck list |
 | `/display` | A screen the organizer assigns from the organizer page, and reassigns without touching it |
 | `/display/roster` | The match roster |
 | `/print/pools` | Printable pool sheets |

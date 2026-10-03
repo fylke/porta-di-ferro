@@ -67,6 +67,25 @@ func (c *Coordinator) eventDefinition() (signup.Definition, error) {
 	return signup.BuildDefinition(store.Tournament{Discipline: c.View().Name, Event: ev}), nil
 }
 
+// SignupRowFor is the programme row a discipline takes, as the event's import would give it,
+// and whether the event has several disciplines (SignupRows, for a discipline's own
+// import). Read from event.json alone, never from a discipline's snapshot: the asking
+// discipline holds its own lock.
+func (c *Coordinator) SignupRowFor(slug string) (string, bool) {
+	ev, err := c.EventInfo()
+	if err != nil {
+		return "", false
+	}
+	def := signup.BuildDefinition(store.Tournament{Event: ev})
+	shares, workers := c.shares(def)
+	for _, sh := range shares {
+		if sh.Discipline == slug {
+			return sh.Tournament, len(workers) > 1
+		}
+	}
+	return "", len(workers) > 1
+}
+
 // shares is which discipline takes which programme row. A discipline that cannot be read
 // is listed with why, and takes nothing.
 func (c *Coordinator) shares(def signup.Definition) ([]SignupShare, []*worker) {

@@ -48,7 +48,7 @@ type Client struct {
 	Match      string `json:"match,omitempty"`
 	Discipline string `json:"discipline,omitempty"`
 	// Target is the display's: what it has been told to show, e.g. "mat/1", "mats",
-	// "roster", "audience/2". Empty until the organizer assigns it.
+	// "roster". Empty until the organizer assigns it.
 	Target   string    `json:"target,omitempty"`
 	LastSeen time.Time `json:"lastSeen"`
 	Alive    bool      `json:"alive"`

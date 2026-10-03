@@ -1,7 +1,9 @@
 package e2e
 
 import (
+	"io"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/fylke/porta-di-ferro/internal/store"
@@ -92,5 +94,28 @@ func TestMissingFilesAre404WhileClientRoutesFallThrough(t *testing.T) {
 		if ct := res.Header.Get("Content-Type"); ct != "text/html; charset=utf-8" {
 			t.Errorf("GET %s served %s, want HTML", path, ct)
 		}
+	}
+}
+
+// The page names its icon, so no browser goes asking for a /favicon.ico that is not there
+// and logs a 404 on every page (#130).
+func TestThePageHasAnIcon(t *testing.T) {
+	s := start(t)
+	res, err := http.Get(s.base + "/favicon.svg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusOK || !strings.HasPrefix(res.Header.Get("Content-Type"), "image/svg+xml") {
+		t.Errorf("GET /favicon.svg: %d %s", res.StatusCode, res.Header.Get("Content-Type"))
+	}
+	res, err = http.Get(s.base + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, _ := io.ReadAll(res.Body)
+	res.Body.Close()
+	if !strings.Contains(string(page), `rel="icon"`) {
+		t.Error("the page should link its icon")
 	}
 }

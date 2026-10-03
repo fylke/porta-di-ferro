@@ -58,7 +58,21 @@ func (e *Event) mats() httpapi.MatsView {
 		inputs = append(inputs, httpapi.MatsInput{Slug: d.slug, Name: d.tournament.Discipline, Snapshot: snap,
 			Expected: e.plan.Expected[d.slug]})
 	}
-	return httpapi.BuildMats(inputs, placed, n, e.held)
+	view := httpapi.BuildMats(inputs, placed, n, e.held)
+	view.Upcoming = store.UpcomingOf(e.screens)
+	return view
+}
+
+func (e *Event) putScreens(body []byte) Response {
+	var in store.Screens
+	if err := json.Unmarshal(body, &in); err != nil {
+		return fail(400, err)
+	}
+	if store.UpcomingOf(in) != in.Upcoming {
+		return fail(400, fmt.Errorf("upcoming is one of %v", store.UpcomingChoices))
+	}
+	e.screens = in
+	return changed(e.mats())
 }
 
 // moveItem is the mat board's move, and a discipline's pool controls in the event.

@@ -30,13 +30,17 @@
   const names = $derived({ red: current?.red ?? '', blue: current?.blue ?? '' });
   const next = $derived(upcoming(here, 1)[0] ?? null);
   const elapsed = $derived(slotElapsed(current, live.receivedAt, clock.now));
+  // What comes next, as the organizer chose for every mat screen (#110): the next match
+  // along the bottom, the next few down the right, or nothing.
+  const mode = $derived(live.view?.upcoming ?? 'bottom');
+  const list = $derived(upcoming(here, 5));
 </script>
 
-<main>
+<main class="mode-{mode}">
   <div class="board">
     <Scoreboard {mat} {match} {names} {elapsed} discipline={current?.disciplineName ?? ''} />
   </div>
-  {#if match?.state.ended || !match}
+  {#if mode === 'bottom'}
     <footer>
       {#if next}
         <span class="label">
@@ -51,6 +55,24 @@
         <span class="label">{t('No more matches on mat {n}', { n: mat })}</span>
       {/if}
     </footer>
+  {:else if mode === 'list'}
+    <aside>
+      <span class="label">{t('Next on mat {n}', { n: mat })}</span>
+      {#if list.length === 0}
+        <span class="none">{t('No more matches on mat {n}', { n: mat })}</span>
+      {:else}
+        <ol>
+          {#each list as s (`${s.discipline}/${s.match.id}`)}
+            <li>
+              {#if s.disciplineName !== current?.disciplineName}<span class="disc">{s.disciplineName}</span>{/if}
+              <span style="color: var(--bright-{s.match.options.red})">{s.red}</span>
+              <span class="v">{t('v')}</span>
+              <span style="color: var(--bright-{s.match.options.blue})">{s.blue}</span>
+            </li>
+          {/each}
+        </ol>
+      {/if}
+    </aside>
   {/if}
   {#if !live.connected}
     <div class="stale">{t('Reconnecting…')}</div>
@@ -65,6 +87,58 @@
     gap: 0.75rem;
     padding: 0.75rem;
     position: relative;
+  }
+  main.mode-none {
+    grid-template-rows: 1fr;
+  }
+  /* The list down the right on a wide screen, under the board on an upright one. */
+  main.mode-list {
+    grid-template-columns: minmax(0, 1fr) minmax(12rem, 26%);
+    grid-template-rows: minmax(0, 1fr);
+  }
+  @media (orientation: portrait) {
+    main.mode-list {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: minmax(0, 1fr) auto;
+    }
+  }
+  aside {
+    display: grid;
+    align-content: start;
+    gap: 0.6rem;
+    padding: 0.9rem 1rem;
+    background: var(--panel);
+    border-radius: var(--radius);
+    min-height: 0;
+    overflow: hidden;
+  }
+  aside ol {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.7rem;
+  }
+  aside li {
+    font-size: clamp(0.95rem, min(3vh, 2.2vw), 1.8rem);
+    font-weight: 700;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+  }
+  aside .v {
+    color: var(--ink-dim);
+    font-weight: 400;
+    margin: 0 0.25rem;
+  }
+  aside .disc {
+    display: block;
+    font-size: 0.6em;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--amber-bright);
+  }
+  aside .none {
+    color: var(--ink-dim);
   }
   .board {
     min-height: 0;

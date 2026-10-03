@@ -408,6 +408,7 @@ func (c *Coordinator) Handler() http.Handler {
 		serveStream(w, r, c.matsHub)
 	})
 	mux.HandleFunc("GET /api/plan", c.getMats)
+	mux.HandleFunc("PUT /api/screens", c.putScreens)
 	mux.HandleFunc("GET /api/forecast", c.getForecast)
 	mux.HandleFunc("PUT /api/plan/timings", c.putTimings)
 	mux.HandleFunc("POST /api/plan/timings/learn", c.learnTimings)

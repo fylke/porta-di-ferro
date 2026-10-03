@@ -3,6 +3,8 @@
   import { api, type Competitor } from '../api';
   import { hall } from '../lib/event.svelte';
   import { discipline } from '../router.svelte';
+  import FoldButton from './FoldButton.svelte';
+  import { Folds } from '../lib/folds.svelte';
   import { t } from '../lib/i18n.svelte';
   import { fitRows, type Layout } from '../lib/fit';
 
@@ -66,6 +68,7 @@
   const SCROLL_FROM = 33;
 
   let layout = $state<Layout>('one');
+  const folds = new Folds(`${discipline()}/admin`);
 
   async function add(event: SubmitEvent) {
     event.preventDefault();
@@ -112,7 +115,10 @@
 </script>
 
 <section>
-  <h2>{t('Competitors')} <span class="count">{t('{n} entered', { n: active })}</span></h2>
+  <h2>
+    <span><FoldButton open={folds.open('competitors')} label={t('Competitors')} ontoggle={() => folds.toggle('competitors')} />{t('Competitors')}</span>
+    <span class="count">{t('{n} entered', { n: active })}</span>
+  </h2>
 
   <form onsubmit={add}>
     <input
@@ -144,6 +150,7 @@
   {/if}
   {#if error}<p class="err">{error}</p>{/if}
 
+  {#if folds.open('competitors')}
   <ul
     class:scroll={competitors.length >= SCROLL_FROM}
     data-layout={layout}
@@ -166,6 +173,7 @@
       </li>
     {/each}
   </ul>
+  {/if}
   {#if poolsDrawn}
     <p class="hint">{t("Pools are drawn, so competitors can only be withdrawn from here. A withdrawal voids their results as though they never entered, and everyone else's standings recompute.")}</p>
   {/if}

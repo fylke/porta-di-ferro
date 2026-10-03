@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Porta di Ferro: an iron gate, in the application's amber on its dark ground. -->
+  <rect width="64" height="64" rx="12" fill="#12141a"/>
+  <path d="M14 54V26a18 18 0 0 1 36 0v28" fill="none" stroke="#f2b134" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M24 54V18M32 54V12M40 54V18M14 34h36M14 44h36" fill="none" stroke="#f2b134" stroke-width="3.5"/>
+  <path d="M22 54h4M30 54h4M38 54h4" stroke="#f2b134" stroke-width="3.5" stroke-linecap="round"/>
+</svg>

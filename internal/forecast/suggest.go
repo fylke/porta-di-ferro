@@ -49,7 +49,7 @@ func Suggest(in Input, mats int) Suggestion {
 	live := false
 	for _, it := range in.Items {
 		for _, m := range it.Matches {
-			live = live || !m.Started.IsZero()
+			live = live || m.begun()
 		}
 	}
 
@@ -57,7 +57,7 @@ func Suggest(in Input, mats int) Suggestion {
 	for _, it := range in.Items {
 		started := false
 		for _, m := range it.Matches {
-			started = started || !m.Started.IsZero()
+			started = started || m.begun()
 		}
 		if started {
 			fixed = append(fixed, it)

@@ -3,6 +3,7 @@ package httpapi
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -181,9 +182,28 @@ func (s *Server) checkSignups(files []signup.File, mine *string) (signup.Preview
 	row := strings.TrimSpace(t.Event.Signup.Tournament)
 	if mine != nil {
 		row = *mine
+	} else if rows, ok := s.event.(SignupRows); ok {
+		// The discipline's own import, in an event: the row the event's import would give
+		// it. With several disciplines and no row it would take everything (#126).
+		var several bool
+		row, several = rows.SignupRowFor(s.self().Slug)
+		if several && row == "" {
+			return signup.Preview{}, t, ErrNoSignupRow
+		}
 	}
 	return signup.Check(def, row, files, competitors, t.Staff), t, nil
 }
+
+// SignupRows is the event saying which programme row a discipline takes, and whether the
+// event has several disciplines.
+type SignupRows interface {
+	SignupRowFor(slug string) (row string, several bool)
+}
+
+// ErrNoSignupRow is a discipline's own import in an event of several, when no programme row
+// is this discipline's: every response would be its own.
+var ErrNoSignupRow = errors.New("no row of the programme is this discipline's, so every response would be imported here; " +
+	"choose its row on the event's signup panel, or import there for every discipline at once")
 
 // SignupRow is the programme row this discipline said it is, if it said.
 func (s *Server) SignupRow() (string, error) {
@@ -225,6 +245,10 @@ func (s *Server) ImportSignups(files []signup.File, mine string) (added, addedSt
 // deciding.
 func (s *Server) previewImport(w http.ResponseWriter, r *http.Request) {
 	preview, t, err := s.readImport(r)
+	if errors.Is(err, ErrNoSignupRow) {
+		writeErr(w, http.StatusConflict, err)
+		return
+	}
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
@@ -259,6 +283,10 @@ func (s *Server) confirmImport(w http.ResponseWriter, r *http.Request) {
 	s.writeMu.Lock()
 	res, err := s.importSignups(files, nil)
 	s.writeMu.Unlock()
+	if errors.Is(err, ErrNoSignupRow) {
+		writeErr(w, http.StatusConflict, err)
+		return
+	}
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return

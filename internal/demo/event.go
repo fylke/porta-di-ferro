@@ -35,6 +35,8 @@ type Event struct {
 	defaults store.Timings
 	// staff is the event's staff and who works where (phase 5): staff.json, in memory.
 	staff store.Staff
+	// screens is how the mat screens look (#110).
+	screens store.Screens
 }
 
 // NewEvent builds the event a visitor arrives in: the longsword halfway through its pools
@@ -143,6 +145,8 @@ func (e *Event) Request(method, path string, body []byte) Response {
 		return ok(e.mats())
 	case method == "PUT" && bare == "/api/mats":
 		return e.putMats(body)
+	case method == "PUT" && bare == "/api/screens":
+		return e.putScreens(body)
 	case method == "PATCH" && strings.HasPrefix(bare, "/api/plan/items/"):
 		id, _ := itemPath(bare)
 		return e.patchItem(id, body)
@@ -368,6 +372,7 @@ type savedEvent struct {
 	People      []store.Person    `json:"people"`
 	Defaults    store.Timings     `json:"defaults,omitempty"`
 	Staff       store.Staff       `json:"staff"`
+	Screens     store.Screens     `json:"screens,omitempty"`
 	Disciplines []savedDiscipline `json:"disciplines"`
 }
 
@@ -379,7 +384,7 @@ type savedDiscipline struct {
 
 // Save is the whole event as JSON: the day, and every discipline's own save.
 func (e *Event) Save() ([]byte, error) {
-	out := savedEvent{Format: eventSaveFormat, Info: e.info, Plan: e.plan, People: e.people, Defaults: e.defaults, Staff: e.staff}
+	out := savedEvent{Format: eventSaveFormat, Info: e.info, Plan: e.plan, People: e.people, Defaults: e.defaults, Staff: e.staff, Screens: e.screens}
 	for _, d := range e.disciplines {
 		state, err := d.Save()
 		if err != nil {
@@ -421,7 +426,7 @@ func (e *Event) Load(b []byte) error {
 		next.adopt(d)
 	}
 	e.info, e.plan, e.disciplines, e.keepers, e.people, e.defaults = next.info, next.plan, nil, nil, in.People, in.Defaults
-	e.staff = in.Staff
+	e.staff, e.screens = in.Staff, in.Screens
 	for _, d := range next.disciplines {
 		e.adopt(d)
 	}
