@@ -33,8 +33,8 @@ func TestTheDemoIsStaffed(t *testing.T) {
 	res = e.Request("GET", "/api/people/"+clara, nil)
 	var pv httpapi.PersonView
 	_ = json.Unmarshal([]byte(res.Body), &pv)
-	if len(pv.Entries) != 1 || pv.Entries[0].Discipline != "open-steel-longsword" {
-		t.Errorf("Clara fences the longsword and is the same person as the volunteer: %+v", pv)
+	if len(pv.Entries) != 2 || pv.Entries[0].Discipline != "open-steel-longsword" || pv.Entries[1].Discipline != "sword-and-buckler" {
+		t.Errorf("Clara fences the longsword and the sword and buckler, and is the same person as the volunteer: %+v", pv.Entries)
 	}
 
 	// A discipline's own staff list is the event's members who work it.

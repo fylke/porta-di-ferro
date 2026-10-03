@@ -2,6 +2,7 @@ package demo_test
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/fylke/porta-di-ferro/internal/demo"
@@ -53,4 +54,50 @@ func TestTheDemoForecastsItsDay(t *testing.T) {
 	if rep.Samples == 0 || len(rep.Matches) == 0 {
 		t.Errorf("the measured day should have the fixture's matches: %+v", rep)
 	}
+}
+
+// The demo's day as #136 drew it: the longsword, then the sabre and the sword and buckler
+// side by side, then every final on mat 1 -- and nobody due in two places at once.
+func TestTheDemoDayRunsInBlocks(t *testing.T) {
+	e := demo.NewEvent()
+	var v httpapi.ForecastView
+	_ = json.Unmarshal([]byte(e.Request("GET", "/api/forecast", nil).Body), &v)
+	for _, w := range v.Warnings {
+		if w.Kind == "overlap" {
+			t.Errorf("nobody should be due in two places at once: %+v", w)
+		}
+	}
+	end := func(prefix string) (last string) {
+		for _, it := range v.Items {
+			if strings.HasPrefix(it.ID, prefix) && it.End > last && !isFinal(it.ID) {
+				last = it.End
+			}
+		}
+		return last
+	}
+	longsword := end("open-steel-longsword/")
+	for _, it := range v.Items {
+		later := strings.HasPrefix(it.ID, "open-sabre/") || strings.HasPrefix(it.ID, "sword-and-buckler/")
+		if later && !isFinal(it.ID) && it.Start < longsword {
+			t.Errorf("%s should wait for the longsword to finish: starts %s, longsword ends %s", it.ID, it.Start, longsword)
+		}
+	}
+	var mats httpapi.MatsView
+	_ = json.Unmarshal([]byte(e.Request("GET", "/api/mats", nil).Body), &mats)
+	var finals []string
+	for _, it := range mats.Items {
+		if it.Kind == "final" {
+			if it.Mat != 1 {
+				t.Errorf("finals are held for mat 1: %s on mat %d", it.ID, it.Mat)
+			}
+			finals = append(finals, it.ID)
+		}
+	}
+	if len(finals) != 3 || finals[len(finals)-1] != "open-steel-longsword/final" {
+		t.Errorf("the longsword's final closes the day: %v", finals)
+	}
+}
+
+func isFinal(id string) bool {
+	return strings.HasSuffix(id, "/final") || strings.HasSuffix(id, "/bronze")
 }

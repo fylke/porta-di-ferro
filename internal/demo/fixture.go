@@ -69,14 +69,17 @@ func fixture(rules match.Ruleset, limits tournament.Limits) ([]store.Competitor,
 		Schedule: []store.ScheduleItem{
 			{At: "08:30", Label: "Gear check"},
 			{At: "09:00", Label: "Staff briefing"},
+			// The day in blocks (#136): the longsword, then the sabre and the sword and
+			// buckler side by side, then every final, one after another.
 			{At: "09:30", Label: "Longsword, pools", Kind: "discipline",
 				Tournament: "longsword-pools", Capacity: 32},
-			{At: "12:00", Ends: "13:00", Label: "Lunch", Kind: "break"},
 			// The same discipline as the pools, so the signup offers the longsword once and
 			// the event import has nobody to put in a row of its own (phase 3).
-			{At: "13:00", Label: "Longsword, eliminations", Kind: "discipline", Tournament: "longsword-pools"},
-			{At: "15:00", Label: "Sabre, pools", Kind: "discipline",
-				Tournament: "sabre-pools", Capacity: 16},
+			{At: "11:30", Label: "Longsword, eliminations", Kind: "discipline", Tournament: "longsword-pools"},
+			{At: "12:30", Ends: "13:15", Label: "Lunch", Kind: "break"},
+			{At: "13:15", Label: "Sabre", Kind: "discipline", Tournament: "sabre-pools", Capacity: 16},
+			{At: "13:15", Label: "Sword and buckler", Kind: "discipline", Tournament: "sword-and-buckler", Capacity: 16},
+			{At: "16:00", Label: "Finals"},
 			{At: "17:00", Label: "Prize giving"},
 		},
 		// A password with a separator in it, because that is the case the QR escaping
@@ -239,6 +242,42 @@ func sabreFixture(rules match.Ruleset, limits tournament.Limits) ([]store.Compet
 	return competitors, drawn, map[string][]match.Event{}
 }
 
+// bucklerFixture is the third discipline (#136): Sword and buckler, drawn and run beside
+// the sabre in the afternoon block, after the longsword. Its fencers are none of the
+// sabre's, so the two can run side by side; the longsword's may be in it, because the
+// longsword is done by then.
+func bucklerFixture(rules match.Ruleset, limits tournament.Limits) ([]store.Competitor, store.Tournament, map[string][]match.Event) {
+	entries := []struct{ name, club string }{
+		{"Clara Wikström", "MSL Linköping"},
+		{"Dag Nyström", "Uppsala HEMA"},
+		{"Elin Sørensen", "Oslo Fribryterlag"},
+		{"Fredrik Ahlberg", "Gotlands Fäktskola"},
+		{"Ida Karlsson", "MSL Linköping"},
+		{"Jonas Ek", "Malmö Svärdsgille"},
+		{"Katrin Olsen", "Oslo Fribryterlag"},
+		{"Lars Bergström", "Uppsala HEMA"},
+		{"Maja Lund", "Malmö Svärdsgille"},
+		{"Rakel Virtanen", "Helsinki Longsword"},
+	}
+	competitors := make([]store.Competitor, len(entries))
+	for i, e := range entries {
+		competitors[i] = store.Competitor{ID: fmt.Sprintf("c%d", i+1), Name: e.name, Club: e.club, Signup: signedUp[e.name]}
+	}
+	t := store.Defaults()
+	t.Discipline = "Sword and buckler"
+	t.Event = store.Event{Signup: store.Signup{Tournament: "sword-and-buckler"}}
+	t.Mats = 2
+	t.MinPoolSize = 4
+	t.MaxPoolSize = 6
+	t.Seed = fixtureSeed + 2
+	drawn, err := tournament.Generate(t, competitors, limits)
+	if err != nil {
+		panic("demo sword and buckler fixture cannot be drawn: " + err.Error())
+	}
+	drawn.GeneratedAt = time.Now().Add(-80 * time.Minute).Format(time.RFC3339)
+	return competitors, drawn, map[string][]match.Event{}
+}
+
 // emptyFixture is a discipline a visitor adds in the demo: named, and nothing else yet.
 func emptyFixture(name string) func(match.Ruleset, tournament.Limits) ([]store.Competitor, store.Tournament, map[string][]match.Event) {
 	return func(match.Ruleset, tournament.Limits) ([]store.Competitor, store.Tournament, map[string][]match.Event) {
@@ -299,6 +338,18 @@ func roster() []store.Competitor {
 var signedUp = map[string]string{
 	"Astrid Lindqvist": "demo-signup-astrid",
 	"Greta Mäkinen":    "demo-signup-greta",
+	// The sword and buckler's fencers all fence the longsword too, and said so on one
+	// response each.
+	"Clara Wikström":  "demo-signup-clara",
+	"Dag Nyström":     "demo-signup-dag",
+	"Elin Sørensen":   "demo-signup-elin",
+	"Fredrik Ahlberg": "demo-signup-fredrik",
+	"Ida Karlsson":    "demo-signup-ida",
+	"Jonas Ek":        "demo-signup-jonas",
+	"Katrin Olsen":    "demo-signup-katrin",
+	"Lars Bergström":  "demo-signup-lars",
+	"Maja Lund":       "demo-signup-maja",
+	"Rakel Virtanen":  "demo-signup-rakel",
 }
 
 // playMatch writes a whole match's log: the clock started, a run of exchanges, and the

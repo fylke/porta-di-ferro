@@ -94,10 +94,10 @@ func TestTheDemoImportsForTheWholeEvent(t *testing.T) {
 		Disciplines []httpapi.SignupShare    `json:"disciplines"`
 		Unclaimed   []struct{ Label string } `json:"unclaimed"`
 	}
-	if err := json.Unmarshal([]byte(res.Body), &ready); err != nil || len(ready.Disciplines) != 2 {
+	if err := json.Unmarshal([]byte(res.Body), &ready); err != nil || len(ready.Disciplines) != 3 {
 		t.Fatalf("ready should list both disciplines: %v %s", err, res.Body)
 	}
-	if ready.Disciplines[0].Tournament == "" || ready.Disciplines[1].Tournament == "" {
+	if ready.Disciplines[0].Tournament == "" || ready.Disciplines[1].Tournament == "" || ready.Disciplines[2].Tournament == "" {
 		t.Errorf("each discipline should take a programme row: %+v", ready.Disciplines)
 	}
 	if len(ready.Unclaimed) != 0 {
