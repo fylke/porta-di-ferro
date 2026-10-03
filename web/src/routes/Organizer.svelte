@@ -3,6 +3,7 @@
   import { api } from '../api';
   import { Live } from '../lib/live.svelte';
   import { LanAddress, describeNetwork } from '../lib/lan.svelte';
+  import { hallURL, qrSrc } from '../lib/qr';
   import { apiBase } from '../lib/paths';
   import { dhref, discipline } from '../router.svelte';
   import Competitors from './Competitors.svelte';
@@ -68,7 +69,7 @@
    * is the organizer's page on the organizer's PC, and none of it is any use at a mat.
    */
   // The score keepers' page is the hall's: a tablet picks a physical mat (phase 2).
-  const scoreURL = $derived(clientURL ? `${clientURL}/score` : '');
+  const scoreURL = $derived(hallURL(clientURL) ? `${hallURL(clientURL)}/score` : '');
 
   async function refresh() {
     try {
@@ -149,13 +150,14 @@
         {/if}
         <p class="links">
           <a href="/score">{t('Score keeper')}</a>
+          <a href="/print/mats" target="_blank" rel="noreferrer">{t('Print a code for each mat')}</a>
           {#each { length: snapshot.eventMats ?? snapshot.tournament.mats } as _, i (i)}
             <a href="/display/mat/{i + 1}">{t('Mat {n}', { n: i + 1 })}</a>
           {/each}
         </p>
       </div>
       {#if scoreURL}
-        <img class="qr" alt={t('QR code for {url}', { url: scoreURL })} src="/api/qr.png?url={encodeURIComponent(scoreURL)}" />
+        <img class="qr" alt={t('QR code for {url}', { url: scoreURL })} src={qrSrc(scoreURL)} />
       {/if}
     </section>
 

@@ -440,6 +440,15 @@ export const sv: Record<string, string> = {
   '{n} slots have nobody.': '{n} platser saknar folk.',
   'A mat needs': 'En matta behöver',
   'Add to the staff': 'Lägg till som funktionär',
+  'Print a code for each mat': 'Skriv ut en kod för varje matta',
+  Print: 'Skriv ut',
+  'Every score keeper’s tablet scans this, picks its mat once and follows it through every discipline.':
+    'Varje sekretariats surfplatta skannar den här, väljer sin matta en gång och följer den genom alla grenar.',
+  'One code per mat, for the score keepers. Print them on the network the tablets will join: the codes carry its address.':
+    'En kod per matta, för sekretariatet. Skriv ut dem på nätverket surfplattorna ska ansluta till: koderna bär dess adress.',
+  'This PC is not on a network another device could reach, so there is no address to put in the codes. Join it to the venue wifi and reload this page.':
+    'Den här datorn är inte på ett nätverk som en annan enhet når, så det finns ingen adress att lägga i koderna. Anslut den till lokalens wifi och ladda om sidan.',
+  'Scan with the tablet’s camera to score this mat.': 'Skanna med surfplattans kamera för att föra protokoll på den här mattan.',
   'Fold the demo strip away': 'Fäll undan demoremsan',
   'What this demo is': 'Vad den här demon är',
   'Hide the list': 'Dölj listan',
