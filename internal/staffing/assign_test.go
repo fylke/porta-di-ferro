@@ -1,6 +1,7 @@
 package staffing_test
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -117,5 +118,37 @@ func TestPhysiciansAreOnCall(t *testing.T) {
 	got := staffing.Physicians([]store.StaffMember{member("eva", "p", "physician"), member("dag", "q", "head-ref")})
 	if len(got) != 1 || got[0].ID != "eva" {
 		t.Errorf("only Eva is a physician: %+v", got)
+	}
+}
+
+// Contiguous blocks, but not the whole day: after a long stint somebody else takes over
+// while they rest, if anybody can.
+func TestALongStintGetsABreak(t *testing.T) {
+	var items []staffing.Item
+	for i := 0; i < 6; i++ {
+		items = append(items, item(fmt.Sprintf("ls/pool-%d", i+1), "ls", 1, i*60, i*60+58))
+	}
+	r := staffing.Assign(staffing.Input{Crew: heads, Items: items,
+		Members: []store.StaffMember{member("ann", "p1", "head-ref"), member("bo", "p2", "head-ref")}})
+	run, longest, prev := 0, 0, ""
+	for _, it := range items {
+		got := who(r, it.ID, "head-ref")
+		if len(got) != 1 {
+			t.Fatalf("every pool has a referee: %v", r.Assignments)
+		}
+		if got[0] == prev {
+			run++
+		} else {
+			run, prev = 1, got[0]
+		}
+		longest = max(longest, run)
+	}
+	if longest > 3 || longest < 2 {
+		t.Errorf("referees should work blocks of two or three hours, not one or six: longest %d", longest)
+	}
+	// Alone, Ann does it all: a tired referee beats an empty mat.
+	r = staffing.Assign(staffing.Input{Crew: heads, Items: items, Members: []store.StaffMember{member("ann", "p1", "head-ref")}})
+	if len(r.Short) != 0 {
+		t.Errorf("with nobody else free, the stint limit must not leave the mat empty: %+v", r.Short)
 	}
 }

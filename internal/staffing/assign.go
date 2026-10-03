@@ -20,7 +20,8 @@ import (
 // Among those who may, #5 asks for as little hopping about as possible: the same role, on
 // the same mat, for contiguous blocks of time. So each slot goes to whoever held this role
 // on this mat just before, then whoever held this role anywhere, then whoever was on this
-// mat; and otherwise to whoever has worked least, so the day is shared. Greedy over the
+// mat; and otherwise to whoever has worked least, so the day is shared. Nobody is kept on
+// past LongestStint without a pause while somebody else could take over. Greedy over the
 // items in the order they run, which keeps it fast, deterministic and explainable.
 //
 // The organizer's choices stand: an assignment made by hand is kept, and so is anything on
@@ -172,6 +173,26 @@ func run(in Input, fill bool) Result {
 		return best, found
 	}
 
+	// stint is how long a member has worked without a real pause, up to a start.
+	stint := func(member string, before time.Time) time.Duration {
+		var spans []span
+		for _, w := range working[member] {
+			if !w.end.After(before) {
+				spans = append(spans, w)
+			}
+		}
+		sort.Slice(spans, func(i, j int) bool { return spans[i].end.After(spans[j].end) })
+		total, edge := time.Duration(0), before
+		for _, w := range spans {
+			if edge.Sub(w.end) > Pause {
+				break
+			}
+			total += w.end.Sub(w.start)
+			edge = w.start
+		}
+		return total
+	}
+
 	ids := make([]string, 0, len(members))
 	for id := range members {
 		ids = append(ids, id)
@@ -221,6 +242,10 @@ func run(in Input, fill bool) Result {
 						continue
 					}
 					score := -minutes[id].Minutes() / 10
+					// A long stint wants a break: past the limit, anybody else first.
+					if stint(id, it.Start)+it.End.Sub(it.Start) > LongestStint {
+						score -= 150
+					}
 					if prev, ok := last(id, it.Start); ok {
 						switch {
 						case prev.mat == it.Mat && prev.role == role:
@@ -245,6 +270,14 @@ func run(in Input, fill bool) Result {
 	}
 	return out
 }
+
+// LongestStint is how long somebody should work without a break before somebody else is
+// preferred, and Pause the gap that counts as one. Soft: when nobody else is free, the
+// slot is still better filled than empty.
+const (
+	LongestStint = 150 * time.Minute
+	Pause        = 20 * time.Minute
+)
 
 // Signature names a set of assignments, so applying a suggestion can check it is still
 // the one the organizer looked at.
