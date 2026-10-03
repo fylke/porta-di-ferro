@@ -37,21 +37,19 @@ const fixtureSeed = 20260922
 // for anyone who does not want to score the rest by hand.
 const liveMat = 1
 
-// progress says how far each mat has got: into which of its pools, in running order, and
-// what share of that pool's matches are fenced. Everything before that pool is finished.
-//
-//   - Mat 1, the live one everything points at: two thirds into its first pool, with the
-//     next match under way. Its fencers have one or two matches left.
-//   - Mat 2: first pool done, halfway into the second, where everyone has two left.
-//   - Mat 3: between pools, the first done and the second about to start.
-var progress = map[int]struct {
-	pool  int
-	share float64
-}{
-	1: {pool: 0, share: 2.0 / 3},
-	2: {pool: 1, share: 0.5},
-	3: {pool: 1, share: 0},
-}
+// liveShare is how far the live mat, the one everything points at, has got: this share of
+// its first pool fenced, with the next match under way, so its fencers have one or two
+// matches left. The other mats started at the same time and fenced at the same pace
+// (#131): as many of their matches as fit in the live mat's morning, so none of them is
+// ahead of the plan or behind it from the first look.
+const liveShare = 2.0 / 3
+
+// The fixture's pace: about three quarters of a minute of stoppages on top of a match's
+// fencing, and a little over a minute between pairs.
+const (
+	fixtureStoppage = 45 * time.Second
+	fixtureBetween  = 70 * time.Second
+)
 
 func fixture(rules match.Ruleset, limits tournament.Limits) ([]store.Competitor, store.Tournament, map[string][]match.Event) {
 	competitors := roster()
@@ -122,76 +120,131 @@ func fixture(rules match.Ruleset, limits tournament.Limits) ([]store.Competitor,
 	sort.Ints(mats)
 
 	logs := map[string][]match.Event{}
+	fencedOn := map[int][]string{}
 	seed := int64(fixtureSeed)
+	fencing := func(events []match.Event) time.Duration {
+		return time.Duration(events[len(events)-1].ElapsedMS) * time.Millisecond
+	}
+	// The live mat first: how long its morning has been is how long every mat's has.
+	sort.SliceStable(mats, func(i, j int) bool { return mats[i] == liveMat && mats[j] != liveMat })
+	var morning time.Duration
 	for _, mat := range mats {
 		var queue []store.Match
-		stop := 0
-		at := progress[mat]
-		for i, p := range byMat[mat] {
-			switch {
-			case i < at.pool:
-				stop += len(p.Matches)
-			case i == at.pool:
-				stop += int(at.share * float64(len(p.Matches)))
-			}
+		for _, p := range byMat[mat] {
 			queue = append(queue, p.Matches...)
 		}
-		stop = min(stop, len(queue))
-		for _, m := range queue[:stop] {
-			seed++
-			logs[m.ID] = playMatch(rules, m.ID, seed, false)
-		}
-		// The first of the ones left on the live mat is under way: a couple of exchanges
-		// in with the clock running, which is what every display and the score keeper
-		// client are built around.
 		var fenced []string
-		for _, m := range queue[:stop] {
-			fenced = append(fenced, m.ID)
+		if mat == liveMat {
+			stop := 0
+			if len(byMat[mat]) > 0 {
+				stop = min(int(liveShare*float64(len(byMat[mat][0].Matches))), len(queue))
+			}
+			for _, m := range queue[:stop] {
+				seed++
+				logs[m.ID] = playMatch(rules, m.ID, seed, false)
+				fenced = append(fenced, m.ID)
+				morning += fencing(logs[m.ID]) + fixtureStoppage + fixtureBetween
+			}
+			// The first of the ones left is under way: a couple of exchanges in with the
+			// clock running, which is what every display and the score keeper client are
+			// built around.
+			if stop < len(queue) {
+				seed++
+				logs[queue[stop].ID] = partMatch(rules, queue[stop].ID, seed)
+				fenced = append(fenced, queue[stop].ID)
+				morning += fencing(logs[queue[stop].ID]) + 8*time.Second
+			}
+		} else {
+			// As many as fit, the last finished a minute and a half ago at the latest.
+			day := time.Duration(0)
+			for _, m := range queue {
+				seed++
+				events := playMatch(rules, m.ID, seed, false)
+				next := day + fencing(events) + fixtureStoppage
+				if next+90*time.Second > morning {
+					seed--
+					break
+				}
+				logs[m.ID] = events
+				fenced = append(fenced, m.ID)
+				day = next + fixtureBetween
+			}
 		}
-		if mat == liveMat && stop < len(queue) {
-			seed++
-			logs[queue[stop].ID] = partMatch(rules, queue[stop].ID, seed)
-			fenced = append(fenced, queue[stop].ID)
-		}
-		stampMat(logs, fenced, time.Now())
+		fencedOn[mat] = fenced
 	}
+	stampMats(logs, fencedOn, time.Now())
 
 	return competitors, drawn, logs
 }
 
-// stampMat gives a mat's fenced matches the times they would have been logged at,
-// counting back from now: the match under way a few seconds since its last exchange, and
-// before it, match by match, about three quarters of a minute of stoppages on top of the
-// fencing and a little over a minute between pairs. Real logs carry these times, and the
-// forecast learns each mat's pace from them (phase 4); a fixture without them would have
-// a day with no past.
-func stampMat(logs map[string][]match.Event, ids []string, now time.Time) {
-	cursor := now.Add(-90 * time.Second)
-	if n := len(ids); n > 0 {
-		if events := logs[ids[n-1]]; len(events) > 0 && events[len(events)-1].Type != match.TypeEnd {
-			cursor = now.Add(-8 * time.Second)
-		}
+// stampMats gives every mat's fenced matches the times they would have been logged at.
+// Real logs carry these times, and the forecast learns each mat's pace from them (phase
+// 4); a fixture without them would have a day with no past.
+//
+// Every mat started at one time (#131): the longest mat's day at the fixture's pace,
+// counted back from now. A mat that fenced a little less in the same time was a little
+// slower -- its pauses stretched -- rather than late to start: a mat that seemed to start
+// late was late on the board from the first look. Each ends where it is now: the match
+// under way a few seconds since its last exchange, or the last one finished a minute and
+// a half ago.
+func stampMats(logs map[string][]match.Event, fencedOn map[int][]string, now time.Time) {
+	const stoppage, between = fixtureStoppage, fixtureBetween
+	type lane struct {
+		ids                   []string
+		fencing, pauses, tail time.Duration
 	}
-	for i := len(ids) - 1; i >= 0; i-- {
-		events := logs[ids[i]]
-		if len(events) == 0 {
+	var lanes []lane
+	longest := time.Duration(0)
+	var mats []int
+	for mat := range fencedOn {
+		mats = append(mats, mat)
+	}
+	sort.Ints(mats)
+	for _, mat := range mats {
+		ids := fencedOn[mat]
+		l := lane{tail: 90 * time.Second}
+		for i, id := range ids {
+			events := logs[id]
+			if len(events) == 0 {
+				continue
+			}
+			l.ids = append(l.ids, id)
+			l.fencing += time.Duration(events[len(events)-1].ElapsedMS) * time.Millisecond
+			if events[len(events)-1].Type == match.TypeEnd {
+				l.pauses += stoppage
+			} else if i == len(ids)-1 {
+				l.tail = 8 * time.Second
+			}
+		}
+		if len(l.ids) == 0 {
 			continue
 		}
-		last := time.Duration(events[len(events)-1].ElapsedMS) * time.Millisecond
-		ended := events[len(events)-1].Type == match.TypeEnd
-		start := cursor.Add(-last)
-		end := cursor
-		if ended {
-			start = cursor.Add(-last - 45*time.Second)
+		l.pauses += between * time.Duration(len(l.ids)-1)
+		lanes = append(lanes, l)
+		longest = max(longest, l.fencing+l.pauses+l.tail)
+	}
+	start := now.Add(-longest)
+	for _, l := range lanes {
+		// How much longer than the busiest mat's this mat's pauses ran.
+		stretch := 1.0
+		if l.pauses > 0 {
+			stretch = float64(longest-l.fencing-l.tail) / float64(l.pauses)
 		}
-		for j := range events {
-			at := start.Add(time.Duration(events[j].ElapsedMS) * time.Millisecond)
-			if events[j].Type == match.TypeEnd {
-				at = end
+		pause := func(d time.Duration) time.Duration { return time.Duration(float64(d) * stretch) }
+		cursor := start
+		for _, id := range l.ids {
+			events := logs[id]
+			last := time.Duration(events[len(events)-1].ElapsedMS) * time.Millisecond
+			end := cursor.Add(last + pause(stoppage))
+			for j := range events {
+				at := cursor.Add(time.Duration(events[j].ElapsedMS) * time.Millisecond)
+				if events[j].Type == match.TypeEnd {
+					at = end
+				}
+				events[j].At = at.UTC().Format("2006-01-02T15:04:05.000Z07:00")
 			}
-			events[j].At = at.UTC().Format("2006-01-02T15:04:05.000Z07:00")
+			cursor = end.Add(pause(between))
 		}
-		cursor = start.Add(-70 * time.Second)
 	}
 }
 
