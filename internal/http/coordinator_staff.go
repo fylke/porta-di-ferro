@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/fylke/porta-di-ferro/internal/signup"
 	"github.com/fylke/porta-di-ferro/internal/people"
+	"github.com/fylke/porta-di-ferro/internal/signup"
 	"github.com/fylke/porta-di-ferro/internal/staffing"
 	"github.com/fylke/porta-di-ferro/internal/store"
 )
