@@ -55,7 +55,7 @@
   <!-- The first look at the event. -->
 {:else if eventPage && route('/')}
   <EventLanding />
-{:else if !slug && route('/admin/plan')}
+{:else if !slug && route('/plan')}
   <!-- What is set once, before the day, for the event (#142). -->
   <PlanEvent />
 {:else if eventPage && route('/admin')}

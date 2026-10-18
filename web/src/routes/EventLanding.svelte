@@ -94,7 +94,7 @@
         {/if}
         {#if organizer}
           <!-- The organizer's PC only (lib/organizer.ts): the day is set in Plan the event. -->
-          <a class="edit" href="/admin/plan?step=1">{t('Edit the day')}</a>
+          <a class="edit" href="/plan?step=1">{t('Edit the day')}</a>
         {/if}
       </section>
 

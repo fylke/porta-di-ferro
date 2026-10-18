@@ -15,7 +15,7 @@
    * It used to be half the admin page, between the mats and the screens an organizer
    * watches all day; it is here now, a step at a time, and the admin page links to it.
    *
-   * The steps are addresses (/admin/plan?step=2), so Back works and a step can be opened
+   * The steps are addresses (/plan?step=2), so Back works and a step can be opened
    * straight from wherever it is wanted -- the landing page's Edit opens the first.
    */
   const steps = [
@@ -34,7 +34,7 @@
   const step = $derived(Math.min(steps.length, Math.max(1, Number(query().get('step')) || 1)));
 
   function go(n: number) {
-    navigate(n > steps.length ? '/admin' : `/admin/plan?step=${n}`);
+    navigate(n > steps.length ? '/admin' : `/plan?step=${n}`);
     window.scrollTo(0, 0);
   }
 </script>
@@ -54,7 +54,7 @@
   <ol class="steps">
     {#each steps as s, i (i)}
       <li class:current={step === i + 1}>
-        <a href="/admin/plan?step={i + 1}" aria-current={step === i + 1 ? 'step' : undefined}>
+        <a href="/plan?step={i + 1}" aria-current={step === i + 1 ? 'step' : undefined}>
           <span class="n">{i + 1}</span>{s.title()}
         </a>
       </li>

@@ -91,7 +91,7 @@
       {#if snapshot?.instance.name}<span class="discipline">{snapshot.instance.name}</span>{/if}
     </h1>
     <nav>
-      {#if multi}<a href="/admin">&larr; {t('The event')}</a>{:else}<a href="/admin/plan">{t('Plan the event')}</a>{/if}
+      {#if multi}<a href="/admin">&larr; {t('The event')}</a>{:else}<a href="/plan">{t('Plan the event')}</a>{/if}
       <a href={dhref('/')}>{t('Landing page')}</a>
       <a href="/info">{t('Info sheet')}</a>
       <a href="/display/mats" target="_blank" rel="noreferrer">{t('Displays')}</a>
