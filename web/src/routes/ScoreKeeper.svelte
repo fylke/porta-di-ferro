@@ -25,8 +25,10 @@
     adjustLength,
     adjustUntil,
     backToBack,
+    endedNow,
     formatRest,
     remaining,
+    restPhase,
   } from '../lib/rest';
   import LangToggle from './LangToggle.svelte';
 
@@ -376,8 +378,11 @@
   });
 
   const restLeft = $derived(restUntil === null ? 0 : remaining(restUntil, clock.now));
-  const restRunning = $derived(untouched && restUntil !== null && restLeft > 0);
-  const restOver = $derived(untouched && restUntil !== null && restLeft === 0);
+  const phase = $derived(restUntil === null ? null : restPhase(restUntil, clock.now));
+  const restRunning = $derived(untouched && phase === 'running');
+  const restOver = $derived(untouched && phase === 'over');
+  // Offered only while no rest has been taken: once one has ended, early or on time, the
+  // widget is gone for this match (#147).
   const offerRest = $derived(untouched && resting.length > 0 && restUntil === null);
   const restNames = $derived.by(() => {
     const who = resting.map((id) => (id === view?.red ? names.red : names.blue));
@@ -386,6 +391,9 @@
 
   function startRest() {
     keepRest(Date.now() + restLength);
+  }
+  function endRest() {
+    keepRest(endedNow(Date.now()));
   }
   function adjustRest(delta: number) {
     if (restRunning && restUntil !== null) keepRest(adjustUntil(restUntil, delta, Date.now()));
@@ -506,7 +514,7 @@
                 <span class="rest-head">{t('REST')} &middot; {restNames}</span>
                 <div class="rest-steps">
                   <button aria-label={t('Thirty seconds shorter')} onclick={() => adjustRest(-REST_STEP_MS)}>&minus;30 s</button>
-                  <button class="rest-end" onclick={() => keepRest(null)}>{t('END REST')}</button>
+                  <button class="rest-end" onclick={endRest}>{t('END REST')}</button>
                   <button aria-label={t('Thirty seconds longer')} onclick={() => adjustRest(REST_STEP_MS)}>+30 s</button>
                 </div>
               </div>

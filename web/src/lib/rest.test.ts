@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  REST_OVER_MS,
+  endedNow,
+  restPhase,
   REST_DEFAULT_MS,
   REST_STEP_MS,
   adjustLength,
@@ -45,5 +48,18 @@ describe('the rest between back-to-back matches', () => {
     expect(formatRest(89_001)).toBe('1:30');
     expect(formatRest(400)).toBe('0:01');
     expect(formatRest(0)).toBe('0:00');
+  });
+
+  it('says it is over for a few seconds, then is gone for good (#147)', () => {
+    const until = 1_000_000;
+    expect(restPhase(until, until - 1)).toBe('running');
+    expect(restPhase(until, until)).toBe('over');
+    expect(restPhase(until, until + REST_OVER_MS - 1)).toBe('over');
+    expect(restPhase(until, until + REST_OVER_MS)).toBe('done');
+  });
+
+  it('is done at once when the head referee ends it', () => {
+    const now = 1_000_000;
+    expect(restPhase(endedNow(now), now)).toBe('done');
   });
 });
