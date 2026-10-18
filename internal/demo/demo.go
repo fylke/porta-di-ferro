@@ -29,10 +29,9 @@ import (
 	"strings"
 	"time"
 
-	qrcode "github.com/skip2/go-qrcode"
-
 	httpapi "github.com/fylke/porta-di-ferro/internal/http"
 	"github.com/fylke/porta-di-ferro/internal/match"
+	"github.com/fylke/porta-di-ferro/internal/qr"
 	"github.com/fylke/porta-di-ferro/internal/signup"
 	"github.com/fylke/porta-di-ferro/internal/staffing"
 	"github.com/fylke/porta-di-ferro/internal/store"
@@ -306,7 +305,7 @@ func (d *Demo) Request(method, path string, body []byte) Response {
 		return d.infoPDF(query)
 
 	case method == "GET" && path == "/api/qr.png":
-		return qr(query)
+		return qrImage(query)
 
 	// Offline signup (issue #91). The demo can do all of it: the files never touch a
 	// network in the real thing either, so there is nothing here it has to pretend about.
@@ -472,11 +471,11 @@ func (d *Demo) importSignups(files []signup.File, mine string) (added, addedStaf
 	return len(d.competitors) - before, len(d.tournament.Staff) - staffBefore
 }
 
-// qr renders a code for whatever it is given -- the wifi payload and the landing address
+// qrImage renders a code for whatever it is given -- the wifi payload and the landing address
 // on the info sheet. The server has an endpoint for this and the client asks for it with
 // an <img>, so without it here the demo's info sheet shows two broken images, which is
 // the first thing a visitor to the demo would see of a page that is mostly two codes.
-func qr(query string) Response {
+func qrImage(query string) Response {
 	target := ""
 	for _, kv := range strings.Split(query, "&") {
 		if after, found := strings.CutPrefix(kv, "url="); found {
@@ -488,7 +487,7 @@ func qr(query string) Response {
 	if target == "" {
 		return fail(400, fmt.Errorf("a code needs something to encode"))
 	}
-	png, err := qrcode.Encode(target, qrcode.Medium, 512)
+	png, err := qr.PNG(target, 512)
 	if err != nil {
 		return fail(500, err)
 	}

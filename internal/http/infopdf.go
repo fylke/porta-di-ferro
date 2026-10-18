@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/go-pdf/fpdf"
-	qrcode "github.com/skip2/go-qrcode"
 
+	"github.com/fylke/porta-di-ferro/internal/qr"
 	"github.com/fylke/porta-di-ferro/internal/store"
 )
 
@@ -209,7 +209,7 @@ func drawWayIn(pdf *fpdf.Fpdf, latin func(string) string, tr func(string) string
 // failing the sheet: the address and the password are printed beside it in text, so a
 // sheet with one code missing is still a usable sheet.
 func drawQR(pdf *fpdf.Fpdf, payload string, x, y, size float64, name string) {
-	png, err := qrcode.Encode(payload, qrcode.Medium, 512)
+	png, err := qr.PNG(payload, 512)
 	if err != nil {
 		return
 	}

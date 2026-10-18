@@ -173,7 +173,7 @@ func (e *Event) Request(method, path string, body []byte) Response {
 		// There is no LAN in a browser tab, which is the truth the admin pages show.
 		return ok([]any{})
 	case method == "GET" && bare == "/api/qr.png":
-		return qr(query)
+		return qrImage(query)
 
 	case method == "GET" && bare == "/api/disciplines":
 		return ok(e.View().Disciplines)
