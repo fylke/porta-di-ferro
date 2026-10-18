@@ -65,6 +65,12 @@
   let ready = $state<SignupReady | EventSignupReady | null>(null);
   const shares = $derived(ready && 'disciplines' in ready ? ready.disciplines : []);
   const unclaimed = $derived(ready && 'unclaimed' in ready ? ready.unclaimed : []);
+  // Which row each discipline takes is worth showing only when it is not the obvious one:
+  // every discipline takes the row named like it, and every row is taken (#142). Otherwise
+  // it folds away under one line saying so.
+  const sharesNeedLooking = $derived(
+    unclaimed.length > 0 || shares.some((d) => !!d.error || d.chosen || !d.tournament),
+  );
   let saving = $state(false);
   let saved = $state(false);
   let error = $state('');
@@ -300,10 +306,14 @@
   </p>
 
   {#if scope === 'event'}
-  <div class="shares">
-    <h3>{t('Who takes what')}</h3>
+  <details class="shares" open={sharesNeedLooking}>
+    <summary>
+      {sharesNeedLooking
+        ? t('Which discipline takes the signups for each row of the programme')
+        : t('Every discipline takes the signups for the programme row named like it.')}
+    </summary>
     <p class="dim small">
-      {t('Each discipline takes the responses for its row in the programme: the one named like it, unless you pick another.')}
+      {t('A participant signs up for rows of the programme. Each discipline takes the responses for the row named like it, unless you pick another here.')}
     </p>
     <ul>
       {#each shares as d (d.discipline)}
@@ -333,7 +343,7 @@
     {#each unclaimed as row (row.id)}
       <p class="warn">{t('No discipline takes {row}: whoever enters it would be imported nowhere.', { row: row.label })}</p>
     {/each}
-  </div>
+  </details>
   <div class="fields">
     <label class="check">
       <input type="checkbox" bind:checked={contact} onchange={touch} />
@@ -573,6 +583,11 @@
     height: 1.1rem;
   }
 
+  .shares summary {
+    cursor: pointer;
+    font-weight: 700;
+    margin-bottom: 0.4rem;
+  }
   .shares ul {
     list-style: none;
     margin: 0 0 0.6rem;

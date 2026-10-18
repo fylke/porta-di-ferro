@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { hall } from '../lib/event.svelte';
+  import { navigate, query } from '../router.svelte';
   import { MatsLive } from '../lib/mats.svelte';
   import { LanAddress, describeNetwork } from '../lib/lan.svelte';
   import { hallURL, qrSrc } from '../lib/qr';
@@ -17,13 +18,15 @@
   /**
    * The event's admin view, at /admin once the event runs more than one discipline
    * (docs/proposals/one-event-many-disciplines.md §6): what is about the event rather than
-   * any one discipline. The disciplines -- add one, rename one, take one out -- and the day
-   * around the fencing, typed once for the whole hall. Each discipline's competitors, pools
-   * and matches are on its own admin page, one tap away.
+   * any one discipline. Each discipline's competitors, pools and matches are on its own
+   * admin page, one tap away; what is set once before the day is in Plan the event.
    *
-   * The join panel hands out the one address for everyone: the landing page, which leads
-   * to every discipline. The score keepers' pages are per discipline until mats are shared
-   * across them (phase 2), so each has its own line.
+   * Two dashboards under one header (#142), because what an organizer needs before the
+   * doors open is not what they watch all day: before, the signup, the people it makes and
+   * the staff; on the day, the mats and the screens. The page opens on the one that fits --
+   * on the day once a match anywhere has been fenced -- and the other is a tab away, in the
+   * address (?view=before), for the late entry or the volunteer who did not turn up. The
+   * join panels, the hall's address and the score keepers', are on both.
    */
   const lan = new LanAddress();
   // The hall's mats, for a link to each one's display (#140).
@@ -43,6 +46,14 @@
   });
 
   const view = $derived(hall.view);
+  const started = $derived(
+    (view?.disciplines ?? []).some((d) => d.matchesDone > 0 || d.stage === 'eliminations' || d.stage === 'done'),
+  );
+  const chosen = $derived(query().get('view'));
+  const dashboard = $derived(chosen === 'before' || chosen === 'day' ? chosen : started ? 'day' : 'before');
+  function show(which: 'before' | 'day') {
+    navigate(`/admin?view=${which}`, true);
+  }
   const clientURL = $derived(lan.clientURL);
   const landingURL = $derived(clientURL ? `${clientURL}/` : '');
   // The score keepers' page, for the code a tablet scans (#138).
@@ -57,7 +68,7 @@
       {#if view?.name}<span class="event">{view.name}</span>{/if}
     </h1>
     <nav>
-      <a href="/admin/plan">{t('Plan the event')}</a>
+      <a href="/plan">{t('Plan the event')}</a>
       <a href="/">{t('Landing page')}</a>
       <a href="/info">{t('Info sheet')}</a>
       <LangToggle />
@@ -134,20 +145,31 @@
       {/if}
     </section>
 
-    <MatBoard canSetCount />
+    <div class="tabs" role="tablist" aria-label={t('Dashboard')}>
+      <button role="tab" aria-selected={dashboard === 'before'} class:on={dashboard === 'before'} onclick={() => show('before')}>
+        {t('Before the day')}
+      </button>
+      <button role="tab" aria-selected={dashboard === 'day'} class:on={dashboard === 'day'} onclick={() => show('day')}>
+        {t('On the day')}
+      </button>
+    </div>
 
-    <Screens />
+    {#if dashboard === 'day'}
+      <MatBoard canSetCount />
 
-    <!-- One signup for the whole event, and the people it and the desks make (phase 3). -->
-    <Signup scope="event" info={view.info} onchange={() => void hall.refresh()} />
+      <Screens />
+    {:else}
+      <!-- One signup for the whole event, and the people it and the desks make (phase 3). -->
+      <Signup scope="event" info={view.info} onchange={() => void hall.refresh()} />
 
-    <People />
+      <!-- Only when two entries may be one person: the desks' doing, not the signup's. -->
+      <People whenNeeded />
 
-    <!-- Who works the mats, at event level (phase 5). -->
-    <Staff />
+      <!-- Who works the mats, at event level (phase 5). -->
+      <div id="staff"><Staff /></div>
 
-
-    <DeleteEvent name={view.name} dir={view.dir} />
+      <DeleteEvent name={view.name} dir={view.dir} />
+    {/if}
 
     <p class="dir">{t('The event’s files are in')} <span class="mono">{view.dir}</span></p>
   {/if}
@@ -283,6 +305,25 @@
     background: #fff;
     padding: 0.5rem;
     border-radius: var(--radius);
+  }
+  .tabs {
+    display: flex;
+    gap: 0.4rem;
+    margin: 0.4rem 0 1rem;
+    border-bottom: 1px solid var(--line);
+  }
+  .tabs button {
+    padding: 0.55rem 1rem;
+    border: none;
+    border-bottom: 3px solid transparent;
+    border-radius: 0;
+    background: none;
+    color: var(--ink-dim);
+    font-weight: 700;
+  }
+  .tabs button.on {
+    color: var(--ink);
+    border-bottom-color: var(--amber-bright);
   }
   .loading,
   .dir {

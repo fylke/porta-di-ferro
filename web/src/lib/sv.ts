@@ -683,9 +683,10 @@ export const sv: Record<string, string> = {
   // The event's signup (phase 3).
   'This event takes its signups once, for every discipline:': 'Tävlingen tar emot anmälningar en gång, för alla discipliner:',
   'on the event’s admin page': 'på tävlingens adminsida',
-  'Who takes what': 'Vem tar vad',
-  'Each discipline takes the responses for its row in the programme: the one named like it, unless you pick another.':
-    'Varje disciplin tar svaren för sin rad i programmet: den som heter som disciplinen, om du inte väljer en annan.',
+  'Which discipline takes the signups for each row of the programme': 'Vilken disciplin som tar anmälningarna till varje rad i programmet',
+  'Every discipline takes the signups for the programme row named like it.': 'Varje disciplin tar anmälningarna till programraden med samma namn.',
+  'A participant signs up for rows of the programme. Each discipline takes the responses for the row named like it, unless you pick another here.':
+    'Deltagare anmäler sig till rader i programmet. Varje disciplin tar svaren till raden med samma namn, om du inte väljer en annan här.',
   'Programme row for {discipline}': 'Programrad för {discipline}',
   '{row}, by its name': '{row}, efter namnet',
   nothing: 'ingenting',
@@ -767,4 +768,8 @@ export const sv: Record<string, string> = {
   'Or another': 'Eller en annan',
   'Each discipline gets its own competitors, pools and admin page, at this same address.':
     'Varje disciplin får egna deltagare, pooler och arrangörssida, på samma adress.',
+  Dashboard: 'Översikt',
+  'Before the day': 'Före dagen',
+  'On the day': 'Under dagen',
+  'Entries that may be one person': 'Anmälningar som kan vara samma person',
 };
