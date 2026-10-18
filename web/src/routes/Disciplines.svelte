@@ -18,7 +18,17 @@
    * round at every event and two spellings of the women's longsword is two disciplines
    * where there should be one (issue #80).
    */
-  let { onchange }: { onchange?: () => void } = $props();
+  let {
+    onchange,
+    bare = false,
+    links = false,
+  }: {
+    onchange?: () => void;
+    /** Without its own box and introduction: the list inside another panel (#142). */
+    bare?: boolean;
+    /** With each discipline's landing page beside its admin page. */
+    links?: boolean;
+  } = $props();
 
   let presets = $state<string[]>([]);
   let name = $state('');
@@ -27,6 +37,7 @@
   let editing = $state<string | null>(null);
   let editingName = $state('');
   let retiring = $state<string | null>(null);
+  let adding = $state(false);
 
   onMount(() => {
     void hall.refresh();
@@ -71,7 +82,10 @@
     // still says so: a preset's button leaves it alone, and so does a save that comes
     // back after the organizer has typed something else.
     const typed = discipline === undefined ? name : null;
-    if ((await act(() => api.addDiscipline(wanted))) && typed !== null && name === typed) name = '';
+    if (await act(() => api.addDiscipline(wanted))) {
+      if (typed !== null && name === typed) name = '';
+      adding = false;
+    }
   }
 
   function startEditing(d: DisciplineSummary) {
@@ -93,10 +107,17 @@
   }
 </script>
 
-<section>
-  <h2>{t('Disciplines')}</h2>
-  <p class="dim">{t('Every discipline of the event runs here, at this one address, each with its own data folder. Score keepers, screens and spectators reach all of them from the same place.')}</p>
+{#if bare}
+  {@render body()}
+{:else}
+  <section>
+    <h2>{t('Disciplines')}</h2>
+    <p class="dim">{t('Every discipline of the event runs here, at this one address, each with its own data folder. Score keepers, screens and spectators reach all of them from the same place.')}</p>
+    {@render body()}
+  </section>
+{/if}
 
+{#snippet body()}
   <ul>
     {#each disciplines as d (d.slug)}
       <li class:failed={!!d.error}>
@@ -119,25 +140,29 @@
           {:else}
             <span class="meta">{stageLabel(d)}</span>
           {/if}
-          {#if disciplines.length > 1}
-            <a href="/d/{d.slug}/admin">{t('Admin')}</a>
-          {/if}
-          {#if !d.error}
-            <button class="edit" onclick={() => startEditing(d)}>{t('Rename')}</button>
-          {:else}
-            <button onclick={() => void act(() => api.reloadDiscipline(d.slug))}>{t('Try again')}</button>
-          {/if}
-          {#if disciplines.length > 1}
-            {#if retiring === d.slug}
-              <span class="confirm">
-                {t('Take {name} out of the event? Its folder is kept.', { name: d.name || d.slug })}
-                <button class="danger" disabled={busy} onclick={() => void retire(d.slug)}>{t('Take it out')}</button>
-                <button onclick={() => (retiring = null)}>{t('Cancel')}</button>
-              </span>
-            {:else}
-              <button onclick={() => (retiring = d.slug)}>{t('Take out')}</button>
+          <!-- Links and buttons alike, in one style: the row's actions (#142). -->
+          <span class="acts">
+            {#if disciplines.length > 1}
+              <a class="act" href="/d/{d.slug}/admin">{t('Admin')}</a>
+              {#if links && !d.error}<a class="act" href="/d/{d.slug}/">{t('Landing page')}</a>{/if}
             {/if}
-          {/if}
+            {#if !d.error}
+              <button class="act" onclick={() => startEditing(d)}>{t('Rename')}</button>
+            {:else}
+              <button class="act" onclick={() => void act(() => api.reloadDiscipline(d.slug))}>{t('Try again')}</button>
+            {/if}
+            {#if disciplines.length > 1}
+              {#if retiring === d.slug}
+                <span class="confirm">
+                  {t('Take {name} out of the event? Its folder is kept.', { name: d.name || d.slug })}
+                  <button class="act danger" disabled={busy} onclick={() => void retire(d.slug)}>{t('Take it out')}</button>
+                  <button class="act" onclick={() => (retiring = null)}>{t('Cancel')}</button>
+                </span>
+              {:else}
+                <button class="act" onclick={() => (retiring = d.slug)}>{t('Take out')}</button>
+              {/if}
+            {/if}
+          </span>
         {/if}
         {#if d.error}<p class="err small">{d.error}</p>{/if}
       </li>
@@ -149,25 +174,40 @@
     {#each presets as p (p)}<option value={p}></option>{/each}
   </datalist>
 
-  {#if available.length > 0}
-    <p class="presets">
-      <span class="label">{t('Add one of the usual')}</span>
-      {#each available as p (p)}
-        <button type="button" disabled={busy} onclick={() => void add(p)}>{p}</button>
-      {/each}
-    </p>
-  {/if}
-  <form
-    onsubmit={(e) => {
-      e.preventDefault();
-      void add();
-    }}
-  >
-    <input list="discipline-names" placeholder={t('Rapier and dagger, Sword and buckler, …')} bind:value={name} required />
-    <button type="submit" disabled={busy || !name.trim()}>{t('Add a discipline')}</button>
-  </form>
-  {#if error}<p class="err">{error}</p>{/if}
-</section>
+  <!-- Adding one is rare -- once per discipline per event -- so it is a button that opens
+       the choice rather than a form always on the page (#142). -->
+  <button class="act add" disabled={busy} onclick={() => (adding = true)}>{t('Add a discipline…')}</button>
+  {#if error && !adding}<p class="err">{error}</p>{/if}
+{/snippet}
+
+{#if adding}
+  <div class="scrim" role="dialog" aria-modal="true" aria-label={t('Add a discipline')}>
+    <div class="card">
+      <h3>{t('Add a discipline')}</h3>
+      {#if available.length > 0}
+        <p class="label">{t('One of the usual')}</p>
+        <div class="presets">
+          {#each available as p (p)}
+            <button type="button" disabled={busy} onclick={() => void add(p)}>{p}</button>
+          {/each}
+        </div>
+        <p class="label">{t('Or another')}</p>
+      {/if}
+      <form
+        onsubmit={(e) => {
+          e.preventDefault();
+          void add();
+        }}
+      >
+        <input list="discipline-names" placeholder={t('Rapier and dagger, Sword and buckler, …')} bind:value={name} required />
+        <button type="submit" class="go" disabled={busy || !name.trim()}>{t('Add')}</button>
+      </form>
+      {#if error}<p class="err">{error}</p>{/if}
+      <p class="dim">{t('Each discipline gets its own competitors, pools and admin page, at this same address.')}</p>
+      <button type="button" class="close" onclick={() => ((adding = false), (error = ''))}>{t('Cancel')}</button>
+    </div>
+  </div>
+{/if}
 
 <style>
   section {
@@ -221,12 +261,60 @@
     font-size: 0.8rem;
     overflow-wrap: anywhere;
   }
-  button {
+  /* One style for every action on a row, link or button. */
+  .act {
+    display: inline-block;
     padding: 0.3rem 0.6rem;
     font-size: 0.82rem;
+    line-height: 1.2;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--panel-2);
+    color: var(--ink);
+    text-decoration: none;
   }
-  button.danger {
+  .act.danger {
     border-color: var(--red);
+  }
+  .acts {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .add {
+    margin-top: 0.1rem;
+  }
+  .scrim {
+    position: fixed;
+    inset: 0;
+    background: rgba(6, 8, 12, 0.86);
+    display: grid;
+    place-items: center;
+    padding: 1rem;
+    z-index: 60;
+  }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 1.4rem;
+    width: min(32rem, 100%);
+    display: grid;
+    gap: 0.6rem;
+  }
+  .card h3 {
+    margin: 0;
+    font-size: 1.2rem;
+  }
+  .card .presets button {
+    padding: 0.45rem 0.7rem;
+  }
+  .go {
+    font-weight: 700;
+  }
+  .close {
+    justify-self: end;
   }
   .confirm {
     display: inline-flex;
@@ -251,9 +339,9 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 0.4rem;
-    margin: 0 0 0.6rem;
   }
   .label {
+    margin: 0;
     color: var(--ink-dim);
     font-size: 0.85rem;
   }

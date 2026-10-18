@@ -101,15 +101,9 @@
         {/if}
 
         <h3>{t('Each discipline')}</h3>
-        <ul class="perdiscipline">
-          {#each view.disciplines.filter((d) => !d.error) as d (d.slug)}
-            <li>
-              <span class="dname">{d.name || t('Unnamed')}</span>
-              <a href="/d/{d.slug}/admin">{t('Admin')}</a>
-              <a class="quiet" href="/d/{d.slug}/">{t('Landing page')}</a>
-            </li>
-          {/each}
-        </ul>
+        <!-- The one list of the disciplines, with what can be done to each (#142): it was
+             here and again in a box of its own further down. -->
+        <Disciplines bare links />
       </div>
       {#if landingURL}
         <img class="qr" alt={t('QR code for {url}', { url: landingURL })} src={qrSrc(landingURL)} />
@@ -139,8 +133,6 @@
         <img class="qr" alt={t('QR code for {url}', { url: scoreURL })} src={qrSrc(scoreURL)} />
       {/if}
     </section>
-
-    <Disciplines />
 
     <MatBoard canSetCount />
 
@@ -280,27 +272,6 @@
     gap: 0.4rem 1rem;
     margin: 0;
     font-size: 0.9rem;
-    overflow-wrap: anywhere;
-  }
-  .perdiscipline {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: grid;
-    gap: 0.3rem;
-    font-size: 0.9rem;
-  }
-  .perdiscipline li {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.3rem 0.8rem;
-    align-items: baseline;
-  }
-  .dname {
-    font-weight: 700;
-    min-width: 12rem;
-  }
-  .perdiscipline a {
     overflow-wrap: anywhere;
   }
   .quiet {

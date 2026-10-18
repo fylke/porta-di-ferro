@@ -182,7 +182,6 @@ export const sv: Record<string, string> = {
     'Alla tävlingens discipliner körs här, på den här enda adressen, var och en med egen datamapp. Sekretariat, skärmar och publik når dem alla från samma ställe.',
   Unnamed: 'Namnlös',
   'Rapier and dagger, Sword and buckler, …': 'Rapir och dolk, Svärd och buckler, …',
-  'Add one of the usual': 'Lägg till en av de vanliga',
   Rename: 'Byt namn',
   Save: 'Spara',
   'Name of this discipline': 'Namn på disciplinen',
@@ -763,4 +762,9 @@ export const sv: Record<string, string> = {
   'Next: {step}': 'Nästa: {step}',
   Back: 'Tillbaka',
   'Edit the day': 'Redigera dagen',
+  'Add a discipline…': 'Lägg till en disciplin…',
+  'One of the usual': 'En av de vanliga',
+  'Or another': 'Eller en annan',
+  'Each discipline gets its own competitors, pools and admin page, at this same address.':
+    'Varje disciplin får egna deltagare, pooler och arrangörssida, på samma adress.',
 };
