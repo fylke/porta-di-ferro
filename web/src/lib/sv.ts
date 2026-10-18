@@ -65,6 +65,7 @@ export const sv: Record<string, string> = {
   'Any device on the venue wifi can reach them.': 'Alla enheter på hallens wifi når dem.',
   'Score keeper': 'Sekretariat',
   'Mat {n}': 'Matta {n}',
+  'Display mat {n}': 'Skärm för matta {n}',
   'mat {n}': 'matta {n}',
   Mat: 'Matta',
   Mats: 'Mattor',

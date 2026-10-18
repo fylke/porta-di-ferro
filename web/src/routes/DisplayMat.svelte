@@ -46,10 +46,9 @@
         <span class="label">
           {t('Next on mat {n}', { n: mat })}{#if next.disciplineName !== current?.disciplineName} &middot; {next.disciplineName}{/if}
         </span>
-        <span class="up">
-          <span style="color: var(--bright-{next.match.options.red})">{next.red}</span>
-          {t('v')}
-          <span style="color: var(--bright-{next.match.options.blue})">{next.blue}</span>
+        <span class="up pair">
+          <span class="who" style="color: var(--bright-{next.match.options.red})">{next.red}</span>
+          <span class="who"><span class="v">{t('v')}</span> <span style="color: var(--bright-{next.match.options.blue})">{next.blue}</span></span>
         </span>
       {:else}
         <span class="label">{t('No more matches on mat {n}', { n: mat })}</span>
@@ -63,11 +62,10 @@
       {:else}
         <ol>
           {#each list as s (`${s.discipline}/${s.match.id}`)}
-            <li>
+            <li class="pair">
               {#if s.disciplineName !== current?.disciplineName}<span class="disc">{s.disciplineName}</span>{/if}
-              <span style="color: var(--bright-{s.match.options.red})">{s.red}</span>
-              <span class="v">{t('v')}</span>
-              <span style="color: var(--bright-{s.match.options.blue})">{s.blue}</span>
+              <span class="who" style="color: var(--bright-{s.match.options.red})">{s.red}</span>
+              <span class="who"><span class="v">{t('v')}</span> <span style="color: var(--bright-{s.match.options.blue})">{s.blue}</span></span>
             </li>
           {/each}
         </ol>
@@ -123,15 +121,28 @@
     font-size: clamp(0.95rem, min(3vh, 2.2vw), 1.8rem);
     font-weight: 700;
     line-height: 1.25;
-    overflow-wrap: anywhere;
+    justify-content: start;
   }
-  aside .v {
+  /* Two competitors on one line if they fit, and one each if they do not -- never one
+     and a half (#140): each name, with the "v" going with the second, wraps as a whole. */
+  .pair {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    column-gap: 0.3em;
+  }
+  .who {
+    white-space: nowrap;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .v {
     color: var(--ink-dim);
     font-weight: 400;
-    margin: 0 0.25rem;
   }
   aside .disc {
-    display: block;
+    flex-basis: 100%;
     font-size: 0.6em;
     letter-spacing: 0.1em;
     text-transform: uppercase;

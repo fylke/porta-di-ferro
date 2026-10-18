@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { api } from '../api';
   import { hall } from '../lib/event.svelte';
+  import { MatsLive } from '../lib/mats.svelte';
   import { LanAddress, describeNetwork } from '../lib/lan.svelte';
   import { hallURL, qrSrc } from '../lib/qr';
   import Disciplines from './Disciplines.svelte';
@@ -27,13 +28,17 @@
    * across them (phase 2), so each has its own line.
    */
   const lan = new LanAddress();
+  // The hall's mats, for a link to each one's display (#140).
+  const mats = new MatsLive();
   const demo = import.meta.env.VITE_DEMO === 'true';
 
   onMount(() => {
     void hall.refresh();
     hall.follow();
     lan.start();
+    void mats.start();
     return () => {
+      mats.stop();
       lan.stop();
       hall.unfollow();
     };
@@ -124,6 +129,11 @@
           <a href="/score">{t('Score keeper')}</a>
           <a href="/print/mats" target="_blank" rel="noreferrer">{t('Print a code for each mat')}</a>
           <a class="quiet" href="/display/mats" target="_blank" rel="noreferrer">{t('Displays')}</a>
+        </p>
+        <p class="links">
+          {#each mats.view?.mats ?? [] as m (m.mat)}
+            <a href="/display/mat/{m.mat}">{t('Display mat {n}', { n: m.mat })}</a>
+          {/each}
         </p>
       </div>
       {#if scoreURL}

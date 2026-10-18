@@ -152,7 +152,7 @@
           <a href="/score">{t('Score keeper')}</a>
           <a href="/print/mats" target="_blank" rel="noreferrer">{t('Print a code for each mat')}</a>
           {#each { length: snapshot.eventMats ?? snapshot.tournament.mats } as _, i (i)}
-            <a href="/display/mat/{i + 1}">{t('Mat {n}', { n: i + 1 })}</a>
+            <a href="/display/mat/{i + 1}">{t('Display mat {n}', { n: i + 1 })}</a>
           {/each}
         </p>
       </div>
