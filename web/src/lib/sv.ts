@@ -751,4 +751,16 @@ export const sv: Record<string, string> = {
   'Every screen and tablet in the hall leaves it at once, and what they kept of it is forgotten. The files are kept in the deleted folder, from where they can be moved back by hand.':
     'Alla skärmar och surfplattor i hallen lämnar den på en gång, och det de sparat av den glöms. Filerna sparas i mappen deleted, varifrån de kan flyttas tillbaka för hand.',
   'Yes, delete the event': 'Ja, radera tävlingen',
+  // --- plan the event (#142) ---------------------------------------------------------
+  'Plan the event': 'Planera tävlingen',
+  'Back to the admin page': 'Tillbaka till arrangörssidan',
+  'The welcome, the programme and the venue wifi: what the landing page and the info sheet put around the fencing.':
+    'Välkomsttexten, programmet och lokalens wifi: det som startsidan och infobladet sätter runt fäktningen.',
+  'What is fenced. Each discipline has its own competitors, pools and admin page.':
+    'Det som fäktas. Varje disciplin har egna deltagare, pooler och arrangörssida.',
+  'How long things take, how many mats there are, and in what order the day runs.':
+    'Hur lång tid saker tar, hur många mattor det finns och i vilken ordning dagen går.',
+  'Next: {step}': 'Nästa: {step}',
+  Back: 'Tillbaka',
+  'Edit the day': 'Redigera dagen',
 };

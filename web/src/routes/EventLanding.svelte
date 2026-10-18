@@ -6,6 +6,7 @@
   import LangToggle from './LangToggle.svelte';
   import Schedule from './Schedule.svelte';
   import FencingProgramme from './FencingProgramme.svelte';
+  import { onOrganizerPC } from '../lib/organizer';
 
   /**
    * What everyone in the hall gets when the event runs several disciplines (#102).
@@ -28,6 +29,7 @@
 
   const view = $derived(hall.view);
   const info = $derived(view?.info ?? {});
+  const organizer = onOrganizerPC();
 
   let query = $state('');
   /** The whole list rather than a search: for browsing, not only finding (#135). */
@@ -89,6 +91,10 @@
           <p class="intro">{info.welcome}</p>
         {:else}
           <p class="intro dim">{t('Welcome. The schedule and the results are on this page, and they update themselves.')}</p>
+        {/if}
+        {#if organizer}
+          <!-- The organizer's PC only (lib/organizer.ts): the day is set in Plan the event. -->
+          <a class="edit" href="/admin/plan?step=1">{t('Edit the day')}</a>
         {/if}
       </section>
 
@@ -236,6 +242,11 @@
     color: var(--amber-bright);
     font-size: 0.85rem;
     margin: 0 0 0.4rem;
+  }
+  .edit {
+    display: inline-block;
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
   }
   .intro {
     margin: 0;

@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { api } from '../api';
   import { hall } from '../lib/event.svelte';
   import { MatsLive } from '../lib/mats.svelte';
   import { LanAddress, describeNetwork } from '../lib/lan.svelte';
@@ -8,9 +7,7 @@
   import Disciplines from './Disciplines.svelte';
   import MatBoard from './MatBoard.svelte';
   import Screens from './Screens.svelte';
-  import EventEditor from './EventEditor.svelte';
   import People from './People.svelte';
-  import Planning from './Planning.svelte';
   import Staff from './Staff.svelte';
   import Signup from './Signup.svelte';
   import LangToggle from './LangToggle.svelte';
@@ -60,6 +57,7 @@
       {#if view?.name}<span class="event">{view.name}</span>{/if}
     </h1>
     <nav>
+      <a href="/admin/plan">{t('Plan the event')}</a>
       <a href="/">{t('Landing page')}</a>
       <a href="/info">{t('Info sheet')}</a>
       <LangToggle />
@@ -146,14 +144,7 @@
 
     <MatBoard canSetCount />
 
-    <Planning />
-
     <Screens />
-
-    <!-- Seeded once and not re-keyed: the event updates on every exchange in every
-         discipline, and an editor that reset itself on each would lose the sentence
-         being typed. -->
-    <EventEditor event={view.info} save={api.saveEventInfo} onchange={() => void hall.refresh()} />
 
     <!-- One signup for the whole event, and the people it and the desks make (phase 3). -->
     <Signup scope="event" info={view.info} onchange={() => void hall.refresh()} />

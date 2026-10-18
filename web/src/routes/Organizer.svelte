@@ -13,9 +13,7 @@
   import Screens from './Screens.svelte';
   import Disciplines from './Disciplines.svelte';
   import MatBoard from './MatBoard.svelte';
-  import Planning from './Planning.svelte';
   import Staff from './Staff.svelte';
-  import EventEditor from './EventEditor.svelte';
   import Signup from './Signup.svelte';
   import LangToggle from './LangToggle.svelte';
   import DeleteEvent from './DeleteEvent.svelte';
@@ -93,7 +91,7 @@
       {#if snapshot?.instance.name}<span class="discipline">{snapshot.instance.name}</span>{/if}
     </h1>
     <nav>
-      {#if multi}<a href="/admin">&larr; {t('The event')}</a>{/if}
+      {#if multi}<a href="/admin">&larr; {t('The event')}</a>{:else}<a href="/admin/plan">{t('Plan the event')}</a>{/if}
       <a href={dhref('/')}>{t('Landing page')}</a>
       <a href="/info">{t('Info sheet')}</a>
       <a href="/display/mats" target="_blank" rel="noreferrer">{t('Displays')}</a>
@@ -168,12 +166,6 @@
       <Setup {snapshot} onchange={refresh} />
     </div>
 
-    <!-- The day around the fencing belongs to the event. With one discipline it is
-         edited here, as it always was; with several, once, on the event's own page. -->
-    {#if !multi}
-      <EventEditor event={snapshot.tournament.event ?? {}} save={api.saveEvent} onchange={refresh} />
-    {/if}
-
     <Signup {snapshot} onchange={refresh} scope={multi ? 'share' : 'single'} />
 
     <!-- Screens and score keepers are the event's: here while there is one discipline,
@@ -190,7 +182,6 @@
          is on the event's page, where it shows all of them. -->
     <!-- Before the draw the board shows the day as it would be (phase 4). -->
     {#if !multi && (drawn || snapshot.competitors.length > 0)}<MatBoard />{/if}
-    {#if !multi}<Planning />{/if}
     {#if !multi}<Staff />{/if}
 
     <Pools {snapshot} onchange={refresh} />
