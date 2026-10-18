@@ -403,7 +403,8 @@
    *
    * Two warnings out of both of them is the case a plain winner/loser reading gets wrong:
    * the engine records no winner, and "draw" on both halves would be a lie about a match
-   * that neither of them won. Both are beaten, and that is what it says.
+   * that neither of them won. Both are beaten, so neither half says WINNER, and the centre
+   * says why.
    */
   function outcomeFor(side: Side): 'won' | 'lost' | 'drew' | null {
     if (!matchState?.ended) return null;

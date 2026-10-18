@@ -43,9 +43,9 @@
   } = $props();
 
   const over = $derived(outcome !== null);
-  const verdict = $derived(
-    outcome === 'won' ? t('WINNER') : outcome === 'lost' ? t('BEATEN') : t('DRAW'),
-  );
+  // Only the winner's half says anything (#146): the other side's empty box is the loss,
+  // and two labels to compare is one more thing to read than the result needs.
+  const verdict = $derived(outcome === 'won' ? t('WINNER') : outcome === 'drew' ? t('DRAW') : '');
 
   // The punctuation encodes severity, so the label reads as more alarming exactly as the
   // consequence gets worse -- a third cue alongside colour and size (design §4).
@@ -230,8 +230,8 @@
   }
 
   /* Spans the two rows the points and the warning button had, so the panel keeps its
-     shape when the match ends. Quiet for the side that lost, because the eye should go
-     to the winner without having to compare two labels. */
+     shape when the match ends. Empty and quiet for the side that lost, because the eye
+     should go to the winner without having to compare two labels. */
   .verdict {
     grid-row: span 2;
     display: grid;
