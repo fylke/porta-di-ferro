@@ -1,5 +1,6 @@
 <script lang="ts">
   import WarningTriangle from '../WarningTriangle.svelte';
+  import { tap } from '../../lib/tap';
   import { t } from '../../lib/i18n.svelte';
   import type { Side } from '../../lib/match';
   import type { Selection } from '../../lib/scorekeeper.svelte';
@@ -91,7 +92,7 @@
           class="point"
           class:selected={selection.value === value}
           aria-pressed={selection.value === value}
-          onclick={() => onPoint(value)}>{value}</button
+          use:tap={() => onPoint(value)}>{value}</button
         >
       {/each}
     </div>
@@ -101,7 +102,7 @@
       class:selected={selection.penalty > 0}
       class:severe={selection.penalty > 1}
       aria-pressed={selection.penalty > 0}
-      onclick={onWarning}>{warningLabel}</button
+      use:tap={onWarning}>{warningLabel}</button
     >
   {/if}
 </section>
@@ -118,6 +119,14 @@
   }
   .panel {
     background: var(--side-tint);
+  }
+  /* Two fingers on two buttons are two presses, not a pinch (lib/tap.ts, #145), and a
+     finger left on a button does not start selecting its text. */
+  .panel button {
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
   }
 
   header {
