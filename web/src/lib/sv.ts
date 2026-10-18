@@ -214,11 +214,17 @@ export const sv: Record<string, string> = {
   'Each discipline': 'Varje disciplin',
   'Match roster: {name}': 'Matchlista: {name}',
   // --- the mat board (phase 2) ------------------------------------------------------
-  'Drag {item}': 'Dra {item}',
   'Move {item}': 'Flytta {item}',
   'Eliminations {n}': 'Elimineringar {n}',
-  'Every discipline’s pools, eliminations and finals, in the order each mat runs them. Drag a card by its grip, or use its menu. What a mat is running stays where it is.': 'Alla disciplinernas pooler, elimineringar och finaler, i den ordning varje matta kör dem. Dra ett kort i greppet, eller använd dess meny. Det en matta kör just nu ligger kvar.',
-  'The pools, eliminations and finals, in the order each mat runs them. Drag a card by its grip, or use its menu. What a mat is running stays where it is.': 'Poolerna, elimineringarna och finalerna, i den ordning varje matta kör dem. Dra ett kort i greppet, eller använd dess meny. Det en matta kör just nu ligger kvar.',
+  'Every discipline’s pools, eliminations and finals, in the order each mat runs them. Drag a card, or use its menu; on a touch screen, hold it a moment first. What a mat is running stays where it is.':
+    'Alla disciplinernas pooler, elimineringar och finaler, i den ordning varje matta kör dem. Dra ett kort, eller använd dess meny; på en pekskärm, håll kvar fingret ett ögonblick först. Det en matta kör just nu ligger kvar.',
+  'The pools, eliminations and finals, in the order each mat runs them. Drag a card, or use its menu; on a touch screen, hold it a moment first. What a mat is running stays where it is.':
+    'Poolerna, elimineringarna och finalerna, i den ordning varje matta kör dem. Dra ett kort, eller använd dess meny; på en pekskärm, håll kvar fingret ett ögonblick först. Det en matta kör just nu ligger kvar.',
+  'Moves not applied yet': 'Flyttar som inte är genomförda',
+  '1 move not applied yet.': '1 flytt är inte genomförd än.',
+  '{n} moves not applied yet.': '{n} flyttar är inte genomförda än.',
+  'The times and the mats in the hall change when it is applied.': 'Tiderna och mattorna i hallen ändras när det genomförs.',
+  '{done} of {n} moves applied, then: {why}': '{done} av {n} flyttar genomförda, sedan: {why}',
   'Nothing placed here.': 'Inget lagt här.',
   'Nothing to fence just now.': 'Inget att fäkta just nu.',
   'One mat fewer': 'En matta färre',
