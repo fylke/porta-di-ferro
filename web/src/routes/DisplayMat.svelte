@@ -81,6 +81,8 @@
   main {
     height: 100dvh;
     display: grid;
+    /* Never wider than the screen: a name too long for it is cut, not the board. */
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: 1fr auto;
     gap: 0.75rem;
     padding: 0.75rem;
@@ -130,9 +132,12 @@
     flex-wrap: wrap;
     justify-content: center;
     column-gap: 0.3em;
+    max-width: 100%;
+    min-width: 0;
   }
   .who {
     white-space: nowrap;
+    min-width: 0;
     max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -156,6 +161,7 @@
   }
   footer {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     justify-items: center;
     gap: 0.3rem;
     padding: 0.75rem;
