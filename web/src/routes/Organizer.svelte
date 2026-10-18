@@ -18,6 +18,8 @@
   import EventEditor from './EventEditor.svelte';
   import Signup from './Signup.svelte';
   import LangToggle from './LangToggle.svelte';
+  import DeleteEvent from './DeleteEvent.svelte';
+  import { hall } from '../lib/event.svelte';
   import { t, lang } from '../lib/i18n.svelte';
 
   /**
@@ -192,6 +194,9 @@
     {#if !multi}<Staff />{/if}
 
     <Pools {snapshot} onchange={refresh} />
+
+    <!-- The event's, so here only while it has one discipline (#141). -->
+    {#if !multi}<DeleteEvent name={hall.view?.name ?? ''} dir={hall.view?.dir ?? ''} />{/if}
   {/if}
 </main>
 

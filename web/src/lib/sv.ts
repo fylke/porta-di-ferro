@@ -740,4 +740,15 @@ export const sv: Record<string, string> = {
   Staff: 'Funktionärer',
   'Offered to work this discipline. Who stands where is still up to you.':
     'Har erbjudit sig att arbeta i den här disciplinen. Vem som står var bestämmer du fortfarande.',
+  // --- deleting the event (#141) -----------------------------------------------------
+  'Delete the whole event': 'Radera hela tävlingen',
+  'For the next event: every discipline, competitor and result, and the day around them, leave the hall, and an empty event takes their place. The files are kept, moved to the deleted folder inside':
+    'Inför nästa tävling: alla discipliner, deltagare och resultat, och dagen runt dem, lämnar hallen, och en tom tävling tar deras plats. Filerna sparas, flyttade till mappen deleted i',
+  'Delete the event…': 'Radera tävlingen…',
+  'Moved to {dir}': 'Flyttad till {dir}',
+  'Delete {name}?': 'Radera {name}?',
+  'Delete the event?': 'Radera tävlingen?',
+  'Every screen and tablet in the hall leaves it at once, and what they kept of it is forgotten. The files are kept in the deleted folder, from where they can be moved back by hand.':
+    'Alla skärmar och surfplattor i hallen lämnar den på en gång, och det de sparat av den glöms. Filerna sparas i mappen deleted, varifrån de kan flyttas tillbaka för hand.',
+  'Yes, delete the event': 'Ja, radera tävlingen',
 };

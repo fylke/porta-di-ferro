@@ -14,6 +14,7 @@
   import Staff from './Staff.svelte';
   import Signup from './Signup.svelte';
   import LangToggle from './LangToggle.svelte';
+  import DeleteEvent from './DeleteEvent.svelte';
   import { t } from '../lib/i18n.svelte';
 
   /**
@@ -162,6 +163,8 @@
     <!-- Who works the mats, at event level (phase 5). -->
     <Staff />
 
+
+    <DeleteEvent name={view.name} dir={view.dir} />
 
     <p class="dir">{t('The event’s files are in')} <span class="mono">{view.dir}</span></p>
   {/if}

@@ -11,6 +11,7 @@
 //	      matches/p1m1.ndjson …
 //	    open-sabre/
 //	  retired/                   disciplines taken out of the event, kept rather than deleted
+//	  deleted/                   events deleted from this folder, kept rather than destroyed
 //
 // Every discipline keeps its own files, ruleset and lock, as #49 made them: the split that
 // matters is by data, and this package is where that split is laid out. It knows nothing
@@ -19,6 +20,8 @@
 package event
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -39,6 +42,7 @@ const (
 	infoFile       = "event.json"
 	disciplinesDir = "disciplines"
 	retiredDir     = "retired"
+	deletedDir     = "deleted"
 )
 
 // File is event.json: what is about the event rather than about one discipline.
@@ -49,6 +53,10 @@ const (
 // discipline is stays with that discipline.
 type File struct {
 	store.Event
+	// ID is this event's identity, made once. A tablet that has kept match logs from
+	// another event -- one deleted from this folder, say, whose disciplines had the same
+	// names -- knows by it that they are not this event's "p1m1" (#141).
+	ID string `json:"id,omitempty"`
 	// Disciplines is the order the disciplines are listed in, by slug. A folder on disk
 	// that is not on the list is still part of the event, listed after the rest: the
 	// folders are the truth about what exists, this is only how to show them.
@@ -503,6 +511,76 @@ func (f *Folder) Retire(slug string) (string, error) {
 		return nil
 	})
 	return dst, err
+}
+
+// EnsureID gives the event an identity if it has none yet, and says what it is. Empty
+// when event.json cannot be read: an event whose identity is unknown is never taken for
+// a different one.
+func (f *Folder) EnsureID() string {
+	if file, err := f.Read(); err != nil || file.ID != "" {
+		return file.ID
+	}
+	file, err := f.Update(func(file *File) error {
+		if file.ID == "" {
+			file.ID = newID()
+		}
+		return nil
+	})
+	if err != nil {
+		return ""
+	}
+	return file.ID
+}
+
+func newID() string {
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Sprintf("ev-%x", time.Now().UnixNano())
+	}
+	return "ev-" + hex.EncodeToString(b)
+}
+
+// Delete empties the folder for a new event (#141), with a new identity. Nothing is
+// destroyed: everything the event had -- its disciplines, the retired ones, its people
+// and staff, event.json -- is moved under deleted/, in a folder named for when and for
+// what it was, from where it can be moved back by hand. Whoever holds a discipline's
+// files must have let them go first, or the move fails, and a move that fails part-way
+// is put back. It answers where the event went.
+func (f *Folder) Delete() (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	file, _ := f.readLocked()
+	name := time.Now().Format("20060102-150405")
+	if slug := Slugify(file.Signup.Name); slug != "" {
+		name += "-" + slug
+	}
+	dst := filepath.Join(f.dir, deletedDir, name)
+	if err := os.MkdirAll(dst, 0o755); err != nil {
+		return "", err
+	}
+	entries, err := os.ReadDir(f.dir)
+	if err != nil {
+		return "", err
+	}
+	var moved []string
+	for _, e := range entries {
+		if e.Name() == deletedDir {
+			continue
+		}
+		if err := os.Rename(filepath.Join(f.dir, e.Name()), filepath.Join(dst, e.Name())); err != nil {
+			for _, m := range moved {
+				_ = os.Rename(filepath.Join(dst, m), filepath.Join(f.dir, m))
+			}
+			_ = os.Remove(dst)
+			return "", fmt.Errorf("the event could not be moved to %s: %w", dst, err)
+		}
+		moved = append(moved, e.Name())
+	}
+	defer f.rev.Add(1)
+	if err := os.MkdirAll(filepath.Join(f.dir, disciplinesDir), 0o755); err != nil {
+		return dst, err
+	}
+	return dst, store.WriteJSONAtomic(f.dir, infoFile, File{ID: newID()})
 }
 
 // withExisting is the stored order with any unlisted folder added, so writing the order

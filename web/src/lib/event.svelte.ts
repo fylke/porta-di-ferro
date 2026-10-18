@@ -12,6 +12,7 @@
  * keeper's tablet opened with the LAN down still knows what kind of event it is in.
  */
 import { api, type EventView, type Presence } from '../api';
+import { anotherEvent } from './forget';
 
 const CACHE = 'porta.event';
 /** How long the first look waits for the server before going on without it. */
@@ -89,6 +90,8 @@ export class EventLive {
   }
 
   private set(view: EventView): void {
+    // Another event than this device last saw (#141): see MatsLive.
+    if (anotherEvent(view.id)) return;
     this.view = view;
     try {
       localStorage.setItem(CACHE, JSON.stringify(view));

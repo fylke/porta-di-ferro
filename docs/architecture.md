@@ -84,6 +84,7 @@ flowchart TB
 - **The event's stream** carries `httpapi.Summarize` of every discipline — stage, progress, what is on each mat, the podium, the entrants — coalesced over 150 ms, so the event landing page holds one stream however many disciplines there are.
 - **Clients keep disciplines apart.** IndexedDB is keyed `[discipline, match, seq]`, and an unsent exchange is pushed to the discipline it was scored in whatever page is open; the snapshot cache and the score keeper's remembered state are namespaced per discipline (`web/src/lib/paths.ts`).
 - **Opening an old folder** moves its files into `disciplines/<slug>/` and lifts its day into `event.json` (`internal/event/migrate.go`); the move resumes if interrupted.
+- **Deleting the event** (`DELETE /api/event`, #141) lets every discipline go, moves everything in the folder under `deleted/<time>-<name>/`, and starts an empty event in its place, as a first start does. Every event has an identity (`id` in `event.json`, carried on `GET /api/event` and `GET /api/mats`); a device that sees a different one from the one it last saw clears its match logs and cached views before using the new one (`web/src/lib/forget.ts`), because the new event's `open-sabre/p1m1` has the same key as the old one's.
 
 ### Event-wide mats (phase 2)
 

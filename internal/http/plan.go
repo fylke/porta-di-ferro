@@ -382,6 +382,8 @@ type MatsView struct {
 	Items []ItemView `json:"items"`
 	// Upcoming is what the mat screens show of what comes next (store.Screens).
 	Upcoming string `json:"upcoming"`
+	// Event is the event's identity: a tablet that kept logs for another forgets them (#141).
+	Event string `json:"event,omitempty"`
 }
 
 // BuildMats lays every discipline's items on the event's mats. held names the match a

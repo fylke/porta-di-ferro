@@ -277,6 +277,8 @@ export interface MatsView {
   items: ItemView[];
   /** What the mat screens show of the matches to come (#110). */
   upcoming?: 'bottom' | 'list' | 'none';
+  /** The event's identity (#141). */
+  event?: string;
 }
 
 /** What one of a discipline's mats is running or has up next, for the event's pages. */
@@ -318,6 +320,8 @@ export interface EventView {
   staff?: { id: string; name: string; club?: string; person?: string }[];
   name: string;
   info: EventInfo;
+  /** The event's identity: a new one after a delete (#141). */
+  id?: string;
   /** event.json could not be read; the disciplines run regardless. */
   infoError?: string;
   disciplines: DisciplineSummary[];
@@ -703,6 +707,8 @@ export const api = {
   event: () => req<EventView>('GET', '/api/event'),
   /** The welcome, the programme, the wifi and the signup settings, typed once for the event. */
   saveEventInfo: (info: EventInfo) => req<EventInfo>('PUT', '/api/event/info', info),
+  /** Puts the whole event aside under deleted/ and starts a new, empty one (#141). */
+  deleteEvent: () => req<{ deleted: string }>('DELETE', '/api/event'),
   addresses: () => req<Address[]>('GET', '/api/addresses'),
 
   /** Everybody in the event, and who might be the same person. */

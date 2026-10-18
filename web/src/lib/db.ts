@@ -137,6 +137,15 @@ export async function clear(discipline: string, matchId: string): Promise<void> 
   });
 }
 
+/** Drops every log this device holds, for when the event they were scored in is gone (#141). */
+export async function forgetAll(): Promise<void> {
+  await attempt<void>(undefined, async (db) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    tx.objectStore(STORE).clear();
+    await done(tx);
+  });
+}
+
 /** Every match this device holds a log for. Empty if storage is unavailable. */
 export async function matches(): Promise<HeldMatch[]> {
   return attempt<HeldMatch[]>([], async (db) => {
