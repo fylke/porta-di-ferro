@@ -5,7 +5,8 @@
 
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { api, ApiError, type ForecastView, type ItemView, type SuggestionView, type Warning } from '../api';
+  import { api, ApiError, type ForecastView, type ItemView, type StaffingView, type SuggestionView, type Warning } from '../api';
+  import { roleLabel } from '../lib/items';
   import { MatsLive } from '../lib/mats.svelte';
   import { clockOf, minutesBetween } from '../lib/clock-of-day';
   import { roundLabel } from './lib-display.svelte';
@@ -34,7 +35,14 @@
    * on its mat; the menu pins and unpins, and holds an item until a time. Suggest a plan
    * shows what would move and when the day would end, and changes nothing until applied.
    */
-  let { canSetCount = false }: { canSetCount?: boolean } = $props();
+  let {
+    canSetCount = false,
+    onshort,
+  }: {
+    canSetCount?: boolean;
+    /** Opens the staff, from a slot short of them (#142). Without it, a link to #staff. */
+    onshort?: () => void;
+  } = $props();
 
   const live = new MatsLive();
   onMount(() => {
@@ -126,19 +134,47 @@
   let menuFor = $state<string | null>(null);
   let holdUntil = $state('');
 
-  // The forecast, again whenever the mats change: a finished match moves the day.
+  // The forecast, again whenever the mats change: a finished match moves the day. The
+  // staff with it, because who is free when moves with the day.
   let forecast = $state<ForecastView | null>(null);
+  let staffing = $state<StaffingView | null>(null);
   async function loadForecast() {
     try {
       forecast = await api.forecast();
     } catch {
       // The board works without times.
     }
+    try {
+      staffing = await api.staff();
+    } catch {
+      // And without the staff.
+    }
   }
   $effect(() => {
     void live.view;
     void loadForecast();
   });
+
+  /**
+   * The roles each item is short of, by item (#142). Only once the event has staff: an
+   * event that does not plan them would otherwise be short of everybody, everywhere.
+   */
+  const shortOf = $derived.by(() => {
+    const out = new Map<string, string[]>();
+    if (!staffing || staffing.members.length === 0) return out;
+    for (const s of staffing.short) {
+      const roles = out.get(s.item) ?? [];
+      const name = roleLabel(s.role);
+      if (!roles.includes(name)) roles.push(name);
+      out.set(s.item, roles);
+    }
+    return out;
+  });
+  function toStaff(e: MouseEvent) {
+    if (!onshort) return;
+    e.preventDefault();
+    onshort();
+  }
   const times = $derived(new Map((forecast?.items ?? []).map((x) => [x.id, x])));
   const itemById = $derived(new Map((view?.items ?? []).map((x) => [x.id, x])));
 
@@ -491,7 +527,15 @@
   {/if}
 
   {#if forecast && forecast.items.length > 0 && view}
-    <DayTimeline {forecast} items={view.items} mats={mats.map((m) => m.mat)} matNames={Object.fromEntries(mats.map((m) => [m.mat, m.name ?? '']))} name={itemName} />
+    <DayTimeline
+      {forecast}
+      items={view.items}
+      mats={mats.map((m) => m.mat)}
+      matNames={Object.fromEntries(mats.map((m) => [m.mat, m.name ?? '']))}
+      name={itemName}
+      short={shortOf}
+      {onshort}
+    />
   {/if}
 
   {#if !view}
@@ -518,6 +562,7 @@
             {#each list as it (it.id)}
               <li
                 class="card {it.status}"
+                class:short={shortOf.has(it.id) && it.status !== 'done'}
                 class:movable={it.movable}
                 class:moved={moved.has(it.id)}
                 class:lifted={drag?.id === it.id}
@@ -543,6 +588,11 @@
                       {#if lateBy(it) >= 5}<span class="late">{t('+{n} min', { n: lateBy(it) })}</span>{/if}
                       {#if lateBy(it) <= -5}<span class="early">{t('{n} min early', { n: -lateBy(it) })}</span>{/if}
                     </span>
+                  {/if}
+                  {#if shortOf.has(it.id) && it.status !== 'done'}
+                    <a class="meta staff-short" href="#staff" onclick={toStaff}>
+                      {t('Short of {roles}', { roles: shortOf.get(it.id)!.join(', ').toLocaleLowerCase() })}
+                    </a>
                   {/if}
                   {#if it.pinned || it.notBefore}
                     <span class="meta flags">
@@ -825,6 +875,15 @@
   }
   .columns.dragging .card.movable {
     cursor: grabbing;
+  }
+  /* Short of staff (#142): orange, the colour of what needs the organizer, and a way to
+     the staff from the card. */
+  .card.short {
+    box-shadow: inset 3px 0 0 var(--amber-bright);
+  }
+  .staff-short {
+    color: var(--amber-bright);
+    font-weight: 700;
   }
   /* Moved in the draft, not applied yet. */
   .card.moved {

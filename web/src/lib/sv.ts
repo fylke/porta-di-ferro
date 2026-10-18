@@ -778,4 +778,9 @@ export const sv: Record<string, string> = {
   'Before the day': 'Före dagen',
   'On the day': 'Under dagen',
   'Entries that may be one person': 'Anmälningar som kan vara samma person',
+  'Short of {roles}': 'Saknar {roles}',
+  'click to see the staff': 'klicka för funktionärerna',
+  'planned {from}–{to}': 'planerad {from}–{to}',
+  'under way, {done} of {total} matches': 'pågår, {done} av {total} matcher',
+  '{done} of {total} matches': '{done} av {total} matcher',
 };

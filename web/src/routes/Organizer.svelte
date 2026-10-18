@@ -182,7 +182,7 @@
          is on the event's page, where it shows all of them. -->
     <!-- Before the draw the board shows the day as it would be (phase 4). -->
     {#if !multi && (drawn || snapshot.competitors.length > 0)}<MatBoard />{/if}
-    {#if !multi}<Staff />{/if}
+    {#if !multi}<div id="staff"><Staff /></div>{/if}
 
     <Pools {snapshot} onchange={refresh} />
 

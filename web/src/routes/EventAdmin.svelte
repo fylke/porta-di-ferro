@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { hall } from '../lib/event.svelte';
   import { navigate, query } from '../router.svelte';
   import { MatsLive } from '../lib/mats.svelte';
@@ -53,6 +53,12 @@
   const dashboard = $derived(chosen === 'before' || chosen === 'day' ? chosen : started ? 'day' : 'before');
   function show(which: 'before' | 'day') {
     navigate(`/admin?view=${which}`, true);
+  }
+  /** To the staff, from a slot on the mats that is short of them (#142). */
+  async function toStaff() {
+    show('before');
+    await tick();
+    document.getElementById('staff')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
   const clientURL = $derived(lan.clientURL);
   const landingURL = $derived(clientURL ? `${clientURL}/` : '');
@@ -155,7 +161,7 @@
     </div>
 
     {#if dashboard === 'day'}
-      <MatBoard canSetCount />
+      <MatBoard canSetCount onshort={() => void toStaff()} />
 
       <Screens />
     {:else}
