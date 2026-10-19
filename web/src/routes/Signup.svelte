@@ -59,18 +59,10 @@
   let name = $state(initial.name ?? '');
   let venue = $state(initial.venue ?? '');
   let date = $state(initial.date ?? '');
-  let tournament = $state(initial.tournament ?? '');
-  let contact = $state(initial.contact ?? false);
 
   let ready = $state<SignupReady | EventSignupReady | null>(null);
-  const shares = $derived(ready && 'disciplines' in ready ? ready.disciplines : []);
-  const unclaimed = $derived(ready && 'unclaimed' in ready ? ready.unclaimed : []);
-  // Which row each discipline takes is worth showing only when it is not the obvious one:
-  // every discipline takes the row named like it, and every row is taken (#142). Otherwise
-  // it folds away under one line saying so.
-  const sharesNeedLooking = $derived(
-    unclaimed.length > 0 || shares.some((d) => !!d.error || d.chosen || !d.tournament),
-  );
+  // What a participant chooses from: the disciplines themselves, by their names (#142).
+  const offered = $derived(ready?.tournaments ?? []);
   let saving = $state(false);
   let saved = $state(false);
   let error = $state('');
@@ -120,9 +112,9 @@
     saving = true;
     try {
       if (scope === 'event') {
-        await api.saveEventInfo({ ...(info ?? {}), signup: { definitionId, name, venue, date, contact } });
+        await api.saveEventInfo({ ...(info ?? {}), signup: { definitionId, name, venue, date } });
       } else {
-        const signup: SignupInfo = { definitionId, name, venue, date, tournament, contact };
+        const signup: SignupInfo = { definitionId, name, venue, date };
         await api.saveEvent({ ...(snapshot?.tournament.event ?? {}), signup });
       }
       saved = true;
@@ -161,17 +153,6 @@
       return;
     }
     await look();
-  }
-
-  /** Which programme row a discipline takes, at the event's panel. */
-  async function setRow(slug: string, row: string) {
-    error = '';
-    try {
-      ready = await api.setSignupRows({ [slug]: row });
-      if (files.length > 0) await look();
-    } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
-    }
   }
 
   async function look() {
@@ -305,68 +286,26 @@
     {t('The identifier keeps a response from last year’s event out of this one. It goes in every file and cannot change once they are sent.')}
   </p>
 
-  {#if scope === 'event'}
-  <details class="shares" open={sharesNeedLooking}>
-    <summary>
-      {sharesNeedLooking
-        ? t('Which discipline takes the signups for each row of the programme')
-        : t('Every discipline takes the signups for the programme row named like it.')}
-    </summary>
-    <p class="dim small">
-      {t('A participant signs up for rows of the programme. Each discipline takes the responses for the row named like it, unless you pick another here.')}
-    </p>
-    <ul>
-      {#each shares as d (d.discipline)}
-        <li>
-          <span class="strong">{d.name}</span>
-          {#if d.error}
-            <span class="warn-inline">{d.error}</span>
-          {:else}
-            <select
-              value={d.chosen ? d.tournament : ''}
-              onchange={(e) => void setRow(d.discipline, e.currentTarget.value)}
-              aria-label={t('Programme row for {discipline}', { discipline: d.name })}
-            >
-              <option value="">
-                {d.tournament && !d.chosen
-                  ? t('{row}, by its name', { row: ready?.tournaments.find((tn) => tn.id === d.tournament)?.label ?? d.tournament })
-                  : t('nothing')}
-              </option>
-              {#each ready?.tournaments ?? [] as tn (tn.id)}
-                <option value={tn.id}>{tn.label}</option>
-              {/each}
-            </select>
-          {/if}
-        </li>
-      {/each}
-    </ul>
-    {#each unclaimed as row (row.id)}
-      <p class="warn">{t('No discipline takes {row}: whoever enters it would be imported nowhere.', { row: row.label })}</p>
-    {/each}
-  </details>
-  <div class="fields">
-    <label class="check">
-      <input type="checkbox" bind:checked={contact} onchange={touch} />
-      {t('Ask for a contact detail')}
-    </label>
-  </div>
-  {:else}
-  <div class="fields">
-    <label>
-      {t('This run is')}
-      <select bind:value={tournament} onchange={touch}>
-        <option value="">{t('the only discipline')}</option>
-        {#each ready?.tournaments ?? [] as tn (tn.id)}
-          <option value={tn.id}>{tn.label}</option>
+  <!-- What goes out is the disciplines themselves, under the names they have here: there
+       is nothing to match up (#142). Everybody gives an email, which is how a second
+       signup from the same person, from any device, is the same person. -->
+  <div class="offered">
+    <h3>{t('Participants choose from')}</h3>
+    {#if offered.length > 0}
+      <ul>
+        {#each offered as d (d.id)}
+          <li>
+            <span class="strong">{d.label}</span>
+            {#if d.startsAt}<span class="dim-inline">{d.startsAt}</span>{/if}
+            {#if d.capacity}<span class="dim-inline">{t('up to {n}', { n: d.capacity })}</span>{/if}
+          </li>
         {/each}
-      </select>
-    </label>
-    <label class="check">
-      <input type="checkbox" bind:checked={contact} onchange={touch} />
-      {t('Ask for a contact detail')}
-    </label>
+      </ul>
+    {/if}
+    <p class="dim small">
+      {t('Every discipline with a name. Name, club and email are asked of everybody; a second signup with the same email is the same person.')}
+    </p>
   </div>
-  {/if}
 
   {#if error}<p class="err">{error}</p>{/if}
   <div class="actions">
@@ -566,55 +505,26 @@
     color: var(--ink-dim);
     min-width: 0;
   }
-  .fields input,
-  .fields select {
+  .fields input {
     padding: 0.4rem 0.5rem;
     min-width: 0;
   }
-  .fields label.check {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    align-self: end;
-    padding-bottom: 0.5rem;
-  }
-  .fields label.check input {
-    width: 1.1rem;
-    height: 1.1rem;
-  }
 
-  .shares summary {
-    cursor: pointer;
-    font-weight: 700;
-    margin-bottom: 0.4rem;
-  }
-  .shares ul {
+  .offered ul {
     list-style: none;
-    margin: 0 0 0.6rem;
+    margin: 0 0 0.5rem;
     padding: 0;
     display: grid;
-    gap: 0.4rem;
-  }
-  .shares li {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.3rem 0.8rem;
-    align-items: center;
+    gap: 0.3rem;
     font-size: 0.9rem;
   }
-  .shares li .strong {
-    min-width: 12rem;
+  .offered li {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.2rem 0.6rem;
+    align-items: baseline;
   }
-  .shares select {
-    padding: 0.35rem 0.5rem;
-    min-width: 0;
-    max-width: 100%;
-  }
-  .warn-inline {
-    color: var(--amber-bright);
-    font-size: 0.85rem;
-  }
-  .shares,
+  .offered,
   .send,
   .import,
   .staff-list {

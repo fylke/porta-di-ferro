@@ -6,6 +6,7 @@ import (
 
 	"github.com/fylke/porta-di-ferro/internal/demo"
 	httpapi "github.com/fylke/porta-di-ferro/internal/http"
+	"github.com/fylke/porta-di-ferro/internal/signup"
 )
 
 // The demo's people answer as the coordinator's do (phase 3).
@@ -89,22 +90,23 @@ func TestTheDemoKnowsItsPeople(t *testing.T) {
 
 func TestTheDemoImportsForTheWholeEvent(t *testing.T) {
 	e := demo.NewEvent()
-	res := e.Request("GET", "/api/event/signup/ready", nil)
-	var ready struct {
-		Disciplines []httpapi.SignupShare    `json:"disciplines"`
-		Unclaimed   []struct{ Label string } `json:"unclaimed"`
+	res := e.Request("GET", "/api/event/signup/definition.json", nil)
+	var def signup.Definition
+	if err := json.Unmarshal([]byte(res.Body), &def); err != nil || len(def.Tournaments) != 3 {
+		t.Fatalf("the file should offer the three disciplines: %v %s", err, res.Body)
 	}
-	if err := json.Unmarshal([]byte(res.Body), &ready); err != nil || len(ready.Disciplines) != 3 {
-		t.Fatalf("ready should list both disciplines: %v %s", err, res.Body)
-	}
-	if ready.Disciplines[0].Tournament == "" || ready.Disciplines[1].Tournament == "" || ready.Disciplines[2].Tournament == "" {
-		t.Errorf("each discipline should take a programme row: %+v", ready.Disciplines)
-	}
-	if len(ready.Unclaimed) != 0 {
-		t.Errorf("the demo's signup should offer nothing that no discipline takes: %+v", ready.Unclaimed)
+	if def.Tournaments[1].ID != "open-sabre" || def.Tournaments[1].Label != "Open Sabre" || def.Tournaments[1].Capacity != 16 {
+		t.Errorf("each discipline should be offered by its own name and capacity: %+v", def.Tournaments[1])
 	}
 	res = e.Request("GET", "/api/event/signup/app.html", nil)
 	if res.Status != 200 || res.ContentType != "text/html; charset=utf-8" {
 		t.Errorf("the signup app should be served: %d %s", res.Status, res.ContentType)
+	}
+	body, _ := json.Marshal(map[string]any{"files": []map[string]string{{"source": "a.json", "body": `{"format":"porta.signup.response","version":2,` +
+		`"definitionId":"stangebroslaget-2026","submissionId":"x1","participant":{"name":"New Person","email":"new@example.org"},"entries":["open-sabre"]}`}}})
+	var preview httpapi.EventSignupPreview
+	res = e.Request("POST", "/api/event/signup/preview", body)
+	if err := json.Unmarshal([]byte(res.Body), &preview); err != nil || preview.Adding != 1 || len(preview.Rows[0].Into) != 1 {
+		t.Errorf("a response for the sabre should go into the sabre: %v %s", err, res.Body)
 	}
 }

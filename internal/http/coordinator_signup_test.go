@@ -2,6 +2,7 @@ package httpapi_test
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	httpapi "github.com/fylke/porta-di-ferro/internal/http"
@@ -9,7 +10,8 @@ import (
 )
 
 // Signup for the whole event (phase 3): one folder back, and every discipline takes its
-// share by the same check it runs on its own.
+// share by the same check it runs on its own. What can be entered is the disciplines
+// themselves, by name, and an email is a person (#142).
 
 func reply(t *testing.T, name, submission string, entries ...string) map[string]string {
 	return replyStaffing(t, name, submission, nil, entries...)
@@ -19,9 +21,9 @@ func reply(t *testing.T, name, submission string, entries ...string) map[string]
 func replyStaffing(t *testing.T, name, submission string, staff []string, entries ...string) map[string]string {
 	t.Helper()
 	res := map[string]any{
-		"format": "porta.signup.response", "version": 1, "definitionId": "msl-open-2026",
+		"format": "porta.signup.response", "version": signup.Version, "definitionId": "msl-open-2026",
 		"submissionId": submission,
-		"participant":  map[string]string{"name": name, "club": "Example HEMA"},
+		"participant":  map[string]string{"name": name, "club": "Example HEMA", "email": strings.ToLower(name) + "@example.org"},
 		"entries":      entries,
 	}
 	if len(staff) > 0 {
@@ -31,57 +33,60 @@ func replyStaffing(t *testing.T, name, submission string, staff []string, entrie
 	if err != nil {
 		t.Fatal(err)
 	}
-	return map[string]string{"source": name + ".json", "body": string(body)}
+	return map[string]string{"source": name + "-" + submission + ".json", "body": string(body)}
 }
 
-func TestOneImportForTheWholeEvent(t *testing.T) {
-	h, ls := twoDisciplines(t)
+// threeDisciplines is an event of a named longsword, the sabre and the rapier, set up for
+// signup. It answers the longsword's slug.
+func threeDisciplines(t *testing.T) (*hall, string) {
+	t.Helper()
+	h, first := twoDisciplines(t)
+	var ls httpapi.DisciplineSummary
+	h.must("PATCH", "/api/disciplines/"+first, map[string]string{"name": "Open Steel Longsword"}, &ls)
 	h.must("POST", "/api/disciplines", map[string]string{"name": "Rapier"}, nil)
 	h.must("PUT", "/api/event/info", map[string]any{
 		"signup": map[string]any{"definitionId": "msl-open-2026", "name": "MSL Open"},
 		"schedule": []map[string]any{
-			{"at": "09:30", "label": "Open Steel Longsword", "kind": "discipline", "tournament": "longsword"},
-			{"at": "13:00", "label": "Open Sabre", "kind": "discipline"},
-			{"at": "15:00", "label": "Rapier and dagger", "kind": "discipline"},
+			{"at": "09:30", "label": "Longsword pools", "kind": "discipline"},
+			{"at": "12:00", "ends": "13:00", "label": "Lunch", "kind": "break"},
 		},
 	}, nil)
+	return h, ls.Slug
+}
 
-	// Sabre is matched by its name; Longsword is told; Rapier matches nothing.
-	h.must("PUT", "/api/event/signup/rows", map[string]string{ls: "longsword"}, nil)
-	var ready struct {
-		Disciplines []httpapi.SignupShare `json:"disciplines"`
-		Unclaimed   []struct{ ID string } `json:"unclaimed"`
+func TestOneImportForTheWholeEvent(t *testing.T) {
+	h, ls := threeDisciplines(t)
+
+	// The file offers the disciplines themselves, under their own names.
+	var def signup.Definition
+	h.must("GET", "/api/event/signup/definition.json", nil, &def)
+	var offered []string
+	for _, d := range def.Tournaments {
+		offered = append(offered, d.ID+"="+d.Label)
 	}
-	h.must("GET", "/api/event/signup/ready", nil, &ready)
-	rows := map[string]httpapi.SignupShare{}
-	for _, d := range ready.Disciplines {
-		rows[d.Discipline] = d
+	if strings.Join(offered, ",") != ls+"=Open Steel Longsword,open-sabre=Open Sabre,rapier=Rapier" {
+		t.Errorf("the file should offer the three disciplines by name, got %v", offered)
 	}
-	if !rows[ls].Chosen || rows[ls].Tournament != "longsword" {
-		t.Errorf("Longsword should take the row it was told: %+v", rows[ls])
-	}
-	if rows["open-sabre"].Chosen || rows["open-sabre"].Tournament != "open-sabre" {
-		t.Errorf("Sabre should take the row named like it: %+v", rows["open-sabre"])
-	}
-	if rows["rapier"].Tournament != "" || len(ready.Unclaimed) != 1 || ready.Unclaimed[0].ID != "rapier-and-dagger" {
-		t.Errorf("Rapier takes nothing, and its row should be reported as nobody's: %+v %+v", rows["rapier"], ready.Unclaimed)
+	if strings.Join(def.Fields, ",") != "name,club,email" || len(def.Schedule) != 2 {
+		t.Errorf("everybody gives an email, and the programme goes out to read: %+v", def)
 	}
 
 	files := []map[string]string{
-		replyStaffing(t, "Ada", "sub-1", []string{"open-sabre"}, "longsword"),
-		reply(t, "Bo", "sub-2", "longsword", "open-sabre"),
+		replyStaffing(t, "Ada", "sub-1", []string{"open-sabre"}, ls),
+		reply(t, "Bo", "sub-2", ls, "open-sabre"),
 		reply(t, "Cilla", "sub-3", "rapier-and-dagger"),
+		reply(t, "Dan", "sub-4", "rapier"),
 	}
 	var preview httpapi.EventSignupPreview
 	h.must("POST", "/api/event/signup/preview", map[string]any{"files": files}, &preview)
-	if preview.Adding != 3 {
-		t.Errorf("Ada once and Bo twice is three entries, got %d", preview.Adding)
+	if preview.Adding != 4 {
+		t.Errorf("Ada once, Bo twice and Dan once is four entries, got %d", preview.Adding)
 	}
 	if bo := preview.Rows[1]; bo.Verdict != signup.New || len(bo.Into) != 2 {
 		t.Errorf("Bo should go into both: %+v", bo)
 	}
-	if cilla := preview.Rows[2]; cilla.Verdict != signup.NotHere || len(cilla.Into) != 0 {
-		t.Errorf("Cilla's discipline is nobody's, and she should be told as much: %+v", cilla)
+	if cilla := preview.Rows[2]; cilla.Verdict != signup.Unknown || len(cilla.Into) != 0 {
+		t.Errorf("Cilla named no discipline of the event's, and should be told as much: %+v", cilla)
 	}
 	if v := h.people(); len(v.People) != 0 {
 		t.Fatalf("a preview writes nothing: %+v", v)
@@ -92,8 +97,8 @@ func TestOneImportForTheWholeEvent(t *testing.T) {
 		Preview httpapi.EventSignupPreview `json:"preview"`
 	}
 	h.must("POST", "/api/event/signup/import", map[string]any{"files": files}, &done)
-	if done.Added != 3 || done.Preview.Rows[1].Verdict != signup.Already {
-		t.Errorf("the import should add three and then call them done: %d %+v", done.Added, done.Preview.Rows[1])
+	if done.Added != 4 || done.Preview.Rows[1].Verdict != signup.Already {
+		t.Errorf("the import should add four and then call them done: %d %+v", done.Added, done.Preview.Rows[1])
 	}
 	if a, b := h.personOf(ls, "Bo"), h.personOf("open-sabre", "Bo"); a == "" || a != b {
 		t.Errorf("Bo should be one person in both: %q %q", a, b)
@@ -106,36 +111,61 @@ func TestOneImportForTheWholeEvent(t *testing.T) {
 	if done.Added != 0 {
 		t.Errorf("importing the same folder twice should add nobody, added %d", done.Added)
 	}
+
+	// Bo signs up again from his phone, adding the rapier: a new submission, the same
+	// email. Already in the two he had, new in the rapier -- and the same person there.
+	again := []map[string]string{reply(t, "Bo", "sub-from-his-phone", ls, "open-sabre", "rapier")}
+	h.must("POST", "/api/event/signup/import", map[string]any{"files": again}, &done)
+	if done.Added != 1 {
+		t.Errorf("only the rapier is new for Bo, added %d", done.Added)
+	}
+	if got := h.personOf("rapier", "Bo"); got != h.personOf(ls, "Bo") {
+		t.Errorf("Bo in the rapier should be the same Bo: %q", got)
+	}
+	// And the people the signup made are nobody's to ask about.
+	if v := h.people(); len(v.Duplicates) != 0 {
+		t.Errorf("signups with an email leave nobody to decide about: %v", v.Duplicates)
+	}
 }
 
-// A discipline's own import, in an event of several, takes only its own programme row --
-// and with no row, refuses rather than importing every response (#126).
-func TestADisciplinesOwnImportTakesOnlyItsRow(t *testing.T) {
-	h, ls := twoDisciplines(t)
-	h.must("POST", "/api/disciplines", map[string]string{"name": "Rapier"}, nil)
-	h.must("PUT", "/api/event/info", map[string]any{
-		"signup": map[string]any{"definitionId": "msl-open-2026", "name": "MSL Open"},
-		"schedule": []map[string]any{
-			{"at": "09:30", "label": "Open Steel Longsword", "kind": "discipline", "tournament": "longsword"},
-			{"at": "13:00", "label": "Open Sabre", "kind": "discipline"},
-		},
-	}, nil)
+// A discipline's own import, in an event of several, takes only what names it.
+func TestADisciplinesOwnImportTakesOnlyItsOwn(t *testing.T) {
+	h, ls := threeDisciplines(t)
 	files := []map[string]string{
-		reply(t, "Ada", "sub-1", "longsword"),
+		reply(t, "Ada", "sub-1", ls),
 		reply(t, "Bo", "sub-2", "open-sabre"),
-	}
-	if code := h.do("POST", "/api/d/rapier/signup/import", map[string]any{"files": files}, nil); code != 409 {
-		t.Errorf("Rapier has no row; its own import must not take everybody, got %d", code)
-	}
-	if code := h.do("POST", "/api/d/rapier/signup/preview", map[string]any{"files": files}, nil); code != 409 {
-		t.Errorf("nor preview as if it would, got %d", code)
 	}
 	var done struct {
 		Added int `json:"added"`
 	}
+	h.must("POST", "/api/d/rapier/signup/import", map[string]any{"files": files}, &done)
+	if done.Added != 0 {
+		t.Errorf("nobody named the rapier, added %d", done.Added)
+	}
 	h.must("POST", "/api/d/open-sabre/signup/import", map[string]any{"files": files}, &done)
 	if done.Added != 1 {
-		t.Errorf("Sabre takes its own row, named like it, and only Bo: added %d", done.Added)
+		t.Errorf("Sabre takes only Bo: added %d", done.Added)
 	}
-	_ = ls
+}
+
+// An event of one discipline signs up for that discipline, by name, on the old paths.
+func TestOneDisciplineSignsUpForItself(t *testing.T) {
+	h := openHall(t, t.TempDir())
+	var view httpapi.EventView
+	h.must("GET", "/api/event", nil, &view)
+	var ready struct{ Missing []string }
+	h.must("GET", "/api/signup/ready", nil, &ready)
+	if !strings.Contains(strings.Join(ready.Missing, ","), "discipline with a name") {
+		t.Errorf("an unnamed discipline is nothing to sign up for, and the panel should say so: %v", ready.Missing)
+	}
+	var ls httpapi.DisciplineSummary
+	h.must("PATCH", "/api/disciplines/"+view.Disciplines[0].Slug, map[string]string{"name": "Open Sabre"}, &ls)
+	h.must("PUT", "/api/event/info", map[string]any{"signup": map[string]any{"definitionId": "msl-open-2026", "name": "MSL Open"}}, nil)
+	var done struct {
+		Added int `json:"added"`
+	}
+	h.must("POST", "/api/signup/import", map[string]any{"files": []map[string]string{reply(t, "Ada", "sub-1", "open-sabre")}}, &done)
+	if done.Added != 1 {
+		t.Errorf("Ada should be entered, added %d", done.Added)
+	}
 }

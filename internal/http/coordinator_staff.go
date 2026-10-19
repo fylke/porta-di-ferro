@@ -35,8 +35,8 @@ func (c *Coordinator) AddStaff(slug string, rows []signup.Row) (int, error) {
 		return 0, err
 	}
 	var perr error
-	members, taken := staffing.FromSignup(st.Members, slug, rows, func(name, club, sub string) string {
-		id, err := c.PersonFor(name, club, sub, "")
+	members, taken := staffing.FromSignup(st.Members, slug, rows, func(name, club, sub, email string) string {
+		id, err := c.PersonFor(name, club, sub, email, "")
 		if err != nil {
 			perr = err
 		}
@@ -93,7 +93,7 @@ func (c *Coordinator) liftStaff() {
 	c.staffMu.Lock()
 	defer c.staffMu.Unlock()
 	person := func(name, club, sub string) string {
-		id, _ := c.PersonFor(name, club, sub, "")
+		id, _ := c.PersonFor(name, club, sub, "", "")
 		return id
 	}
 	st, err := c.folder.Staff()
@@ -286,7 +286,7 @@ func (c *Coordinator) addStaff(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	m.ID, m.Signup = staffing.NewID(), ""
-	if m.Person, err = c.PersonFor(m.Name, m.Club, "", in.Want); err != nil {
+	if m.Person, err = c.PersonFor(m.Name, m.Club, "", "", in.Want); err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}

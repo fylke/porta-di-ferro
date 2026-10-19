@@ -385,7 +385,6 @@ func (c *Coordinator) Handler() http.Handler {
 	mux.HandleFunc("GET /api/event/signup/ready", c.signupReady)
 	mux.HandleFunc("GET /api/event/signup/definition.json", c.signupDefinition)
 	mux.HandleFunc("GET /api/event/signup/app.html", c.signupApp)
-	mux.HandleFunc("PUT /api/event/signup/rows", c.putSignupRows)
 	mux.HandleFunc("POST /api/event/signup/preview", c.previewSignups)
 	mux.HandleFunc("POST /api/event/signup/import", c.importSignups)
 	mux.HandleFunc("GET /api/info.pdf", c.infoPDF)
@@ -530,7 +529,6 @@ func (c *Coordinator) putInfo(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	in.Signup.Tournament = ""
 	if err := c.SaveEventInfo(in); err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return

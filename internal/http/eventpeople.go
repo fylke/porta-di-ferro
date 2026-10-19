@@ -11,19 +11,29 @@ import (
 // EventPeople is the event's registry, as a discipline needs it.
 type EventPeople interface {
 	// PersonFor is who a new entry is: the person asked for if there is one, else the one
-	// who came in on the same signup, else somebody new.
-	PersonFor(name, club, submission, want string) (string, error)
+	// who came in on the same signup or with the same email, else somebody new.
+	PersonFor(name, club, submission, email, want string) (string, error)
+	// PersonByEmail is who signed up with an email, or "".
+	PersonByEmail(email string) string
 }
 
 // UsePeople links this discipline's entries to the event's people. Called once.
 func (s *Server) UsePeople(p EventPeople) { s.people = p }
 
 // personFor is PersonFor when there is an event, and nobody otherwise.
-func (s *Server) personFor(name, club, submission, want string) (string, error) {
+func (s *Server) personFor(name, club, submission, email, want string) (string, error) {
 	if s.people == nil {
 		return "", nil
 	}
-	return s.people.PersonFor(name, club, submission, want)
+	return s.people.PersonFor(name, club, submission, email, want)
+}
+
+// personByEmail is PersonByEmail when there is an event, and nobody otherwise.
+func (s *Server) personByEmail(email string) string {
+	if s.people == nil {
+		return ""
+	}
+	return s.people.PersonByEmail(email)
 }
 
 // Competitors is this discipline's entries, for the event's registry.

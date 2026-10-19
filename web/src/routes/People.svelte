@@ -16,8 +16,8 @@
   let { whenNeeded = false }: {
     /**
      * Only when there is something to decide, under the signup (#142): two entries that
-     * may be one person, or a merge to undo. The signup's submission id already makes one
-     * response one person everywhere, so this is for entries typed in at a desk.
+     * may be one person, or a merge to undo. A signup's email already makes everybody who
+     * signed up one person everywhere, so this is for entries typed in at a desk.
      */
     whenNeeded?: boolean;
   } = $props();

@@ -49,8 +49,7 @@ const (
 //
 // The event part is store.Event, the same shape a tournament carried on its own before
 // (#98), so every reader of it -- the landing page, the info sheet, the signup definition
-// -- reads it unchanged. Its Signup.Tournament is never stored here: which programme row a
-// discipline is stays with that discipline.
+// -- reads it unchanged.
 type File struct {
 	store.Event
 	// ID is this event's identity, made once. A tablet that has kept match logs from
@@ -285,7 +284,6 @@ func (f *Folder) readLocked() (File, error) {
 	if err := json.Unmarshal(b, &out); err != nil {
 		return File{}, fmt.Errorf("%s: %w", infoFile, err)
 	}
-	out.Signup.Tournament = ""
 	return out, nil
 }
 
@@ -301,7 +299,6 @@ func (f *Folder) Update(change func(*File) error) (File, error) {
 	if err := change(&file); err != nil {
 		return File{}, err
 	}
-	file.Signup.Tournament = ""
 	defer f.rev.Add(1)
 	if err := store.WriteJSONAtomic(f.dir, infoFile, file); err != nil {
 		return File{}, err

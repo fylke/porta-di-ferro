@@ -19,6 +19,9 @@ func (s *Server) putTournament(w http.ResponseWriter, r *http.Request) {
 		// A pointer, so a client that does not know about the field cannot wipe the
 		// organizer's answer by leaving it out. Sent as 0 it means "take the suggestion".
 		ElimMats *int `json:"elimMats"`
+		// How many the discipline can take, for the signup's warning (#142). A pointer for
+		// the same reason; 0 is no limit.
+		Capacity *int `json:"capacity"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		writeErr(w, http.StatusBadRequest, err)
@@ -37,6 +40,9 @@ func (s *Server) putTournament(w http.ResponseWriter, r *http.Request) {
 		if t.ElimMats < 0 {
 			t.ElimMats = 0
 		}
+	}
+	if in.Capacity != nil {
+		t.Capacity = max(0, *in.Capacity)
 	}
 	if err := s.store.SaveTournament(t); err != nil {
 		writeErr(w, http.StatusInternalServerError, err)

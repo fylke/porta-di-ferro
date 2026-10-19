@@ -100,14 +100,13 @@ func (f *Folder) migrate() error {
 		}
 	}
 
-	// The tournament's own copy of the day is now event.json's. Only which programme row
-	// this discipline is stays behind, because that is about the discipline.
+	// The tournament's own copy of the day is now event.json's.
 	if terr == nil {
 		moved, err := store.Open(dst)
 		if err != nil {
 			return err
 		}
-		t.Event = store.Event{Signup: store.Signup{Tournament: t.Event.Signup.Tournament}}
+		t.Event = store.Event{}
 		if err := moved.SaveTournament(t); err != nil {
 			return err
 		}

@@ -68,8 +68,8 @@ func TestTheDemoIsAnEventOfThreeDisciplines(t *testing.T) {
 	if sabre.Instance.Name != "Open Sabre" || sabre.Instance.URL != "/d/open-sabre/" {
 		t.Errorf("Sabre's snapshot should say which discipline it is and where: %+v", sabre.Instance)
 	}
-	if sabre.Tournament.Event.Welcome != v.Info.Welcome || sabre.Tournament.Event.Signup.Tournament != "sabre-pools" {
-		t.Errorf("Sabre should show the event's day and keep its own programme row: %+v", sabre.Tournament.Event.Signup)
+	if sabre.Tournament.Event.Welcome != v.Info.Welcome {
+		t.Errorf("Sabre should show the event's day: %+v", sabre.Tournament.Event)
 	}
 
 	if res := e.Request("GET", "/api/state", nil); res.Status != 409 {
@@ -91,9 +91,9 @@ func TestTheDemoEventsDayIsTypedOnce(t *testing.T) {
 		t.Errorf("the longsword should show it, got %q", s.Tournament.Event.Welcome)
 	}
 	// Through a discipline's own path, as its admin page saves it.
-	e.Request("PUT", "/api/d/open-sabre/event", []byte(`{"welcome":"From Sabre","signup":{"tournament":"sabre-pools"}}`))
-	if s := snapIn(t, e, "open-steel-longsword"); s.Tournament.Event.Welcome != "From Sabre" || s.Tournament.Event.Signup.Tournament != "longsword-pools" {
-		t.Errorf("the longsword should share the day and keep its row: %+v", s.Tournament.Event)
+	e.Request("PUT", "/api/d/open-sabre/event", []byte(`{"welcome":"From Sabre"}`))
+	if s := snapIn(t, e, "open-steel-longsword"); s.Tournament.Event.Welcome != "From Sabre" {
+		t.Errorf("the longsword should share the day: %+v", s.Tournament.Event)
 	}
 }
 

@@ -23,14 +23,11 @@ func TestTheSignupAppCarriesTheEvent(t *testing.T) {
 		t.Fatal("web/signup/signup.html no longer has the slot the event is written into")
 	}
 
-	def := signup.BuildDefinition(store.Tournament{
-		Discipline: "Open steel Longsword",
-		Event: store.Event{Signup: store.Signup{
-			DefinitionID: "msl-open-2026", Name: "MSL Open",
-		}, Schedule: []store.ScheduleItem{
-			{Label: "Open Steel Longsword", Kind: "discipline", At: "09:30"},
-		}},
-	})
+	def := signup.BuildDefinition(store.Event{Signup: store.Signup{
+		DefinitionID: "msl-open-2026", Name: "MSL Open",
+	}, Schedule: []store.ScheduleItem{
+		{Label: "Open Steel Longsword", Kind: "discipline", At: "09:30"},
+	}}, "", []signup.TournamentInfo{{ID: "open-steel-longsword", Label: "Open steel Longsword"}})
 
 	baked, err := bakeDefinition(page, def)
 	if err != nil {
@@ -68,12 +65,9 @@ func TestBakingCannotEscapeTheScriptElement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	def := signup.BuildDefinition(store.Tournament{
-		Event: store.Event{
-			Signup:   store.Signup{DefinitionID: "x", Name: `</script><script>alert(1)</script>`},
-			Schedule: []store.ScheduleItem{{Label: "Longsword", Kind: "discipline"}},
-		},
-	})
+	def := signup.BuildDefinition(store.Event{
+		Signup: store.Signup{DefinitionID: "x", Name: `</script><script>alert(1)</script>`},
+	}, "", []signup.TournamentInfo{{ID: "longsword", Label: "Longsword"}})
 	baked, err := bakeDefinition(page, def)
 	if err != nil {
 		t.Fatal(err)
@@ -102,9 +96,7 @@ func TestBakingCannotEscapeTheScriptElement(t *testing.T) {
 
 // The file names an organizer ends up with should say which event they are for.
 func TestDownloadNames(t *testing.T) {
-	def := signup.BuildDefinition(store.Tournament{
-		Event: store.Event{Signup: store.Signup{DefinitionID: "MSL Open 2026"}},
-	})
+	def := signup.BuildDefinition(store.Event{Signup: store.Signup{DefinitionID: "MSL Open 2026"}}, "", nil)
 	if got := signupAppFilename(def); got != "signup-msl-open-2026.html" {
 		t.Errorf("app file is %q", got)
 	}
@@ -112,7 +104,7 @@ func TestDownloadNames(t *testing.T) {
 		t.Errorf("definition file is %q", got)
 	}
 	// An event with nothing filled in still downloads to something openable.
-	bare := signup.BuildDefinition(store.Tournament{})
+	bare := signup.BuildDefinition(store.Event{}, "", nil)
 	if got := signupAppFilename(bare); got != "signup-event.html" {
 		t.Errorf("unconfigured app file is %q", got)
 	}

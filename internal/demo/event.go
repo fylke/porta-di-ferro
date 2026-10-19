@@ -57,11 +57,10 @@ func (e *Event) Reset() {
 	longsword := newDiscipline("open-steel-longsword", fixture)
 	sabre := newDiscipline("open-sabre", sabreFixture)
 	buckler := newDiscipline("sword-and-buckler", bucklerFixture)
-	// The day was the longsword's own before events existed; it is the event's now, and
-	// the discipline keeps only which programme row it is, as a migrated folder does.
+	// The day was the longsword's own before events existed; it is the event's now, as a
+	// migrated folder's is.
 	e.info = longsword.tournament.Event
-	e.info.Signup.Tournament = ""
-	longsword.tournament.Event = store.Event{Signup: store.Signup{Tournament: "longsword-pools"}}
+	longsword.tournament.Event = store.Event{}
 	e.disciplines = nil
 	e.plan = store.Plan{}
 	e.keepers = nil
@@ -281,7 +280,6 @@ func (e *Event) putInfo(body []byte) Response {
 	if err != nil {
 		return fail(400, err)
 	}
-	ev.Signup.Tournament = ""
 	e.info = ev
 	return changed(ev)
 }

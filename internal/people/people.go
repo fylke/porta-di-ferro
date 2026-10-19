@@ -68,23 +68,53 @@ func Active(people []store.Person, id string) bool {
 }
 
 // For is the person a new entry belongs to: the one asked for if there is one, else the
-// one who came in on the same signup, else somebody new. Returns the people, a new one
-// added if need be, and the id.
-func For(people []store.Person, name, club, submission, want string) ([]store.Person, string) {
+// one who came in on the same signup, else the one who signed up with the same email
+// (#142), else somebody new. Returns the people, a new one added or an email learnt if
+// need be, the id, and whether the people changed.
+func For(people []store.Person, name, club, submission, email, want string) ([]store.Person, string, bool) {
+	email = strings.ToLower(strings.TrimSpace(email))
 	if want != "" {
 		if id := Resolve(people, want); Active(people, id) {
-			return people, id
+			return people, id, false
 		}
 	}
+	found := -1
 	if submission != "" {
-		for _, p := range people {
+		for i, p := range people {
 			if p.Signup == submission && p.MergedInto == "" {
-				return people, p.ID
+				found = i
 			}
 		}
 	}
-	p := store.Person{ID: NewID(), Name: name, Club: club, Signup: submission}
-	return append(people, p), p.ID
+	if found < 0 && email != "" {
+		if id := ByEmail(people, email); id != "" {
+			found = index(people, id)
+		}
+	}
+	if found >= 0 {
+		if email == "" || people[found].Email != "" {
+			return people, people[found].ID, false
+		}
+		out := append([]store.Person(nil), people...)
+		out[found].Email = email
+		return out, out[found].ID, true
+	}
+	p := store.Person{ID: NewID(), Name: name, Club: club, Signup: submission, Email: email}
+	return append(people, p), p.ID, true
+}
+
+// ByEmail is who signed up with an email -- followed through any merge -- or "".
+func ByEmail(people []store.Person, email string) string {
+	email = strings.ToLower(strings.TrimSpace(email))
+	if email == "" {
+		return ""
+	}
+	for _, p := range people {
+		if p.Email == email {
+			return Resolve(people, p.ID)
+		}
+	}
+	return ""
 }
 
 // Entry is one competitor record of a person, in one discipline.
@@ -101,8 +131,9 @@ type Entry struct {
 func (e Entry) Key() string { return e.Discipline + "/" + e.Competitor }
 
 // Duplicates are the groups of people who might be one: the same name, folded, and not
-// every pair of them already said to be somebody else. The organizer is asked; nothing
-// here merges anybody.
+// every pair of them already said to be somebody else -- or signed up with two different
+// email addresses, which two people do and one person does not (#142). The organizer is
+// asked; nothing here merges anybody.
 func Duplicates(people []store.Person, entries map[string][]Entry) [][]string {
 	groups := map[string][]string{}
 	for _, p := range people {
@@ -123,12 +154,15 @@ func Duplicates(people []store.Person, entries map[string][]Entry) [][]string {
 		}
 	}
 	apart := map[[2]string]bool{}
+	email := map[string]string{}
 	for _, p := range people {
+		email[p.ID] = p.Email
 		for _, o := range p.Apart {
 			apart[[2]string{p.ID, o}] = true
 			apart[[2]string{o, p.ID}] = true
 		}
 	}
+	twoAddresses := func(a, b string) bool { return email[a] != "" && email[b] != "" && email[a] != email[b] }
 	var out [][]string
 	seen := map[string]bool{}
 	for _, ids := range groups {
@@ -138,7 +172,7 @@ func Duplicates(people []store.Person, entries map[string][]Entry) [][]string {
 		open := false
 		for i := range ids {
 			for j := i + 1; j < len(ids); j++ {
-				open = open || !apart[[2]string{ids[i], ids[j]}]
+				open = open || (!apart[[2]string{ids[i], ids[j]}] && !twoAddresses(ids[i], ids[j]))
 			}
 		}
 		sort.Strings(ids)
@@ -237,7 +271,7 @@ func Ensure(people []store.Person, rosters []Roster) ([]store.Person, Links) {
 		for _, c := range r.Competitors {
 			id := Resolve(people, c.Person)
 			if c.Person == "" || !Active(people, id) {
-				people, id = For(people, c.Name, c.Club, c.Signup, "")
+				people, id, _ = For(people, c.Name, c.Club, c.Signup, "", "")
 			}
 			if id != c.Person {
 				links.set(r.Discipline, c.ID, id)

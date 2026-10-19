@@ -15,25 +15,38 @@ import (
 // importable at all, and the organizer has to be told which is which before anything is
 // written. All of it is data in and data out, so all of it is tested here.
 
-func event() store.Tournament {
-	return store.Tournament{
-		Discipline: "Open steel Longsword",
-		Event: store.Event{
-			Signup: store.Signup{
-				DefinitionID: "msl-open-2026",
-				Name:         "MSL Open",
-				Venue:        "Linköping",
-				Date:         "2026-11-15",
-				Tournament:   "longsword",
-			},
-			Schedule: []store.ScheduleItem{
-				{At: "08:30", Label: "Gear check"},
-				{At: "09:30", Label: "Open Steel Longsword", Kind: "discipline", Tournament: "longsword", Capacity: 3},
-				{At: "12:00", Ends: "13:00", Label: "Lunch", Kind: "break"},
-				{At: "13:00", Label: "Open Sabre", Kind: "discipline", Tournament: "sabre"},
-			},
+func event() store.Event {
+	return store.Event{
+		Signup: store.Signup{
+			DefinitionID: "msl-open-2026",
+			Name:         "MSL Open",
+			Venue:        "Linköping",
+			Date:         "2026-11-15",
+		},
+		Schedule: []store.ScheduleItem{
+			{At: "08:30", Label: "Gear check"},
+			{At: "09:30", Label: "Longsword, pools", Kind: "discipline"},
+			{At: "12:00", Ends: "13:00", Label: "Lunch", Kind: "break"},
+			{At: "13:00", Label: "Sabre", Kind: "discipline"},
 		},
 	}
+}
+
+// disciplines are the event's two, as the event hands them over (#142).
+func disciplines() []signup.TournamentInfo {
+	return []signup.TournamentInfo{
+		{ID: "longsword", Label: "Open Steel Longsword", Capacity: 3, StartsAt: "09:30"},
+		{ID: "sabre", Label: "Open Sabre"},
+	}
+}
+
+func definition() signup.Definition {
+	return signup.BuildDefinition(event(), "", disciplines())
+}
+
+// emailOf is a participant's address in these tests: one per name.
+func emailOf(name string) string {
+	return strings.ToLower(strings.ReplaceAll(name, " ", ".")) + "@example.org"
 }
 
 func responseFile(t *testing.T, name, submission string, entries ...string) signup.File {
@@ -43,7 +56,7 @@ func responseFile(t *testing.T, name, submission string, entries ...string) sign
 		Version:      signup.Version,
 		DefinitionID: "msl-open-2026",
 		SubmissionID: submission,
-		Participant:  signup.Participant{Name: name, Club: "Example HEMA"},
+		Participant:  signup.Participant{Name: name, Club: "Example HEMA", Email: emailOf(name)},
 		Entries:      entries,
 	})
 	if err != nil {
@@ -52,10 +65,10 @@ func responseFile(t *testing.T, name, submission string, entries ...string) sign
 	return signup.File{Source: name + ".json", Body: body}
 }
 
-// The definition is built from the organizer's own programme rather than from a second
-// list they have to keep in step with it.
-func TestTheProgrammeIsTheDefinition(t *testing.T) {
-	def := signup.BuildDefinition(event())
+// What can be entered is the event's disciplines, under their own names (#142); the
+// programme goes out alongside, to read.
+func TestTheDisciplinesAreTheDefinition(t *testing.T) {
+	def := definition()
 
 	if def.Format != signup.DefinitionFormat || def.Version != signup.Version {
 		t.Errorf("format markers are %q v%d", def.Format, def.Version)
@@ -64,29 +77,27 @@ func TestTheProgrammeIsTheDefinition(t *testing.T) {
 		t.Errorf("event came out as %+v", def.Event)
 	}
 	if len(def.Tournaments) != 2 {
-		t.Fatalf("two rows are disciplines; got %d tournaments: %+v", len(def.Tournaments), def.Tournaments)
+		t.Fatalf("two disciplines; got %d: %+v", len(def.Tournaments), def.Tournaments)
 	}
-	if def.Tournaments[0].ID != "longsword" || def.Tournaments[0].Capacity != 3 {
-		t.Errorf("first tournament is %+v", def.Tournaments[0])
+	if d := def.Tournaments[0]; d.ID != "longsword" || d.Label != "Open Steel Longsword" || d.Capacity != 3 || d.StartsAt != "09:30" {
+		t.Errorf("first discipline is %+v", d)
+	}
+	if strings.Join(def.Fields, ",") != "name,club,email" {
+		t.Errorf("everybody is asked for name, club and email; got %v", def.Fields)
 	}
 	if got := len(def.Schedule); got != 4 {
-		t.Errorf("the whole programme is published, including what cannot be entered; got %d rows", got)
+		t.Errorf("the whole programme is published; got %d rows", got)
 	}
 	// Lunch keeps its end time; the gear check is neither a discipline nor a break.
-	var lunch, gear signup.ScheduleEntry
+	types := map[string]signup.ScheduleEntry{}
 	for _, e := range def.Schedule {
-		if e.Label == "Lunch" {
-			lunch = e
-		}
-		if e.Label == "Gear check" {
-			gear = e
-		}
+		types[e.Label] = e
 	}
-	if lunch.Type != "break" || lunch.EndsAt != "13:00" {
+	if lunch := types["Lunch"]; lunch.Type != "break" || lunch.EndsAt != "13:00" {
 		t.Errorf("lunch came out as %+v", lunch)
 	}
-	if gear.Type != "item" {
-		t.Errorf("the gear check came out as %q", gear.Type)
+	if types["Gear check"].Type != "item" || types["Sabre"].Type != "discipline" {
+		t.Errorf("the programme's kinds came out as %+v", types)
 	}
 	// Nothing in the file is a port or a path.
 	raw, _ := json.Marshal(def)
@@ -95,31 +106,26 @@ func TestTheProgrammeIsTheDefinition(t *testing.T) {
 			t.Errorf("the definition leaks %q: %s", leak, raw)
 		}
 	}
+	// With no name of its own, the event takes the one it is given.
+	if named := signup.BuildDefinition(store.Event{}, "Open Sabre", nil); named.Event.Name != "Open Sabre" {
+		t.Errorf("the event's name came out as %q", named.Event.Name)
+	}
 }
 
-// A discipline row with no identifier of its own still publishes a stable one.
-func TestIdentifiersAreDerivedWhenNotGiven(t *testing.T) {
-	tr := event()
-	tr.Event.Schedule = []store.ScheduleItem{
-		{Label: "Långsvärd, öppen klass", Kind: "discipline"},
+// A discipline nobody has named yet is nothing a participant could choose.
+func TestAnUnnamedDisciplineIsNotOffered(t *testing.T) {
+	def := signup.BuildDefinition(event(), "", []signup.TournamentInfo{{ID: "discipline", Label: ""}, {ID: "sabre", Label: "Open Sabre"}})
+	if len(def.Tournaments) != 1 || def.Tournaments[0].ID != "sabre" {
+		t.Errorf("only the named one should be offered, got %+v", def.Tournaments)
 	}
-	def := signup.BuildDefinition(tr)
-	if len(def.Tournaments) != 1 {
-		t.Fatalf("got %+v", def.Tournaments)
-	}
-	// Folded, not dropped: the identifier has to survive a round trip through a file
-	// name and a hand edit.
-	if id := def.Tournaments[0].ID; id != "langsvard-oppen-klass" {
-		t.Errorf("identifier came out as %q", id)
-	}
-	if signup.Slug("Open Sabre") != "open-sabre" {
-		t.Errorf("Slug(Open Sabre) = %q", signup.Slug("Open Sabre"))
+	if signup.Slug("Långsvärd, öppen klass") != "langsvard-oppen-klass" || signup.Slug("Open Sabre") != "open-sabre" {
+		t.Errorf("slugs fold and join: %q %q", signup.Slug("Långsvärd, öppen klass"), signup.Slug("Open Sabre"))
 	}
 }
 
 // The whole point of the preview: the organizer sees what would happen, and nothing has.
 func TestPreviewSortsTheFolderOut(t *testing.T) {
-	def := signup.BuildDefinition(event())
+	def := definition()
 	existing := []store.Competitor{
 		{ID: "c1", Name: "Already Imported", Signup: "sub-old"},
 		{ID: "c2", Name: "Typed In By Hand"},
@@ -128,7 +134,7 @@ func TestPreviewSortsTheFolderOut(t *testing.T) {
 	wrongEvent, _ := json.Marshal(signup.Response{
 		Format: signup.ResponseFormat, Version: signup.Version,
 		DefinitionID: "some-other-open-2025", SubmissionID: "sub-x",
-		Participant: signup.Participant{Name: "Wrong Event"}, Entries: []string{"longsword"},
+		Participant: signup.Participant{Name: "Wrong Event", Email: "wrong@example.org"}, Entries: []string{"longsword"},
 	})
 
 	files := []signup.File{
@@ -146,7 +152,7 @@ func TestPreviewSortsTheFolderOut(t *testing.T) {
 		responseFile(t, "Dag Example", "sub-4", "rapier-and-dagger"),
 	}
 
-	p := signup.Check(def, "longsword", files, existing, nil)
+	p := signup.Check(def, "longsword", files, existing, nil, nil)
 	if len(p.Rows) != len(files) {
 		t.Fatalf("every file gets a row; got %d for %d files", len(p.Rows), len(files))
 	}
@@ -184,7 +190,7 @@ func TestPreviewSortsTheFolderOut(t *testing.T) {
 // Importing the same folder twice is the case this is built around: an organizer who is
 // not sure whether they already did it should be able to just do it again.
 func TestImportingTwiceAddsNobodyTwice(t *testing.T) {
-	def := signup.BuildDefinition(event())
+	def := definition()
 	files := []signup.File{
 		responseFile(t, "Ada Example", "sub-1", "longsword"),
 		responseFile(t, "Bo Example", "sub-2", "longsword"),
@@ -194,7 +200,7 @@ func TestImportingTwiceAddsNobodyTwice(t *testing.T) {
 	}
 
 	var roster []store.Competitor
-	first := signup.Check(def, "longsword", files, roster, nil)
+	first := signup.Check(def, "longsword", files, roster, nil, nil)
 	roster = signup.Import(first, nextID, roster)
 	if len(roster) != 2 {
 		t.Fatalf("the first import should add two, got %d", len(roster))
@@ -203,7 +209,7 @@ func TestImportingTwiceAddsNobodyTwice(t *testing.T) {
 		t.Errorf("the competitor should remember where they came from: %+v", roster[0])
 	}
 
-	second := signup.Check(def, "longsword", files, roster, nil)
+	second := signup.Check(def, "longsword", files, roster, nil, nil)
 	if second.Adding != 0 {
 		t.Errorf("the second import should add nobody, it says %d", second.Adding)
 	}
@@ -221,13 +227,13 @@ func TestImportingTwiceAddsNobodyTwice(t *testing.T) {
 // Only the rows the organizer saw as new are written. A preview they approved and the
 // import that follows cannot come apart.
 func TestImportWritesOnlyWhatThePreviewCalledNew(t *testing.T) {
-	def := signup.BuildDefinition(event())
+	def := definition()
 	files := []signup.File{
 		responseFile(t, "Ada Example", "sub-1", "longsword"),
 		responseFile(t, "Cilla Example", "sub-3", "sabre"),
 		{Source: "bad.json", Body: []byte("{")},
 	}
-	p := signup.Check(def, "longsword", files, nil, nil)
+	p := signup.Check(def, "longsword", files, nil, nil, nil)
 	roster := signup.Import(p, func(e []store.Competitor) string {
 		return fmt.Sprintf("c%d", len(e)+1)
 	}, nil)
@@ -237,19 +243,56 @@ func TestImportWritesOnlyWhatThePreviewCalledNew(t *testing.T) {
 	}
 }
 
-// A single-discipline event that never set an identifier still works: everything valid
-// is importable, because there is nowhere else for it to go.
-func TestASingleDisciplineEventNeedsNoIdentifier(t *testing.T) {
-	tr := event()
-	tr.Event.Signup.Tournament = ""
-	def := signup.BuildDefinition(tr)
+// An email is a person (#142): a second signup from another device -- a new submission
+// id, the same address -- is somebody already here, and two in one folder are one.
+func TestTheSameEmailIsOnePerson(t *testing.T) {
+	def := definition()
+	existing := []store.Competitor{{ID: "c1", Name: "Ada Example", Signup: "sub-1", Person: "pr-ada"}}
+	personOf := func(email string) string {
+		if email == emailOf("Ada Example") {
+			return "pr-ada"
+		}
+		return ""
+	}
+	again := responseFile(t, "Ada Example", "sub-from-her-phone", "longsword")
+	twice := []signup.File{
+		responseFile(t, "Bo Example", "sub-2", "longsword"),
+		responseFile(t, "Bo Example", "sub-2-again", "longsword"),
+	}
 
-	p := signup.Check(def, "", []signup.File{
-		responseFile(t, "Ada Example", "sub-1", "longsword"),
-		responseFile(t, "Cilla Example", "sub-3", "sabre"),
-	}, nil, nil)
-	if p.Adding != 2 {
-		t.Errorf("with no discipline set, both are importable; the preview says %d", p.Adding)
+	p := signup.Check(def, "longsword", append([]signup.File{again}, twice...), existing, nil, personOf)
+	want := []signup.Verdict{signup.Already, signup.New, signup.Repeat}
+	for i, w := range want {
+		if p.Rows[i].Verdict != w {
+			t.Errorf("row %d (%s) is %q, want %q", i, p.Rows[i].Source, p.Rows[i].Verdict, w)
+		}
+	}
+	if p.Adding != 1 {
+		t.Errorf("only Bo is new, once; the preview says %d", p.Adding)
+	}
+	// In a discipline she is not in yet, the same Ada is a new entry -- of the same person,
+	// which is the import's business, not the check's.
+	sabre := signup.Check(def, "sabre", []signup.File{responseFile(t, "Ada Example", "sub-3", "sabre")}, nil, nil, personOf)
+	if sabre.Rows[0].Verdict != signup.New || sabre.Rows[0].Email != emailOf("Ada Example") {
+		t.Errorf("Ada should be new in the sabre, with her email: %+v", sabre.Rows[0])
+	}
+}
+
+// The address is what a participant typed: trimmed and lowercased, so "Ada@Example.org "
+// and "ada@example.org" are one person.
+func TestAnEmailIsReadAsTheSameAddressHoweverTyped(t *testing.T) {
+	body, _ := json.Marshal(signup.Response{
+		Format: signup.ResponseFormat, Version: signup.Version, DefinitionID: "msl-open-2026", SubmissionID: "s",
+		Participant: signup.Participant{Name: "Ada", Email: "  Ada@Example.org "}, Entries: []string{"longsword"},
+	})
+	res, err := signup.ParseResponse(body)
+	if err != nil || res.Participant.Email != "ada@example.org" {
+		t.Errorf("got %q, %v", res.Participant.Email, err)
+	}
+	for _, bad := range []string{"", "ada", "ada@", "@example.org", "ada@example", "ada example@x.org"} {
+		if signup.Email(bad) {
+			t.Errorf("%q should not pass for an address", bad)
+		}
 	}
 }
 
@@ -257,7 +300,7 @@ func TestResponsesThatCannotBeUsedAreRefusedWithAReason(t *testing.T) {
 	ok := signup.Response{
 		Format: signup.ResponseFormat, Version: signup.Version,
 		DefinitionID: "msl-open-2026", SubmissionID: "sub-1",
-		Participant: signup.Participant{Name: "Ada"}, Entries: []string{"longsword"},
+		Participant: signup.Participant{Name: "Ada", Email: "ada@example.org"}, Entries: []string{"longsword"},
 	}
 	mutate := func(fn func(*signup.Response)) []byte {
 		r := ok
@@ -273,6 +316,9 @@ func TestResponsesThatCannotBeUsedAreRefusedWithAReason(t *testing.T) {
 	}{
 		{"no name", mutate(func(r *signup.Response) { r.Participant.Name = "  " }), "no name"},
 		{"no submission id", mutate(func(r *signup.Response) { r.SubmissionID = "" }), "submission id"},
+		{"no email", mutate(func(r *signup.Response) { r.Participant.Email = "" }), "no email"},
+		{"not an email", mutate(func(r *signup.Response) { r.Participant.Email = "Ada Example" }), "no email"},
+		{"from an older app", mutate(func(r *signup.Response) { r.Version = signup.Version - 1 }), "older signup app"},
 		{"nothing chosen", mutate(func(r *signup.Response) { r.Entries = nil }), "no disciplines"},
 		{"no version", mutate(func(r *signup.Response) { r.Version = 0 }), "which version"},
 		{"from the future", mutate(func(r *signup.Response) { r.Version = signup.Version + 1 }), "newer signup app"},
@@ -294,7 +340,7 @@ func TestResponsesThatCannotBeUsedAreRefusedWithAReason(t *testing.T) {
 	}
 
 	// The one mistake a participant will actually make: sending the definition back.
-	def, _ := json.Marshal(signup.BuildDefinition(event()))
+	def, _ := json.Marshal(definition())
 	if _, err := signup.ParseResponse(def); err == nil ||
 		!strings.Contains(err.Error(), "definition") {
 		t.Errorf("sending the definition back should say so, got %v", err)
@@ -304,10 +350,10 @@ func TestResponsesThatCannotBeUsedAreRefusedWithAReason(t *testing.T) {
 // The organizer is told what is missing before a definition goes out, rather than by a
 // participant who cannot use the file.
 func TestReadySaysWhatIsMissing(t *testing.T) {
-	if missing := signup.Ready(signup.BuildDefinition(event())); len(missing) != 0 {
+	if missing := signup.Ready(definition()); len(missing) != 0 {
 		t.Errorf("that event is ready; got %v", missing)
 	}
-	bare := signup.BuildDefinition(store.Tournament{})
+	bare := signup.BuildDefinition(store.Event{}, "", nil)
 	missing := signup.Ready(bare)
 	if len(missing) != 3 {
 		t.Errorf("an unconfigured event is missing three things, got %v", missing)
@@ -316,14 +362,14 @@ func TestReadySaysWhatIsMissing(t *testing.T) {
 
 // A hand-edited response with the label in it rather than the identifier still matches.
 func TestEntriesAreNormalisedBeforeComparing(t *testing.T) {
-	def := signup.BuildDefinition(event())
+	def := definition()
 	body, _ := json.Marshal(signup.Response{
 		Format: signup.ResponseFormat, Version: signup.Version,
 		DefinitionID: "msl-open-2026", SubmissionID: "sub-1",
-		Participant: signup.Participant{Name: "Ada"},
+		Participant: signup.Participant{Name: "Ada", Email: "ada@example.org"},
 		Entries:     []string{"Longsword", "longsword"},
 	})
-	p := signup.Check(def, "longsword", []signup.File{{Source: "a.json", Body: body}}, nil, nil)
+	p := signup.Check(def, "longsword", []signup.File{{Source: "a.json", Body: body}}, nil, nil, nil)
 	if p.Rows[0].Verdict != signup.New {
 		t.Fatalf("got %q: %s", p.Rows[0].Verdict, p.Rows[0].Problem)
 	}
@@ -341,7 +387,7 @@ func staffFile(t *testing.T, name, submission string, entries, staffing, roles [
 		Version:      signup.Version,
 		DefinitionID: "msl-open-2026",
 		SubmissionID: submission,
-		Participant:  signup.Participant{Name: name, Club: "Example HEMA"},
+		Participant:  signup.Participant{Name: name, Club: "Example HEMA", Email: emailOf(name)},
 		Entries:      entries,
 		Staff:        &signup.StaffOffer{Tournaments: staffing, Roles: roles},
 	})
@@ -353,7 +399,7 @@ func staffFile(t *testing.T, name, submission string, entries, staffing, roles [
 
 // Every role is ticked for the participant except the one that is a qualification.
 func TestTheDefinitionPublishesTheStaffRoles(t *testing.T) {
-	def := signup.BuildDefinition(event())
+	def := definition()
 	offered := map[string]bool{}
 	for _, r := range def.StaffRoles {
 		offered[r.ID] = r.Offered
@@ -368,10 +414,10 @@ func TestTheDefinitionPublishesTheStaffRoles(t *testing.T) {
 	}
 }
 
-// One file, two runs: fencing in the sabre and refereeing the longsword makes a
-// competitor of the sabre run and staff of the longsword run.
+// One file, two disciplines: fencing in the sabre and refereeing the longsword makes a
+// competitor of the sabre and staff of the longsword.
 func TestAStaffOfferLandsInTheDisciplineItNames(t *testing.T) {
-	def := signup.BuildDefinition(event())
+	def := definition()
 	files := []signup.File{
 		staffFile(t, "Eva Example", "sub-e", []string{"sabre"}, []string{"longsword"}, []string{"head-ref", "score-keeper"}),
 		// Staff only, no fencing at all.
@@ -380,7 +426,7 @@ func TestAStaffOfferLandsInTheDisciplineItNames(t *testing.T) {
 		staffFile(t, "Hanna Example", "sub-h", nil, []string{"sabre"}, []string{"assistant-ref"}),
 	}
 
-	long := signup.Check(def, "longsword", files, nil, nil)
+	long := signup.Check(def, "longsword", files, nil, nil, nil)
 	want := []signup.Verdict{signup.Staff, signup.Staff, signup.NotHere}
 	for i, w := range want {
 		if long.Rows[i].Verdict != w {
@@ -391,7 +437,7 @@ func TestAStaffOfferLandsInTheDisciplineItNames(t *testing.T) {
 		t.Errorf("longsword gets no competitors and two staff; got %d and %d", long.Adding, long.AddingStaff)
 	}
 
-	sabre := signup.Check(def, "sabre", files, nil, nil)
+	sabre := signup.Check(def, "sabre", files, nil, nil, nil)
 	want = []signup.Verdict{signup.New, signup.Staff, signup.Staff}
 	for i, w := range want {
 		if sabre.Rows[i].Verdict != w {
@@ -414,7 +460,7 @@ func TestAStaffOfferLandsInTheDisciplineItNames(t *testing.T) {
 	}
 
 	// And the same folder again adds nobody to either list.
-	again := signup.Check(def, "longsword", files, nil, staff)
+	again := signup.Check(def, "longsword", files, nil, staff, nil)
 	if again.AddingStaff != 0 || again.Rows[0].Verdict != signup.Already {
 		t.Errorf("the second import should find them already there; got %+v", again.Rows)
 	}

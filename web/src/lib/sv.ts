@@ -683,21 +683,10 @@ export const sv: Record<string, string> = {
   Date: 'Datum',
   'The identifier keeps a response from last year’s event out of this one. It goes in every file and cannot change once they are sent.':
     'Id:t hindrar ett svar från förra årets evenemang från att hamna i det här. Det finns i varje fil och kan inte ändras när de väl är utskickade.',
-  'This run is': 'Den här körningen är',
-  'the only discipline': 'den enda disciplinen',
-  'Ask for a contact detail': 'Fråga efter en kontaktuppgift',
   // The event's signup (phase 3).
   'This event takes its signups once, for every discipline:': 'Tävlingen tar emot anmälningar en gång, för alla discipliner:',
   'on the event’s admin page': 'på tävlingens adminsida',
-  'Which discipline takes the signups for each row of the programme': 'Vilken disciplin som tar anmälningarna till varje rad i programmet',
-  'Every discipline takes the signups for the programme row named like it.': 'Varje disciplin tar anmälningarna till programraden med samma namn.',
-  'A participant signs up for rows of the programme. Each discipline takes the responses for the row named like it, unless you pick another here.':
-    'Deltagare anmäler sig till rader i programmet. Varje disciplin tar svaren till raden med samma namn, om du inte väljer en annan här.',
-  'Programme row for {discipline}': 'Programrad för {discipline}',
-  '{row}, by its name': '{row}, efter namnet',
   nothing: 'ingenting',
-  'No discipline takes {row}: whoever enters it would be imported nowhere.':
-    'Ingen disciplin tar {row}: den som anmäler sig dit importeras ingenstans.',
   'The pools are already drawn in {disciplines}. Anyone imported there will not be in one until you draw again.':
     'Poolerna är redan lottade i {disciplines}. Den som importeras dit hamnar inte i någon pool förrän du lottar om.',
   'into {where}': 'till {where}',
@@ -783,4 +772,11 @@ export const sv: Record<string, string> = {
   'planned {from}–{to}': 'planerad {from}–{to}',
   'under way, {done} of {total} matches': 'pågår, {done} av {total} matcher',
   '{done} of {total} matches': '{done} av {total} matcher',
+  // --- signup by discipline (#142) --------------------------------------------------
+  'Participants choose from': 'Deltagarna väljer bland',
+  'up to {n}': 'högst {n}',
+  'Every discipline with a name. Name, club and email are asked of everybody; a second signup with the same email is the same person.':
+    'Alla discipliner som har ett namn. Namn, klubb och e-post efterfrågas av alla; en andra anmälan med samma e-post är samma person.',
+  Places: 'Platser',
+  'no limit': 'ingen gräns',
 };

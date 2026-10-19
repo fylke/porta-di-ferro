@@ -7,25 +7,40 @@ import { pathToFileURL } from 'node:url';
 // formats and the import; only a browser can say that the page itself works from a
 // downloads folder and writes the file the import expects.
 
-const event = {
-  signup: {
-    definitionId: 'msl-open-2026',
-    name: 'MSL Open',
-    venue: 'Linköping',
-    tournament: 'longsword',
-  },
+// The definition as the event writes it (#142): its disciplines by name, the programme to
+// read, and name, club and email asked of everybody.
+const definition = {
+  format: 'porta.signup',
+  version: 2,
+  definitionId: 'msl-open-2026',
+  event: { name: 'MSL Open', venue: 'Linköping' },
   schedule: [
-    { at: '09:30', label: 'Open Steel Longsword', kind: 'discipline', tournament: 'longsword' },
-    { at: '12:00', ends: '13:00', label: 'Lunch', kind: 'break' },
-    { at: '13:00', label: 'Open Sabre', kind: 'discipline', tournament: 'sabre' },
+    { type: 'discipline', label: 'Longsword pools', startsAt: '09:30' },
+    { type: 'break', label: 'Lunch', startsAt: '12:00', endsAt: '13:00' },
+  ],
+  tournaments: [
+    { id: 'longsword', label: 'Open Steel Longsword', startsAt: '09:30', capacity: 28 },
+    { id: 'sabre', label: 'Open Sabre', startsAt: '13:00' },
+  ],
+  fields: ['name', 'club', 'email'],
+  staffRoles: [
+    { id: 'head-ref', label: 'Head referee', offered: true },
+    { id: 'assistant-ref', label: 'Assistant referee', offered: true },
+    { id: 'score-keeper', label: 'Score keeper', offered: true },
+    { id: 'physician', label: 'Physician', offered: false },
   ],
 };
 
-async function openFromDisk(page: Page, request: import('@playwright/test').APIRequestContext, path: string) {
-  expect((await request.put('/api/event', { data: event })).ok()).toBe(true);
-  const res = await request.get('/api/signup/app.html?download=1');
-  expect(res.ok()).toBe(true);
-  await writeFile(path, await res.body());
+/**
+ * The app with the event written into it, as the server bakes it, saved to disk and
+ * opened from there. Baked here rather than fetched, so the test needs no particular
+ * event on the shared test server; the Go tests check the server's baking.
+ */
+async function openFromDisk(page: Page, path: string) {
+  const app = await readFile(new URL('../signup/signup.html', import.meta.url), 'utf8');
+  const slot = '<script id="definition" type="application/json">null</script>';
+  expect(app).toContain(slot);
+  await writeFile(path, app.replace(slot, `<script id="definition" type="application/json">${JSON.stringify(definition)}</script>`));
 
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
@@ -41,11 +56,8 @@ async function save(page: Page) {
 }
 
 test.describe('The offline signup app', () => {
-  test('offers to staff what you are not fencing, and writes it into the file', async ({
-    page,
-    request,
-  }, info) => {
-    const errors = await openFromDisk(page, request, info.outputPath('signup.html'));
+  test('offers to staff what you are not fencing, and writes it into the file', async ({ page }, info) => {
+    const errors = await openFromDisk(page, info.outputPath('signup.html'));
 
     // Down for everything by default: both disciplines, and every role but physician.
     await expect(page.locator('#staff-longsword')).toBeChecked();
@@ -56,6 +68,8 @@ test.describe('The offline signup app', () => {
 
     await page.locator('#f-name').fill('Ada Example');
     await page.locator('#f-club').fill('Example HEMA');
+    // Each discipline under its own name, with when it starts.
+    await expect(page.locator('label.pick', { hasText: 'Open Sabre' }).first()).toContainText('from 13:00');
 
     // Entering the longsword takes it off the staff list.
     await page.locator('#pick-longsword').check();
@@ -65,21 +79,29 @@ test.describe('The offline signup app', () => {
     // Not comfortable as a head referee.
     await page.locator('#role-head-ref').uncheck();
 
+    // No email, no file: it is who she is to the organizer (#142).
+    const button = page.getByRole('button', { name: 'Save my signup file' });
+    await expect(button).toBeDisabled();
+    await page.locator('#f-email').fill('not an address');
+    await expect(button).toBeDisabled();
+    await page.locator('#f-email').fill(' Ada@Example.org ');
+    await expect(button).toBeEnabled();
+
     const response = await save(page);
     expect(response.format).toBe('porta.signup.response');
     expect(response.definitionId).toBe('msl-open-2026');
+    expect(response.version).toBe(2);
     expect(response.participant.name).toBe('Ada Example');
+    expect(response.participant.email).toBe('ada@example.org');
     expect(response.entries).toEqual(['longsword']);
     expect(response.staff).toEqual({ tournaments: ['sabre'], roles: ['assistant-ref', 'score-keeper'] });
     expect(errors).toEqual([]);
   });
 
-  test('takes somebody who only comes to help, and nobody who unticks everything', async ({
-    page,
-    request,
-  }, info) => {
-    await openFromDisk(page, request, info.outputPath('signup.html'));
+  test('takes somebody who only comes to help, and nobody who unticks everything', async ({ page }, info) => {
+    await openFromDisk(page, info.outputPath('signup.html'));
     await page.locator('#f-name').fill('Finn Example');
+    await page.locator('#f-email').fill('finn@example.org');
 
     const button = page.getByRole('button', { name: 'Save my signup file' });
     await expect(button).toBeEnabled();

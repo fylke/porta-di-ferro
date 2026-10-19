@@ -20,20 +20,31 @@ import (
 // under the registry's lock and written to the entries after.
 
 // PersonFor is who a new entry is (EventPeople, for the disciplines).
-func (c *Coordinator) PersonFor(name, club, submission, want string) (string, error) {
+func (c *Coordinator) PersonFor(name, club, submission, email, want string) (string, error) {
 	c.peopleMu.Lock()
 	defer c.peopleMu.Unlock()
 	reg, err := c.folder.People()
 	if err != nil {
 		return "", err
 	}
-	next, id := people.For(reg, name, club, submission, want)
-	if len(next) != len(reg) {
+	next, id, changed := people.For(reg, name, club, submission, email, want)
+	if changed {
 		if err := c.folder.SavePeople(next); err != nil {
 			return "", err
 		}
 	}
 	return id, nil
+}
+
+// PersonByEmail is who signed up with an email, or "" (EventPeople, for the disciplines).
+func (c *Coordinator) PersonByEmail(email string) string {
+	c.peopleMu.Lock()
+	defer c.peopleMu.Unlock()
+	reg, err := c.folder.People()
+	if err != nil {
+		return ""
+	}
+	return people.ByEmail(reg, email)
 }
 
 // rosters is every readable discipline's entries, and the disciplines' names.

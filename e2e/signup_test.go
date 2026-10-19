@@ -2,7 +2,6 @@ package e2e
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -17,34 +16,48 @@ import (
 // back -- twice, because importing the same folder twice is the case the design exists
 // for.
 
+// longsword is the one discipline of the event these tests run, once it has its name:
+// what a response enters it by (#142).
+const longsword = "open-steel-longsword"
+
 func configureEvent(t *testing.T, s *server) {
 	t.Helper()
+	// A first start is one discipline with no name yet, which nobody could sign up for.
+	var view struct {
+		Disciplines []struct{ Slug, Name string }
+	}
+	s.mustDo(t, "GET", "/api/event", nil, &view)
+	if view.Disciplines[0].Name == "" {
+		s.mustDo(t, "PATCH", "/api/disciplines/"+view.Disciplines[0].Slug, map[string]string{"name": "Open Steel Longsword"}, nil)
+	}
+	s.mustDo(t, "PUT", "/api/tournament", map[string]any{"mats": 2, "minPoolSize": 5, "maxPoolSize": 6, "capacity": 28}, nil)
 	s.mustDo(t, "PUT", "/api/event", map[string]any{
 		"signup": map[string]any{
 			"definitionId": "msl-open-2026",
 			"name":         "MSL Open",
 			"venue":        "Linköping",
 			"date":         "2026-11-15",
-			"tournament":   "longsword",
 		},
 		"schedule": []map[string]any{
 			{"at": "08:30", "label": "Gear check"},
-			{"at": "09:30", "label": "Open Steel Longsword", "kind": "discipline",
-				"tournament": "longsword", "capacity": 28},
+			{"at": "09:30", "label": "Longsword pools", "kind": "discipline"},
 			{"at": "12:00", "ends": "13:00", "label": "Lunch", "kind": "break"},
-			{"at": "13:00", "label": "Open Sabre", "kind": "discipline", "tournament": "sabre"},
 		},
 	}, nil)
+}
+
+func emailOf(name string) string {
+	return strings.ToLower(strings.ReplaceAll(name, " ", ".")) + "@example.org"
 }
 
 func response(t *testing.T, name, submission string, entries ...string) map[string]string {
 	t.Helper()
 	body, err := json.Marshal(map[string]any{
 		"format":       "porta.signup.response",
-		"version":      1,
+		"version":      signup.Version,
 		"definitionId": "msl-open-2026",
 		"submissionId": submission,
-		"participant":  map[string]string{"name": name, "club": "Example HEMA"},
+		"participant":  map[string]string{"name": name, "club": "Example HEMA", "email": emailOf(name)},
 		"entries":      entries,
 	})
 	if err != nil {
@@ -78,7 +91,7 @@ func TestOfflineSignupRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	page := string(body)
-	for _, want := range []string{"msl-open-2026", "MSL Open", "Open Steel Longsword", "Open Sabre"} {
+	for _, want := range []string{"msl-open-2026", "MSL Open", "Open Steel Longsword", longsword} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the app does not carry %q", want)
 		}
@@ -91,15 +104,15 @@ func TestOfflineSignupRoundTrip(t *testing.T) {
 	// The definition on its own, for anyone who would rather send two files.
 	var def signup.Definition
 	s.mustDo(t, "GET", "/api/signup/definition.json", nil, &def)
-	if def.Format != signup.DefinitionFormat || len(def.Tournaments) != 2 {
+	if def.Format != signup.DefinitionFormat || len(def.Tournaments) != 1 || def.Tournaments[0].ID != longsword || def.Tournaments[0].Capacity != 28 {
 		t.Fatalf("the definition came out as %+v", def)
 	}
 
-	// What comes back. One for this discipline, one for both, one for the sabre only,
-	// one that is not a signup at all.
+	// What comes back. One for this discipline, one for it and a sabre this event does not
+	// run, one for that sabre only, one that is not a signup at all.
 	files := []map[string]string{
-		response(t, "Ada Example", "sub-1", "longsword"),
-		response(t, "Bo Example", "sub-2", "longsword", "sabre"),
+		response(t, "Ada Example", "sub-1", longsword),
+		response(t, "Bo Example", "sub-2", longsword, "sabre"),
 		response(t, "Cilla Example", "sub-3", "sabre"),
 		{"source": "notes.json", "body": "{}"},
 	}
@@ -114,7 +127,7 @@ func TestOfflineSignupRoundTrip(t *testing.T) {
 	if preview.Adding != 2 {
 		t.Errorf("two of those are for this discipline; the preview says %d", preview.Adding)
 	}
-	if preview.Tournament != "longsword" {
+	if preview.Tournament != longsword {
 		t.Errorf("the preview should name this discipline, got %q", preview.Tournament)
 	}
 
@@ -145,7 +158,7 @@ func TestOfflineSignupRoundTrip(t *testing.T) {
 		t.Errorf("Ada came in as %+v", ada)
 	}
 	if _, ok := byName["Cilla Example"]; ok {
-		t.Error("Cilla only entered the sabre; another run of the application imports her")
+		t.Error("Cilla only entered a sabre this event does not run")
 	}
 
 	// Again, with the same folder. This is what an organizer does when they are not sure
@@ -164,42 +177,16 @@ func TestOfflineSignupRoundTrip(t *testing.T) {
 
 	// A response corrected and sent again replaces rather than duplicates: the
 	// submission id is what carries that, not the name.
-	corrected := response(t, "Ada Example", "sub-1", "longsword")
+	corrected := response(t, "Ada Example", "sub-1", longsword)
 	s.mustDo(t, "POST", "/api/signup/import", map[string]any{"files": []map[string]string{corrected}}, &second)
 	if second.Added != 0 {
 		t.Errorf("the same submission id came back and added %d", second.Added)
 	}
-}
-
-// A run that has not been told which discipline it is takes everything valid, which is
-// the right answer for an event with one.
-func TestSignupImportWithoutADisciplineTakesEverything(t *testing.T) {
-	s := start(t)
-	s.mustDo(t, "PUT", "/api/event", map[string]any{
-		"signup": map[string]any{"definitionId": "small-open", "name": "Small Open"},
-		"schedule": []map[string]any{
-			{"label": "Longsword", "kind": "discipline", "tournament": "longsword"},
-			{"label": "Sabre", "kind": "discipline", "tournament": "sabre"},
-		},
-	}, nil)
-
-	files := []map[string]string{}
-	for i, entry := range []string{"longsword", "sabre"} {
-		body, _ := json.Marshal(map[string]any{
-			"format": "porta.signup.response", "version": 1,
-			"definitionId": "small-open", "submissionId": fmt.Sprintf("s-%d", i),
-			"participant": map[string]string{"name": fmt.Sprintf("Person %d", i)},
-			"entries":     []string{entry},
-		})
-		files = append(files, map[string]string{"source": entry + ".json", "body": string(body)})
-	}
-
-	var out struct {
-		Added int `json:"added"`
-	}
-	s.mustDo(t, "POST", "/api/signup/import", map[string]any{"files": files}, &out)
-	if out.Added != 2 {
-		t.Errorf("with no discipline set both belong here; added %d", out.Added)
+	// And Ada again from her phone -- a new submission, the same email -- is still Ada.
+	phone := response(t, "Ada Example", "sub-from-her-phone", longsword)
+	s.mustDo(t, "POST", "/api/signup/import", map[string]any{"files": []map[string]string{phone}}, &second)
+	if second.Added != 0 {
+		t.Errorf("the same email on a new submission added %d", second.Added)
 	}
 }
 
@@ -227,8 +214,8 @@ func TestSignupReadySaysWhatIsMissing(t *testing.T) {
 	}
 }
 
-// Staff come back in the same files (issue #5): somebody fencing the sabre offers to
-// referee the longsword, and the longsword run takes them as staff rather than as a
+// Staff come back in the same files (issue #5): somebody fencing a sabre elsewhere offers
+// to referee the longsword, and the longsword takes them as staff rather than as a
 // competitor. They survive a draw, and the organizer can take them off again.
 func TestOfflineSignupBringsStaffIn(t *testing.T) {
 	s := start(t)
@@ -242,9 +229,9 @@ func TestOfflineSignupBringsStaffIn(t *testing.T) {
 
 	offer := func(name, submission string, entries, staffing, roles []string) map[string]string {
 		body, err := json.Marshal(map[string]any{
-			"format": "porta.signup.response", "version": 1,
+			"format": "porta.signup.response", "version": signup.Version,
 			"definitionId": "msl-open-2026", "submissionId": submission,
-			"participant": map[string]string{"name": name, "club": "Example HEMA"},
+			"participant": map[string]string{"name": name, "club": "Example HEMA", "email": emailOf(name)},
 			"entries":     entries,
 			"staff":       map[string]any{"tournaments": staffing, "roles": roles},
 		})
@@ -254,10 +241,10 @@ func TestOfflineSignupBringsStaffIn(t *testing.T) {
 		return map[string]string{"source": name + ".json", "body": string(body)}
 	}
 	files := []map[string]string{
-		response(t, "Ada Example", "sub-1", "longsword"),
-		response(t, "Bo Example", "sub-2", "longsword"),
-		offer("Eva Example", "sub-e", []string{"sabre"}, []string{"longsword"}, []string{"assistant-ref", "score-keeper"}),
-		offer("Finn Example", "sub-f", nil, []string{"longsword"}, []string{"head-ref"}),
+		response(t, "Ada Example", "sub-1", longsword),
+		response(t, "Bo Example", "sub-2", longsword),
+		offer("Eva Example", "sub-e", []string{"sabre"}, []string{longsword}, []string{"assistant-ref", "score-keeper"}),
+		offer("Finn Example", "sub-f", nil, []string{longsword}, []string{"head-ref"}),
 	}
 
 	var preview struct {

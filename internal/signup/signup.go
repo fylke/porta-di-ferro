@@ -27,13 +27,15 @@ import (
 const (
 	DefinitionFormat = "porta.signup"
 	ResponseFormat   = "porta.signup.response"
-	// Version is the format version this build writes and the highest it reads.
-	Version = 1
+	// Version is the format version this build writes and the only one it reads. Version 2
+	// (#142) lists the event's disciplines rather than rows of its programme, and asks
+	// everybody for an email address, which is who they are across responses.
+	Version = 2
 )
 
 // Definition is what the organizer publishes: the event, when things run, and what can
-// be entered. It carries stable tournament identifiers rather than ports or paths, so it
-// survives the organizer restarting the application on a different port.
+// be entered -- the event's disciplines, by their addresses in the event, so a response
+// says which discipline it is for in the same words the hall uses for it.
 type Definition struct {
 	Format       string           `json:"format"`
 	Version      int              `json:"version"`
@@ -41,8 +43,7 @@ type Definition struct {
 	Event        DefinitionEvent  `json:"event"`
 	Schedule     []ScheduleEntry  `json:"schedule,omitempty"`
 	Tournaments  []TournamentInfo `json:"tournaments"`
-	// Fields are what the participant is asked for. "name" and "club" always; "contact"
-	// when the organizer turned it on.
+	// Fields are what the participant is asked for: name, club and email.
 	Fields []string `json:"fields"`
 	// StaffRoles are the jobs a participant can offer to do in the disciplines they are
 	// not fencing in (issue #5). Published rather than built into the app, so the list
@@ -85,21 +86,23 @@ type DefinitionEvent struct {
 
 // ScheduleEntry is one row of the published programme. Times are the organizer's text.
 type ScheduleEntry struct {
-	// Type is "discipline" or "break".
-	Type string `json:"type"`
-	// Tournament is set on a discipline row and names the tournament it runs.
-	Tournament string `json:"tournamentId,omitempty"`
-	Label      string `json:"label"`
-	StartsAt   string `json:"startsAt,omitempty"`
-	EndsAt     string `json:"endsAt,omitempty"`
+	// Type is "discipline", "break" or "item".
+	Type     string `json:"type"`
+	Label    string `json:"label"`
+	StartsAt string `json:"startsAt,omitempty"`
+	EndsAt   string `json:"endsAt,omitempty"`
 }
 
-// TournamentInfo is one thing a participant can enter.
+// TournamentInfo is one discipline a participant can enter.
 type TournamentInfo struct {
-	ID    string `json:"id"`
+	// ID is the discipline's address in the event: "open-sabre".
+	ID string `json:"id"`
+	// Label is its name: "Open Sabre". The one name for it, wherever it is shown.
 	Label string `json:"label"`
 	// Capacity is 0 for no limit.
 	Capacity int `json:"capacity,omitempty"`
+	// StartsAt is when it is planned to start, "09:00", if the plan knows.
+	StartsAt string `json:"startsAt,omitempty"`
 }
 
 // Response is what comes back: one participant, what they enter and what they will work.
@@ -129,18 +132,19 @@ type StaffOffer struct {
 }
 
 type Participant struct {
-	Name    string `json:"name"`
-	Club    string `json:"club,omitempty"`
-	Contact string `json:"contact,omitempty"`
+	Name string `json:"name"`
+	Club string `json:"club,omitempty"`
+	// Email is who they are across responses (#142): two files with the same address are
+	// one person, whatever device each came from. Kept with the event's people, never on a
+	// page anybody in the hall can open.
+	Email string `json:"email"`
 }
 
-// BuildDefinition turns the organizer's own event settings into the file that goes out.
-//
-// The programme is the source: rows marked as a discipline are what can be entered, and
-// a row with no identifier of its own gets one derived from its label, so an organizer
-// who never thinks about identifiers still publishes stable ones.
-func BuildDefinition(t store.Tournament) Definition {
-	ev := t.Event
+// BuildDefinition is the file that goes out: the event's settings, its programme to read,
+// and its disciplines to enter (#142). The disciplines are given by the caller -- the
+// event, which knows them -- rather than read off the programme, so a discipline is
+// entered under its own name and there is nothing to match up.
+func BuildDefinition(ev store.Event, name string, disciplines []TournamentInfo) Definition {
 	def := Definition{
 		Format:       DefinitionFormat,
 		Version:      Version,
@@ -150,54 +154,29 @@ func BuildDefinition(t store.Tournament) Definition {
 			Venue: strings.TrimSpace(ev.Signup.Venue),
 			Date:  strings.TrimSpace(ev.Signup.Date),
 		},
-		Fields:     []string{"name", "club"},
-		StaffRoles: Roles,
+		Fields:      []string{"name", "club", "email"},
+		StaffRoles:  Roles,
+		Tournaments: []TournamentInfo{},
 	}
 	if def.Event.Name == "" {
-		def.Event.Name = strings.TrimSpace(t.Discipline)
+		def.Event.Name = strings.TrimSpace(name)
 	}
-	if ev.Signup.Contact {
-		def.Fields = append(def.Fields, "contact")
-	}
-
-	seen := map[string]bool{}
-	for _, item := range ev.Schedule {
-		entry := ScheduleEntry{
-			Type:     "break",
-			Label:    item.Label,
-			StartsAt: item.At,
-			EndsAt:   item.Ends,
+	for _, d := range disciplines {
+		if strings.TrimSpace(d.ID) == "" || strings.TrimSpace(d.Label) == "" {
+			// A discipline with no name yet is nothing a participant could choose.
+			continue
 		}
-		if item.Kind == "discipline" {
-			id := TournamentID(item)
-			entry.Type = "discipline"
-			entry.Tournament = id
-			if id != "" && !seen[id] {
-				seen[id] = true
-				def.Tournaments = append(def.Tournaments, TournamentInfo{
-					ID: id, Label: item.Label, Capacity: item.Capacity,
-				})
-			}
-		} else if item.Kind != "break" {
-			// Anything that is neither is still worth publishing -- gear check, the
-			// prize giving -- but it is not a break with an end time either.
-			entry.Type = "item"
+		def.Tournaments = append(def.Tournaments, d)
+	}
+	for _, item := range ev.Schedule {
+		entry := ScheduleEntry{Type: "item", Label: item.Label, StartsAt: item.At, EndsAt: item.Ends}
+		switch item.Kind {
+		case "discipline", "break":
+			entry.Type = item.Kind
 		}
 		def.Schedule = append(def.Schedule, entry)
 	}
-	if def.Tournaments == nil {
-		def.Tournaments = []TournamentInfo{}
-	}
 	return def
-}
-
-// TournamentID is the stable identifier of a discipline row: the organizer's own if they
-// set one, and a slug of the label otherwise.
-func TournamentID(item store.ScheduleItem) string {
-	if id := strings.TrimSpace(item.Tournament); id != "" {
-		return Slug(id)
-	}
-	return Slug(item.Label)
 }
 
 // Slug makes an identifier out of a label: lowercase, words joined by hyphens, and
@@ -247,11 +226,13 @@ const (
 	// Staff: somebody this import would add to the staff, because they offered to work
 	// this discipline rather than fence in it (issue #5).
 	Staff Verdict = "staff"
-	// Already: this submission has been imported before. Re-importing is a no-op, which
-	// is what lets an organizer point at the same folder twice without thinking.
+	// Already: this submission has been imported before, or its email is somebody already
+	// here. Re-importing is a no-op, which is what lets an organizer point at the same
+	// folder twice without thinking, and a second signup from another device is not a
+	// second entry.
 	Already Verdict = "already"
-	// Repeat: the same submission id twice in one import -- the same file in the folder
-	// under two names. Counted once.
+	// Repeat: the same submission id or the same email twice in one import -- the same
+	// file under two names, or somebody who signed up twice. Counted once.
 	Repeat Verdict = "repeat"
 	// OtherEvent: a response for a different event.
 	OtherEvent Verdict = "other-event"
@@ -270,7 +251,7 @@ type Row struct {
 	Verdict      Verdict `json:"verdict"`
 	Name         string  `json:"name,omitempty"`
 	Club         string  `json:"club,omitempty"`
-	Contact      string  `json:"contact,omitempty"`
+	Email        string  `json:"email,omitempty"`
 	SubmissionID string  `json:"submissionId,omitempty"`
 	// Entries are every discipline the response asked for, whether or not this run is one.
 	Entries []string `json:"entries,omitempty"`
@@ -308,10 +289,11 @@ type File struct {
 // again and adds exactly the rows it returns as New or Staff, so what the organizer
 // approved and what gets written cannot come apart.
 //
-// mine is the tournament identifier this run of the application is, or "" for a single
-// discipline event that never set one. A response naming only other disciplines is
-// somebody else's to import, and says so rather than being an error.
-func Check(def Definition, mine string, files []File, existing []store.Competitor, staff []store.StaffMember) Preview {
+// mine is the discipline this check is for. A response naming only other disciplines is
+// somebody else's to import, and says so rather than being an error. personOf is who an
+// email already is in the event, or "" -- nil for nobody -- so somebody who signed up
+// again from another device is not entered twice.
+func Check(def Definition, mine string, files []File, existing []store.Competitor, staff []store.StaffMember, personOf func(email string) string) Preview {
 	known := map[string]TournamentInfo{}
 	for _, t := range def.Tournaments {
 		known[t.ID] = t
@@ -321,10 +303,14 @@ func Check(def Definition, mine string, files []File, existing []store.Competito
 	// One submission is one person in one run: a competitor here or staff here, never
 	// both, so either list having it means it is done.
 	imported := map[string]bool{}
+	here := map[string]bool{}
 	entered := 0
 	for _, c := range existing {
 		if c.Signup != "" {
 			imported[c.Signup] = true
+		}
+		if c.Person != "" {
+			here[c.Person] = true
 		}
 		if !c.Withdrawn {
 			entered++
@@ -334,6 +320,16 @@ func Check(def Definition, mine string, files []File, existing []store.Competito
 		if s.Signup != "" {
 			imported[s.Signup] = true
 		}
+		if s.Person != "" {
+			here[s.Person] = true
+		}
+	}
+	signedUp := func(email string) bool {
+		if personOf == nil || email == "" {
+			return false
+		}
+		p := personOf(email)
+		return p != "" && here[p]
 	}
 
 	out := Preview{Rows: []Row{}, Tournament: mine}
@@ -348,7 +344,7 @@ func Check(def Definition, mine string, files []File, existing []store.Competito
 			continue
 		}
 
-		row.Name, row.Club, row.Contact = res.Participant.Name, res.Participant.Club, res.Participant.Contact
+		row.Name, row.Club, row.Email = res.Participant.Name, res.Participant.Club, res.Participant.Email
 		row.SubmissionID, row.Entries = res.SubmissionID, res.Entries
 		if res.Staff != nil {
 			row.Staffing, row.Roles = res.Staff.Tournaments, res.Staff.Roles
@@ -358,9 +354,9 @@ func Check(def Definition, mine string, files []File, existing []store.Competito
 		case def.DefinitionID != "" && res.DefinitionID != def.DefinitionID:
 			row.Verdict = OtherEvent
 			row.Problem = fmt.Sprintf("for %q, not %q", res.DefinitionID, def.DefinitionID)
-		case inThisImport[res.SubmissionID]:
+		case inThisImport[res.SubmissionID] || inThisImport[res.Participant.Email]:
 			row.Verdict = Repeat
-		case imported[res.SubmissionID]:
+		case imported[res.SubmissionID] || signedUp(res.Participant.Email):
 			row.Verdict = Already
 		default:
 			row.Verdict = verdictFor(res, known, mine)
@@ -372,6 +368,7 @@ func Check(def Definition, mine string, files []File, existing []store.Competito
 		switch row.Verdict {
 		case New, Staff, NotHere:
 			inThisImport[res.SubmissionID] = true
+			inThisImport[res.Participant.Email] = true
 		}
 		switch row.Verdict {
 		case New:
@@ -404,13 +401,6 @@ func verdictFor(res Response, known map[string]TournamentInfo, mine string) Verd
 	switch {
 	case !enters && !staffs:
 		return Unknown
-	case mine == "":
-		// This run has not been told which discipline it is. Everything valid is
-		// importable, which is the sensible answer for a one-discipline event.
-		if enters {
-			return New
-		}
-		return Staff
 	case entersMine:
 		return New
 	case staffsMine:

@@ -4,12 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 
 	httpapi "github.com/fylke/porta-di-ferro/internal/http"
 	"github.com/fylke/porta-di-ferro/internal/people"
 	"github.com/fylke/porta-di-ferro/internal/signup"
-	"github.com/fylke/porta-di-ferro/internal/store"
 	"github.com/fylke/porta-di-ferro/web"
 )
 
@@ -19,9 +17,9 @@ import (
 // competitors.json there.
 
 // personFor is who a new entry is: httpapi.Coordinator.PersonFor, in memory.
-func (e *Event) personFor(name, club, submission, want string) string {
+func (e *Event) personFor(name, club, submission, email, want string) string {
 	var id string
-	e.people, id = people.For(e.people, name, club, submission, want)
+	e.people, id, _ = people.For(e.people, name, club, submission, email, want)
 	return id
 }
 
@@ -91,17 +89,28 @@ func (e *Event) postPerson(id, action string, body []byte) Response {
 
 // --- the event's signup -----------------------------------------------------------------
 
-func (e *Event) definition() signup.Definition {
-	return signup.BuildDefinition(store.Tournament{Discipline: e.View().Name, Event: e.info})
+// definition is the event's signup definition: every discipline with a name, as
+// httpapi.Coordinator.SignupDefinition has it.
+func (e *Event) definition(withTimes bool) signup.Definition {
+	var starts map[string]string
+	name := ""
+	if withTimes {
+		view := e.View()
+		starts, name = httpapi.FirstStarts(view.Programme), view.Name
+	}
+	entries := make([]signup.TournamentInfo, 0, len(e.disciplines))
+	for _, d := range e.disciplines {
+		entries = append(entries, signup.TournamentInfo{
+			ID: d.slug, Label: d.tournament.Discipline, Capacity: d.tournament.Capacity, StartsAt: starts[d.slug],
+		})
+	}
+	return signup.BuildDefinition(e.info, name, entries)
 }
 
-func (e *Event) shares(def signup.Definition) []httpapi.SignupShare {
+func (e *Event) shares() []httpapi.SignupShare {
 	out := make([]httpapi.SignupShare, 0, len(e.disciplines))
 	for _, d := range e.disciplines {
-		sh := httpapi.SignupShare{Discipline: d.slug, Name: d.tournament.Discipline}
-		sh.Tournament, sh.Chosen = httpapi.RowFor(def, strings.TrimSpace(d.tournament.Event.Signup.Tournament),
-			sh.Name, d.slug, len(e.disciplines) > 1)
-		out = append(out, sh)
+		out = append(out, httpapi.SignupShare{Discipline: d.slug, Name: d.tournament.Discipline})
 	}
 	return out
 }
@@ -111,42 +120,20 @@ func (e *Event) signupApp() Response {
 	if err != nil {
 		return fail(500, err)
 	}
-	baked, err := httpapi.BakeSignupApp(page, e.definition())
+	baked, err := httpapi.BakeSignupApp(page, e.definition(true))
 	if err != nil {
 		return fail(500, err)
 	}
 	return Response{Status: 200, ContentType: "text/html; charset=utf-8", Body: string(baked)}
 }
 
-func (e *Event) putSignupRows(body []byte) Response {
-	var in map[string]string
-	if err := json.Unmarshal(body, &in); err != nil {
-		return fail(400, err)
-	}
-	for slug := range in {
-		if e.find(slug) == nil {
-			return fail(400, fmt.Errorf("this event has no discipline %q to set", slug))
-		}
-	}
-	for slug, row := range in {
-		e.find(slug).tournament.Event.Signup.Tournament = strings.TrimSpace(row)
-	}
-	def := e.definition()
-	return changed(httpapi.SignupReadyView(def, e.shares(def)))
-}
-
 func (e *Event) previewSignups(files []signup.File) httpapi.EventSignupPreview {
-	def := e.definition()
-	shares := e.shares(def)
+	shares := e.shares()
 	previews := map[int]httpapi.SharePreview{}
-	for i, sh := range shares {
-		if !httpapi.Takes(sh, len(shares) > 1) {
-			continue
-		}
-		d := e.disciplines[i]
-		previews[i] = httpapi.SharePreview{Preview: d.checkSignups(files, sh.Tournament), PoolsDrawn: len(d.tournament.Pools) > 0}
+	for i, d := range e.disciplines {
+		previews[i] = httpapi.SharePreview{Preview: d.checkSignups(files), PoolsDrawn: len(d.tournament.Pools) > 0}
 	}
-	return httpapi.CombineSignups(def, files, shares, previews)
+	return httpapi.CombineSignups(e.definition(false), files, shares, previews)
 }
 
 func (e *Event) signupImport(body []byte, confirm bool) Response {
@@ -157,14 +144,9 @@ func (e *Event) signupImport(body []byte, confirm bool) Response {
 	if !confirm {
 		return ok(e.previewSignups(files))
 	}
-	def := e.definition()
-	shares := e.shares(def)
 	added, addedStaff := 0, 0
-	for i, sh := range shares {
-		if !httpapi.Takes(sh, len(shares) > 1) {
-			continue
-		}
-		a, s := e.disciplines[i].importSignups(files, sh.Tournament)
+	for _, d := range e.disciplines {
+		a, s := d.importSignups(files)
 		added += a
 		addedStaff += s
 	}
@@ -199,14 +181,11 @@ func (e *Event) peopleRequest(method, bare string, parts []string, body []byte) 
 		return e.postPerson(parts[2], parts[3], body), true
 
 	case method == "GET" && bare == "/api/event/signup/ready":
-		def := e.definition()
-		return ok(httpapi.SignupReadyView(def, e.shares(def))), true
+		return ok(httpapi.SignupReadyView(e.definition(true))), true
 	case method == "GET" && bare == "/api/event/signup/definition.json":
-		return ok(e.definition()), true
+		return ok(e.definition(true)), true
 	case method == "GET" && bare == "/api/event/signup/app.html":
 		return e.signupApp(), true
-	case method == "PUT" && bare == "/api/event/signup/rows":
-		return e.putSignupRows(body), true
 	case method == "POST" && bare == "/api/event/signup/preview":
 		return e.signupImport(body, false), true
 	case method == "POST" && bare == "/api/event/signup/import":
