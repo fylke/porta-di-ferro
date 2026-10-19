@@ -118,6 +118,7 @@ func NewCoordinator(folder *event.Folder, assets fs.FS) (*Coordinator, error) {
 	c.ensurePeople()
 	c.liftStaff()
 	c.prunePeople()
+	folder.EnsureID()
 	go c.announce()
 	go c.sweep()
 	return c, nil
@@ -310,6 +311,7 @@ func (c *Coordinator) viewFrom(snaps []snapped, mats MatsView) EventView {
 		view.InfoError = err.Error()
 	}
 	view.Info = file.Event
+	view.ID = file.ID
 	for _, s := range snaps {
 		d := c.summarizeFrom(s)
 		if s.err == nil {
@@ -376,13 +378,13 @@ func (c *Coordinator) Handler() http.Handler {
 
 	mux.HandleFunc("GET /api/event", c.getEvent)
 	mux.HandleFunc("PUT /api/event/info", c.putInfo)
+	mux.HandleFunc("DELETE /api/event", c.deleteEvent)
 	mux.HandleFunc("GET /api/event/stream", func(w http.ResponseWriter, r *http.Request) {
 		serveStream(w, r, c.hub)
 	})
 	mux.HandleFunc("GET /api/event/signup/ready", c.signupReady)
 	mux.HandleFunc("GET /api/event/signup/definition.json", c.signupDefinition)
 	mux.HandleFunc("GET /api/event/signup/app.html", c.signupApp)
-	mux.HandleFunc("PUT /api/event/signup/rows", c.putSignupRows)
 	mux.HandleFunc("POST /api/event/signup/preview", c.previewSignups)
 	mux.HandleFunc("POST /api/event/signup/import", c.importSignups)
 	mux.HandleFunc("GET /api/info.pdf", c.infoPDF)
@@ -527,7 +529,6 @@ func (c *Coordinator) putInfo(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	in.Signup.Tournament = ""
 	if err := c.SaveEventInfo(in); err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
@@ -548,6 +549,65 @@ func (c *Coordinator) infoPDF(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/pdf")
 	w.Header().Set("Content-Disposition", `attachment; filename="porta-di-ferro-info.pdf"`)
 	w.Write(buf.Bytes())
+}
+
+// deleteEvent empties the event for a new one (#141).
+func (c *Coordinator) deleteEvent(w http.ResponseWriter, r *http.Request) {
+	where, err := c.DeleteEvent()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"deleted": where})
+}
+
+// DeleteEvent puts the event aside and starts a new one in its place, as a first start
+// does: one unnamed discipline, nothing else. Every discipline lets go of its files, the
+// folder's contents move under deleted/ (event.Folder.Delete), and every page hears the
+// new event -- whose new identity tells each tablet that the match logs it kept are from
+// an event that is gone. If the move fails, the event is opened again as it was.
+func (c *Coordinator) DeleteEvent() (string, error) {
+	c.planMu.Lock()
+	c.staffMu.Lock()
+	c.peopleMu.Lock()
+	c.mu.Lock()
+	old := c.workers
+	c.workers = map[string]*worker{}
+	c.order = nil
+	c.mu.Unlock()
+	for _, w := range old {
+		w.close()
+	}
+	where, err := c.folder.Delete()
+	var slug string
+	if err == nil {
+		slug, err = c.folder.Create("")
+	}
+	c.projected = nil
+	c.peopleMu.Unlock()
+	c.staffMu.Unlock()
+	c.planMu.Unlock()
+
+	slugs := []string{slug}
+	if err != nil {
+		slugs, _ = c.folder.Slugs()
+	}
+	for _, s := range slugs {
+		if s == "" {
+			continue
+		}
+		wk := c.load(s)
+		c.mu.Lock()
+		c.workers[s] = wk
+		c.order = append(c.order, s)
+		c.mu.Unlock()
+	}
+	c.rev.Add(1)
+	c.poke()
+	if err != nil {
+		return "", err
+	}
+	return where, nil
 }
 
 // --- adding, renaming, retiring and reloading disciplines (#4) --------------------------

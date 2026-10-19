@@ -41,7 +41,7 @@ func (s *Server) addCompetitor(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, fmt.Errorf("a competitor needs a name"))
 		return
 	}
-	person, err := s.personFor(in.Name, strings.TrimSpace(in.Club), "", in.Person)
+	person, err := s.personFor(in.Name, strings.TrimSpace(in.Club), "", "", in.Person)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return

@@ -69,14 +69,11 @@ func fixture(rules match.Ruleset, limits tournament.Limits) ([]store.Competitor,
 			{At: "09:00", Label: "Staff briefing"},
 			// The day in blocks (#136): the longsword, then the sabre and the sword and
 			// buckler side by side, then every final, one after another.
-			{At: "09:30", Label: "Longsword, pools", Kind: "discipline",
-				Tournament: "longsword-pools", Capacity: 32},
-			// The same discipline as the pools, so the signup offers the longsword once and
-			// the event import has nobody to put in a row of its own (phase 3).
-			{At: "11:30", Label: "Longsword, eliminations", Kind: "discipline", Tournament: "longsword-pools"},
+			{At: "09:30", Label: "Longsword, pools", Kind: "discipline"},
+			{At: "11:30", Label: "Longsword, eliminations", Kind: "discipline"},
 			{At: "12:30", Ends: "13:15", Label: "Lunch", Kind: "break"},
-			{At: "13:15", Label: "Sabre", Kind: "discipline", Tournament: "sabre-pools", Capacity: 16},
-			{At: "13:15", Label: "Sword and buckler", Kind: "discipline", Tournament: "sword-and-buckler", Capacity: 16},
+			{At: "13:15", Label: "Sabre", Kind: "discipline"},
+			{At: "13:15", Label: "Sword and buckler", Kind: "discipline"},
 			{At: "16:00", Label: "Finals"},
 			{At: "17:00", Label: "Prize giving"},
 		},
@@ -90,9 +87,9 @@ func fixture(rules match.Ruleset, limits tournament.Limits) ([]store.Competitor,
 			Name:         "Stångebroslaget",
 			Venue:        "Linköping",
 			Date:         "2026-11-14",
-			Tournament:   "longsword-pools",
 		},
 	}
+	t.Capacity = 32
 	t.Mats = 3
 	t.MinPoolSize = 5
 	t.MaxPoolSize = 6
@@ -282,7 +279,7 @@ func sabreFixture(rules match.Ruleset, limits tournament.Limits) ([]store.Compet
 
 	t := store.Defaults()
 	t.Discipline = "Open Sabre"
-	t.Event = store.Event{Signup: store.Signup{Tournament: "sabre-pools"}}
+	t.Capacity = 16
 	t.Mats = 2
 	t.MinPoolSize = 4
 	t.MaxPoolSize = 7
@@ -318,7 +315,7 @@ func bucklerFixture(rules match.Ruleset, limits tournament.Limits) ([]store.Comp
 	}
 	t := store.Defaults()
 	t.Discipline = "Sword and buckler"
-	t.Event = store.Event{Signup: store.Signup{Tournament: "sword-and-buckler"}}
+	t.Capacity = 16
 	t.Mats = 2
 	t.MinPoolSize = 4
 	t.MaxPoolSize = 6

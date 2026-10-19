@@ -72,9 +72,6 @@ func TestALegacyFolderBecomesTheFirstDiscipline(t *testing.T) {
 	if file.Welcome != "Welcome to the hall" || file.Wifi.SSID != "Hall" || file.Signup.Name != "MSL Open" {
 		t.Errorf("the day around the tournament should be lifted into event.json, got %+v", file.Event)
 	}
-	if file.Signup.Tournament != "" {
-		t.Error("which programme row a discipline is belongs to the discipline, not the event")
-	}
 
 	st, err := store.Open(disc)
 	if err != nil {
@@ -87,8 +84,8 @@ func TestALegacyFolderBecomesTheFirstDiscipline(t *testing.T) {
 	if tour.Discipline != "Open Sabre" || tour.Mats != 3 || tour.Seed != 42 {
 		t.Errorf("the tournament itself should be unchanged, got %+v", tour)
 	}
-	if tour.Event.Welcome != "" || tour.Event.Signup.Tournament != "sabre-pools" {
-		t.Errorf("the tournament keeps only its own programme row, got %+v", tour.Event)
+	if tour.Event.Welcome != "" || tour.Event.Signup.Name != "" {
+		t.Errorf("the tournament keeps none of the day, got %+v", tour.Event)
 	}
 	comps, _ := st.Competitors()
 	if len(comps) != 1 || comps[0].Name != "Astrid" {

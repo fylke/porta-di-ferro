@@ -98,14 +98,6 @@ type Signup struct {
 	Venue        string `json:"venue,omitempty"`
 	// Date as the organizer wrote it. Shown, never computed with.
 	Date string `json:"date,omitempty"`
-	// Tournament is which discipline *this* run of the application is, matching the
-	// Tournament of one of the schedule rows. An event with three disciplines is three
-	// runs, and each imports the entries naming its own: the organizer points all three
-	// at the same folder of responses and each takes its share.
-	Tournament string `json:"tournament,omitempty"`
-	// Contact turns on the optional contact field in the participant app. Name and club
-	// are always asked for; anything more is the organizer's choice to collect.
-	Contact bool `json:"contact,omitempty"`
 }
 
 // ScheduleItem is one line of the day's agenda: gear check, the pools, lunch, the
@@ -119,21 +111,9 @@ type ScheduleItem struct {
 	// Ends is when a break finishes, for the rows where that matters. Same rules.
 	Ends  string `json:"ends,omitempty"`
 	Label string `json:"label"`
-	// Kind is "discipline", "break" or "" -- used to style the row, and to decide which
-	// rows are things a participant can sign up for.
+	// Kind is "discipline", "break" or "" -- used to style the row. What a participant
+	// signs up for is the event's disciplines themselves, not these rows (#142).
 	Kind string `json:"kind,omitempty"`
-	// Tournament is the stable identifier of the discipline this row runs, on a row of
-	// kind "discipline". It is what a signup file refers to, so it must not change once
-	// definitions have gone out: the response that comes back names it (issue #91).
-	//
-	// Stable identifiers rather than ports or paths is the point. A discipline is a
-	// separate run of the application on whichever port was free that morning, and a
-	// participant's file must survive the organizer restarting it.
-	Tournament string `json:"tournament,omitempty"`
-	// Capacity is how many the discipline can take, or 0 for no limit. Used to warn on
-	// import rather than to refuse it -- an organizer who wants a twenty-ninth in a pool
-	// of twenty-eight is allowed to have one, and should be told.
-	Capacity int `json:"capacity,omitempty"`
 }
 
 // Wifi is the venue network, for the QR code on the printed info sheet. A spectator who
@@ -158,10 +138,14 @@ type Tournament struct {
 	// shown on every page so a hall with two runs going can tell them apart. Kept here
 	// rather than only in the -name flag, so renaming it from the organizer page sticks
 	// across a restart (issue #80).
-	Discipline  string `json:"discipline,omitempty"`
-	Mats        int    `json:"mats"`
-	MinPoolSize int    `json:"minPoolSize"`
-	MaxPoolSize int    `json:"maxPoolSize"`
+	Discipline string `json:"discipline,omitempty"`
+	// Capacity is how many this discipline can take, or 0 for no limit. A signup import
+	// warns past it rather than refusing: an organizer who wants a twenty-ninth in a
+	// discipline of twenty-eight is allowed one, and should be told.
+	Capacity    int `json:"capacity,omitempty"`
+	Mats        int `json:"mats"`
+	MinPoolSize int `json:"minPoolSize"`
+	MaxPoolSize int `json:"maxPoolSize"`
 	// Event is the day around the tournament: the welcome message, the agenda and the
 	// venue wifi (issue #98). Nothing here reaches a result.
 	Event Event `json:"event,omitempty"`
@@ -248,6 +232,9 @@ type Person struct {
 	// Signup is the submission id the person came in on, so a response that enters
 	// several disciplines is one person in all of them.
 	Signup string `json:"signup,omitempty"`
+	// Email is the address they signed up with (#142): a second response with it, from
+	// any device, is this person again. Never in a view anybody in the hall can open.
+	Email string `json:"email,omitempty"`
 	// MergedInto says this person turned out to be another; their entries were moved
 	// there. Moved lists those entries, "discipline/competitor", so the merge can be
 	// undone exactly.

@@ -4,6 +4,7 @@
   import { hall } from './lib/event.svelte';
   import Organizer from './routes/Organizer.svelte';
   import EventAdmin from './routes/EventAdmin.svelte';
+  import PlanEvent from './routes/PlanEvent.svelte';
   import EventLanding from './routes/EventLanding.svelte';
   import DisciplinePicker from './routes/DisciplinePicker.svelte';
   import Participant from './routes/Participant.svelte';
@@ -54,6 +55,9 @@
   <!-- The first look at the event. -->
 {:else if eventPage && route('/')}
   <EventLanding />
+{:else if !slug && route('/plan')}
+  <!-- What is set once, before the day, for the event (#142). -->
+  <PlanEvent />
 {:else if eventPage && route('/admin')}
   <EventAdmin />
 {:else if route('/')}

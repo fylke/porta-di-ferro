@@ -19,6 +19,8 @@ type EventView struct {
 	// given one, or the only discipline's name when there is just one.
 	Name string      `json:"name"`
 	Info store.Event `json:"info"`
+	// ID is the event's identity (event.File.ID).
+	ID string `json:"id,omitempty"`
 	// InfoError says event.json could not be read. The disciplines run regardless; the
 	// day around them is blank until the file is fixed (proposal §11).
 	InfoError   string              `json:"infoError,omitempty"`

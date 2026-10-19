@@ -13,6 +13,7 @@
   import { Folds } from '../lib/folds.svelte';
   import { dhref, discipline } from '../router.svelte';
   import { hall } from '../lib/event.svelte';
+  import { onOrganizerPC } from '../lib/organizer';
 
   /**
    * What a competitor or a spectator gets when they scan the code on the door (issue #98).
@@ -31,6 +32,7 @@
   // The mats are the hall's (phase 2): what each is running, in any discipline.
   const hallMats = new MatsLive();
   const clock = new Clock();
+  const organizer = onOrganizerPC();
 
   onMount(() => {
     live.start();
@@ -103,6 +105,10 @@
           <p class="intro">{event.welcome}</p>
         {:else}
           <p class="intro dim">{t('Welcome. The schedule and the results are on this page, and they update themselves.')}</p>
+        {/if}
+        {#if organizer}
+          <!-- The organizer's PC only (lib/organizer.ts): the day is set in Plan the event. -->
+          <a class="edit" href="/plan?step=1">{t('Edit the day')}</a>
         {/if}
       </section>
 
@@ -248,6 +254,11 @@
   .hint {
     margin: -0.3rem 0 0.6rem;
     font-size: 0.82rem;
+  }
+  .edit {
+    display: inline-block;
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
   }
   .intro {
     margin: 0;

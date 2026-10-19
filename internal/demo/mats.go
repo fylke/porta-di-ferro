@@ -74,6 +74,7 @@ func (e *Event) mats() httpapi.MatsView {
 	e.withSessions(inputs)
 	view := httpapi.BuildMats(inputs, placed, n, e.held)
 	view.Upcoming = store.UpcomingOf(e.screens)
+	view.Event = e.id
 	httpapi.NameMats(&view, e.plan)
 	return view
 }

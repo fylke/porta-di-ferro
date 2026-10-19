@@ -12,6 +12,8 @@
 
 export const REST_DEFAULT_MS = 120_000;
 export const REST_STEP_MS = 30_000;
+/** How long REST OVER stays up once a rest has run out, before the centre is just Play. */
+export const REST_OVER_MS = 10_000;
 
 interface Bout {
   id: string;
@@ -55,4 +57,22 @@ export function adjustUntil(until: number, delta: number, now: number): number {
 export function formatRest(ms: number): string {
   const s = Math.ceil(ms / 1000);
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+/**
+ * Where a rest that ends at `until` stands (issue #147). Over for a few seconds once it
+ * has run out, then done -- and done is done: the rest is not offered again, so the
+ * widget leaves the screen rather than lingering until Play.
+ */
+export function restPhase(until: number, now: number): 'running' | 'over' | 'done' {
+  if (now < until) return 'running';
+  return now - until < REST_OVER_MS ? 'over' : 'done';
+}
+
+/**
+ * The end to record for a rest the head referee ends early: one already past its REST
+ * OVER, since everyone at the mat heard it ended.
+ */
+export function endedNow(now: number): number {
+  return now - REST_OVER_MS;
 }

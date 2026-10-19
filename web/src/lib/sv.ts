@@ -65,6 +65,7 @@ export const sv: Record<string, string> = {
   'Any device on the venue wifi can reach them.': 'Alla enheter på hallens wifi når dem.',
   'Score keeper': 'Sekretariat',
   'Mat {n}': 'Matta {n}',
+  'Display mat {n}': 'Skärm för matta {n}',
   'mat {n}': 'matta {n}',
   Mat: 'Matta',
   Mats: 'Mattor',
@@ -181,7 +182,6 @@ export const sv: Record<string, string> = {
     'Alla tävlingens discipliner körs här, på den här enda adressen, var och en med egen datamapp. Sekretariat, skärmar och publik når dem alla från samma ställe.',
   Unnamed: 'Namnlös',
   'Rapier and dagger, Sword and buckler, …': 'Rapir och dolk, Svärd och buckler, …',
-  'Add one of the usual': 'Lägg till en av de vanliga',
   Rename: 'Byt namn',
   Save: 'Spara',
   'Name of this discipline': 'Namn på disciplinen',
@@ -214,11 +214,17 @@ export const sv: Record<string, string> = {
   'Each discipline': 'Varje disciplin',
   'Match roster: {name}': 'Matchlista: {name}',
   // --- the mat board (phase 2) ------------------------------------------------------
-  'Drag {item}': 'Dra {item}',
   'Move {item}': 'Flytta {item}',
   'Eliminations {n}': 'Elimineringar {n}',
-  'Every discipline’s pools, eliminations and finals, in the order each mat runs them. Drag a card by its grip, or use its menu. What a mat is running stays where it is.': 'Alla disciplinernas pooler, elimineringar och finaler, i den ordning varje matta kör dem. Dra ett kort i greppet, eller använd dess meny. Det en matta kör just nu ligger kvar.',
-  'The pools, eliminations and finals, in the order each mat runs them. Drag a card by its grip, or use its menu. What a mat is running stays where it is.': 'Poolerna, elimineringarna och finalerna, i den ordning varje matta kör dem. Dra ett kort i greppet, eller använd dess meny. Det en matta kör just nu ligger kvar.',
+  'Every discipline’s pools, eliminations and finals, in the order each mat runs them. Drag a card, or use its menu; on a touch screen, hold it a moment first. What a mat is running stays where it is.':
+    'Alla disciplinernas pooler, elimineringar och finaler, i den ordning varje matta kör dem. Dra ett kort, eller använd dess meny; på en pekskärm, håll kvar fingret ett ögonblick först. Det en matta kör just nu ligger kvar.',
+  'The pools, eliminations and finals, in the order each mat runs them. Drag a card, or use its menu; on a touch screen, hold it a moment first. What a mat is running stays where it is.':
+    'Poolerna, elimineringarna och finalerna, i den ordning varje matta kör dem. Dra ett kort, eller använd dess meny; på en pekskärm, håll kvar fingret ett ögonblick först. Det en matta kör just nu ligger kvar.',
+  'Moves not applied yet': 'Flyttar som inte är genomförda',
+  '1 move not applied yet.': '1 flytt är inte genomförd än.',
+  '{n} moves not applied yet.': '{n} flyttar är inte genomförda än.',
+  'The times and the mats in the hall change when it is applied.': 'Tiderna och mattorna i hallen ändras när det genomförs.',
+  '{done} of {n} moves applied, then: {why}': '{done} av {n} flyttar genomförda, sedan: {why}',
   'Nothing placed here.': 'Inget lagt här.',
   'Nothing to fence just now.': 'Inget att fäkta just nu.',
   'One mat fewer': 'En matta färre',
@@ -255,7 +261,6 @@ export const sv: Record<string, string> = {
   draw: 'oavgjort',
   Draw: 'Oavgjort',
   WINNER: 'VINNARE',
-  BEATEN: 'BESEGRAD',
   DRAW: 'OAVGJORT',
   "Saving rewrites this match's log. The version being replaced is kept as a backup beside it":
     'Att spara skriver om matchens logg. Versionen som ersätts sparas som säkerhetskopia bredvid den',
@@ -678,20 +683,10 @@ export const sv: Record<string, string> = {
   Date: 'Datum',
   'The identifier keeps a response from last year’s event out of this one. It goes in every file and cannot change once they are sent.':
     'Id:t hindrar ett svar från förra årets evenemang från att hamna i det här. Det finns i varje fil och kan inte ändras när de väl är utskickade.',
-  'This run is': 'Den här körningen är',
-  'the only discipline': 'den enda disciplinen',
-  'Ask for a contact detail': 'Fråga efter en kontaktuppgift',
   // The event's signup (phase 3).
   'This event takes its signups once, for every discipline:': 'Tävlingen tar emot anmälningar en gång, för alla discipliner:',
   'on the event’s admin page': 'på tävlingens adminsida',
-  'Who takes what': 'Vem tar vad',
-  'Each discipline takes the responses for its row in the programme: the one named like it, unless you pick another.':
-    'Varje disciplin tar svaren för sin rad i programmet: den som heter som disciplinen, om du inte väljer en annan.',
-  'Programme row for {discipline}': 'Programrad för {discipline}',
-  '{row}, by its name': '{row}, efter namnet',
   nothing: 'ingenting',
-  'No discipline takes {row}: whoever enters it would be imported nowhere.':
-    'Ingen disciplin tar {row}: den som anmäler sig dit importeras ingenstans.',
   'The pools are already drawn in {disciplines}. Anyone imported there will not be in one until you draw again.':
     'Poolerna är redan lottade i {disciplines}. Den som importeras dit hamnar inte i någon pool förrän du lottar om.',
   'into {where}': 'till {where}',
@@ -740,4 +735,48 @@ export const sv: Record<string, string> = {
   Staff: 'Funktionärer',
   'Offered to work this discipline. Who stands where is still up to you.':
     'Har erbjudit sig att arbeta i den här disciplinen. Vem som står var bestämmer du fortfarande.',
+  // --- deleting the event (#141) -----------------------------------------------------
+  'Delete the whole event': 'Radera hela tävlingen',
+  'For the next event: every discipline, competitor and result, and the day around them, leave the hall, and an empty event takes their place. The files are kept, moved to the deleted folder inside':
+    'Inför nästa tävling: alla discipliner, deltagare och resultat, och dagen runt dem, lämnar hallen, och en tom tävling tar deras plats. Filerna sparas, flyttade till mappen deleted i',
+  'Delete the event…': 'Radera tävlingen…',
+  'Moved to {dir}': 'Flyttad till {dir}',
+  'Delete {name}?': 'Radera {name}?',
+  'Delete the event?': 'Radera tävlingen?',
+  'Every screen and tablet in the hall leaves it at once, and what they kept of it is forgotten. The files are kept in the deleted folder, from where they can be moved back by hand.':
+    'Alla skärmar och surfplattor i hallen lämnar den på en gång, och det de sparat av den glöms. Filerna sparas i mappen deleted, varifrån de kan flyttas tillbaka för hand.',
+  'Yes, delete the event': 'Ja, radera tävlingen',
+  // --- plan the event (#142) ---------------------------------------------------------
+  'Plan the event': 'Planera tävlingen',
+  'Back to the admin page': 'Tillbaka till arrangörssidan',
+  'The welcome, the programme and the venue wifi: what the landing page and the info sheet put around the fencing.':
+    'Välkomsttexten, programmet och lokalens wifi: det som startsidan och infobladet sätter runt fäktningen.',
+  'What is fenced. Each discipline has its own competitors, pools and admin page.':
+    'Det som fäktas. Varje disciplin har egna deltagare, pooler och arrangörssida.',
+  'How long things take, how many mats there are, and in what order the day runs.':
+    'Hur lång tid saker tar, hur många mattor det finns och i vilken ordning dagen går.',
+  'Next: {step}': 'Nästa: {step}',
+  Back: 'Tillbaka',
+  'Edit the day': 'Redigera dagen',
+  'Add a discipline…': 'Lägg till en disciplin…',
+  'One of the usual': 'En av de vanliga',
+  'Or another': 'Eller en annan',
+  'Each discipline gets its own competitors, pools and admin page, at this same address.':
+    'Varje disciplin får egna deltagare, pooler och arrangörssida, på samma adress.',
+  Dashboard: 'Översikt',
+  'Before the day': 'Före dagen',
+  'On the day': 'Under dagen',
+  'Entries that may be one person': 'Anmälningar som kan vara samma person',
+  'Short of {roles}': 'Saknar {roles}',
+  'click to see the staff': 'klicka för funktionärerna',
+  'planned {from}–{to}': 'planerad {from}–{to}',
+  'under way, {done} of {total} matches': 'pågår, {done} av {total} matcher',
+  '{done} of {total} matches': '{done} av {total} matcher',
+  // --- signup by discipline (#142) --------------------------------------------------
+  'Participants choose from': 'Deltagarna väljer bland',
+  'up to {n}': 'högst {n}',
+  'Every discipline with a name. Name, club and email are asked of everybody; a second signup with the same email is the same person.':
+    'Alla discipliner som har ett namn. Namn, klubb och e-post efterfrågas av alla; en andra anmälan med samma e-post är samma person.',
+  Places: 'Platser',
+  'no limit': 'ingen gräns',
 };

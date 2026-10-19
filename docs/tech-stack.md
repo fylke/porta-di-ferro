@@ -242,7 +242,8 @@ because it applies weekly for months to the screen everything else depends on.
 treat as secure; every tablet and screen is on `http://<LAN address>`, which they do not. Anything
 gated to a secure context — `crypto.randomUUID`, the wake lock, the service worker, the clipboard — is
 absent there, and code that assumes it works on the developer's machine and fails at the venue.
-The wake lock and the service worker are already guarded and degrade; random ids use
+The service worker is guarded and degrades. The wake lock falls back to what NoSleep.js does
+(`lib/wakelock.ts`, issue #144): a second of silent video on a loop, started on the first tap. Random ids use
 `crypto.getRandomValues`. Serving HTTPS on a LAN would need a certificate every tablet trusts, which
 is a worse install than living without those APIs.
 

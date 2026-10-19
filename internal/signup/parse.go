@@ -52,11 +52,14 @@ func ParseResponse(body []byte) (Response, error) {
 	case res.Version > Version:
 		return Response{}, fmt.Errorf(
 			"written by a newer signup app (version %d; this reads up to %d)", res.Version, Version)
+	case res.Version < Version:
+		return Response{}, fmt.Errorf(
+			"written by an older signup app (version %d); send the participant this event's app again", res.Version)
 	}
 
 	res.Participant.Name = strings.TrimSpace(res.Participant.Name)
 	res.Participant.Club = strings.TrimSpace(res.Participant.Club)
-	res.Participant.Contact = strings.TrimSpace(res.Participant.Contact)
+	res.Participant.Email = strings.ToLower(strings.TrimSpace(res.Participant.Email))
 	res.SubmissionID = strings.TrimSpace(res.SubmissionID)
 	res.DefinitionID = strings.TrimSpace(res.DefinitionID)
 
@@ -65,6 +68,9 @@ func ParseResponse(body []byte) (Response, error) {
 	}
 	if len([]rune(res.Participant.Name)) > 80 {
 		return Response{}, fmt.Errorf("the name is too long to be one")
+	}
+	if !Email(res.Participant.Email) {
+		return Response{}, fmt.Errorf("no email address in it")
 	}
 	if res.SubmissionID == "" {
 		// Without it, importing the same folder twice would add everybody twice. Better
@@ -105,6 +111,19 @@ func ParseResponse(body []byte) (Response, error) {
 	return res, nil
 }
 
+// Email says an address looks like one: something, an at sign, and a domain with a dot.
+// Not a check that it works -- nothing offline can do that -- but enough that a name typed
+// in the wrong box is caught at the import rather than taken for an identity.
+func Email(s string) bool {
+	at := strings.LastIndexByte(s, '@')
+	if at < 1 || strings.ContainsAny(s, " \t\n<>,;") {
+		return false
+	}
+	domain := s[at+1:]
+	dot := strings.LastIndexByte(domain, '.')
+	return dot > 0 && dot < len(domain)-1
+}
+
 // identifiers slugs and de-duplicates a list of identifiers, leaving out any already in
 // seen and adding the rest to it.
 func identifiers(in []string, seen map[string]bool) []string {
@@ -129,9 +148,8 @@ func ParseDefinition(body []byte) (Definition, error) {
 	if def.Format != DefinitionFormat {
 		return Definition{}, fmt.Errorf("not a signup definition: it says it is %q", def.Format)
 	}
-	if def.Version > Version {
-		return Definition{}, fmt.Errorf(
-			"a newer definition (version %d; this reads up to %d)", def.Version, Version)
+	if def.Version != Version {
+		return Definition{}, fmt.Errorf("a definition in version %d of the format; this reads %d", def.Version, Version)
 	}
 	return def, nil
 }
@@ -149,7 +167,7 @@ func Ready(def Definition) []string {
 		missing = append(missing, "the event's name")
 	}
 	if len(def.Tournaments) == 0 {
-		missing = append(missing, "at least one row of the programme marked as a discipline")
+		missing = append(missing, "at least one discipline with a name")
 	}
 	return missing
 }

@@ -68,8 +68,8 @@ func TestTheDemoIsAnEventOfThreeDisciplines(t *testing.T) {
 	if sabre.Instance.Name != "Open Sabre" || sabre.Instance.URL != "/d/open-sabre/" {
 		t.Errorf("Sabre's snapshot should say which discipline it is and where: %+v", sabre.Instance)
 	}
-	if sabre.Tournament.Event.Welcome != v.Info.Welcome || sabre.Tournament.Event.Signup.Tournament != "sabre-pools" {
-		t.Errorf("Sabre should show the event's day and keep its own programme row: %+v", sabre.Tournament.Event.Signup)
+	if sabre.Tournament.Event.Welcome != v.Info.Welcome {
+		t.Errorf("Sabre should show the event's day: %+v", sabre.Tournament.Event)
 	}
 
 	if res := e.Request("GET", "/api/state", nil); res.Status != 409 {
@@ -91,9 +91,9 @@ func TestTheDemoEventsDayIsTypedOnce(t *testing.T) {
 		t.Errorf("the longsword should show it, got %q", s.Tournament.Event.Welcome)
 	}
 	// Through a discipline's own path, as its admin page saves it.
-	e.Request("PUT", "/api/d/open-sabre/event", []byte(`{"welcome":"From Sabre","signup":{"tournament":"sabre-pools"}}`))
-	if s := snapIn(t, e, "open-steel-longsword"); s.Tournament.Event.Welcome != "From Sabre" || s.Tournament.Event.Signup.Tournament != "longsword-pools" {
-		t.Errorf("the longsword should share the day and keep its row: %+v", s.Tournament.Event)
+	e.Request("PUT", "/api/d/open-sabre/event", []byte(`{"welcome":"From Sabre"}`))
+	if s := snapIn(t, e, "open-steel-longsword"); s.Tournament.Event.Welcome != "From Sabre" {
+		t.Errorf("the longsword should share the day: %+v", s.Tournament.Event)
 	}
 }
 
@@ -230,5 +230,35 @@ func TestTheDemoRunsTheEventsMats(t *testing.T) {
 		if it.ID == "open-sabre/pool-1" && (it.Mat != 3 || it.Position != was) {
 			t.Errorf("the move should survive a reload: %+v", it)
 		}
+	}
+}
+
+// Deleting the event in the demo is what it is on the server (#141): a new event of one
+// unnamed, empty discipline, with an identity of its own -- and Start over still brings
+// the visitor's event back.
+func TestTheDemoDeletesItsEvent(t *testing.T) {
+	e := demo.NewEvent()
+	before := view(t, e)
+	if r := e.Request("DELETE", "/api/event", nil); r.Status != 200 || !r.Changed {
+		t.Fatalf("DELETE /api/event returned %d (changed %v)", r.Status, r.Changed)
+	}
+	after := view(t, e)
+	if len(after.Disciplines) != 1 || after.Disciplines[0].Name != "" || after.Disciplines[0].Competitors != 0 {
+		t.Errorf("the new event should be one unnamed, empty discipline: %+v", after.Disciplines)
+	}
+	if after.Info.Welcome != "" || after.ID == "" || after.ID == before.ID {
+		t.Errorf("the new event should have nothing of the old one and an identity of its own: %q %q", after.Info.Welcome, after.ID)
+	}
+	var mats httpapi.MatsView
+	_ = json.Unmarshal([]byte(e.Request("GET", "/api/mats", nil).Body), &mats)
+	if mats.Event != after.ID {
+		t.Errorf("the mats should be the new event's, got %q", mats.Event)
+	}
+	if r := e.Request("GET", "/api/state", nil); r.Status != 200 {
+		t.Errorf("the one discipline should answer the unprefixed paths, got %d", r.Status)
+	}
+	e.Request("POST", "/api/demo/reset", nil)
+	if v := view(t, e); len(v.Disciplines) != 3 || v.ID != before.ID {
+		t.Errorf("Start over should bring the visitor's event back, got %d disciplines and %q", len(v.Disciplines), v.ID)
 	}
 }

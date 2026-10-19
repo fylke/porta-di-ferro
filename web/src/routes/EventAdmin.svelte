@@ -1,45 +1,65 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { api } from '../api';
+  import { onMount, tick } from 'svelte';
   import { hall } from '../lib/event.svelte';
+  import { navigate, query } from '../router.svelte';
+  import { MatsLive } from '../lib/mats.svelte';
   import { LanAddress, describeNetwork } from '../lib/lan.svelte';
   import { hallURL, qrSrc } from '../lib/qr';
   import Disciplines from './Disciplines.svelte';
   import MatBoard from './MatBoard.svelte';
   import Screens from './Screens.svelte';
-  import EventEditor from './EventEditor.svelte';
   import People from './People.svelte';
-  import Planning from './Planning.svelte';
   import Staff from './Staff.svelte';
   import Signup from './Signup.svelte';
   import LangToggle from './LangToggle.svelte';
+  import DeleteEvent from './DeleteEvent.svelte';
   import { t } from '../lib/i18n.svelte';
 
   /**
    * The event's admin view, at /admin once the event runs more than one discipline
    * (docs/proposals/one-event-many-disciplines.md §6): what is about the event rather than
-   * any one discipline. The disciplines -- add one, rename one, take one out -- and the day
-   * around the fencing, typed once for the whole hall. Each discipline's competitors, pools
-   * and matches are on its own admin page, one tap away.
+   * any one discipline. Each discipline's competitors, pools and matches are on its own
+   * admin page, one tap away; what is set once before the day is in Plan the event.
    *
-   * The join panel hands out the one address for everyone: the landing page, which leads
-   * to every discipline. The score keepers' pages are per discipline until mats are shared
-   * across them (phase 2), so each has its own line.
+   * Two dashboards under one header (#142), because what an organizer needs before the
+   * doors open is not what they watch all day: before, the signup, the people it makes and
+   * the staff; on the day, the mats and the screens. The page opens on the one that fits --
+   * on the day once a match anywhere has been fenced -- and the other is a tab away, in the
+   * address (?view=before), for the late entry or the volunteer who did not turn up. The
+   * join panels, the hall's address and the score keepers', are on both.
    */
   const lan = new LanAddress();
+  // The hall's mats, for a link to each one's display (#140).
+  const mats = new MatsLive();
   const demo = import.meta.env.VITE_DEMO === 'true';
 
   onMount(() => {
     void hall.refresh();
     hall.follow();
     lan.start();
+    void mats.start();
     return () => {
+      mats.stop();
       lan.stop();
       hall.unfollow();
     };
   });
 
   const view = $derived(hall.view);
+  const started = $derived(
+    (view?.disciplines ?? []).some((d) => d.matchesDone > 0 || d.stage === 'eliminations' || d.stage === 'done'),
+  );
+  const chosen = $derived(query().get('view'));
+  const dashboard = $derived(chosen === 'before' || chosen === 'day' ? chosen : started ? 'day' : 'before');
+  function show(which: 'before' | 'day') {
+    navigate(`/admin?view=${which}`, true);
+  }
+  /** To the staff, from a slot on the mats that is short of them (#142). */
+  async function toStaff() {
+    show('before');
+    await tick();
+    document.getElementById('staff')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
   const clientURL = $derived(lan.clientURL);
   const landingURL = $derived(clientURL ? `${clientURL}/` : '');
   // The score keepers' page, for the code a tablet scans (#138).
@@ -54,6 +74,7 @@
       {#if view?.name}<span class="event">{view.name}</span>{/if}
     </h1>
     <nav>
+      <a href="/plan">{t('Plan the event')}</a>
       <a href="/">{t('Landing page')}</a>
       <a href="/info">{t('Info sheet')}</a>
       <LangToggle />
@@ -97,15 +118,9 @@
         {/if}
 
         <h3>{t('Each discipline')}</h3>
-        <ul class="perdiscipline">
-          {#each view.disciplines.filter((d) => !d.error) as d (d.slug)}
-            <li>
-              <span class="dname">{d.name || t('Unnamed')}</span>
-              <a href="/d/{d.slug}/admin">{t('Admin')}</a>
-              <a class="quiet" href="/d/{d.slug}/">{t('Landing page')}</a>
-            </li>
-          {/each}
-        </ul>
+        <!-- The one list of the disciplines, with what can be done to each (#142): it was
+             here and again in a box of its own further down. -->
+        <Disciplines bare links />
       </div>
       {#if landingURL}
         <img class="qr" alt={t('QR code for {url}', { url: landingURL })} src={qrSrc(landingURL)} />
@@ -125,33 +140,42 @@
           <a href="/print/mats" target="_blank" rel="noreferrer">{t('Print a code for each mat')}</a>
           <a class="quiet" href="/display/mats" target="_blank" rel="noreferrer">{t('Displays')}</a>
         </p>
+        <p class="links">
+          {#each mats.view?.mats ?? [] as m (m.mat)}
+            <a href="/display/mat/{m.mat}">{t('Display mat {n}', { n: m.mat })}</a>
+          {/each}
+        </p>
       </div>
       {#if scoreURL}
         <img class="qr" alt={t('QR code for {url}', { url: scoreURL })} src={qrSrc(scoreURL)} />
       {/if}
     </section>
 
-    <Disciplines />
+    <div class="tabs" role="tablist" aria-label={t('Dashboard')}>
+      <button role="tab" aria-selected={dashboard === 'before'} class:on={dashboard === 'before'} onclick={() => show('before')}>
+        {t('Before the day')}
+      </button>
+      <button role="tab" aria-selected={dashboard === 'day'} class:on={dashboard === 'day'} onclick={() => show('day')}>
+        {t('On the day')}
+      </button>
+    </div>
 
-    <MatBoard canSetCount />
+    {#if dashboard === 'day'}
+      <MatBoard canSetCount onshort={() => void toStaff()} />
 
-    <Planning />
+      <Screens />
+    {:else}
+      <!-- One signup for the whole event, and the people it and the desks make (phase 3). -->
+      <Signup scope="event" info={view.info} onchange={() => void hall.refresh()} />
 
-    <Screens />
+      <!-- Only when two entries may be one person: the desks' doing, not the signup's. -->
+      <People whenNeeded />
 
-    <!-- Seeded once and not re-keyed: the event updates on every exchange in every
-         discipline, and an editor that reset itself on each would lose the sentence
-         being typed. -->
-    <EventEditor event={view.info} save={api.saveEventInfo} onchange={() => void hall.refresh()} />
+      <!-- Who works the mats, at event level (phase 5). -->
+      <div id="staff"><Staff /></div>
 
-    <!-- One signup for the whole event, and the people it and the desks make (phase 3). -->
-    <Signup scope="event" info={view.info} onchange={() => void hall.refresh()} />
-
-    <People />
-
-    <!-- Who works the mats, at event level (phase 5). -->
-    <Staff />
-
+      <DeleteEvent name={view.name} dir={view.dir} />
+    {/if}
 
     <p class="dir">{t('The event’s files are in')} <span class="mono">{view.dir}</span></p>
   {/if}
@@ -278,27 +302,6 @@
     font-size: 0.9rem;
     overflow-wrap: anywhere;
   }
-  .perdiscipline {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: grid;
-    gap: 0.3rem;
-    font-size: 0.9rem;
-  }
-  .perdiscipline li {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.3rem 0.8rem;
-    align-items: baseline;
-  }
-  .dname {
-    font-weight: 700;
-    min-width: 12rem;
-  }
-  .perdiscipline a {
-    overflow-wrap: anywhere;
-  }
   .quiet {
     color: var(--ink-dim);
   }
@@ -308,6 +311,25 @@
     background: #fff;
     padding: 0.5rem;
     border-radius: var(--radius);
+  }
+  .tabs {
+    display: flex;
+    gap: 0.4rem;
+    margin: 0.4rem 0 1rem;
+    border-bottom: 1px solid var(--line);
+  }
+  .tabs button {
+    padding: 0.55rem 1rem;
+    border: none;
+    border-bottom: 3px solid transparent;
+    border-radius: 0;
+    background: none;
+    color: var(--ink-dim);
+    font-weight: 700;
+  }
+  .tabs button.on {
+    color: var(--ink);
+    border-bottom-color: var(--amber-bright);
   }
   .loading,
   .dir {

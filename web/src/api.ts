@@ -277,6 +277,8 @@ export interface MatsView {
   items: ItemView[];
   /** What the mat screens show of the matches to come (#110). */
   upcoming?: 'bottom' | 'list' | 'none';
+  /** The event's identity (#141). */
+  event?: string;
 }
 
 /** What one of a discipline's mats is running or has up next, for the event's pages. */
@@ -318,6 +320,8 @@ export interface EventView {
   staff?: { id: string; name: string; club?: string; person?: string }[];
   name: string;
   info: EventInfo;
+  /** The event's identity: a new one after a delete (#141). */
+  id?: string;
   /** event.json could not be read; the disciplines run regardless. */
   infoError?: string;
   disciplines: DisciplineSummary[];
@@ -351,9 +355,6 @@ export interface SignupInfo {
   name?: string;
   venue?: string;
   date?: string;
-  /** Which programme row this discipline is. The discipline's own; never the event's. */
-  tournament?: string;
-  contact?: boolean;
 }
 
 export interface EventInfo {
@@ -441,7 +442,8 @@ export interface SignupRow {
   verdict: 'new' | 'staff' | 'already' | 'repeat' | 'other-event' | 'not-here' | 'unknown' | 'invalid';
   name?: string;
   club?: string;
-  contact?: string;
+  /** Who they are across responses (#142). For the organizer's eyes only. */
+  email?: string;
   submissionId?: string;
   entries?: string[];
   /** The offer to work (issue #5): which disciplines, in which roles. */
@@ -461,18 +463,16 @@ export interface SignupPreview {
 
 export interface SignupReady {
   missing: string[];
-  tournaments: { id: string; label: string; capacity?: number }[];
+  /** The disciplines a participant chooses from, by name (#142). */
+  tournaments: { id: string; label: string; capacity?: number; startsAt?: string }[];
   filename: string;
   definition: string;
 }
 
-/** Which discipline takes which programme row, in the event's signup (phase 3). */
+/** One discipline's part in the event's signup import (phase 3). */
 export interface SignupShare {
   discipline: string;
   name: string;
-  tournament: string;
-  /** The discipline chose the row; otherwise it was matched by name. */
-  chosen: boolean;
   adding: number;
   addingStaff: number;
   capacity?: string[];
@@ -480,11 +480,7 @@ export interface SignupShare {
   error?: string;
 }
 
-export interface EventSignupReady extends SignupReady {
-  disciplines: SignupShare[];
-  /** Programme rows no discipline takes: whoever enters them is imported nowhere. */
-  unclaimed: { id: string; label: string }[];
-}
+export type EventSignupReady = SignupReady;
 
 /** One response, and the disciplines it adds to. */
 export interface EventSignupRow extends SignupRow {
@@ -550,6 +546,8 @@ export interface Snapshot {
     maxPoolSize: number;
     /** The organizer's answer for the eliminations, or 0 to take the suggestion. */
     elimMats?: number;
+    /** How many this discipline takes, or 0 for no limit (#142). */
+    capacity?: number;
     seed: number;
     pools: unknown[];
     generatedAt?: string;
@@ -620,19 +618,20 @@ function disciplineApi(base: () => string) {
     removeCompetitor: (id: string) => req<{ ok: boolean }>('DELETE', `${base()}/competitors/${id}`),
     /**
      * Left out rather than sent as 0 when the caller has no opinion on it: the setup screen
-     * saves mats and pool sizes without touching what the eliminations were set to.
+     * saves mats and pool sizes without touching what the eliminations were set to, and the
+     * eliminations panel leaves the capacity alone.
      */
-    saveTournament: (mats: number, minPoolSize: number, maxPoolSize: number, elimMats?: number) =>
+    saveTournament: (mats: number, minPoolSize: number, maxPoolSize: number, elimMats?: number, capacity?: number) =>
       req<unknown>('PUT', `${base()}/tournament`, {
         mats,
         minPoolSize,
         maxPoolSize,
         ...(elimMats === undefined ? {} : { elimMats }),
+        ...(capacity === undefined ? {} : { capacity }),
       }),
     /**
      * The welcome message, the agenda, the wifi and the signup settings, through the
-     * discipline: the event keeps the day, and the discipline keeps which programme row it
-     * is. Written from the admin view only.
+     * discipline: the event keeps the day. Written from the admin view only.
      */
     saveEvent: (event: EventInfo) => req<EventInfo>('PUT', `${base()}/event`, event),
     /** What is still missing before the signup files can go out. */
@@ -703,6 +702,8 @@ export const api = {
   event: () => req<EventView>('GET', '/api/event'),
   /** The welcome, the programme, the wifi and the signup settings, typed once for the event. */
   saveEventInfo: (info: EventInfo) => req<EventInfo>('PUT', '/api/event/info', info),
+  /** Puts the whole event aside under deleted/ and starts a new, empty one (#141). */
+  deleteEvent: () => req<{ deleted: string }>('DELETE', '/api/event'),
   addresses: () => req<Address[]>('GET', '/api/addresses'),
 
   /** Everybody in the event, and who might be the same person. */
@@ -731,7 +732,6 @@ export const api = {
 
   /** The signup for the whole event: one file out, one folder back, every discipline its share. */
   eventSignupReady: () => req<EventSignupReady>('GET', '/api/event/signup/ready'),
-  setSignupRows: (rows: Record<string, string>) => req<EventSignupReady>('PUT', '/api/event/signup/rows', rows),
   previewEventSignups: (files: { source: string; body: string }[]) =>
     req<EventSignupPreview>('POST', '/api/event/signup/preview', { files }),
   importEventSignups: (files: { source: string; body: string }[]) =>

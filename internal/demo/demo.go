@@ -29,10 +29,10 @@ import (
 	"strings"
 	"time"
 
-	qrcode "github.com/skip2/go-qrcode"
-
 	httpapi "github.com/fylke/porta-di-ferro/internal/http"
 	"github.com/fylke/porta-di-ferro/internal/match"
+	"github.com/fylke/porta-di-ferro/internal/people"
+	"github.com/fylke/porta-di-ferro/internal/qr"
 	"github.com/fylke/porta-di-ferro/internal/signup"
 	"github.com/fylke/porta-di-ferro/internal/staffing"
 	"github.com/fylke/porta-di-ferro/internal/store"
@@ -162,14 +162,12 @@ func (d *Demo) Competitors() ([]store.Competitor, error) {
 func (d *Demo) Tournament() (store.Tournament, error) { return d.merged(), nil }
 
 // merged is the tournament with the event's day laid over it, as the server's discipline
-// reads it (httpapi.Server.tournament): only which programme row it is stays its own.
-// Every reader of t.Event wants this; every write goes to d.tournament.
+// reads it (httpapi.Server.tournament). Every reader of t.Event wants this; every write
+// goes to d.tournament.
 func (d *Demo) merged() store.Tournament {
 	t := d.tournament
 	if d.event != nil {
-		mine := t.Event.Signup.Tournament
 		t.Event = d.event.info
-		t.Event.Signup.Tournament = mine
 		// The staff are the event's (phase 5): this discipline's are those who work it.
 		t.Staff = staffing.For(d.event.staff.Members, d.slug)
 	}
@@ -306,14 +304,14 @@ func (d *Demo) Request(method, path string, body []byte) Response {
 		return d.infoPDF(query)
 
 	case method == "GET" && path == "/api/qr.png":
-		return qr(query)
+		return qrImage(query)
 
 	// Offline signup (issue #91). The demo can do all of it: the files never touch a
 	// network in the real thing either, so there is nothing here it has to pretend about.
 	case method == "GET" && path == "/api/signup/ready":
 		return d.signupReady()
 	case method == "GET" && path == "/api/signup/definition.json":
-		return ok(signup.BuildDefinition(d.merged()))
+		return ok(d.definition(true))
 	case method == "GET" && path == "/api/signup/app.html":
 		return d.signupApp()
 	case method == "POST" && path == "/api/signup/preview":
@@ -401,8 +399,28 @@ func (d *Demo) Request(method, path string, body []byte) Response {
 
 // --- offline signup --------------------------------------------------------------------
 
+// definition is the event's signup definition, or this discipline's own with itself as
+// its one discipline, as httpapi.Server.definition has it.
+func (d *Demo) definition(withTimes bool) signup.Definition {
+	if d.event != nil {
+		return d.event.definition(withTimes)
+	}
+	t := d.merged()
+	return signup.BuildDefinition(t.Event, t.Discipline, []signup.TournamentInfo{
+		{ID: d.entryID(), Label: t.Discipline, Capacity: t.Capacity},
+	})
+}
+
+// entryID is how a response names this discipline.
+func (d *Demo) entryID() string {
+	if d.slug != "" {
+		return d.slug
+	}
+	return signup.Slug(d.tournament.Discipline)
+}
+
 func (d *Demo) signupReady() Response {
-	def := signup.BuildDefinition(d.merged())
+	def := d.definition(true)
 	return ok(map[string]any{
 		"missing":     signup.Ready(def),
 		"tournaments": def.Tournaments,
@@ -416,7 +434,7 @@ func (d *Demo) signupApp() Response {
 	if err != nil {
 		return fail(500, err)
 	}
-	baked, err := httpapi.BakeSignupApp(page, signup.BuildDefinition(d.merged()))
+	baked, err := httpapi.BakeSignupApp(page, d.definition(true))
 	if err != nil {
 		return fail(500, err)
 	}
@@ -430,7 +448,7 @@ func (d *Demo) signupImport(body []byte, confirm bool) Response {
 	if err != nil {
 		return fail(400, err)
 	}
-	preview := d.checkSignups(files, d.tournament.Event.Signup.Tournament)
+	preview := d.checkSignups(files)
 	view := map[string]any{
 		"rows": preview.Rows, "adding": preview.Adding, "addingStaff": preview.AddingStaff,
 		"capacity": preview.Capacity, "tournament": preview.Tournament,
@@ -440,7 +458,7 @@ func (d *Demo) signupImport(body []byte, confirm bool) Response {
 		return ok(view)
 	}
 
-	added, addedStaff := d.importSignups(files, d.tournament.Event.Signup.Tournament)
+	added, addedStaff := d.importSignups(files)
 	return changed(map[string]any{
 		"added":      added,
 		"addedStaff": addedStaff,
@@ -448,21 +466,29 @@ func (d *Demo) signupImport(body []byte, confirm bool) Response {
 	})
 }
 
-// checkSignups is signup.Check over this discipline, as the programme row mine.
-func (d *Demo) checkSignups(files []signup.File, mine string) signup.Preview {
+// checkSignups is signup.Check over this discipline.
+func (d *Demo) checkSignups(files []signup.File) signup.Preview {
 	t := d.merged()
-	return signup.Check(signup.BuildDefinition(t), mine, files, d.competitors, t.Staff)
+	var byEmail func(string) string
+	if d.event != nil {
+		byEmail = func(email string) string { return people.ByEmail(d.event.people, email) }
+	}
+	return signup.Check(d.definition(false), d.entryID(), files, d.competitors, t.Staff, byEmail)
 }
 
 // importSignups adds what the check calls new, each entry a person of the event's.
-func (d *Demo) importSignups(files []signup.File, mine string) (added, addedStaff int) {
-	preview := d.checkSignups(files, mine)
+func (d *Demo) importSignups(files []signup.File) (added, addedStaff int) {
+	preview := d.checkSignups(files)
 	before, staffBefore := len(d.competitors), len(d.tournament.Staff)
 	d.competitors = signup.Import(preview, httpapi.NextCompetitorID, d.competitors)
 	if d.event != nil {
+		emails := map[string]string{}
+		for _, row := range preview.Rows {
+			emails[row.SubmissionID] = row.Email
+		}
 		for i := before; i < len(d.competitors); i++ {
 			c := d.competitors[i]
-			d.competitors[i].Person = d.event.personFor(c.Name, c.Club, c.Signup, "")
+			d.competitors[i].Person = d.event.personFor(c.Name, c.Club, c.Signup, emails[c.Signup], "")
 		}
 	}
 	if d.event != nil {
@@ -472,11 +498,11 @@ func (d *Demo) importSignups(files []signup.File, mine string) (added, addedStaf
 	return len(d.competitors) - before, len(d.tournament.Staff) - staffBefore
 }
 
-// qr renders a code for whatever it is given -- the wifi payload and the landing address
+// qrImage renders a code for whatever it is given -- the wifi payload and the landing address
 // on the info sheet. The server has an endpoint for this and the client asks for it with
 // an <img>, so without it here the demo's info sheet shows two broken images, which is
 // the first thing a visitor to the demo would see of a page that is mostly two codes.
-func qr(query string) Response {
+func qrImage(query string) Response {
 	target := ""
 	for _, kv := range strings.Split(query, "&") {
 		if after, found := strings.CutPrefix(kv, "url="); found {
@@ -488,7 +514,7 @@ func qr(query string) Response {
 	if target == "" {
 		return fail(400, fmt.Errorf("a code needs something to encode"))
 	}
-	png, err := qrcode.Encode(target, qrcode.Medium, 512)
+	png, err := qr.PNG(target, 512)
 	if err != nil {
 		return fail(500, err)
 	}
@@ -562,7 +588,7 @@ func (d *Demo) addCompetitor(body []byte) Response {
 		Club: strings.TrimSpace(in.Club),
 	}
 	if d.event != nil {
-		c.Person = d.event.personFor(c.Name, c.Club, "", in.Person)
+		c.Person = d.event.personFor(c.Name, c.Club, "", "", in.Person)
 	}
 	d.competitors = append(d.competitors, c)
 	return changed(c)
@@ -625,11 +651,8 @@ func (d *Demo) putEvent(body []byte) Response {
 		d.tournament.Event = ev
 		return changed(ev)
 	}
-	// As the server does it: the event takes the day, the discipline keeps its row.
-	d.tournament.Event = store.Event{Signup: store.Signup{Tournament: ev.Signup.Tournament}}
-	shared := ev
-	shared.Signup.Tournament = ""
-	d.event.info = shared
+	// As the server does it: the event takes the day.
+	d.event.info = ev
 	return changed(ev)
 }
 
@@ -641,11 +664,15 @@ func (d *Demo) putTournament(body []byte) Response {
 		MinPoolSize int  `json:"minPoolSize"`
 		MaxPoolSize int  `json:"maxPoolSize"`
 		ElimMats    *int `json:"elimMats"`
+		Capacity    *int `json:"capacity"`
 	}
 	if err := json.Unmarshal(body, &in); err != nil {
 		return fail(400, err)
 	}
 	d.tournament.Mats, d.tournament.MinPoolSize, d.tournament.MaxPoolSize = in.Mats, in.MinPoolSize, in.MaxPoolSize
+	if in.Capacity != nil {
+		d.tournament.Capacity = max(0, *in.Capacity)
+	}
 	if in.ElimMats != nil {
 		d.tournament.ElimMats = *in.ElimMats
 		if d.tournament.ElimMats < 0 {

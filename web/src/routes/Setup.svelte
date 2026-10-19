@@ -16,6 +16,8 @@
   let mats = $state(untrack(() => snapshot.tournament.mats));
   let minPoolSize = $state(untrack(() => snapshot.tournament.minPoolSize));
   let maxPoolSize = $state(untrack(() => snapshot.tournament.maxPoolSize));
+  // Empty is no limit: the signup warns past it, never refuses (#142).
+  let capacity = $state<number | null>(untrack(() => snapshot.tournament.capacity || null));
   let error = $state('');
   let busy = $state(false);
 
@@ -26,7 +28,7 @@
     error = '';
     busy = true;
     try {
-      await api.saveTournament(mats, minPoolSize, maxPoolSize);
+      await api.saveTournament(mats, minPoolSize, maxPoolSize, undefined, Math.max(0, Math.round(capacity ?? 0)));
       onchange();
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
@@ -70,6 +72,10 @@
     <label>
       {t('Largest pool')}
       <input type="number" min="2" max="7" bind:value={maxPoolSize} onchange={save} />
+    </label>
+    <label>
+      {t('Places')}
+      <input type="number" min="0" placeholder={t('no limit')} bind:value={capacity} onchange={save} />
     </label>
   </div>
 

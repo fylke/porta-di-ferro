@@ -39,19 +39,16 @@ func (s *Server) UseEvent(e EventInfo) { s.event = e }
 // tournament is the stored tournament with the event's day laid over it, which is what
 // every reader of t.Event wants: the snapshot, the info sheet, the signup definition.
 //
-// Only which programme row this discipline is -- Signup.Tournament -- is the
-// discipline's own. Never save what this returns: a read-modify-write goes through
-// s.store.Tournament(), so the event's copy is never written back into the discipline.
+// Never save what this returns: a read-modify-write goes through s.store.Tournament(), so
+// the event's copy is never written back into the discipline.
 func (s *Server) tournament() (store.Tournament, error) {
 	t, err := s.store.Tournament()
 	if err != nil || s.event == nil {
 		return t, err
 	}
-	mine := t.Event.Signup.Tournament
 	// An event.json that does not parse leaves the day blank rather than the discipline
 	// unreadable; the event reports the error itself (proposal §11).
 	ev, _ := s.event.EventInfo()
-	ev.Signup.Tournament = mine
 	t.Event = ev
 	// The staff are the event's (phase 5): this discipline's are those who work it.
 	if s.staff != nil {
@@ -83,31 +80,23 @@ func (s *Server) putEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.writeMu.Lock()
-	t, err := s.store.Tournament()
-	if err != nil {
-		s.writeMu.Unlock()
-		writeErr(w, http.StatusInternalServerError, err)
-		return
-	}
 	if s.event == nil {
-		t.Event = in
-	} else {
-		// The admin screens send the whole day, as they always have. The event takes it,
-		// and the discipline keeps only which programme row it is.
-		t.Event = store.Event{Signup: store.Signup{Tournament: in.Signup.Tournament}}
-	}
-	err = s.store.SaveTournament(t)
-	s.writeMu.Unlock()
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err)
-		return
+		s.writeMu.Lock()
+		t, err := s.store.Tournament()
+		if err == nil {
+			t.Event = in
+			err = s.store.SaveTournament(t)
+		}
+		s.writeMu.Unlock()
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err)
+			return
+		}
 	}
 	if s.event != nil {
-		shared := in
-		shared.Signup.Tournament = ""
-		// Saving it republishes every discipline, this one included.
-		if err := s.event.SaveEventInfo(shared); err != nil {
+		// The admin screens send the whole day, as they always have, and the event takes
+		// it. Saving it republishes every discipline, this one included.
+		if err := s.event.SaveEventInfo(in); err != nil {
 			writeErr(w, http.StatusInternalServerError, err)
 			return
 		}

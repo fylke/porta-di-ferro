@@ -3,7 +3,7 @@ package httpapi
 import (
 	"net/http"
 
-	qrcode "github.com/skip2/go-qrcode"
+	"github.com/fylke/porta-di-ferro/internal/qr"
 )
 
 // qr renders a QR code for whatever address the organizer view was told to advertise.
@@ -21,7 +21,7 @@ func serveQR(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, errMissingURL)
 		return
 	}
-	png, err := qrcode.Encode(target, qrcode.Medium, 512)
+	png, err := qr.PNG(target, 512)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return

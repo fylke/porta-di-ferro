@@ -1,13 +1,12 @@
 package httpapi
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/fylke/porta-di-ferro/internal/signup"
-	"github.com/fylke/porta-di-ferro/internal/store"
 	"github.com/fylke/porta-di-ferro/web"
 )
 
@@ -16,19 +15,14 @@ import (
 // discipline runs on its own, so the rules are the ones #91 settled; what this adds is
 // asking every discipline at once, and saying in one table where each response goes.
 //
-// Which discipline takes which programme row is the discipline's own setting. One that
-// never set it takes the row named like it -- "Open Sabre" takes the row labelled Open
-// Sabre -- so an organizer who names things the same twice never has to think about it.
-// In an event of one discipline an unset row still means "everything", as it always did.
+// What can be entered is the event's disciplines, by name (#142). The file used to list
+// rows of the programme, and each discipline had to be matched to one; now a response
+// names the discipline itself, by its address in the event, and there is nothing to match.
 
 // SignupShare is one discipline's part in the event's signup.
 type SignupShare struct {
-	Discipline string `json:"discipline"`
-	Name       string `json:"name"`
-	// Tournament is the programme row it takes: its own setting, or the row named like it.
-	Tournament string `json:"tournament"`
-	// Chosen says the discipline set the row itself rather than having it matched by name.
-	Chosen      bool     `json:"chosen"`
+	Discipline  string   `json:"discipline"`
+	Name        string   `json:"name"`
 	Adding      int      `json:"adding"`
 	AddingStaff int      `json:"addingStaff"`
 	Capacity    []string `json:"capacity,omitempty"`
@@ -58,132 +52,95 @@ type EventSignupPreview struct {
 	AddingStaff int              `json:"addingStaff"`
 }
 
-// eventDefinition is the event's signup definition, from event.json.
-func (c *Coordinator) eventDefinition() (signup.Definition, error) {
+// SignupDefinition is the event's signup definition (SignupEvent, for the disciplines):
+// the day from event.json, and every discipline with a name. withTimes adds when each is
+// planned to start, from the forecast -- for the file that goes out, never for a check,
+// which a discipline makes holding its own lock and the forecast would ask it again.
+func (c *Coordinator) SignupDefinition(withTimes bool) (signup.Definition, error) {
 	ev, err := c.EventInfo()
 	if err != nil {
 		return signup.Definition{}, err
 	}
-	return signup.BuildDefinition(store.Tournament{Discipline: c.View().Name, Event: ev}), nil
-}
-
-// SignupRowFor is the programme row a discipline takes, as the event's import would give it,
-// and whether the event has several disciplines (SignupRows, for a discipline's own
-// import). Read from event.json alone, never from a discipline's snapshot: the asking
-// discipline holds its own lock.
-func (c *Coordinator) SignupRowFor(slug string) (string, bool) {
-	ev, err := c.EventInfo()
-	if err != nil {
-		return "", false
+	var starts map[string]string
+	name := ""
+	if withTimes {
+		view := c.View()
+		starts, name = FirstStarts(view.Programme), view.Name
 	}
-	def := signup.BuildDefinition(store.Tournament{Event: ev})
-	shares, workers := c.shares(def)
-	for _, sh := range shares {
-		if sh.Discipline == slug {
-			return sh.Tournament, len(workers) > 1
-		}
-	}
-	return "", len(workers) > 1
-}
-
-// shares is which discipline takes which programme row. A discipline that cannot be read
-// is listed with why, and takes nothing.
-func (c *Coordinator) shares(def signup.Definition) ([]SignupShare, []*worker) {
-	workers := c.snapshotWorkers()
-	several := len(workers) > 1
-	out := make([]SignupShare, 0, len(workers))
-	srvs := make([]*worker, 0, len(workers))
-	for _, w := range workers {
-		sh := SignupShare{Discipline: w.slug, Name: w.slug}
+	var entries []signup.TournamentInfo
+	for _, w := range c.snapshotWorkers() {
 		if w.srv == nil {
-			sh.Error = w.err.Error()
-			out, srvs = append(out, sh), append(srvs, w)
 			continue
 		}
-		sh.Name = w.srv.Self().Name
-		own, err := w.srv.SignupRow()
+		t, err := w.srv.store.Tournament()
 		if err != nil {
-			sh.Error = err.Error()
+			continue
 		}
-		sh.Tournament, sh.Chosen = RowFor(def, own, sh.Name, w.slug, several)
-		out, srvs = append(out, sh), append(srvs, w)
+		entries = append(entries, signup.TournamentInfo{
+			ID: w.slug, Label: w.srv.Self().Name, Capacity: t.Capacity, StartsAt: starts[w.slug],
+		})
 	}
-	return out, srvs
+	return signup.BuildDefinition(ev, name, entries), nil
 }
 
-// RowFor is the programme row a discipline takes: the one it chose, else -- in an event
-// of several -- the one named like it. Shared with the browser demo.
-func RowFor(def signup.Definition, own, name, slug string, several bool) (row string, chosen bool) {
-	if own != "" {
-		return own, true
-	}
-	if !several {
-		return "", false
-	}
-	return rowNamed(def, name, slug), false
-}
-
-// rowNamed is the programme row named like a discipline, or "".
-func rowNamed(def signup.Definition, name, slug string) string {
-	want := signup.Slug(name)
-	for _, t := range def.Tournaments {
-		if want != "" && (t.ID == want || signup.Slug(t.Label) == want) {
-			return t.ID
+// FirstStarts is when each discipline is planned to start, "09:00", by slug. Shared with
+// the browser demo.
+func FirstStarts(programme []ProgrammeRow) map[string]string {
+	first := map[string]time.Time{}
+	for _, row := range programme {
+		at, err := time.Parse(time.RFC3339, row.Start)
+		if err != nil {
+			continue
+		}
+		if was, ok := first[row.Discipline]; !ok || at.Before(was) {
+			first[row.Discipline] = at
 		}
 	}
-	for _, t := range def.Tournaments {
-		if t.ID == slug {
-			return t.ID
-		}
-	}
-	return ""
-}
-
-// Takes says whether a discipline is in the import: it has a row, or it is the event's
-// only discipline and takes everything.
-func Takes(sh SignupShare, several bool) bool {
-	return sh.Error == "" && (sh.Tournament != "" || !several)
-}
-
-// Unclaimed are the programme rows nobody takes: whoever enters them is imported nowhere.
-func Unclaimed(def signup.Definition, shares []SignupShare) []signup.TournamentInfo {
-	taken := map[string]bool{}
-	for _, sh := range shares {
-		taken[sh.Tournament] = true
-	}
-	out := []signup.TournamentInfo{}
-	for _, t := range def.Tournaments {
-		if !taken[t.ID] {
-			out = append(out, t)
-		}
+	out := map[string]string{}
+	for slug, at := range first {
+		out[slug] = at.Local().Format("15:04")
 	}
 	return out
 }
 
+// shares is every discipline's part. A discipline that cannot be read is listed with why,
+// and takes nothing.
+func (c *Coordinator) shares() ([]SignupShare, []*worker) {
+	workers := c.snapshotWorkers()
+	out := make([]SignupShare, 0, len(workers))
+	for _, w := range workers {
+		sh := SignupShare{Discipline: w.slug, Name: w.slug}
+		if w.srv == nil {
+			sh.Error = w.err.Error()
+		} else {
+			sh.Name = w.srv.Self().Name
+		}
+		out = append(out, sh)
+	}
+	return out, workers
+}
+
 func (c *Coordinator) signupReady(w http.ResponseWriter, r *http.Request) {
-	def, err := c.eventDefinition()
+	def, err := c.SignupDefinition(true)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
-	shares, _ := c.shares(def)
-	writeJSON(w, http.StatusOK, SignupReadyView(def, shares))
+	writeJSON(w, http.StatusOK, SignupReadyView(def))
 }
 
-// SignupReadyView is what the event's signup panel is told before anything goes out.
-func SignupReadyView(def signup.Definition, shares []SignupShare) map[string]any {
+// SignupReadyView is what the signup panel is told before anything goes out.
+func SignupReadyView(def signup.Definition) map[string]any {
 	return map[string]any{
 		"missing":     signup.Ready(def),
 		"tournaments": def.Tournaments,
 		"filename":    signupAppFilename(def),
 		"definition":  definitionFilename(def),
-		"disciplines": shares,
-		"unclaimed":   Unclaimed(def, shares),
 	}
 }
 
 func (c *Coordinator) signupDefinition(w http.ResponseWriter, r *http.Request) {
-	def, err := c.eventDefinition()
+	def, err := c.SignupDefinition(true)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
@@ -195,7 +152,7 @@ func (c *Coordinator) signupDefinition(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *Coordinator) signupApp(w http.ResponseWriter, r *http.Request) {
-	def, err := c.eventDefinition()
+	def, err := c.SignupDefinition(true)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
@@ -218,43 +175,19 @@ func (c *Coordinator) signupApp(w http.ResponseWriter, r *http.Request) {
 	w.Write(baked)
 }
 
-// putSignupRows sets which programme row each discipline takes.
-func (c *Coordinator) putSignupRows(w http.ResponseWriter, r *http.Request) {
-	var in map[string]string
-	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-		writeErr(w, http.StatusBadRequest, err)
-		return
-	}
-	for slug, row := range in {
-		c.mu.Lock()
-		wk := c.workers[slug]
-		c.mu.Unlock()
-		if wk == nil || wk.srv == nil {
-			writeErr(w, http.StatusBadRequest, fmt.Errorf("this event has no discipline %q to set", slug))
-			return
-		}
-		if err := wk.srv.SetSignupRow(row); err != nil {
-			writeErr(w, http.StatusInternalServerError, err)
-			return
-		}
-	}
-	c.poke()
-	c.signupReady(w, r)
-}
-
 // PreviewSignups is what importing these files would do, across the event.
 func (c *Coordinator) PreviewSignups(files []signup.File) (EventSignupPreview, error) {
-	def, err := c.eventDefinition()
+	def, err := c.SignupDefinition(false)
 	if err != nil {
 		return EventSignupPreview{}, err
 	}
-	shares, workers := c.shares(def)
+	shares, workers := c.shares()
 	previews := map[int]SharePreview{}
 	for i, sh := range shares {
-		if !Takes(sh, len(workers) > 1) {
+		if sh.Error != "" {
 			continue
 		}
-		p, drawn, err := workers[i].srv.PreviewSignups(files, sh.Tournament)
+		p, drawn, err := workers[i].srv.PreviewSignups(files)
 		if err != nil {
 			shares[i].Error = err.Error()
 			continue
@@ -290,7 +223,7 @@ func CombineSignups(def signup.Definition, files []signup.File, shares []SignupS
 	}
 	if len(each) == 0 {
 		// Nobody takes anything; the files are still worth reading back to the organizer.
-		p := signup.Check(def, "", files, nil, nil)
+		p := signup.Check(def, "", files, nil, nil, nil)
 		for _, row := range p.Rows {
 			if row.Verdict == signup.New || row.Verdict == signup.Staff {
 				row.Verdict = signup.NotHere
@@ -354,19 +287,14 @@ func (c *Coordinator) importSignups(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	def, err := c.eventDefinition()
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err)
-		return
-	}
-	shares, workers := c.shares(def)
+	shares, workers := c.shares()
 	added, addedStaff := 0, 0
 	var failed []string
 	for i, sh := range shares {
-		if !Takes(sh, len(workers) > 1) {
+		if sh.Error != "" {
 			continue
 		}
-		a, s, err := workers[i].srv.ImportSignups(files, sh.Tournament)
+		a, s, err := workers[i].srv.ImportSignups(files)
 		if err != nil {
 			failed = append(failed, sh.Name+": "+err.Error())
 			continue

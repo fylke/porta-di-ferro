@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/fylke/porta-di-ferro/internal/event"
 	httpapi "github.com/fylke/porta-di-ferro/internal/http"
@@ -37,6 +38,9 @@ type Event struct {
 	staff store.Staff
 	// screens is how the mat screens look (#110).
 	screens store.Screens
+	// id is the event's identity (event.File.ID): the same for the event a visitor
+	// arrives in, a new one for every event that replaces it (#141).
+	id string
 }
 
 // NewEvent builds the event a visitor arrives in: the longsword halfway through its pools
@@ -53,16 +57,16 @@ func (e *Event) Reset() {
 	longsword := newDiscipline("open-steel-longsword", fixture)
 	sabre := newDiscipline("open-sabre", sabreFixture)
 	buckler := newDiscipline("sword-and-buckler", bucklerFixture)
-	// The day was the longsword's own before events existed; it is the event's now, and
-	// the discipline keeps only which programme row it is, as a migrated folder does.
+	// The day was the longsword's own before events existed; it is the event's now, as a
+	// migrated folder's is.
 	e.info = longsword.tournament.Event
-	e.info.Signup.Tournament = ""
-	longsword.tournament.Event = store.Event{Signup: store.Signup{Tournament: "longsword-pools"}}
+	longsword.tournament.Event = store.Event{}
 	e.disciplines = nil
 	e.plan = store.Plan{}
 	e.keepers = nil
 	e.people = nil
 	e.defaults = store.Timings{}
+	e.id = "demo"
 	e.adopt(longsword)
 	e.adopt(sabre)
 	e.adopt(buckler)
@@ -83,6 +87,21 @@ func (e *Event) Reset() {
 	e.staff.Assignments = s.Assignments
 }
 
+// Delete replaces the event with a new one, as the server's DELETE /api/event does: one
+// unnamed discipline and nothing else. The template for new events is the visitor's, not
+// the event's, and stays.
+func (e *Event) Delete() {
+	e.info = store.Event{}
+	e.disciplines = nil
+	e.plan = store.Plan{}
+	e.keepers = nil
+	e.people = nil
+	e.staff = store.Staff{}
+	e.screens = store.Screens{}
+	e.id = fmt.Sprintf("ev-%x", time.Now().UnixNano())
+	e.adopt(newDiscipline("discipline", emptyFixture("")))
+}
+
 func (e *Event) adopt(d *Demo) {
 	d.event = e
 	e.disciplines = append(e.disciplines, d)
@@ -99,7 +118,7 @@ func (e *Event) find(slug string) *Demo {
 
 // View is the event as its pages see it, built the way the coordinator builds it.
 func (e *Event) View() httpapi.EventView {
-	view := httpapi.EventView{Info: e.info, Dir: "in this browser", Disciplines: []httpapi.DisciplineSummary{}}
+	view := httpapi.EventView{Info: e.info, ID: e.id, Dir: "in this browser", Disciplines: []httpapi.DisciplineSummary{}}
 	mats := e.mats()
 	for _, d := range e.disciplines {
 		snap, err := d.snapshot()
@@ -148,6 +167,9 @@ func (e *Event) Request(method, path string, body []byte) Response {
 		return ok(e.View())
 	case method == "PUT" && bare == "/api/event/info":
 		return e.putInfo(body)
+	case method == "DELETE" && bare == "/api/event":
+		e.Delete()
+		return changed(map[string]string{"deleted": "in this browser"})
 	case method == "GET" && bare == "/api/info.pdf":
 		return e.infoPDF(query)
 	case method == "GET" && (bare == "/api/mats" || bare == "/api/plan"):
@@ -173,7 +195,7 @@ func (e *Event) Request(method, path string, body []byte) Response {
 		// There is no LAN in a browser tab, which is the truth the admin pages show.
 		return ok([]any{})
 	case method == "GET" && bare == "/api/qr.png":
-		return qr(query)
+		return qrImage(query)
 
 	case method == "GET" && bare == "/api/disciplines":
 		return ok(e.View().Disciplines)
@@ -258,7 +280,6 @@ func (e *Event) putInfo(body []byte) Response {
 	if err != nil {
 		return fail(400, err)
 	}
-	ev.Signup.Tournament = ""
 	e.info = ev
 	return changed(ev)
 }
@@ -384,6 +405,7 @@ type savedEvent struct {
 	Defaults    store.Timings     `json:"defaults,omitempty"`
 	Staff       store.Staff       `json:"staff"`
 	Screens     store.Screens     `json:"screens,omitempty"`
+	ID          string            `json:"id,omitempty"`
 	Disciplines []savedDiscipline `json:"disciplines"`
 }
 
@@ -395,7 +417,7 @@ type savedDiscipline struct {
 
 // Save is the whole event as JSON: the day, and every discipline's own save.
 func (e *Event) Save() ([]byte, error) {
-	out := savedEvent{Format: eventSaveFormat, Info: e.info, Plan: e.plan, People: e.people, Defaults: e.defaults, Staff: e.staff, Screens: e.screens}
+	out := savedEvent{Format: eventSaveFormat, Info: e.info, Plan: e.plan, People: e.people, Defaults: e.defaults, Staff: e.staff, Screens: e.screens, ID: e.id}
 	for _, d := range e.disciplines {
 		state, err := d.Save()
 		if err != nil {
@@ -440,6 +462,10 @@ func (e *Event) Load(b []byte) error {
 	}
 	e.info, e.plan, e.disciplines, e.keepers, e.people, e.defaults = next.info, next.plan, nil, nil, in.People, in.Defaults
 	e.staff, e.screens = in.Staff, in.Screens
+	e.id = in.ID
+	if e.id == "" {
+		e.id = "demo"
+	}
 	for _, d := range next.disciplines {
 		e.adopt(d)
 	}

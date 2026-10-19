@@ -12,6 +12,7 @@
  * the LAN comes back (lib/db.ts).
  */
 import { api, type MatView, type MatsView, type Slot } from '../api';
+import { anotherEvent } from './forget';
 
 const CACHE = 'porta.mats';
 
@@ -33,6 +34,9 @@ export class MatsLive {
   }
 
   set view(next: MatsView | null) {
+    // A view of another event than this device last saw: it forgets the old one's logs
+    // before it could push them into this one's matches, and the page starts again (#141).
+    if (next && anotherEvent(next.event)) return;
     this.#view = next;
     this.receivedAt = Date.now();
     this.stale = false;

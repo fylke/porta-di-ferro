@@ -83,6 +83,7 @@
         margin-bottom: 0.25rem;
       }
       input[type='text'],
+      input[type='email'],
       input[type='file'] {
         width: 100%;
         font: inherit;
@@ -288,6 +289,10 @@
         // unticked in the staff list -- kept as the exceptions, because being down for
         // every discipline they are not fencing in is the default. roles: which roles are
         // ticked, starting from what the definition offers.
+        // The format this app reads and writes: internal/signup's Version. 2 lists the
+        // event's disciplines by name and asks everybody for an email (#142).
+        var FORMAT_VERSION = 2;
+
         var state = {
           definition: null,
           chosen: {},
@@ -320,8 +325,11 @@
             state.error = 'That is not a signup file from an organizer.';
             return then();
           }
-          if (def.version > 1) {
-            state.error = 'That file was made by a newer version of this app.';
+          if (def.version !== FORMAT_VERSION) {
+            state.error =
+              def.version > FORMAT_VERSION
+                ? 'That file was made by a newer version of this app.'
+                : 'That file was made for an older version of this app. Ask the organizer for a new one.';
             return then();
           }
           state.definition = def;
@@ -378,13 +386,12 @@
           return el('section', {}, [el('h2', { text: 'Programme' }), list]);
         }
 
-        /** When a discipline starts, from its programme row. */
-        function startOf(def, id) {
-          var when = '';
-          (def.schedule || []).forEach(function (row) {
-            if (row.tournamentId && row.tournamentId === id && row.startsAt) when = row.startsAt;
-          });
-          return when;
+        /**
+         * An email address, as far as a page with no network can tell: something, an at
+         * sign, and a domain with a dot. The same rule the import applies.
+         */
+        function looksLikeEmail(s) {
+          return /^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+$/.test(String(s || '').trim());
         }
 
         /** A whole tappable row with a checkbox in it. */
@@ -447,14 +454,16 @@
         function buildResponse(def, draft) {
           var response = {
             format: 'porta.signup.response',
-            version: 1,
+            version: FORMAT_VERSION,
             definitionId: def.definitionId || '',
             submissionId: draft.submissionId || randomId(),
             submittedAt: new Date().toISOString(),
             participant: {
               name: (draft.name || '').trim(),
               club: (draft.club || '').trim(),
-              contact: (draft.contact || '').trim(),
+              // Who they are across signups (#142): a second file with the same address,
+              // from any device, is the same person to the organizer.
+              email: (draft.email || '').trim().toLowerCase(),
             },
             entries: Object.keys(state.chosen).filter(function (k) {
               return state.chosen[k];
@@ -466,7 +475,7 @@
         }
 
         function form(def) {
-          var wants = def.fields || ['name', 'club'];
+          var wants = def.fields || ['name', 'club', 'email'];
           var draft = state.draft;
           if (!state.roles) state.roles = startingRoles(def);
 
@@ -475,10 +484,10 @@
             return el('label', { class: 'field' }, [
               el('span', { text: label }),
               el('input', {
-                type: 'text',
+                type: key === 'email' ? 'email' : 'text',
                 id: 'f-' + key,
                 value: draft[key] || '',
-                autocomplete: key === 'name' ? 'name' : 'off',
+                autocomplete: key === 'name' ? 'name' : key === 'email' ? 'email' : 'off',
                 placeholder: hint || '',
                 oninput: function (ev) {
                   draft[key] = ev.target.value;
@@ -491,7 +500,7 @@
 
           var picks = el('div', {});
           (def.tournaments || []).forEach(function (t) {
-            var when = startOf(def, t.id);
+            var when = t.startsAt || '';
             picks.appendChild(
               pick(
                 'pick-' + t.id,
@@ -533,7 +542,7 @@
               return;
             }
             open.forEach(function (t) {
-              var when = startOf(def, t.id);
+              var when = t.startsAt || '';
               staffList.appendChild(
                 pick(
                   'staff-' + t.id,
@@ -565,8 +574,11 @@
             var any = Object.keys(state.chosen).some(function (k) {
               return state.chosen[k];
             });
-            // Fencing in nothing is fine for somebody who is only coming to help.
-            button.disabled = !(draft.name || '').trim() || !(any || staffOffer(def));
+            // Fencing in nothing is fine for somebody who is only coming to help. An
+            // email is not optional: it is how the organizer knows who they are.
+            var needsEmail = wants.indexOf('email') >= 0;
+            button.disabled =
+              !(draft.name || '').trim() || (needsEmail && !looksLikeEmail(draft.email)) || !(any || staffOffer(def));
           }
 
           function submit() {
@@ -589,7 +601,13 @@
             el('h2', { text: 'You' }),
             field('name', 'Name', 'Ada Example'),
             field('club', 'Club', 'Example HEMA'),
-            field('contact', 'Contact', 'Email or phone'),
+            field('email', 'Email', 'ada@example.org'),
+            el('p', {
+              class: 'hint',
+              text:
+                'Your email is how the organizer knows it is you if you sign up again. It ' +
+                'stays with them and is not shown anywhere.',
+            }),
             el('h2', { text: 'What you are entering' }),
             (def.tournaments || []).length
               ? picks

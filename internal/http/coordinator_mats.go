@@ -176,6 +176,7 @@ func (c *Coordinator) matsFrom(snaps []snapped) MatsView {
 	placed, mats := c.Placements()
 	view := BuildMats(inputs, placed, mats, c.held)
 	view.Upcoming = store.UpcomingOf(file.Screens)
+	view.Event = file.ID
 	NameMats(&view, file.Plan)
 	return view
 }

@@ -52,7 +52,7 @@ func (e *Event) seedStaff() {
 		}
 		e.staff.Members = append(e.staff.Members, store.StaffMember{
 			ID: staffing.NewID(), Name: s.name, Club: s.club, Roles: s.roles, Disciplines: s.disciplines,
-			Person: e.personFor(s.name, s.club, "", want),
+			Person: e.personFor(s.name, s.club, "", "", want),
 		})
 	}
 }
@@ -78,8 +78,8 @@ func (e *Event) slugs() []string {
 
 // addStaffFromSignup is a discipline's import putting offers to work on the event's staff.
 func (e *Event) addStaffFromSignup(slug string, rows []signup.Row) int {
-	members, taken := staffing.FromSignup(e.staff.Members, slug, rows, func(name, club, sub string) string {
-		return e.personFor(name, club, sub, "")
+	members, taken := staffing.FromSignup(e.staff.Members, slug, rows, func(name, club, sub, email string) string {
+		return e.personFor(name, club, sub, email, "")
 	})
 	e.staff.Members = members
 	return taken
@@ -120,7 +120,7 @@ func (e *Event) staffRequest(method, bare string, parts []string, body []byte) (
 			return fail(400, err), true
 		}
 		m.ID, m.Signup = staffing.NewID(), ""
-		m.Person = e.personFor(m.Name, m.Club, "", in.Want)
+		m.Person = e.personFor(m.Name, m.Club, "", "", in.Want)
 		e.staff.Members = append(e.staff.Members, m)
 		res := e.staffView()
 		res.Status, res.Changed = 201, true

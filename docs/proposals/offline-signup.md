@@ -26,7 +26,7 @@ The first version supports:
 - A list of available disciplines or tournament instances.
 - The order and start time of each discipline.
 - Breaks such as lunch, with a start and end time.
-- Participant name and club, with optional contact fields if the organizer enables them.
+- Participant name, club and email address.
 - Selecting one or more disciplines.
 - Exporting and importing JSON files.
 - Import preview, validation, duplicate detection, and explicit confirmation.
@@ -69,7 +69,7 @@ signup files describe a proposed registration.
 ```json
 {
   "format": "porta.signup",
-  "version": 1,
+  "version": 2,
   "definitionId": "msl-open-2026",
   "event": {
     "name": "MSL Open",
@@ -79,8 +79,7 @@ signup files describe a proposed registration.
   "schedule": [
     {
       "type": "discipline",
-      "tournamentId": "longsword-open",
-      "label": "Open Steel Longsword",
+      "label": "Longsword pools",
       "startsAt": "09:00"
     },
     {
@@ -92,12 +91,13 @@ signup files describe a proposed registration.
   ],
   "tournaments": [
     {
-      "id": "longsword-open",
+      "id": "open-steel-longsword",
       "label": "Open Steel Longsword",
-      "capacity": 28
+      "capacity": 28,
+      "startsAt": "09:00"
     }
   ],
-  "fields": ["name", "club"]
+  "fields": ["name", "club", "email"]
 }
 ```
 
@@ -109,14 +109,15 @@ That lets the organizer regenerate a definition without exposing local implement
 ```json
 {
   "format": "porta.signup.response",
-  "version": 1,
+  "version": 2,
   "definitionId": "msl-open-2026",
   "submittedAt": "2026-09-21T12:00:00Z",
   "participant": {
     "name": "Ada Example",
-    "club": "Example HEMA"
+    "club": "Example HEMA",
+    "email": "ada@example.org"
   },
-  "entries": ["longsword-open"]
+  "entries": ["open-steel-longsword"]
 }
 ```
 
@@ -196,13 +197,24 @@ organizer's event programme: when disciplines run and when breaks occur.
 
 ## What was built
 
-Three places where the built feature differs from the proposal above, each deliberate:
+The places where the built feature differs from the proposal above, each deliberate:
 
-**The programme is the definition.** The proposal has the organizer enter the schedule and
-the discipline list. The schedule already existed from issue #98, so the rows marked as a
-discipline *are* the entry list: one thing to keep right instead of two that can disagree.
-A row carries an optional stable identifier and a capacity; a row without an identifier
-gets one derived from its label.
+**The disciplines are the definition** (version 2, #142). What can be entered is the
+event's disciplines themselves, by their address in the event and their name, each with
+its capacity (set in the discipline's setup) and when the plan has it starting. The first
+version listed rows of the programme marked as disciplines, and each discipline then had to
+be matched to a row; nothing needs matching now, and a discipline is entered under the one
+name it has everywhere else. The programme still goes out, to read. Version 1 files are
+refused with a reason: none were sent out for real.
+
+**Everybody gives an email** (version 2, #142). It replaces the optional contact field, and
+it is an identity rather than a detail: the person it belongs to keeps it in `people.json`,
+never in anything the hall can open, and a second response with the same address -- from
+another device, so with another submission id -- is the same person. Where they are
+already entered it is `already`; where they are not, it is a new entry of the same
+person. Two people who share a name but not an address are never offered to the organizer
+as maybe the same person. Nothing confirms the address by mail: the server runs offline at
+the venue.
 
 **One file goes out, not two.** `GET /api/signup/app.html?download=1` returns the
 participant app with the event written into it, so the organizer sends a single
@@ -210,12 +222,9 @@ attachment. `GET /api/signup/definition.json` is still there for anyone who want
 files separately, and a bare copy of the app asks for a definition. "Open both of these,
 the second one from inside the first" is an instruction people get wrong.
 
-**Each run imports its own.** An event with several disciplines is several runs of the
-application (issue #49), so `Event.Signup.Tournament` says which discipline a given run
-is, and it takes the responses naming that one. The organizer points all of them at the
-same folder and each takes its share; responses for another discipline are reported as
-such rather than as errors. A single-discipline event that never sets it takes everything
-valid. Aggregating them into one view is issue #102, not this.
+**Each discipline imports its own.** One import on the event's page gives every discipline
+the responses naming it, through the same check each runs on its own (issue #102);
+responses for a discipline the event does not have are reported as such.
 
 **Staff sign up in the same file.** The proposal covers participants only. A response can
 also offer to work, as `"staff": {"tournaments": [...], "roles": [...]}`, and the
@@ -224,7 +233,7 @@ keeper, physician — with whether the app ticks each by default. Everyone is do
 every discipline they are not fencing in, in every role but physician, and unticks what
 they would rather not do: asking people to volunteer finds fewer staff than letting them
 opt out. The app never offers a discipline they have entered, and the import drops such
-an offer from a hand-edited file. Each run takes the offers naming it, as with entries,
+an offer from a hand-edited file. Each discipline takes the offers naming it, as with entries,
 into `Tournament.Staff`. Assigning them to mats and pools is the rest of issue #5.
 
 The submission identifier the proposal asks for is generated by the participant app with

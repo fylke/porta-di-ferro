@@ -1,5 +1,6 @@
 <script lang="ts">
   import WarningTriangle from '../WarningTriangle.svelte';
+  import { tap } from '../../lib/tap';
   import { t } from '../../lib/i18n.svelte';
   import type { Side } from '../../lib/match';
   import type { Selection } from '../../lib/scorekeeper.svelte';
@@ -42,9 +43,9 @@
   } = $props();
 
   const over = $derived(outcome !== null);
-  const verdict = $derived(
-    outcome === 'won' ? t('WINNER') : outcome === 'lost' ? t('BEATEN') : t('DRAW'),
-  );
+  // Only the winner's half says anything (#146): the other side's empty box is the loss,
+  // and two labels to compare is one more thing to read than the result needs.
+  const verdict = $derived(outcome === 'won' ? t('WINNER') : outcome === 'drew' ? t('DRAW') : '');
 
   // The punctuation encodes severity, so the label reads as more alarming exactly as the
   // consequence gets worse -- a third cue alongside colour and size (design §4).
@@ -91,7 +92,7 @@
           class="point"
           class:selected={selection.value === value}
           aria-pressed={selection.value === value}
-          onclick={() => onPoint(value)}>{value}</button
+          use:tap={() => onPoint(value)}>{value}</button
         >
       {/each}
     </div>
@@ -101,7 +102,7 @@
       class:selected={selection.penalty > 0}
       class:severe={selection.penalty > 1}
       aria-pressed={selection.penalty > 0}
-      onclick={onWarning}>{warningLabel}</button
+      use:tap={onWarning}>{warningLabel}</button
     >
   {/if}
 </section>
@@ -118,6 +119,14 @@
   }
   .panel {
     background: var(--side-tint);
+  }
+  /* Two fingers on two buttons are two presses, not a pinch (lib/tap.ts, #145), and a
+     finger left on a button does not start selecting its text. */
+  .panel button {
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
   }
 
   header {
@@ -221,8 +230,8 @@
   }
 
   /* Spans the two rows the points and the warning button had, so the panel keeps its
-     shape when the match ends. Quiet for the side that lost, because the eye should go
-     to the winner without having to compare two labels. */
+     shape when the match ends. Empty and quiet for the side that lost, because the eye
+     should go to the winner without having to compare two labels. */
   .verdict {
     grid-row: span 2;
     display: grid;

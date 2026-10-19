@@ -13,6 +13,15 @@
    * -- are asked about here: the same person, or two. A merge can be undone, and two kept
    * apart stop being asked about.
    */
+  let { whenNeeded = false }: {
+    /**
+     * Only when there is something to decide, under the signup (#142): two entries that
+     * may be one person, or a merge to undo. A signup's email already makes everybody who
+     * signed up one person everywhere, so this is for entries typed in at a desk.
+     */
+    whenNeeded?: boolean;
+  } = $props();
+
   let people = $state<PeopleView | null>(null);
   let error = $state('');
   let busy = $state(false);
@@ -73,9 +82,10 @@
   }
 </script>
 
+{#if !whenNeeded || pairs.length > 0 || merged.length > 0 || error}
 <section>
   <h2>
-    {t('People')}
+    {whenNeeded ? t('Entries that may be one person') : t('People')}
     {#if people}<span class="count">{t('{n} entered', { n: people.people.length })}</span>{/if}
   </h2>
   <p class="dim">
@@ -142,6 +152,7 @@
     </details>
   {/if}
 </section>
+{/if}
 
 <style>
   section {

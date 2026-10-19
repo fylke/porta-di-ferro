@@ -13,11 +13,11 @@
   import Screens from './Screens.svelte';
   import Disciplines from './Disciplines.svelte';
   import MatBoard from './MatBoard.svelte';
-  import Planning from './Planning.svelte';
   import Staff from './Staff.svelte';
-  import EventEditor from './EventEditor.svelte';
   import Signup from './Signup.svelte';
   import LangToggle from './LangToggle.svelte';
+  import DeleteEvent from './DeleteEvent.svelte';
+  import { hall } from '../lib/event.svelte';
   import { t, lang } from '../lib/i18n.svelte';
 
   /**
@@ -91,7 +91,7 @@
       {#if snapshot?.instance.name}<span class="discipline">{snapshot.instance.name}</span>{/if}
     </h1>
     <nav>
-      {#if multi}<a href="/admin">&larr; {t('The event')}</a>{/if}
+      {#if multi}<a href="/admin">&larr; {t('The event')}</a>{:else}<a href="/plan">{t('Plan the event')}</a>{/if}
       <a href={dhref('/')}>{t('Landing page')}</a>
       <a href="/info">{t('Info sheet')}</a>
       <a href="/display/mats" target="_blank" rel="noreferrer">{t('Displays')}</a>
@@ -152,7 +152,7 @@
           <a href="/score">{t('Score keeper')}</a>
           <a href="/print/mats" target="_blank" rel="noreferrer">{t('Print a code for each mat')}</a>
           {#each { length: snapshot.eventMats ?? snapshot.tournament.mats } as _, i (i)}
-            <a href="/display/mat/{i + 1}">{t('Mat {n}', { n: i + 1 })}</a>
+            <a href="/display/mat/{i + 1}">{t('Display mat {n}', { n: i + 1 })}</a>
           {/each}
         </p>
       </div>
@@ -165,12 +165,6 @@
       <Competitors competitors={snapshot.competitors} poolsDrawn={drawn} onchange={refresh} {multi} />
       <Setup {snapshot} onchange={refresh} />
     </div>
-
-    <!-- The day around the fencing belongs to the event. With one discipline it is
-         edited here, as it always was; with several, once, on the event's own page. -->
-    {#if !multi}
-      <EventEditor event={snapshot.tournament.event ?? {}} save={api.saveEvent} onchange={refresh} />
-    {/if}
 
     <Signup {snapshot} onchange={refresh} scope={multi ? 'share' : 'single'} />
 
@@ -188,10 +182,12 @@
          is on the event's page, where it shows all of them. -->
     <!-- Before the draw the board shows the day as it would be (phase 4). -->
     {#if !multi && (drawn || snapshot.competitors.length > 0)}<MatBoard />{/if}
-    {#if !multi}<Planning />{/if}
-    {#if !multi}<Staff />{/if}
+    {#if !multi}<div id="staff"><Staff /></div>{/if}
 
     <Pools {snapshot} onchange={refresh} />
+
+    <!-- The event's, so here only while it has one discipline (#141). -->
+    {#if !multi}<DeleteEvent name={hall.view?.name ?? ''} dir={hall.view?.dir ?? ''} />{/if}
   {/if}
 </main>
 

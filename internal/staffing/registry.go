@@ -109,16 +109,19 @@ func union(a, b []string) []string {
 // the members -- it offered another discipline too -- adds this discipline and its roles
 // to that member; anybody else is a new member. Never matched by name. person is who a
 // new member is (people.For). Returns the members and how many offers were taken.
-func FromSignup(members []store.StaffMember, slug string, rows []signup.Row, person func(name, club, submission string) string) ([]store.StaffMember, int) {
+func FromSignup(members []store.StaffMember, slug string, rows []signup.Row, person func(name, club, submission, email string) string) ([]store.StaffMember, int) {
 	out := append([]store.StaffMember{}, members...)
 	taken := 0
 	for _, row := range rows {
 		if row.Verdict != signup.Staff {
 			continue
 		}
+		// The same member if they came in on this response before, or are the same person
+		// by email from another one (#142).
+		who := person(row.Name, row.Club, row.SubmissionID, row.Email)
 		found := -1
 		for i, m := range out {
-			if row.SubmissionID != "" && m.Signup == row.SubmissionID {
+			if (row.SubmissionID != "" && m.Signup == row.SubmissionID) || (who != "" && m.Person == who) {
 				found = i
 			}
 		}
@@ -136,7 +139,7 @@ func FromSignup(members []store.StaffMember, slug string, rows []signup.Row, per
 		out = append(out, store.StaffMember{
 			ID: NewID(), Name: row.Name, Club: row.Club, Roles: append([]string{}, row.Roles...),
 			Signup: row.SubmissionID, Disciplines: []string{slug},
-			Person: person(row.Name, row.Club, row.SubmissionID),
+			Person: who,
 		})
 		taken++
 	}

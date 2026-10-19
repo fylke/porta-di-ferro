@@ -3,10 +3,8 @@ package httpapi
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/fylke/porta-di-ferro/internal/signup"
 	"github.com/fylke/porta-di-ferro/internal/store"
@@ -29,13 +27,42 @@ import (
 // several hundred and a guard against a folder of something else entirely.
 const maxImport = 8 << 20
 
-func (s *Server) signupDefinition(w http.ResponseWriter, r *http.Request) {
+// SignupEvent is the event giving its signup definition: every discipline of it, so one
+// file signs somebody up for any of them (#142).
+type SignupEvent interface {
+	SignupDefinition(withTimes bool) (signup.Definition, error)
+}
+
+// entryID is how a response names this discipline: its address in the event, or, for a
+// discipline on its own, a slug of its name.
+func (s *Server) entryID(t store.Tournament) string {
+	if slug := s.self().Slug; slug != "" {
+		return slug
+	}
+	return signup.Slug(t.Discipline)
+}
+
+// definition is the signup definition this discipline answers to: the event's, or its own
+// with itself as the one discipline.
+func (s *Server) definition(withTimes bool) (signup.Definition, error) {
+	if ev, ok := s.event.(SignupEvent); ok {
+		return ev.SignupDefinition(withTimes)
+	}
 	t, err := s.tournament()
+	if err != nil {
+		return signup.Definition{}, err
+	}
+	return signup.BuildDefinition(t.Event, t.Discipline, []signup.TournamentInfo{
+		{ID: s.entryID(t), Label: t.Discipline, Capacity: t.Capacity},
+	}), nil
+}
+
+func (s *Server) signupDefinition(w http.ResponseWriter, r *http.Request) {
+	def, err := s.definition(true)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
-	def := signup.BuildDefinition(t)
 	if r.URL.Query().Get("download") != "" {
 		w.Header().Set("Content-Disposition",
 			fmt.Sprintf(`attachment; filename=%q`, definitionFilename(def)))
@@ -46,18 +73,12 @@ func (s *Server) signupDefinition(w http.ResponseWriter, r *http.Request) {
 // signupReady tells the admin screen what is still missing, so the organizer finds out
 // before the file goes out rather than from a participant who cannot use it.
 func (s *Server) signupReady(w http.ResponseWriter, r *http.Request) {
-	t, err := s.tournament()
+	def, err := s.definition(true)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
-	def := signup.BuildDefinition(t)
-	writeJSON(w, http.StatusOK, map[string]any{
-		"missing":     signup.Ready(def),
-		"tournaments": def.Tournaments,
-		"filename":    signupAppFilename(def),
-		"definition":  definitionFilename(def),
-	})
+	writeJSON(w, http.StatusOK, SignupReadyView(def))
 }
 
 // signupApp serves the participant's app with this event written into it, so what the
@@ -67,12 +88,11 @@ func (s *Server) signupReady(w http.ResponseWriter, r *http.Request) {
 // attachment beats two every time, and "open both of these, the second one from inside
 // the first" is an instruction people get wrong.
 func (s *Server) signupApp(w http.ResponseWriter, r *http.Request) {
-	t, err := s.tournament()
+	def, err := s.definition(true)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
-	def := signup.BuildDefinition(t)
 
 	page, err := web.SignupApp()
 	if err != nil {
@@ -164,12 +184,11 @@ func (s *Server) readImport(r *http.Request) (signup.Preview, store.Tournament, 
 	if err != nil {
 		return signup.Preview{}, store.Tournament{}, err
 	}
-	return s.checkSignups(files, nil)
+	return s.checkSignups(files)
 }
 
-// checkSignups is signup.Check over this discipline: as the programme row it is, or as
-// the one the event says it is when mine is given.
-func (s *Server) checkSignups(files []signup.File, mine *string) (signup.Preview, store.Tournament, error) {
+// checkSignups is signup.Check over this discipline.
+func (s *Server) checkSignups(files []signup.File) (signup.Preview, store.Tournament, error) {
 	t, err := s.tournament()
 	if err != nil {
 		return signup.Preview{}, store.Tournament{}, err
@@ -178,65 +197,24 @@ func (s *Server) checkSignups(files []signup.File, mine *string) (signup.Preview
 	if err != nil {
 		return signup.Preview{}, store.Tournament{}, err
 	}
-	def := signup.BuildDefinition(t)
-	row := strings.TrimSpace(t.Event.Signup.Tournament)
-	if mine != nil {
-		row = *mine
-	} else if rows, ok := s.event.(SignupRows); ok {
-		// The discipline's own import, in an event: the row the event's import would give
-		// it. With several disciplines and no row it would take everything (#126).
-		var several bool
-		row, several = rows.SignupRowFor(s.self().Slug)
-		if several && row == "" {
-			return signup.Preview{}, t, ErrNoSignupRow
-		}
+	def, err := s.definition(false)
+	if err != nil {
+		return signup.Preview{}, store.Tournament{}, err
 	}
-	return signup.Check(def, row, files, competitors, t.Staff), t, nil
-}
-
-// SignupRows is the event saying which programme row a discipline takes, and whether the
-// event has several disciplines.
-type SignupRows interface {
-	SignupRowFor(slug string) (row string, several bool)
-}
-
-// ErrNoSignupRow is a discipline's own import in an event of several, when no programme row
-// is this discipline's: every response would be its own.
-var ErrNoSignupRow = errors.New("no row of the programme is this discipline's, so every response would be imported here; " +
-	"choose its row on the event's signup panel, or import there for every discipline at once")
-
-// SignupRow is the programme row this discipline said it is, if it said.
-func (s *Server) SignupRow() (string, error) {
-	t, err := s.store.Tournament()
-	return strings.TrimSpace(t.Event.Signup.Tournament), err
-}
-
-// SetSignupRow says which programme row this discipline is: whose entries it takes.
-func (s *Server) SetSignupRow(id string) error {
-	s.writeMu.Lock()
-	t, err := s.store.Tournament()
-	if err == nil {
-		t.Event.Signup.Tournament = strings.TrimSpace(id)
-		err = s.store.SaveTournament(t)
-	}
-	s.writeMu.Unlock()
-	if err == nil {
-		s.publishState()
-	}
-	return err
+	return signup.Check(def, s.entryID(t), files, competitors, t.Staff, s.personByEmail), t, nil
 }
 
 // PreviewSignups is what an import would do here, for the event's import.
-func (s *Server) PreviewSignups(files []signup.File, mine string) (signup.Preview, bool, error) {
-	p, t, err := s.checkSignups(files, &mine)
+func (s *Server) PreviewSignups(files []signup.File) (signup.Preview, bool, error) {
+	p, t, err := s.checkSignups(files)
 	return p, len(t.Pools) > 0, err
 }
 
 // ImportSignups is this discipline's share of the event's import.
-func (s *Server) ImportSignups(files []signup.File, mine string) (added, addedStaff int, err error) {
+func (s *Server) ImportSignups(files []signup.File) (added, addedStaff int, err error) {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
-	res, err := s.importSignups(files, &mine)
+	res, err := s.importSignups(files)
 	return res.added, res.addedStaff, err
 }
 
@@ -245,10 +223,6 @@ func (s *Server) ImportSignups(files []signup.File, mine string) (added, addedSt
 // deciding.
 func (s *Server) previewImport(w http.ResponseWriter, r *http.Request) {
 	preview, t, err := s.readImport(r)
-	if errors.Is(err, ErrNoSignupRow) {
-		writeErr(w, http.StatusConflict, err)
-		return
-	}
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
@@ -281,12 +255,8 @@ func (s *Server) confirmImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.writeMu.Lock()
-	res, err := s.importSignups(files, nil)
+	res, err := s.importSignups(files)
 	s.writeMu.Unlock()
-	if errors.Is(err, ErrNoSignupRow) {
-		writeErr(w, http.StatusConflict, err)
-		return
-	}
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
@@ -305,8 +275,8 @@ type imported struct {
 }
 
 // importSignups writes the rows the check calls new. The caller holds writeMu.
-func (s *Server) importSignups(files []signup.File, mine *string) (imported, error) {
-	preview, t, err := s.checkSignups(files, mine)
+func (s *Server) importSignups(files []signup.File) (imported, error) {
+	preview, t, err := s.checkSignups(files)
 	if err != nil {
 		return imported{}, err
 	}
@@ -316,12 +286,17 @@ func (s *Server) importSignups(files []signup.File, mine *string) (imported, err
 	}
 	updated := signup.Import(preview, NextCompetitorID, competitors)
 	// Each new entry is a person of the event's: the same one in every discipline the
-	// response entered, by its submission id (phase 3).
+	// response entered, by its submission id, and the same one as any other response with
+	// the same email (phase 3, #142).
+	emails := map[string]string{}
+	for _, row := range preview.Rows {
+		emails[row.SubmissionID] = row.Email
+	}
 	for i, c := range updated {
 		if c.Person != "" {
 			continue
 		}
-		if updated[i].Person, err = s.personFor(c.Name, c.Club, c.Signup, ""); err != nil {
+		if updated[i].Person, err = s.personFor(c.Name, c.Club, c.Signup, emails[c.Signup], ""); err != nil {
 			return imported{}, err
 		}
 	}

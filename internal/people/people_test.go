@@ -20,21 +20,58 @@ func TestIdsAreRandomAndMarked(t *testing.T) {
 // is never enough.
 func TestWhoANewEntryIs(t *testing.T) {
 	var reg []store.Person
-	reg, astrid := people.For(reg, "Astrid", "Gbg", "sub-1", "")
-	reg, again := people.For(reg, "Astrid", "Gbg", "sub-1", "")
+	reg, astrid, _ := people.For(reg, "Astrid", "Gbg", "sub-1", "astrid@example.org", "")
+	reg, again, _ := people.For(reg, "Astrid", "Gbg", "sub-1", "", "")
 	if again != astrid || len(reg) != 1 {
 		t.Errorf("the same submission should be the same person: %q %q", astrid, again)
 	}
-	reg, twin := people.For(reg, "Astrid", "Gbg", "", "")
+	reg, twin, _ := people.For(reg, "Astrid", "Gbg", "", "", "")
 	if twin == astrid {
 		t.Error("the same name must never be made the same person on its own")
 	}
-	reg, chosen := people.For(reg, "Astrid L.", "Gbg", "", astrid)
+	reg, chosen, _ := people.For(reg, "Astrid L.", "Gbg", "", "", astrid)
 	if chosen != astrid || len(reg) != 2 {
 		t.Errorf("a person the organizer picked should be that person: %q", chosen)
 	}
-	if _, ghost := people.For(reg, "X", "", "", "pr-nobody"); ghost == "pr-nobody" {
+	if _, ghost, _ := people.For(reg, "X", "", "", "", "pr-nobody"); ghost == "pr-nobody" {
 		t.Error("asking for a person who does not exist should make a new one, not a dangling link")
+	}
+	// The same email from another submission -- a second signup from her phone -- is her
+	// again (#142), however it is capitalised; a new address is somebody new.
+	reg, phone, changed := people.For(reg, "Astrid L", "Gbg", "sub-9", " Astrid@Example.org", "")
+	if phone != astrid || changed {
+		t.Errorf("the same email should be the same person, unchanged: %q %v", phone, changed)
+	}
+	if people.ByEmail(reg, "ASTRID@example.org") != astrid {
+		t.Error("ByEmail should find her whatever the case")
+	}
+	reg, other, _ := people.For(reg, "Astrid", "Gbg", "sub-10", "another@example.org", "")
+	if other == astrid {
+		t.Error("another address is another person")
+	}
+	// Somebody first entered without an email learns it from their signup.
+	reg, desk, _ := people.For(reg, "Bo", "Sthlm", "sub-11", "", "")
+	reg, _, learnt := people.For(reg, "Bo", "Sthlm", "sub-11", "bo@example.org", "")
+	if !learnt || people.ByEmail(reg, "bo@example.org") != desk {
+		t.Error("a person found by submission should keep the email they signed up with")
+	}
+}
+
+// Two people with the same name and two different addresses are two people: nobody
+// asks the organizer about them (#142).
+func TestTwoAddressesAreNeverTheSamePerson(t *testing.T) {
+	reg := []store.Person{
+		{ID: "a", Name: "Anna Nilsson", Email: "anna@one.se"},
+		{ID: "b", Name: "Anna Nilsson", Email: "anna@two.se"},
+		{ID: "c", Name: "Anna Nilsson"},
+	}
+	got := people.Duplicates(reg, nil)
+	if len(got) != 1 || len(got[0]) != 3 {
+		t.Fatalf("the one without an address may be either, so the group is still asked about: %v", got)
+	}
+	reg = reg[:2]
+	if got := people.Duplicates(reg, nil); len(got) != 0 {
+		t.Errorf("two addresses are two people, got %v", got)
 	}
 }
 

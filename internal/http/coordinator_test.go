@@ -195,25 +195,20 @@ func TestTheDayIsTypedOnce(t *testing.T) {
 	}
 
 	// The admin screens of a discipline still save the whole day through its own path, as
-	// they always have. The event takes the day; the discipline keeps which programme row
-	// it is.
+	// they always have. The event takes the day.
 	h.must("PUT", "/api/d/open-sabre/event", map[string]any{
 		"welcome": "Changed from Sabre",
-		"signup":  map[string]string{"name": "MSL Open", "tournament": "sabre-pools"},
+		"signup":  map[string]string{"name": "MSL Open"},
 	}, nil)
-	var sabre, other snap
-	h.must("GET", "/api/d/open-sabre/state", nil, &sabre)
+	var other snap
 	h.must("GET", "/api/d/"+one+"/state", nil, &other)
-	if sabre.Tournament.Event.Signup.Tournament != "sabre-pools" {
-		t.Errorf("Sabre should keep its programme row, got %q", sabre.Tournament.Event.Signup.Tournament)
-	}
-	if other.Tournament.Event.Welcome != "Changed from Sabre" || other.Tournament.Event.Signup.Tournament != "" {
-		t.Errorf("the other discipline should share the day and not Sabre's row: %+v", other.Tournament.Event)
+	if other.Tournament.Event.Welcome != "Changed from Sabre" {
+		t.Errorf("the other discipline should share the day: %+v", other.Tournament.Event)
 	}
 	var view httpapi.EventView
 	h.must("GET", "/api/event", nil, &view)
-	if view.Name != "MSL Open" || view.Info.Signup.Tournament != "" {
-		t.Errorf("the event should be named from its signup settings and hold no discipline's row: %q %+v", view.Name, view.Info.Signup)
+	if view.Name != "MSL Open" {
+		t.Errorf("the event should be named from its signup settings: %q %+v", view.Name, view.Info.Signup)
 	}
 
 	b, _ := os.ReadFile(filepath.Join(h.dir, "disciplines", "open-sabre", "tournament.json"))
