@@ -3,7 +3,6 @@ package httpapi
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/fs"
 	"log"
@@ -85,9 +84,8 @@ type worker struct {
 	unfollow func()
 }
 
-// NewCoordinator loads every discipline in the event folder. An event with none gets one,
-// unnamed, so a first start is what it always was: one tournament, ready to set up
-// (proposal R10).
+// NewCoordinator loads every discipline in the event folder. An event with none has none
+// (#149): a first start is a welcome, and the disciplines come from planning the event.
 func NewCoordinator(folder *event.Folder, assets fs.FS) (*Coordinator, error) {
 	c := &Coordinator{
 		folder:   folder,
@@ -102,13 +100,6 @@ func NewCoordinator(folder *event.Folder, assets fs.FS) (*Coordinator, error) {
 	slugs, err := folder.Slugs()
 	if err != nil {
 		return nil, err
-	}
-	if len(slugs) == 0 {
-		slug, err := folder.Create("")
-		if err != nil {
-			return nil, err
-		}
-		slugs = []string{slug}
 	}
 	for _, slug := range slugs {
 		c.workers[slug] = c.load(slug)
@@ -494,6 +485,13 @@ func (c *Coordinator) alias(w http.ResponseWriter, r *http.Request) {
 		only = c.workers[c.order[0]]
 	}
 	c.mu.Unlock()
+	if len(slugs) == 0 {
+		writeJSON(w, http.StatusConflict, map[string]any{
+			"error":       "this event has no disciplines yet: add one first",
+			"disciplines": slugs,
+		})
+		return
+	}
 	if only == nil {
 		writeJSON(w, http.StatusConflict, map[string]any{
 			"error":       "this event runs several disciplines: ask for one by its address, /api/d/{discipline}/…",
@@ -562,7 +560,7 @@ func (c *Coordinator) deleteEvent(w http.ResponseWriter, r *http.Request) {
 }
 
 // DeleteEvent puts the event aside and starts a new one in its place, as a first start
-// does: one unnamed discipline, nothing else. Every discipline lets go of its files, the
+// does: no disciplines, nothing else (#149). Every discipline lets go of its files, the
 // folder's contents move under deleted/ (event.Folder.Delete), and every page hears the
 // new event -- whose new identity tells each tablet that the match logs it kept are from
 // an event that is gone. If the move fails, the event is opened again as it was.
@@ -579,23 +577,17 @@ func (c *Coordinator) DeleteEvent() (string, error) {
 		w.close()
 	}
 	where, err := c.folder.Delete()
-	var slug string
-	if err == nil {
-		slug, err = c.folder.Create("")
-	}
 	c.projected = nil
 	c.peopleMu.Unlock()
 	c.staffMu.Unlock()
 	c.planMu.Unlock()
 
-	slugs := []string{slug}
+	var slugs []string
 	if err != nil {
+		// The move failed: the event is opened again as it was.
 		slugs, _ = c.folder.Slugs()
 	}
 	for _, s := range slugs {
-		if s == "" {
-			continue
-		}
 		wk := c.load(s)
 		c.mu.Lock()
 		c.workers[s] = wk
@@ -737,8 +729,8 @@ func (c *Coordinator) reslug(old *worker, name string) (*worker, error) {
 }
 
 // retireDiscipline takes a discipline out of the event. Its folder is kept under
-// retired/, never deleted. The last discipline stays: an event with none has nothing for
-// any page to show.
+// retired/, never deleted. The last one can go too: an event with none is one still being
+// planned (#149).
 func (c *Coordinator) retireDiscipline(w http.ResponseWriter, r *http.Request) {
 	slug := r.PathValue("d")
 	c.mu.Lock()
@@ -746,11 +738,6 @@ func (c *Coordinator) retireDiscipline(w http.ResponseWriter, r *http.Request) {
 	if wk == nil {
 		c.mu.Unlock()
 		writeErr(w, http.StatusNotFound, fmt.Errorf("this event has no discipline %q", slug))
-		return
-	}
-	if len(c.order) == 1 {
-		c.mu.Unlock()
-		writeErr(w, http.StatusBadRequest, errors.New("an event needs at least one discipline"))
 		return
 	}
 	delete(c.workers, slug)

@@ -87,8 +87,8 @@ func (e *Event) Reset() {
 	e.staff.Assignments = s.Assignments
 }
 
-// Delete replaces the event with a new one, as the server's DELETE /api/event does: one
-// unnamed discipline and nothing else. The template for new events is the visitor's, not
+// Delete replaces the event with a new one, as the server's DELETE /api/event does: no
+// disciplines and nothing else (#149). The template for new events is the visitor's, not
 // the event's, and stays.
 func (e *Event) Delete() {
 	e.info = store.Event{}
@@ -99,7 +99,6 @@ func (e *Event) Delete() {
 	e.staff = store.Staff{}
 	e.screens = store.Screens{}
 	e.id = fmt.Sprintf("ev-%x", time.Now().UnixNano())
-	e.adopt(newDiscipline("discipline", emptyFixture("")))
 }
 
 func (e *Event) adopt(d *Demo) {
@@ -350,9 +349,6 @@ func (e *Event) rename(slug string, body []byte) Response {
 func (e *Event) retire(slug string) Response {
 	if e.find(slug) == nil {
 		return fail(404, fmt.Errorf("this event has no discipline %q", slug))
-	}
-	if len(e.disciplines) == 1 {
-		return fail(400, fmt.Errorf("an event needs at least one discipline"))
 	}
 	kept := e.disciplines[:0]
 	for _, d := range e.disciplines {

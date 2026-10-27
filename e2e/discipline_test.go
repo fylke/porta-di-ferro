@@ -30,8 +30,8 @@ type instance struct {
 	URL  string `json:"url"`
 }
 
-// Naming the discipline you are actually on (issue #80). A first start is one discipline
-// with no name; the organizer picks one from the usual list, and it is kept with the
+// Naming the discipline you are actually on (issue #80). An event of one discipline, made
+// with no name, has the organizer pick one from the usual list, and it is kept with the
 // tournament so it survives the restart a long day in a sports hall will involve.
 func TestNamingThisDiscipline(t *testing.T) {
 	s := start(t)
