@@ -542,7 +542,11 @@ func (d *Demo) infoPDF(query string) Response {
 		}
 	}
 	var buf bytes.Buffer
-	if err := httpapi.BuildInfoPDF(snap, landing, strings.Contains(query, "lang=sv")).Output(&buf); err != nil {
+	var programme []httpapi.ProgrammeRow
+	if d.event != nil {
+		programme = d.event.View().Programme
+	}
+	if err := httpapi.BuildInfoPDF(snap, programme, landing, strings.Contains(query, "lang=sv")).Output(&buf); err != nil {
 		return fail(500, err)
 	}
 	return Response{
@@ -660,16 +664,20 @@ func (d *Demo) putEvent(body []byte) Response {
 
 func (d *Demo) putTournament(body []byte) Response {
 	var in struct {
-		Mats        int  `json:"mats"`
-		MinPoolSize int  `json:"minPoolSize"`
-		MaxPoolSize int  `json:"maxPoolSize"`
-		ElimMats    *int `json:"elimMats"`
-		Capacity    *int `json:"capacity"`
+		Mats        int   `json:"mats"`
+		MinPoolSize int   `json:"minPoolSize"`
+		MaxPoolSize int   `json:"maxPoolSize"`
+		ElimMats    *int  `json:"elimMats"`
+		Capacity    *int  `json:"capacity"`
+		SetUp       *bool `json:"setUp"`
 	}
 	if err := json.Unmarshal(body, &in); err != nil {
 		return fail(400, err)
 	}
 	d.tournament.Mats, d.tournament.MinPoolSize, d.tournament.MaxPoolSize = in.Mats, in.MinPoolSize, in.MaxPoolSize
+	if in.SetUp != nil {
+		d.tournament.SetUp = *in.SetUp
+	}
 	if in.Capacity != nil {
 		d.tournament.Capacity = max(0, *in.Capacity)
 	}

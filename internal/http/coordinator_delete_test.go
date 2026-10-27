@@ -9,8 +9,8 @@ import (
 	httpapi "github.com/fylke/porta-di-ferro/internal/http"
 )
 
-// Deleting the event (#141) puts it aside and starts a new one in its place: one unnamed
-// discipline, nothing else, and a new identity -- with every file of the old one kept.
+// Deleting the event (#141) puts it aside and starts a new one in its place: no
+// disciplines (#149), nothing else, and a new identity -- with every file of the old one kept.
 func TestDeletingTheEventStartsANewOne(t *testing.T) {
 	h := openHall(t, t.TempDir())
 	h.must("PUT", "/api/event/info", map[string]any{"welcome": "Hi", "signup": map[string]string{"name": "Autumn Open"}}, nil)
@@ -29,8 +29,8 @@ func TestDeletingTheEventStartsANewOne(t *testing.T) {
 
 	var after httpapi.EventView
 	h.must("GET", "/api/event", nil, &after)
-	if len(after.Disciplines) != 1 || after.Disciplines[0].Name != "" || after.Disciplines[0].Competitors != 0 {
-		t.Errorf("the new event should be one unnamed, empty discipline: %+v", after.Disciplines)
+	if len(after.Disciplines) != 0 {
+		t.Errorf("the new event should have no disciplines: %+v", after.Disciplines)
 	}
 	if after.Info.Welcome != "" || after.Name != "" {
 		t.Errorf("the new event should have nothing of the old one's day: %+v", after.Info)
@@ -45,11 +45,9 @@ func TestDeletingTheEventStartsANewOne(t *testing.T) {
 	if code := h.do("GET", "/api/d/open-sabre/state", nil, nil); code != 404 {
 		t.Errorf("the old event's disciplines should be gone from the hall, got %d", code)
 	}
-	// The unprefixed paths are the new event's one discipline, as on a first start.
-	var s snap
-	h.must("GET", "/api/state", nil, &s)
-	if len(s.Competitors) != 0 {
-		t.Errorf("the new event's discipline should have no competitors, got %+v", s.Competitors)
+	// The unprefixed paths have no discipline to answer as, as on a first start.
+	if code := h.do("GET", "/api/state", nil, nil); code != 409 {
+		t.Errorf("the new event has no discipline for the unprefixed paths; want 409, got %d", code)
 	}
 
 	// Kept, not destroyed: under deleted/, named for when and for what.
@@ -65,6 +63,7 @@ func TestDeletingTheEventStartsANewOne(t *testing.T) {
 	}
 
 	// And the new event is an event like any other: it can be set up, and deleted in turn.
+	h.must("POST", "/api/disciplines", map[string]string{"name": "Open Sabre"}, nil)
 	h.must("POST", "/api/competitors", map[string]string{"name": "Bo", "club": "Sthlm"}, nil)
 	h.must("DELETE", "/api/event", nil, nil)
 	entries, _ := os.ReadDir(filepath.Join(h.dir, "deleted"))

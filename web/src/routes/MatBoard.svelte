@@ -59,6 +59,14 @@
     kept = draft;
   });
 
+  /**
+   * Only a pool is moved by hand (#149): the eliminations follow the pools, and the bronze
+   * match and the final follow the eliminations. Nor is one under way or finished.
+   */
+  function canMove(it: ItemView): boolean {
+    return it.movable && it.kind === 'pool';
+  }
+
   /** The board as the server has it, then with the draft's moves made on it. */
   const byMat = $derived.by(() => {
     const out = new Map<number, ItemView[]>();
@@ -73,15 +81,18 @@
         if (i >= 0) [it] = list.splice(i, 1);
       }
       if (!it) continue;
-      if (!it.movable || !target) {
+      if (!canMove(it) || !target) {
         // It started since, or its mat is gone: it stays where the server has it.
         out.get(it.mat)?.splice(it.position - 1, 0, it);
         continue;
       }
-      // Never in front of what a mat has under way or finished.
+      // Never in front of what a mat has under way or finished, and never behind its own
+      // discipline's eliminations or finals, which wait for it (#149).
       let floor = 0;
       while (floor < target.length && !target[floor].movable) floor++;
-      target.splice(Math.min(target.length, Math.max(floor, mv.index)), 0, it);
+      let ceiling = target.findIndex((o) => o.discipline === it.discipline && o.kind !== 'pool');
+      if (ceiling < 0) ceiling = target.length;
+      target.splice(Math.min(Math.max(ceiling, floor), Math.max(floor, mv.index)), 0, it);
     }
     return out;
   });
@@ -250,6 +261,10 @@
     menuFor = null;
     void send(() => api.flagItem(it.id, { pinned }));
   }
+  function withFinal(it: ItemView, on: boolean) {
+    menuFor = null;
+    void send(() => api.flagItem(it.id, { withFinal: on }));
+  }
   function hold(it: ItemView, notBefore: string) {
     menuFor = null;
     void send(() => api.flagItem(it.id, { notBefore }));
@@ -328,7 +343,7 @@
 
   /** A press anywhere on a card that is not one of its controls. */
   function press(e: PointerEvent, it: ItemView) {
-    if (!it.movable || busy) return;
+    if (!canMove(it) || busy) return;
     if ((e.target as HTMLElement).closest('button, a, input, select, form, .menu')) return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     const card = e.currentTarget as HTMLElement;
@@ -423,7 +438,7 @@
     if (!done) return;
     // The board as it is now, not as it was when the drag began.
     const it = view?.items.find((i) => i.id === done.id);
-    if (!it || !it.movable) return;
+    if (!it || !canMove(it)) return;
     plan(it, done.mat, done.index);
   }
 
@@ -483,7 +498,7 @@
   {#if forecast && forecast.end}
     <div class="day">
       <p>
-        {forecast.live ? t('Forecast to end at {time}', { time: clockOf(forecast.end) }) : t('Planned to end at {time}', { time: clockOf(forecast.end) })}
+        {forecast.live ? t('Forecast to end at {time}', { time: clockOf(forecast.end) }) : t('Estimated to end at {time}', { time: clockOf(forecast.end) })}
         {#if forecast.live && forecast.plannedEnd && clockOf(forecast.plannedEnd) !== clockOf(forecast.end)}
           <span class="dim-inline">{t('(planned {time})', { time: clockOf(forecast.plannedEnd) })}</span>
         {/if}
@@ -535,6 +550,9 @@
       name={itemName}
       short={shortOf}
       {onshort}
+      physicians={staffing && staffing.members.length > 0
+        ? staffing.physicians.map((id) => staffing?.members.find((m) => m.id === id)?.name ?? id)
+        : undefined}
     />
   {/if}
 
@@ -563,7 +581,7 @@
               <li
                 class="card {it.status}"
                 class:short={shortOf.has(it.id) && it.status !== 'done'}
-                class:movable={it.movable}
+                class:movable={canMove(it)}
                 class:moved={moved.has(it.id)}
                 class:lifted={drag?.id === it.id}
                 class:drop-before={dropBefore(m.mat, list, it)}
@@ -575,7 +593,7 @@
                 oncontextmenu={(e) => (holding || pressed) && e.preventDefault()}
               >
                 <!-- The whole card is what is dragged; this only says it can be. -->
-                <span class="grip" class:locked={!it.movable} aria-hidden="true" title={it.movable ? '' : statusLabel(it)}>{it.movable ? '⠿' : '•'}</span>
+                <span class="grip" class:locked={!canMove(it)} aria-hidden="true" title={canMove(it) ? '' : it.movable ? t('Follows the pools') : statusLabel(it)}>{canMove(it) ? '⠿' : '•'}</span>
                 <span class="what">
                   {#if disciplines > 1}<span class="disc">{it.disciplineName}</span>{/if}
                   <span class="name">{label(it)}</span>
@@ -594,23 +612,34 @@
                       {t('Short of {roles}', { roles: shortOf.get(it.id)!.join(', ').toLocaleLowerCase() })}
                     </a>
                   {/if}
-                  {#if it.pinned || it.notBefore}
+                  {#if it.pinned || it.notBefore || it.withFinal}
                     <span class="meta flags">
                       {#if it.pinned}<span class="flag">{t('pinned')}</span>{/if}
                       {#if it.notBefore}<span class="flag">{t('not before {time}', { time: it.notBefore })}</span>{/if}
+                      {#if it.withFinal}<span class="flag">{t('with the final')}</span>{/if}
                     </span>
                   {/if}
                 </span>
                 {#if it.movable}
-                  <button class="more" aria-haspopup="menu" aria-expanded={menuFor === it.id} aria-label={t('Move {item}', { item: label(it) })} onclick={() => openMenu(it)}>&hellip;</button>
+                  <button class="more plain" aria-haspopup="menu" aria-expanded={menuFor === it.id} aria-label={t('Move {item}', { item: label(it) })} onclick={() => openMenu(it)}>&hellip;</button>
                   {#if menuFor === it.id}
                     <div class="menu" role="menu">
-                      <button role="menuitem" disabled={busy} onclick={() => step(it, 'up')}>{t('Earlier')}</button>
-                      <button role="menuitem" disabled={busy} onclick={() => step(it, 'down')}>{t('Later')}</button>
-                      {#each mats.filter((o) => o.mat !== it.mat) as o (o.mat)}
-                        <button role="menuitem" disabled={busy} onclick={() => moveTo(it, o.mat)}>{t('To the end of mat {n}', { n: o.mat })}</button>
-                      {/each}
-                      <button role="menuitem" disabled={busy} onclick={() => pin(it, !it.pinned)}>{it.pinned ? t('Unpin') : t('Pin to this mat')}</button>
+                      {#if canMove(it)}
+                        <button role="menuitem" disabled={busy} onclick={() => step(it, 'up')}>{t('Earlier')}</button>
+                        <button role="menuitem" disabled={busy} onclick={() => step(it, 'down')}>{t('Later')}</button>
+                        {#each mats.filter((o) => o.mat !== it.mat) as o (o.mat)}
+                          <button role="menuitem" disabled={busy} onclick={() => moveTo(it, o.mat)}>{t('To the end of mat {n}', { n: o.mat })}</button>
+                        {/each}
+                        <button role="menuitem" disabled={busy} onclick={() => pin(it, !it.pinned)}>{it.pinned ? t('Unpin') : t('Pin to this mat')}</button>
+                      {:else}
+                        <p class="menu-note">{t('Follows the pools: move the pools, and this comes after them.')}</p>
+                      {/if}
+                      {#if it.kind === 'bronze'}
+                        <!-- Never alongside the final, unless the organizer says so (#149). -->
+                        <button role="menuitem" disabled={busy} onclick={() => withFinal(it, !it.withFinal)}>
+                          {it.withFinal ? t('Run before the final') : t('Run at the same time as the final')}
+                        </button>
+                      {/if}
                       <form class="hold" onsubmit={(e) => (e.preventDefault(), hold(it, holdUntil))}>
                         <label>
                           {t('Not before')}
@@ -931,6 +960,10 @@
   .more {
     padding: 0.2rem 0.5rem;
     font-size: 1rem;
+    background: var(--panel-2);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 6px;
   }
   .menu {
     position: absolute;
@@ -954,6 +987,14 @@
   }
   .menu button:hover {
     background: var(--panel);
+  }
+  .menu-note {
+    margin: 0;
+    padding: 0.45rem 0.6rem;
+    max-width: 14rem;
+    font-size: 0.8rem;
+    line-height: 1.4;
+    color: var(--ink-dim);
   }
   .ghost {
     position: fixed;

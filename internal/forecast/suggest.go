@@ -322,7 +322,8 @@ func position(items []Item, it Item) int {
 	return n
 }
 
-// dependencies says what each item waits for. Within a discipline: its eliminations wait
+// dependencies says what each item waits for. A final also waits for its bronze match,
+// unless the organizer lets the two run at once (#149). Within a discipline: its eliminations wait
 // for all its pools, and its bronze match and final for its eliminations -- or for its
 // pools, when its bracket is a final alone; pause lists the pools, after which the break
 // before the bracket applies. Across the event (#136): an item waits for every item of the
@@ -334,6 +335,9 @@ func dependencies(items []Item) func(Item) (wait, pause []string) {
 			byDisc[it.Discipline] = map[string][]string{}
 		}
 		byDisc[it.Discipline][it.Kind] = append(byDisc[it.Discipline][it.Kind], it.ID)
+		if it.Kind == KindBronze && !it.WithFinal {
+			byDisc[it.Discipline]["bronze-first"] = append(byDisc[it.Discipline]["bronze-first"], it.ID)
+		}
 	}
 	return func(it Item) ([]string, []string) {
 		k := byDisc[it.Discipline]
@@ -346,6 +350,9 @@ func dependencies(items []Item) func(Item) (wait, pause []string) {
 				wait = append(wait, k[KindEliminations]...)
 			} else {
 				pause = k[KindPool]
+			}
+			if it.Kind == KindFinal {
+				wait = append(wait, k["bronze-first"]...)
 			}
 		}
 		for _, o := range items {

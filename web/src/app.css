@@ -93,7 +93,8 @@ button {
 }
 
 input,
-select {
+select,
+textarea {
   font-family: inherit;
   font-size: 1rem;
   color: var(--ink);
@@ -119,4 +120,44 @@ a {
   overflow: hidden;
   clip: rect(0 0 0 0);
   white-space: nowrap;
+}
+
+/*
+ * The organizer's pages share one button (#149): white for what a panel is for, slate
+ * (.secondary) for what sits beside it -- Cancel, Back, a row's Rename -- and one height
+ * for both. Every page an organizer works in has class="admin" on its <main>. Wrapped in
+ * :where() around the elements: the score keeper's and the displays' own buttons, and
+ * the few deliberately different ones here (tabs, menus, the language toggle), keep the
+ * look they set for themselves -- a menu's items, a tab, and anything marked .plain. It weighs one class: enough to beat the bare button rule
+ * above, and less than any component's own.
+ */
+.admin :where(button:not(.plain, [role='menuitem'], [role='tab']), a.button) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 2.25rem;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.2;
+  border: 1px solid var(--ink);
+  border-radius: 8px;
+  background: var(--ink);
+  color: #0d0f14;
+  text-decoration: none;
+}
+.admin :where(button.secondary, a.button.secondary) {
+  background: var(--panel-2);
+  border-color: var(--line);
+  color: var(--ink);
+}
+.admin :where(button.danger) {
+  background: var(--red);
+  border-color: var(--red);
+  color: #fff;
+}
+.admin :where(button:disabled) {
+  opacity: 0.5;
+  cursor: default;
 }

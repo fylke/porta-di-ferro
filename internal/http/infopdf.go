@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-pdf/fpdf"
 
@@ -31,7 +32,11 @@ func (s *Server) exportInfoPDF(w http.ResponseWriter, r *http.Request) {
 	// The address a phone should open. The organizer picks it in the admin view and
 	// passes it here, because only the browser knows which of this PC's networks the
 	// tablets are actually on.
-	doc := BuildInfoPDF(snap, r.URL.Query().Get("url"), r.URL.Query().Get("lang") == "sv")
+	var programme []ProgrammeRow
+	if s.event != nil {
+		programme = s.event.Programme()
+	}
+	doc := BuildInfoPDF(snap, programme, r.URL.Query().Get("url"), r.URL.Query().Get("lang") == "sv")
 	w.Header().Set("Content-Type", "application/pdf")
 	w.Header().Set("Content-Disposition", `attachment; filename="porta-di-ferro-info.pdf"`)
 	if err := doc.Output(w); err != nil {
@@ -51,11 +56,20 @@ var infoSwedish = map[string]string{
 	"No network configured":              "Inget nätverk angivet",
 	"Ask the organizer":                  "Fråga arrangören",
 	"Results and schedule on your phone": "Resultat och schema i mobilen",
+	"Gear check":                         "Utrustningskontroll",
+	"Staff briefing":                     "Funktionärsgenomgång",
+	"Pools":                              "Pooler",
+	"Eliminations":                       "Elimineringar",
+	"Final":                              "Final",
+	"Lunch":                              "Lunch",
 }
 
 // BuildInfoPDF lays the sheet out. Exported for the same reason BuildPDF is: the browser
 // demo prints the same document, and one of these is enough.
-func BuildInfoPDF(snap Snapshot, landing string, swedish bool) *fpdf.Fpdf {
+//
+// The programme is the one generated from the plan (#149); an event planned before there
+// was one prints the rows its organizer typed instead.
+func BuildInfoPDF(snap Snapshot, programme []ProgrammeRow, landing string, swedish bool) *fpdf.Fpdf {
 	tr := func(s string) string {
 		if swedish {
 			if v, ok := infoSwedish[s]; ok {
@@ -116,21 +130,25 @@ func BuildInfoPDF(snap Snapshot, landing string, swedish bool) *fpdf.Fpdf {
 	// The schedule, full width underneath, as the sketch has it -- in two columns once
 	// there are enough items that one would push the sheet onto a second page. This goes
 	// on a door; a poster that is two pages is a poster somebody has to staple.
-	if len(event.Schedule) > 0 {
+	schedule := event.Schedule
+	if len(programme) > 0 {
+		schedule = ProgrammeSchedule(programme, tr)
+	}
+	if len(schedule) > 0 {
 		pdf.SetFont("Helvetica", "B", 13)
 		pdf.CellFormat(0, 8, latin(tr("Programme")), "", 1, "L", false, 0, "")
 		pdf.Ln(1)
 
 		usable := pageW - 36
-		perColumn := len(event.Schedule)
+		perColumn := len(schedule)
 		columnWidth := usable
-		if len(event.Schedule) > 5 {
-			perColumn = (len(event.Schedule) + 1) / 2
+		if len(schedule) > 5 {
+			perColumn = (len(schedule) + 1) / 2
 			columnWidth = usable/2 - 6
 		}
 
 		top := pdf.GetY()
-		for i, item := range event.Schedule {
+		for i, item := range schedule {
 			column, row := i/perColumn, i%perColumn
 			pdf.SetXY(left+float64(column)*(columnWidth+12), top+float64(row)*7.2)
 
@@ -215,4 +233,28 @@ func drawQR(pdf *fpdf.Fpdf, payload string, x, y, size float64, name string) {
 	}
 	pdf.RegisterImageOptionsReader(name, fpdf.ImageOptions{ImageType: "PNG"}, bytes.NewReader(png))
 	pdf.ImageOptions(name, x, y, size, size, false, fpdf.ImageOptions{ImageType: "PNG"}, 0, "")
+}
+
+// ProgrammeSchedule is the generated programme as rows for the sheet: the time it starts,
+// and what happens -- "Open Sabre: Pools" -- in the sheet's language. A discipline's first
+// fencing is set in bold, as a typed discipline row was, and a break in grey.
+func ProgrammeSchedule(rows []ProgrammeRow, tr func(string) string) []store.ScheduleItem {
+	stages := map[string]string{"gear-check": "Gear check", "briefing": "Staff briefing", "pools": "Pools",
+		"eliminations": "Eliminations", "final": "Final"}
+	out := make([]store.ScheduleItem, 0, len(rows))
+	for _, r := range rows {
+		at := ""
+		if t, err := time.Parse(time.RFC3339, r.Start); err == nil {
+			at = t.Format("15:04")
+		}
+		item := store.ScheduleItem{At: at, Label: r.Name + ": " + tr(stages[r.Stage])}
+		switch r.Stage {
+		case "break":
+			item.Kind, item.Label = "break", tr(r.Name)
+		case "pools":
+			item.Kind = "discipline"
+		}
+		out = append(out, item)
+	}
+	return out
 }

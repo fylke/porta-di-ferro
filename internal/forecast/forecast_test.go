@@ -308,3 +308,50 @@ func TestAMatAwayWaitsItOut(t *testing.T) {
 		t.Errorf("mat 2 is there from nine: %s", hm(s.Start))
 	}
 }
+
+// A final waits for its bronze match, so the two are never fenced at once -- unless the
+// organizer lets them run side by side (#149).
+func TestTheFinalWaitsForTheBronzeMatch(t *testing.T) {
+	items := func(with bool) []forecast.Item {
+		bronze := item("ls/bronze", "ls", "bronze", 2, 2, 1)
+		bronze.WithFinal = with
+		return []forecast.Item{
+			item("ls/pool-1", "ls", "pool", 1, 1, 3),
+			bronze,
+			item("ls/final", "ls", "final", 1, 2, 1),
+		}
+	}
+	r := forecast.Run(forecast.Input{Timings: tpl, Items: items(false)})
+	if b, f := spanOf(r, "ls/bronze"), spanOf(r, "ls/final"); f.Start.Before(b.End) {
+		t.Errorf("the final should start after the bronze match ends: bronze %s-%s, final %s", hm(b.Start), hm(b.End), hm(f.Start))
+	}
+	r = forecast.Run(forecast.Input{Timings: tpl, Items: items(true)})
+	if b, f := spanOf(r, "ls/bronze"), spanOf(r, "ls/final"); !f.Start.Before(b.End) {
+		t.Errorf("let run with the final, the two should overlap: bronze %s-%s, final %s", hm(b.Start), hm(b.End), hm(f.Start))
+	}
+}
+
+// A pool held to a later start pushes what follows on its mat only as far as it must
+// (#149): the next pool starts once this one is over, and a gap that was there closes up
+// rather than being carried along.
+func TestALaterStartShiftsWhatFollowsOnlyOnOverlap(t *testing.T) {
+	items := func(hold string) []forecast.Item {
+		p1 := item("ls/pool-1", "ls", "pool", 1, 1, 3)
+		p1.NotBefore = at(hold)
+		p2 := item("ls/pool-2", "ls", "pool", 1, 2, 3)
+		p2.NotBefore = at("09:30")
+		return []forecast.Item{p1, p2}
+	}
+	// Pool 1 runs 14 minutes. Held to 09:10 it ends 09:24, before pool 2's own 09:30:
+	// pool 2 is where it was with pool 1 at nine.
+	base := spanOf(forecast.Run(forecast.Input{Timings: tpl, Items: items("09:00")}), "ls/pool-2")
+	r := forecast.Run(forecast.Input{Timings: tpl, Items: items("09:10")})
+	if s := spanOf(r, "ls/pool-2"); !s.Start.Equal(base.Start) {
+		t.Errorf("pool 1 ending before 09:30 should leave pool 2 where it was: %s, not %s", hm(s.Start), hm(base.Start))
+	}
+	// Held to 09:25 it ends 09:39, and pool 2 follows it after the changeover.
+	r = forecast.Run(forecast.Input{Timings: tpl, Items: items("09:25")})
+	if s, p1 := spanOf(r, "ls/pool-2"), spanOf(r, "ls/pool-1"); !s.Start.Equal(p1.End.Add(tpl.Changeover)) {
+		t.Errorf("pool 2 should follow pool 1 once they would overlap: %s after %s", hm(s.Start), hm(p1.End))
+	}
+}

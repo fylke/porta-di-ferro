@@ -6,7 +6,7 @@
   import { t } from '../lib/i18n.svelte';
 
   /**
-   * The event's disciplines: add one, rename one, take one out (#4, #102).
+   * The event's disciplines: add one, set it up, rename it, delete it (#4, #102, #149).
    *
    * Every discipline of the day runs in this one application, at this one address, each in
    * a folder of its own (docs/proposals/one-event-many-disciplines.md). Adding one used to
@@ -22,12 +22,18 @@
     onchange,
     bare = false,
     links = false,
+    setup = false,
   }: {
     onchange?: () => void;
     /** Without its own box and introduction: the list inside another panel (#142). */
     bare?: boolean;
     /** With each discipline's landing page beside its admin page. */
     links?: boolean;
+    /**
+     * Planning the event (#149): each discipline says whether it is set up, and Set up
+     * opens its setup in a tab of its own.
+     */
+    setup?: boolean;
   } = $props();
 
   let presets = $state<string[]>([]);
@@ -62,10 +68,7 @@
     try {
       await fn();
       await hall.refresh();
-      // The one discipline's admin page refreshes its snapshot on a change -- unless the
-      // change made the event several disciplines, when that page is about to give way to
-      // the event's, and the address it would ask no longer means one discipline.
-      if (!hall.multi) onchange?.();
+      onchange?.();
       return true;
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
@@ -118,6 +121,9 @@
 {/if}
 
 {#snippet body()}
+  {#if disciplines.length === 0}
+    <p class="dim">{t('No disciplines yet. Add the first one.')}</p>
+  {/if}
   <ul>
     {#each disciplines as d (d.slug)}
       <li class:failed={!!d.error}>
@@ -131,36 +137,40 @@
           >
             <input list="discipline-names" bind:value={editingName} aria-label={t('Name of this discipline')} required />
             <button type="submit" disabled={busy || !editingName.trim()}>{t('Save')}</button>
-            <button type="button" onclick={() => (editing = null)}>{t('Cancel')}</button>
+            <button type="button" class="secondary" onclick={() => (editing = null)}>{t('Cancel')}</button>
           </form>
         {:else}
           <span class="who" class:unnamed={!d.name}>{d.name || t('Unnamed')}</span>
           {#if d.error}
             <span class="meta warn">{t('could not be read')}</span>
+          {:else if setup}
+            <!-- What "done setting it up" means (#149): its setup was finished. -->
+            <span class="meta" class:ready={d.setUp}>{d.setUp ? `${t('Set up')} ✓` : t('Not set up yet')}</span>
           {:else}
             <span class="meta">{stageLabel(d)}</span>
           {/if}
           <!-- Links and buttons alike, in one style: the row's actions (#142). -->
           <span class="acts">
-            {#if disciplines.length > 1}
-              <a class="act" href="/d/{d.slug}/admin">{t('Admin')}</a>
-              {#if links && !d.error}<a class="act" href="/d/{d.slug}/">{t('Landing page')}</a>{/if}
+            {#if setup && !d.error}
+              <!-- In a tab of its own, so the plan stays where it was (#149). -->
+              <a class="button" class:secondary={d.setUp} href="/d/{d.slug}/setup" target="_blank" rel="noreferrer">{t('Set up')}</a>
+            {:else if !d.error}
+              <a class="button secondary" href="/d/{d.slug}/admin">{t('Admin')}</a>
+              {#if links}<a class="button secondary" href="/d/{d.slug}/">{t('Landing page')}</a>{/if}
             {/if}
             {#if !d.error}
-              <button class="act" onclick={() => startEditing(d)}>{t('Rename')}</button>
+              <button class="secondary" onclick={() => startEditing(d)}>{t('Rename')}</button>
             {:else}
-              <button class="act" onclick={() => void act(() => api.reloadDiscipline(d.slug))}>{t('Try again')}</button>
+              <button class="secondary" onclick={() => void act(() => api.reloadDiscipline(d.slug))}>{t('Try again')}</button>
             {/if}
-            {#if disciplines.length > 1}
-              {#if retiring === d.slug}
-                <span class="confirm">
-                  {t('Take {name} out of the event? Its folder is kept.', { name: d.name || d.slug })}
-                  <button class="act danger" disabled={busy} onclick={() => void retire(d.slug)}>{t('Take it out')}</button>
-                  <button class="act" onclick={() => (retiring = null)}>{t('Cancel')}</button>
-                </span>
-              {:else}
-                <button class="act" onclick={() => (retiring = d.slug)}>{t('Take out')}</button>
-              {/if}
+            {#if retiring === d.slug}
+              <span class="confirm">
+                {t('Delete {name} from the event? Its folder is kept.', { name: d.name || d.slug })}
+                <button class="danger" disabled={busy} onclick={() => void retire(d.slug)}>{t('Delete')}</button>
+                <button class="secondary" onclick={() => (retiring = null)}>{t('Cancel')}</button>
+              </span>
+            {:else}
+              <button class="secondary" onclick={() => (retiring = d.slug)}>{t('Delete')}</button>
             {/if}
           </span>
         {/if}
@@ -176,7 +186,7 @@
 
   <!-- Adding one is rare -- once per discipline per event -- so it is a button that opens
        the choice rather than a form always on the page (#142). -->
-  <button class="act add" disabled={busy} onclick={() => (adding = true)}>{t('Add a discipline…')}</button>
+  <button class="add" disabled={busy} onclick={() => (adding = true)}>{t('Add a discipline…')}</button>
   {#if error && !adding}<p class="err">{error}</p>{/if}
 {/snippet}
 
@@ -188,7 +198,7 @@
         <p class="label">{t('One of the usual')}</p>
         <div class="presets">
           {#each available as p (p)}
-            <button type="button" disabled={busy} onclick={() => void add(p)}>{p}</button>
+            <button type="button" class="secondary" disabled={busy} onclick={() => void add(p)}>{p}</button>
           {/each}
         </div>
         <p class="label">{t('Or another')}</p>
@@ -200,11 +210,11 @@
         }}
       >
         <input list="discipline-names" placeholder={t('Rapier and dagger, Sword and buckler, …')} bind:value={name} required />
-        <button type="submit" class="go" disabled={busy || !name.trim()}>{t('Add')}</button>
+        <button type="submit" disabled={busy || !name.trim()}>{t('Add')}</button>
       </form>
       {#if error}<p class="err">{error}</p>{/if}
       <p class="dim">{t('Each discipline gets its own competitors, pools and admin page, at this same address.')}</p>
-      <button type="button" class="close" onclick={() => ((adding = false), (error = ''))}>{t('Cancel')}</button>
+      <button type="button" class="close secondary" onclick={() => ((adding = false), (error = ''))}>{t('Cancel')}</button>
     </div>
   </div>
 {/if}
@@ -261,20 +271,8 @@
     font-size: 0.8rem;
     overflow-wrap: anywhere;
   }
-  /* One style for every action on a row, link or button. */
-  .act {
-    display: inline-block;
-    padding: 0.3rem 0.6rem;
-    font-size: 0.82rem;
-    line-height: 1.2;
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    background: var(--panel-2);
-    color: var(--ink);
-    text-decoration: none;
-  }
-  .act.danger {
-    border-color: var(--red);
+  .meta.ready {
+    color: var(--ok);
   }
   .acts {
     display: inline-flex;
@@ -306,12 +304,6 @@
   .card h3 {
     margin: 0;
     font-size: 1.2rem;
-  }
-  .card .presets button {
-    padding: 0.45rem 0.7rem;
-  }
-  .go {
-    font-weight: 700;
   }
   .close {
     justify-self: end;

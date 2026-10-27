@@ -14,6 +14,8 @@ import (
 	"runtime"
 	"testing"
 	"time"
+
+	"github.com/fylke/porta-di-ferro/internal/event"
 )
 
 type server struct {
@@ -26,7 +28,17 @@ type server struct {
 // start builds the binary and runs it against a fresh event directory.
 func start(t *testing.T) *server {
 	t.Helper()
-	return startIn(t, t.TempDir())
+	// A fresh event has no disciplines (#149). These tests are about one that has one,
+	// unnamed, answering on the unprefixed paths -- what a first start was before.
+	dir := t.TempDir()
+	f, err := event.Open(dir)
+	if err != nil {
+		t.Fatalf("opening the event folder: %v", err)
+	}
+	if _, err := f.Create(""); err != nil {
+		t.Fatalf("making the first discipline: %v", err)
+	}
+	return startIn(t, dir)
 }
 
 // startIn runs the binary against a directory the test has prepared -- a tournament

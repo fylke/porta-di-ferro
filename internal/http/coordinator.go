@@ -3,7 +3,6 @@ package httpapi
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/fs"
 	"log"
@@ -54,6 +53,9 @@ type Coordinator struct {
 	// staffMu serialises changes to the event's staff. Taken after a discipline's lock and
 	// before the people's (coordinator_staff.go).
 	staffMu sync.Mutex
+	// namesMu serialises adding and renaming disciplines, so two adds of one name at the
+	// same moment cannot both pass the check that it is free.
+	namesMu sync.Mutex
 
 	mu      sync.Mutex
 	order   []string
@@ -85,9 +87,8 @@ type worker struct {
 	unfollow func()
 }
 
-// NewCoordinator loads every discipline in the event folder. An event with none gets one,
-// unnamed, so a first start is what it always was: one tournament, ready to set up
-// (proposal R10).
+// NewCoordinator loads every discipline in the event folder. An event with none has none
+// (#149): a first start is a welcome, and the disciplines come from planning the event.
 func NewCoordinator(folder *event.Folder, assets fs.FS) (*Coordinator, error) {
 	c := &Coordinator{
 		folder:   folder,
@@ -102,13 +103,6 @@ func NewCoordinator(folder *event.Folder, assets fs.FS) (*Coordinator, error) {
 	slugs, err := folder.Slugs()
 	if err != nil {
 		return nil, err
-	}
-	if len(slugs) == 0 {
-		slug, err := folder.Create("")
-		if err != nil {
-			return nil, err
-		}
-		slugs = []string{slug}
 	}
 	for _, slug := range slugs {
 		c.workers[slug] = c.load(slug)
@@ -284,6 +278,11 @@ func (c *Coordinator) SaveEventInfo(ev store.Event) error {
 	return nil
 }
 
+// Programme is the day as the plan has it (#149), for a discipline's info sheet.
+func (c *Coordinator) Programme() []ProgrammeRow {
+	return c.View().Programme
+}
+
 // --- the event view ---------------------------------------------------------------------
 
 func (c *Coordinator) snapshotWorkers() []*worker {
@@ -432,6 +431,9 @@ func (c *Coordinator) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/plan/expected", c.putExpected)
 	mux.HandleFunc("PUT /api/plan/sessions", c.putSessions)
 	mux.HandleFunc("PUT /api/plan/finals", c.putFinals)
+	mux.HandleFunc("PUT /api/plan/breaks", c.putBreaks)
+	mux.HandleFunc("PUT /api/plan/prep", c.putPrep)
+	mux.HandleFunc("PUT /api/plan/starts", c.putStarts)
 	mux.HandleFunc("GET /api/plan/report", c.getReport)
 	mux.HandleFunc("PUT /api/plan/anomalies", c.putAnomaly)
 	mux.HandleFunc("POST /api/plan/suggest", c.suggest)
@@ -494,6 +496,13 @@ func (c *Coordinator) alias(w http.ResponseWriter, r *http.Request) {
 		only = c.workers[c.order[0]]
 	}
 	c.mu.Unlock()
+	if len(slugs) == 0 {
+		writeJSON(w, http.StatusConflict, map[string]any{
+			"error":       "this event has no disciplines yet: add one first",
+			"disciplines": slugs,
+		})
+		return
+	}
 	if only == nil {
 		writeJSON(w, http.StatusConflict, map[string]any{
 			"error":       "this event runs several disciplines: ask for one by its address, /api/d/{discipline}/…",
@@ -540,7 +549,7 @@ func (c *Coordinator) putInfo(w http.ResponseWriter, r *http.Request) {
 func (c *Coordinator) infoPDF(w http.ResponseWriter, r *http.Request) {
 	view := c.View()
 	snap := Snapshot{Tournament: store.Tournament{Event: view.Info}, Instance: Instance{Name: view.Name}}
-	doc := BuildInfoPDF(snap, r.URL.Query().Get("url"), r.URL.Query().Get("lang") == "sv")
+	doc := BuildInfoPDF(snap, view.Programme, r.URL.Query().Get("url"), r.URL.Query().Get("lang") == "sv")
 	var buf bytes.Buffer
 	if err := doc.Output(&buf); err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
@@ -562,7 +571,7 @@ func (c *Coordinator) deleteEvent(w http.ResponseWriter, r *http.Request) {
 }
 
 // DeleteEvent puts the event aside and starts a new one in its place, as a first start
-// does: one unnamed discipline, nothing else. Every discipline lets go of its files, the
+// does: no disciplines, nothing else (#149). Every discipline lets go of its files, the
 // folder's contents move under deleted/ (event.Folder.Delete), and every page hears the
 // new event -- whose new identity tells each tablet that the match logs it kept are from
 // an event that is gone. If the move fails, the event is opened again as it was.
@@ -579,23 +588,17 @@ func (c *Coordinator) DeleteEvent() (string, error) {
 		w.close()
 	}
 	where, err := c.folder.Delete()
-	var slug string
-	if err == nil {
-		slug, err = c.folder.Create("")
-	}
 	c.projected = nil
 	c.peopleMu.Unlock()
 	c.staffMu.Unlock()
 	c.planMu.Unlock()
 
-	slugs := []string{slug}
+	var slugs []string
 	if err != nil {
+		// The move failed: the event is opened again as it was.
 		slugs, _ = c.folder.Slugs()
 	}
 	for _, s := range slugs {
-		if s == "" {
-			continue
-		}
 		wk := c.load(s)
 		c.mu.Lock()
 		c.workers[s] = wk
@@ -634,6 +637,8 @@ func (c *Coordinator) addDiscipline(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
+	c.namesMu.Lock()
+	defer c.namesMu.Unlock()
 	name, err := CleanName(in.Name)
 	if err == nil {
 		err = c.nameTaken(name, "")
@@ -683,6 +688,8 @@ func (c *Coordinator) renameDiscipline(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusConflict, fmt.Errorf("%s cannot be renamed until its files can be read: %w", slug, wk.err))
 		return
 	}
+	c.namesMu.Lock()
+	defer c.namesMu.Unlock()
 	name, err := CleanName(in.Name)
 	if err == nil {
 		err = c.nameTaken(name, slug)
@@ -737,8 +744,8 @@ func (c *Coordinator) reslug(old *worker, name string) (*worker, error) {
 }
 
 // retireDiscipline takes a discipline out of the event. Its folder is kept under
-// retired/, never deleted. The last discipline stays: an event with none has nothing for
-// any page to show.
+// retired/, never deleted. The last one can go too: an event with none is one still being
+// planned (#149).
 func (c *Coordinator) retireDiscipline(w http.ResponseWriter, r *http.Request) {
 	slug := r.PathValue("d")
 	c.mu.Lock()
@@ -746,11 +753,6 @@ func (c *Coordinator) retireDiscipline(w http.ResponseWriter, r *http.Request) {
 	if wk == nil {
 		c.mu.Unlock()
 		writeErr(w, http.StatusNotFound, fmt.Errorf("this event has no discipline %q", slug))
-		return
-	}
-	if len(c.order) == 1 {
-		c.mu.Unlock()
-		writeErr(w, http.StatusBadRequest, errors.New("an event needs at least one discipline"))
 		return
 	}
 	delete(c.workers, slug)

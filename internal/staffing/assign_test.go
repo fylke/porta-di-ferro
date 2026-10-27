@@ -152,3 +152,22 @@ func TestALongStintGetsABreak(t *testing.T) {
 		t.Errorf("with nobody else free, the stint limit must not leave the mat empty: %+v", r.Short)
 	}
 }
+
+// The fewest people who could staff a plan: a full crew on every mat at the busiest moment
+// (#149). Two mats side by side, then one, with a mat freed exactly as the next item starts.
+func TestTheStaffNeededIsTheBusiestMoment(t *testing.T) {
+	items := []staffing.Item{
+		item("ls/pool-1", "ls", 1, 0, 60),
+		item("ls/pool-2", "ls", 2, 0, 60),
+		item("ls/elim-1", "ls", 1, 60, 120),
+	}
+	if got := staffing.Needed(items, nil); got != 6 {
+		t.Errorf("two mats at once of a head referee, an assistant and a score keeper are 6 people, got %d", got)
+	}
+	if got := staffing.Needed(items[2:], map[string]int{"assistant-ref": 2}); got != 4 {
+		t.Errorf("one mat with two assistants is 4 people, got %d", got)
+	}
+	if got := staffing.Needed(nil, nil); got != 0 {
+		t.Errorf("nothing planned needs nobody, got %d", got)
+	}
+}

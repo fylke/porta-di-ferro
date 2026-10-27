@@ -63,7 +63,7 @@
     <div class="foot">
       <span>{t('mat {n}', { n: m.mat })}{#if m.status === 'running'} &middot; {t('under way')}{/if}</span>
       {#if onedit && m.red && m.blue}
-        <button class="edit" title={t("Edit this match's log")} aria-label={t('Edit the log of {match}', { match: roundLabel(m) })} onclick={() => onedit?.(m)}>&#9998;</button>
+        <button class="edit plain" title={t("Edit this match's log")} aria-label={t('Edit the log of {match}', { match: roundLabel(m) })} onclick={() => onedit?.(m)}>&#9998;</button>
       {/if}
     </div>
   </div>

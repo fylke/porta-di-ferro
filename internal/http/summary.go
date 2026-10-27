@@ -55,7 +55,10 @@ type DisciplineSummary struct {
 	// Stage is where the discipline has got to: "setup" before the pools are drawn,
 	// "pools", "waiting" between the last pool match and the bracket, "eliminations",
 	// and "done" once the bracket is fenced.
-	Stage        string       `json:"stage"`
+	Stage string `json:"stage"`
+	// SetUp says the organizer finished the discipline's setup (#149); a discipline with
+	// entrants or a draw counts as set up whatever the flag says.
+	SetUp        bool         `json:"setUp"`
 	Competitors  int          `json:"competitors"`
 	Pools        int          `json:"pools"`
 	MatchesDone  int          `json:"matchesDone"`
@@ -106,6 +109,7 @@ func Summarize(slug string, snap Snapshot) DisciplineSummary {
 		URL:      snap.Instance.URL,
 		Mats:     []MatSummary{},
 		Entrants: []Entrant{},
+		SetUp:    snap.Tournament.SetUp || len(snap.Pools) > 0,
 	}
 	names := map[string]string{}
 	for _, c := range snap.Competitors {

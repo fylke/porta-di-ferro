@@ -211,3 +211,73 @@ func TestMatsHaveNamesAndAwayTimes(t *testing.T) {
 		t.Errorf("there is no mat 9, got %d", code)
 	}
 }
+
+// The programme is generated from the plan (#149): each discipline's gear check and staff
+// briefing end as its first pool starts, the hall's breaks stop the mats and are listed,
+// a discipline starts no earlier than it is told to -- and what a day usually has and this
+// one lacks is pointed out.
+func TestTheProgrammeIsGeneratedFromThePlan(t *testing.T) {
+	h := openHall(t, filepath.Join(t.TempDir(), "event"))
+	h.c.Clock = func() time.Time { return time.Date(2026, 11, 14, 8, 0, 0, 0, time.Local) }
+	var ev httpapi.EventView
+	h.must("GET", "/api/event", nil, &ev)
+	ls := ev.Disciplines[0].Slug
+	h.must("PUT", "/api/plan/timings", map[string]any{"match": 300, "changeover": 60, "start": "09:00"}, nil)
+	h.draw("/api/d/"+ls, 8, 2)
+
+	v := h.forecast()
+	gaps := map[string]bool{}
+	for _, g := range v.Gaps {
+		gaps[g.Kind] = true
+	}
+	if !gaps["lunch"] || !gaps["gear-check"] || !gaps["briefing"] {
+		t.Errorf("a day with no lunch, gear check or briefing should say so: %+v", v.Gaps)
+	}
+
+	h.must("PUT", "/api/plan/prep", map[string]any{ls: map[string]int{"gearCheck": 1800, "briefing": 900}}, nil)
+	h.must("PUT", "/api/plan/breaks", []map[string]string{{"from": "09:30", "to": "10:00"}}, nil)
+	h.must("PUT", "/api/plan/starts", map[string]string{ls: "09:15"}, nil)
+	v = h.forecast()
+	if len(v.Gaps) != 0 {
+		t.Errorf("nothing should be missing now: %+v", v.Gaps)
+	}
+	if len(v.Breaks) != 1 || v.Breaks[0].Label != "Lunch" || v.Starts[ls] != "09:15" || v.Prep[ls].GearCheck != 1800 {
+		t.Errorf("the plan's breaks, starts and prep should come back, a nameless break as lunch: %+v %+v %+v", v.Breaks, v.Starts, v.Prep)
+	}
+	at := map[string]httpapi.ProgrammeRow{}
+	for _, r := range v.Programme {
+		at[r.Stage] = r
+	}
+	if p := at["pools"]; clockOf(p.Start) != "09:15" {
+		t.Errorf("the pools should wait for the discipline's start: %+v", p)
+	}
+	if g := at["gear-check"]; clockOf(g.Start) != "08:45" || g.End != at["pools"].Start {
+		t.Errorf("the gear check should be the half hour before the first pool: %+v", g)
+	}
+	if b := at["briefing"]; clockOf(b.Start) != "09:00" {
+		t.Errorf("the briefing should be the quarter hour before the first pool: %+v", b)
+	}
+	if b := at["break"]; b.Name != "Lunch" || clockOf(b.Start) != "09:30" || clockOf(b.End) != "10:00" {
+		t.Errorf("the break should be in the programme: %+v", b)
+	}
+	// Six matches of five minutes and five changeovers are 35 minutes of fencing; the
+	// break stops the mat for another 30.
+	if p := timesOf(v, ls+"/pool-1"); clockOf(p.End) < "10:15" {
+		t.Errorf("no mat fences through the break, so pool 1 ends after it: %+v", p)
+	}
+
+	for _, bad := range []any{
+		[]map[string]string{{"from": "12:00", "to": "11:00"}},
+		[]map[string]string{{"from": "noon", "to": "13:00"}},
+	} {
+		if code := h.do("PUT", "/api/plan/breaks", bad, nil); code != 400 {
+			t.Errorf("a break that is not a span of the day should be refused: %v got %d", bad, code)
+		}
+	}
+	if code := h.do("PUT", "/api/plan/starts", map[string]string{"nope": "09:00"}, nil); code != 400 {
+		t.Errorf("a start for a discipline the event does not have should be refused, got %d", code)
+	}
+	if code := h.do("PUT", "/api/plan/prep", map[string]any{ls: map[string]int{"gearCheck": -5}}, nil); code != 400 {
+		t.Errorf("a negative gear check should be refused, got %d", code)
+	}
+}

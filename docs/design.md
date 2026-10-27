@@ -1084,7 +1084,7 @@ multi-tenancy, macOS — are listed in [`tech-stack.md`](tech-stack.md) rather t
 | **Scope creep from Future** | Milestone 3 is an idea dump, not a queue. Nothing moves out of it without being cut down first |
 | **Code signing left until the first release** | An unsigned download triggers SmartScreen, and that dialog *is* the install wall. It sits directly on the 5-minute acceptance criterion, so pick a signing route early rather than in the week before an event |
 | **The match engine drifts between Go and TypeScript** | It exists twice (decision 13), and the shared test vectors are the only thing holding the two together. The failure mode is a rule that gets a fix in one implementation without earning a vector. If it bites, the escape hatch is compiling the Go engine to WebAssembly and deleting the second copy |
-| **The organizer gets a browser tab, not an application** | Choosing a server over a desktop app means "now open your browser" is part of the install. Mitigated by the executable opening the browser itself and the first screen showing the LAN URL and QR code, but it needs testing on the non-programmer, not assuming |
+| **The organizer gets a browser tab, not an application** | Choosing a server over a desktop app means "now open your browser" is part of the install. Mitigated by the executable opening the browser itself, a welcome with a guided tour on a first start (#149), and the admin page showing the LAN URL and QR code, but it needs testing on the non-programmer, not assuming |
 
 ---
 

@@ -1,21 +1,20 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import type { EventInfo, ScheduleItem } from '../api';
+  import type { EventInfo } from '../api';
   import { t } from '../lib/i18n.svelte';
+  import SaveButton from './SaveButton.svelte';
 
   /**
-   * Where the welcome message, the day's agenda and the venue wifi are written
-   * (issue #98). Admin only: everything here comes out on the info sheet on the door and
-   * on every phone in the hall.
+   * The event, the first step of planning it (#149): what it is called, where and when, and
+   * the identifier that goes in every signup file -- needed before anything else, because
+   * the signup and the info sheet are built from them -- and the welcome and the venue
+   * wifi for the info sheet by the door and every phone in the hall.
    *
-   * Saved on a button rather than as you type. The other panels on this page save on
-   * change because they hold one value each; this holds a paragraph and a list, and an
-   * autosave that fires mid-sentence would push half-written text to every screen in the
-   * venue.
+   * The programme is not here any more: it is generated from the plan (#149), so nobody
+   * types "pools at 10:40" and then forgets to change it.
    *
-   * The day belongs to the event (docs/proposals/one-event-many-disciplines.md §7): this
-   * is on the event's admin page, or on the one discipline's while there is only one.
-   * Which is the caller's business; it hands over the day as it stands and how to save it.
+   * Saved on a button rather than as you type. The welcome is a paragraph, and an autosave
+   * that fires mid-sentence would push half-written text to every screen in the venue.
    */
   let {
     event,
@@ -23,71 +22,115 @@
     onchange,
   }: { event: EventInfo; save: (event: EventInfo) => Promise<unknown>; onchange: () => void } = $props();
 
-  // Seeded once, like the tournament setup above it: the organizer is the only writer,
-  // and a field that rewrites itself under the cursor is worse than one briefly stale.
+  // Seeded once: the organizer is the only writer, and a field that rewrites itself under
+  // the cursor is worse than one briefly stale.
   const initial = untrack(() => event);
+  let definitionId = $state(initial.signup?.definitionId ?? '');
+  let name = $state(initial.signup?.name ?? '');
+  let venue = $state(initial.signup?.venue ?? '');
+  let date = $state(initial.signup?.date ?? '');
   let welcome = $state(initial.welcome ?? '');
   let ssid = $state(initial.wifi?.ssid ?? '');
   let password = $state(initial.wifi?.password ?? '');
   let security = $state(initial.wifi?.security ?? 'WPA');
-  let schedule = $state<ScheduleItem[]>(
-    (initial.schedule ?? []).map((i) => ({ ...i })),
-  );
+  // The identifier follows the name and the year until somebody types one of their own.
+  let ownId = $state(!!initial.signup?.definitionId);
 
   let saving = $state(false);
   let error = $state('');
-  let saved = $state(false);
+  let dirty = $state(false);
 
-  function addRow(kind: ScheduleItem['kind'] = '') {
-    schedule = [...schedule, { at: '', label: '', kind }];
-    saved = false;
-  }
-  function removeRow(i: number) {
-    schedule = schedule.filter((_, k) => k !== i);
-    saved = false;
-  }
-  function move(i: number, by: -1 | 1) {
-    const j = i + by;
-    if (j < 0 || j >= schedule.length) return;
-    const next = [...schedule];
-    [next[i], next[j]] = [next[j], next[i]];
-    schedule = next;
-    saved = false;
-  }
   function touch() {
-    saved = false;
+    dirty = true;
+    error = '';
+    if (!ownId) definitionId = suggestId(name, date);
   }
 
-  async function save() {
+  /** "Autumn Open" on 2026-11-15 is autumn-open-2026. */
+  function suggestId(n: string, d: string): string {
+    const slug = n
+      .toLocaleLowerCase()
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+    const year = /^\d{4}/.exec(d.trim())?.[0];
+    return slug && year && !slug.endsWith(year) ? `${slug}-${year}` : slug;
+  }
+
+  /** What still has to be filled in before the event can be planned further. */
+  const missing = $derived(
+    [
+      [definitionId, t('Event identifier')],
+      [name, t('Event name')],
+      [venue, t('Venue')],
+      [date, t('Date')],
+    ]
+      .filter(([v]) => !v.trim())
+      .map(([, label]) => label),
+  );
+
+  async function save(): Promise<boolean> {
     error = '';
     saving = true;
     try {
-      // On top of the day as it stands now, not as it was when the page opened: the save
-      // replaces the whole of it, and the signup settings beside these three fields are
-      // edited elsewhere. Sending only these used to wipe them.
+      // On top of the event as it stands now, not as it was when the page opened: the save
+      // replaces the whole of it, and the signup settings are edited elsewhere too.
       const next: EventInfo = {
         ...event,
         welcome,
-        // Blank labels are how a row is removed; the server drops them too.
-        schedule: schedule.filter((i) => (i.label ?? '').trim() !== ''),
+        signup: { ...event.signup, definitionId: definitionId.trim(), name: name.trim(), venue: venue.trim(), date: date.trim() },
         wifi: { ssid, password, security: security as 'WPA' | 'WEP' | 'nopass' },
       };
       await send(next);
-      saved = true;
+      dirty = false;
       onchange();
+      return true;
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
+      return false;
     } finally {
       saving = false;
     }
   }
+
+  /**
+   * For the wizard's Next: saves what is unsaved, and says whether the event is complete
+   * enough to go on. The four that go in every signup file are required (#149).
+   */
+  export async function commit(): Promise<boolean> {
+    if (missing.length > 0) {
+      error = t('Fill in {fields} to go on.', { fields: missing.join(', ') });
+      return false;
+    }
+    return dirty ? await save() : true;
+  }
 </script>
 
-<section>
-  <h2>{t('The day')}</h2>
-  <p class="dim">
-    {t('What goes on the info sheet by the door and on everyone’s phone. None of it touches a result.')}
-    <a href="/info" target="_blank" rel="noreferrer">{t('See the info sheet')}</a>
+<section data-tour="plan-event">
+  <h2>{t('The event')}</h2>
+  <p class="dim">{t('What it is called, where and when. These four go in every signup file, so they are needed before anything else.')}</p>
+
+  <div class="fields">
+    <label>
+      <span>{t('Event name')} <span class="req">*</span></span>
+      <input bind:value={name} oninput={touch} placeholder={t('MSL Open')} required />
+    </label>
+    <label>
+      <span>{t('Venue')} <span class="req">*</span></span>
+      <input bind:value={venue} oninput={touch} placeholder={t('Linköping')} required />
+    </label>
+    <label>
+      <span>{t('Date')} <span class="req">*</span></span>
+      <input type="date" bind:value={date} oninput={touch} required />
+    </label>
+    <label>
+      <span>{t('Event identifier')} <span class="req">*</span></span>
+      <input bind:value={definitionId} oninput={() => ((ownId = true), touch())} placeholder="msl-open-2026" required />
+    </label>
+  </div>
+  <p class="dim small">
+    {t('The identifier keeps a response from last year’s event out of this one. It goes in every file and cannot change once they are sent.')}
   </p>
 
   <label class="block">
@@ -99,31 +142,6 @@
       placeholder={t('Welcome to Stångebroslaget. Gear check from 08:30, first pools at 09:30.')}
     ></textarea>
   </label>
-
-  <div class="sched">
-    <span class="lab">{t('Programme')}</span>
-    {#each schedule as row, i (i)}
-      <div class="row">
-        <input class="at" bind:value={row.at} oninput={touch} placeholder={t('09:00')} aria-label={t('Time')} />
-        <input class="what" bind:value={row.label} oninput={touch} placeholder={t('Gear check')} aria-label={t('What happens')} />
-        <select bind:value={row.kind} onchange={touch} aria-label={t('Kind')}>
-          <option value="">{t('item')}</option>
-          <option value="discipline">{t('discipline')}</option>
-          <option value="break">{t('break')}</option>
-        </select>
-        <span class="rowbtns">
-          <button type="button" onclick={() => move(i, -1)} aria-label={t('Move up')} title={t('Earlier')}>&uarr;</button>
-          <button type="button" onclick={() => move(i, 1)} aria-label={t('Move down')} title={t('Later')}>&darr;</button>
-          <button type="button" onclick={() => removeRow(i)} aria-label={t('Delete')} title={t('Delete this event')}>&times;</button>
-        </span>
-      </div>
-    {/each}
-    <p class="add">
-      <button type="button" onclick={() => addRow('')}>{t('Add a row')}</button>
-      <button type="button" onclick={() => addRow('discipline')}>{t('Add a discipline')}</button>
-      <button type="button" onclick={() => addRow('break')}>{t('Add a break')}</button>
-    </p>
-  </div>
 
   <div class="wifi">
     <span class="lab">{t('Venue wifi')}</span>
@@ -150,8 +168,8 @@
 
   {#if error}<p class="err">{error}</p>{/if}
   <div class="actions">
-    <button class="save" disabled={saving} onclick={save}>{t('Save the day')}</button>
-    {#if saved}<span class="ok">{t('Saved')}</span>{/if}
+    <SaveButton {dirty} busy={saving} onclick={() => void save()} />
+    <a href="/info" target="_blank" rel="noreferrer">{t('See the info sheet')}</a>
   </div>
 </section>
 
@@ -174,7 +192,7 @@
   }
   .small {
     font-size: 0.82rem;
-    margin-bottom: 0.5rem;
+    margin: 0.4rem 0 1rem;
   }
   .lab {
     display: block;
@@ -184,6 +202,9 @@
     text-transform: uppercase;
     color: var(--ink-dim);
     margin-bottom: 0.35rem;
+  }
+  .req {
+    color: var(--amber-bright);
   }
   .block {
     display: block;
@@ -196,50 +217,9 @@
     line-height: 1.5;
     padding: 0.5rem 0.6rem;
   }
-
-  .sched {
-    margin-bottom: 1rem;
-  }
-  .row {
-    display: grid;
-    grid-template-columns: 5.5rem 1fr 7rem auto;
-    gap: 0.4rem;
-    margin-bottom: 0.35rem;
-    align-items: center;
-  }
-  .row input,
-  .row select {
-    padding: 0.35rem 0.45rem;
-    font-size: 0.9rem;
-    min-width: 0;
-  }
-  .rowbtns {
-    display: inline-flex;
-    gap: 0.2rem;
-  }
-  .rowbtns button {
-    padding: 0.25rem 0.45rem;
-    font-size: 0.85rem;
-    background: var(--panel-2);
-    border: 1px solid var(--line);
-    color: var(--ink-dim);
-  }
-  .add {
-    margin: 0.5rem 0 0;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-  }
-  .add button {
-    padding: 0.35rem 0.7rem;
-    font-size: 0.85rem;
-    background: var(--panel-2);
-    border: 1px solid var(--line);
-  }
-
   .fields {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
     gap: 0.6rem;
   }
   .fields label {
@@ -253,56 +233,14 @@
     padding: 0.4rem 0.5rem;
     min-width: 0;
   }
-
   .actions {
     display: flex;
     align-items: center;
     gap: 0.8rem;
     margin-top: 1rem;
   }
-  .save {
-    padding: 0.55rem 1rem;
-    font-weight: 700;
-    background: var(--ink);
-    color: #0d0f14;
-    border: none;
-  }
-  .save:disabled {
-    opacity: 0.5;
-  }
-  .ok {
-    color: var(--ok);
-    font-size: 0.88rem;
-  }
   .err {
     margin: 0.5rem 0 0;
     color: var(--amber-bright);
-  }
-
-  /* The schedule rows stack rather than squeeze on a phone: an organizer does sometimes
-     fix the programme from the same tablet they are carrying round the hall. */
-  @media (max-width: 40rem) {
-    .row {
-      grid-template-columns: 5rem 1fr;
-      grid-template-areas:
-        'at what'
-        'kind btns';
-      row-gap: 0.3rem;
-      padding-bottom: 0.5rem;
-      border-bottom: 1px solid var(--line);
-    }
-    .row .at {
-      grid-area: at;
-    }
-    .row .what {
-      grid-area: what;
-    }
-    .row select {
-      grid-area: kind;
-    }
-    .rowbtns {
-      grid-area: btns;
-      justify-content: flex-end;
-    }
   }
 </style>

@@ -10,8 +10,8 @@
 </script>
 
 <span class="lang" class:compact role="group" aria-label="Language / Språk">
-  <button class:on={lang.current === 'en'} aria-pressed={lang.current === 'en'} onclick={() => setLang('en')}>EN</button>
-  <button class:on={lang.current === 'sv'} aria-pressed={lang.current === 'sv'} onclick={() => setLang('sv')}>SV</button>
+  <button class="plain" class:on={lang.current === 'en'} aria-pressed={lang.current === 'en'} onclick={() => setLang('en')}>EN</button>
+  <button class="plain" class:on={lang.current === 'sv'} aria-pressed={lang.current === 'sv'} onclick={() => setLang('sv')}>SV</button>
 </span>
 
 <style>

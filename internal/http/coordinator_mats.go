@@ -291,19 +291,18 @@ func (c *Coordinator) putMats(w http.ResponseWriter, r *http.Request) {
 // {"move": "up"} one step along its own.
 func (c *Coordinator) patchItem(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Mat       int     `json:"mat"`
-		Index     *int    `json:"index"`
-		Move      string  `json:"move"`
-		Pinned    *bool   `json:"pinned"`
-		NotBefore *string `json:"notBefore"`
+		Mat   int    `json:"mat"`
+		Index *int   `json:"index"`
+		Move  string `json:"move"`
+		ItemFlags
 	}
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
 	// The card menu's pin and hold-until (phase 4), on their own or with a move.
-	if in.Pinned != nil || in.NotBefore != nil {
-		if err := c.flagItem(r.PathValue("id"), in.Pinned, in.NotBefore); err != nil {
+	if in.Any() {
+		if err := c.flagItem(r.PathValue("id"), in.ItemFlags); err != nil {
 			writeErr(w, http.StatusBadRequest, err)
 			return
 		}

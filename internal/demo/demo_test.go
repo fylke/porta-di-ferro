@@ -371,8 +371,8 @@ func TestWhatTheDemoCannotDoItRefuses(t *testing.T) {
 			t.Fatalf("taking %s out returned %d", slug, res.Status)
 		}
 	}
-	if res := e.Request("DELETE", "/api/disciplines/open-steel-longsword", nil); res.Status != 400 {
-		t.Errorf("an event keeps at least one discipline; want 400, got %d", res.Status)
+	if res := e.Request("DELETE", "/api/disciplines/open-steel-longsword", nil); res.Status != 200 {
+		t.Errorf("the last discipline can go too (#149); want 200, got %d", res.Status)
 	}
 }
 

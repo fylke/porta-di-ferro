@@ -107,10 +107,10 @@
             <span class="dim-inline">{pair.b.club ?? ''} &middot; {where(pair.b)}</span>
           </span>
           <span class="actions">
-            <button class="save" disabled={busy} onclick={() => act(() => api.mergePerson(pair.b.id, pair.a.id))}>
+            <button disabled={busy} onclick={() => act(() => api.mergePerson(pair.b.id, pair.a.id))}>
               {t('The same person')}
             </button>
-            <button class="quiet" disabled={busy} onclick={() => act(() => api.keepApart(pair.a.id, pair.b.id))}>
+            <button class="secondary" disabled={busy} onclick={() => act(() => api.keepApart(pair.a.id, pair.b.id))}>
               {t('Two people')}
             </button>
           </span>
@@ -128,7 +128,7 @@
         {#each p.mergedFrom ?? [] as from (from.id)}
           <li>
             <span>{t('{from} is now {into}', { from: from.name, into: p.name })}</span>
-            <button class="quiet" disabled={busy} onclick={() => act(() => api.unmergePerson(from.id))}>
+            <button class="secondary" disabled={busy} onclick={() => act(() => api.unmergePerson(from.id))}>
               {t('Separate again')}
             </button>
           </li>
@@ -234,23 +234,6 @@
     display: flex;
     flex-wrap: wrap;
     gap: 0.4rem;
-  }
-  .save,
-  .quiet {
-    padding: 0.4rem 0.8rem;
-    font-size: 0.85rem;
-    font-weight: 700;
-    border-radius: var(--radius);
-  }
-  .save {
-    background: var(--ink);
-    color: #0d0f14;
-    border: none;
-  }
-  .quiet {
-    background: var(--panel-2);
-    color: var(--ink);
-    border: 1px solid var(--line);
   }
   .merged li {
     display: flex;

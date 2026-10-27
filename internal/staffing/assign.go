@@ -290,6 +290,39 @@ func Signature(as []store.Assignment) string {
 	return strings.Join(keys, ";")
 }
 
+// Needed is the fewest people who could staff the plan: a full crew on every mat running
+// at the busiest moment of the day. Nobody works two mats at once, so no fewer will do.
+func Needed(items []Item, crew map[string]int) int {
+	per := 0
+	for _, r := range MatRoles {
+		per += CrewOf(crew)[r]
+	}
+	type edge struct {
+		at    time.Time
+		delta int
+	}
+	var edges []edge
+	for _, it := range items {
+		if it.Start.IsZero() || !it.End.After(it.Start) {
+			continue
+		}
+		edges = append(edges, edge{it.Start, 1}, edge{it.End, -1})
+	}
+	// An item ending as another starts frees its mat first.
+	sort.Slice(edges, func(i, j int) bool {
+		if !edges[i].at.Equal(edges[j].at) {
+			return edges[i].at.Before(edges[j].at)
+		}
+		return edges[i].delta < edges[j].delta
+	})
+	peak, now := 0, 0
+	for _, e := range edges {
+		now += e.delta
+		peak = max(peak, now)
+	}
+	return peak * per
+}
+
 // Physicians are the members on call for the hall: a physician is not on a mat.
 func Physicians(members []store.StaffMember) []store.StaffMember {
 	out := []store.StaffMember{}

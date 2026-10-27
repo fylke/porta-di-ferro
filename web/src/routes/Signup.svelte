@@ -15,6 +15,7 @@
   import { t } from '../lib/i18n.svelte';
   import { apiBase } from '../lib/paths';
   import { discipline } from '../router.svelte';
+  import SaveButton from './SaveButton.svelte';
 
   /**
    * Offline signup, the organizer's half (issue #91).
@@ -64,8 +65,10 @@
   // What a participant chooses from: the disciplines themselves, by their names (#142).
   const offered = $derived(ready?.tournaments ?? []);
   let saving = $state(false);
-  let saved = $state(false);
+  let dirty = $state(false);
   let error = $state('');
+  // When each discipline starts at the earliest, by slug: the event's plan (#149).
+  let starts = $state<Record<string, string>>({});
 
   // The chosen files and what the server says about them. Kept apart: the organizer can
   // look, change their mind, and pick a different folder without anything having
@@ -96,15 +99,38 @@
     if (scope === 'share') return;
     try {
       ready = scope === 'event' ? await api.eventSignupReady() : await api.signupReady();
+      if (scope === 'event') starts = { ...((await api.forecast()).starts ?? {}) };
     } catch {
       // The panel still works; it just cannot say what is missing.
+    }
+  }
+
+  // The event's disciplines, edited where they are listed (#149): the name, and when it
+  // starts at the earliest -- shown as the planned start until one is given.
+  async function rename(slug: string, to: string) {
+    error = '';
+    try {
+      await api.renameDiscipline(slug, to);
+      await refreshReady();
+      onchange();
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+    }
+  }
+  async function setStart(slug: string, at: string) {
+    error = '';
+    try {
+      starts = { ...((await api.setStarts({ [slug]: at })).starts ?? {}) };
+      await refreshReady();
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
     }
   }
 
   onMount(refreshReady);
 
   function touch() {
-    saved = false;
+    dirty = true;
   }
 
   async function save() {
@@ -117,7 +143,7 @@
         const signup: SignupInfo = { definitionId, name, venue, date };
         await api.saveEvent({ ...(snapshot?.tournament.event ?? {}), signup });
       }
-      saved = true;
+      dirty = false;
       await refreshReady();
       onchange();
     } catch (e) {
@@ -264,6 +290,44 @@
     {t('Send people a file they fill in offline and send back. Nothing here needs the internet, and neither does what they open.')}
   </p>
 
+  {#if several}
+    <!-- The event's name, venue, date and identifier are set in Plan the event (#149). -->
+    <p class="identity">
+      <span class="strong">{info?.signup?.name || t('No name yet')}</span>
+      {#if info?.signup?.venue}&middot; {info.signup.venue}{/if}
+      {#if info?.signup?.date}&middot; {info.signup.date}{/if}
+      {#if info?.signup?.definitionId}&middot; <span class="mono">{info.signup.definitionId}</span>{/if}
+      <a href="/plan?step=1">{t('Edit')}</a>
+    </p>
+
+    <!-- What goes out is the disciplines themselves, under the names they have here:
+         there is nothing to match up (#142). Listed as the event is, with their fields
+         (#149); the ruleset will join them. -->
+    <div class="offered">
+      <h3>{t('Disciplines')}</h3>
+      {#if offered.length > 0}
+        <div class="drow head" aria-hidden="true">
+          <span>{t('Identifier')}</span><span>{t('Name')}</span><span>{t('Time')}</span>
+        </div>
+        {#each offered as d (d.id)}
+          <div class="drow">
+            <input class="mono" value={d.id} readonly aria-label={t('Identifier of {name}', { name: d.label })} title={t('The discipline’s address, and its name in the signup files. It does not change.')} />
+            <input value={d.label} aria-label={t('Name of {name}', { name: d.label })} onchange={(e) => void rename(d.id, e.currentTarget.value)} />
+            <input
+              type="time"
+              value={starts[d.id] || d.startsAt || ''}
+              aria-label={t('When {name} starts', { name: d.label })}
+              onchange={(e) => void setStart(d.id, e.currentTarget.value)}
+            />
+          </div>
+        {/each}
+      {/if}
+      <p class="dim small">
+        {t('A time is when the discipline starts at the earliest; until one is given it is the planned start. Name, club and email are asked of everybody; a second signup with the same email is the same person.')}
+      </p>
+    </div>
+    {#if error}<p class="err">{error}</p>{/if}
+  {:else}
   <div class="fields">
     <label>
       {t('Event identifier')}
@@ -290,7 +354,7 @@
        is nothing to match up (#142). Everybody gives an email, which is how a second
        signup from the same person, from any device, is the same person. -->
   <div class="offered">
-    <h3>{t('Participants choose from')}</h3>
+    <h3>{t('Disciplines')}</h3>
     {#if offered.length > 0}
       <ul>
         {#each offered as d (d.id)}
@@ -309,9 +373,9 @@
 
   {#if error}<p class="err">{error}</p>{/if}
   <div class="actions">
-    <button class="save" disabled={saving} onclick={save}>{t('Save')}</button>
-    {#if saved}<span class="ok">{t('Saved')}</span>{/if}
+    <SaveButton {dirty} busy={saving} onclick={() => void save()} />
   </div>
+  {/if}
 
   {#if ready && (ready.missing?.length ?? 0) > 0}
     <p class="warn">
@@ -541,22 +605,25 @@
   }
   /* The file inputs are hidden inside their labels: a bare file input cannot be styled
      and reads as an afterthought on a page of buttons. */
+  /* The links and file pickers, as the admin's buttons look (#149). */
   .button,
   .quiet {
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
-    padding: 0.5rem 0.9rem;
-    border-radius: var(--radius);
+    min-height: 2.25rem;
+    padding: 0.4rem 0.9rem;
+    border-radius: 8px;
     font-size: 0.9rem;
-    font-weight: 700;
+    font-weight: 600;
+    line-height: 1.2;
     cursor: pointer;
     text-decoration: none;
   }
   .button {
     background: var(--ink);
     color: #0d0f14;
-    border: none;
+    border: 1px solid var(--ink);
   }
   .quiet {
     background: var(--panel-2);
@@ -576,15 +643,32 @@
     margin-top: 0.9rem;
     flex-wrap: wrap;
   }
-  .save {
-    padding: 0.55rem 1rem;
-    font-weight: 700;
-    background: var(--ink);
-    color: #0d0f14;
-    border: none;
+  .identity {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem 0.5rem;
+    align-items: baseline;
+    margin: 0 0 0.6rem;
   }
-  .save:disabled {
-    opacity: 0.5;
+  .drow {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) 7rem;
+    gap: 0.4rem;
+    margin-bottom: 0.35rem;
+  }
+  .drow input {
+    min-width: 0;
+    padding: 0.35rem 0.5rem;
+    font-size: 0.9rem;
+  }
+  .drow input[readonly] {
+    color: var(--ink-dim);
+    background: transparent;
+  }
+  .drow.head {
+    font-size: 0.72rem;
+    color: var(--ink-dim);
+    margin-bottom: 0.2rem;
   }
   .ok {
     color: var(--ok);

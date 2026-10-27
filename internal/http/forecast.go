@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -70,6 +71,72 @@ func ParseClock(day time.Time, s string) (time.Time, bool) {
 	}
 	y, mo, d := day.Date()
 	return time.Date(y, mo, d, h, m, 0, 0, day.Location()), true
+}
+
+// BreaksOf is the hall's breaks: the plan's (#149), or -- for an event planned before the
+// plan held them -- the break rows of the programme the organizer used to type.
+func BreaksOf(plan store.Plan, ev store.Event) []store.Break {
+	if len(plan.Breaks) > 0 {
+		return plan.Breaks
+	}
+	var out []store.Break
+	for _, row := range ev.Schedule {
+		if row.Kind == "break" && row.Ends != "" {
+			out = append(out, store.Break{Label: row.Label, From: row.At, To: row.Ends})
+		}
+	}
+	return out
+}
+
+// maxBreaks caps the hall's breaks: a day with more stops than this is not a plan.
+const maxBreaks = 10
+
+// CleanBreaks checks the hall's breaks: times of day, each ending after it starts, in the
+// order of the day. A break with no name is lunch, the one every day has.
+func CleanBreaks(in []store.Break) ([]store.Break, error) {
+	if len(in) > maxBreaks {
+		return nil, fmt.Errorf("a day with more than %d breaks is not one anybody plans", maxBreaks)
+	}
+	now := time.Now()
+	out := make([]store.Break, 0, len(in))
+	for _, b := range in {
+		b.Label, b.From, b.To = strings.TrimSpace(b.Label), strings.TrimSpace(b.From), strings.TrimSpace(b.To)
+		from, ok1 := ParseClock(now, b.From)
+		to, ok2 := ParseClock(now, b.To)
+		if !ok1 || !ok2 {
+			return nil, fmt.Errorf("a break needs a start and an end, written as 12:00")
+		}
+		if !to.After(from) {
+			return nil, fmt.Errorf("the break from %s should end after it starts", b.From)
+		}
+		if b.Label == "" {
+			b.Label = "Lunch"
+		}
+		if len(b.Label) > 60 {
+			return nil, fmt.Errorf("a break's name is a word or two, not %d characters", len(b.Label))
+		}
+		out = append(out, b)
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].From < out[j].From })
+	return out, nil
+}
+
+// CleanPrep checks a discipline's gear check and staff briefing: up to four hours each.
+func CleanPrep(p store.Prep) (store.Prep, error) {
+	if p.GearCheck < 0 || p.GearCheck > 4*3600 || p.Briefing < 0 || p.Briefing > 4*3600 {
+		return p, fmt.Errorf("a gear check or a briefing takes between nothing and four hours")
+	}
+	return p, nil
+}
+
+// CleanStart checks when a discipline starts at the earliest: a time of day, or blank for
+// whenever the plan reaches it.
+func CleanStart(s string) (string, error) {
+	s = strings.TrimSpace(s)
+	if _, ok := ParseClock(time.Now(), s); s != "" && !ok {
+		return s, fmt.Errorf("%q is not a time of day; write it as 09:30", s)
+	}
+	return s, nil
 }
 
 // ForecastInput is what the forecast needs, from the disciplines and the plan. The day is
@@ -153,20 +220,28 @@ func ForecastInput(inputs []MatsInput, placed map[string]store.Placement, plan s
 			}
 		}
 	}
-	for _, row := range ev.Schedule {
-		if row.Kind != "break" {
-			continue
-		}
-		from, ok1 := ParseClock(day, row.At)
-		to, ok2 := ParseClock(day, row.Ends)
+	for _, b := range BreaksOf(plan, ev) {
+		from, ok1 := ParseClock(day, b.From)
+		to, ok2 := ParseClock(day, b.To)
 		if ok1 && ok2 && to.After(from) {
-			out.Breaks = append(out.Breaks, forecast.Break{From: from, To: to})
+			out.Breaks = append(out.Breaks, forecast.Break{From: from, To: to, Label: b.Label})
 		}
 	}
+	for slug, p := range plan.Prep {
+		if out.Prep == nil {
+			out.Prep = map[string]forecast.Prep{}
+		}
+		out.Prep[slug] = forecast.Prep{GearCheck: time.Duration(p.GearCheck) * time.Second, Briefing: time.Duration(p.Briefing) * time.Second}
+	}
 	for _, it := range items {
+		notBefore := clock(it.place.NotBefore)
+		// No work of a discipline before it starts (#149).
+		if at := clock(plan.Starts[it.w.Discipline]); at.After(notBefore) {
+			notBefore = at
+		}
 		fi := forecast.Item{ID: it.w.ID(), Discipline: it.w.Discipline, Kind: it.w.Kind,
-			Mat: it.place.Mat, Seq: it.place.Seq, Projected: it.w.Projected, Pinned: it.place.Pinned, NotBefore: clock(it.place.NotBefore),
-			Session: it.session, Held: it.held}
+			Mat: it.place.Mat, Seq: it.place.Seq, Projected: it.w.Projected, Pinned: it.place.Pinned, NotBefore: notBefore,
+			Session: it.session, Held: it.held, WithFinal: it.place.WithFinal}
 		people := map[string]bool{}
 		for _, id := range it.w.Matches {
 			m := forecast.Match{Key: it.w.Discipline + "/" + id}
@@ -307,12 +382,13 @@ type WarningView struct {
 	To         string   `json:"to,omitempty"`
 }
 
-// ProgrammeRow is one stage of a discipline, as the derived programme lists it: its pools,
-// its eliminations, its final.
+// ProgrammeRow is one row of the programme, generated from the plan (#149): a discipline's
+// gear check, staff briefing, pools, eliminations or final, or a break for the whole hall.
 type ProgrammeRow struct {
+	// Discipline is empty for a break; Name is then the break's.
 	Discipline string `json:"discipline"`
 	Name       string `json:"name"`
-	// Stage is "pools", "eliminations" or "final".
+	// Stage is "gear-check", "briefing", "pools", "eliminations", "final" or "break".
 	Stage string `json:"stage"`
 	Start string `json:"start"`
 	End   string `json:"end"`
@@ -338,6 +414,50 @@ type ForecastView struct {
 	// finals are held to the end (#136).
 	Sessions   map[string]int `json:"sessions,omitempty"`
 	FinalsLast bool           `json:"finalsLast,omitempty"`
+	// Breaks, Prep and Starts are the plan's, for the planning panel (#149).
+	Breaks []store.Break         `json:"breaks"`
+	Prep   map[string]store.Prep `json:"prep,omitempty"`
+	Starts map[string]string     `json:"starts,omitempty"`
+	// Gaps are what the plan looks to be missing: a lunch break, a discipline's gear
+	// check or staff briefing. Pointed out, never required.
+	Gaps []PlanGap `json:"gaps"`
+}
+
+// PlanGap is something a day usually has and this plan does not. Kind is "lunch",
+// "gear-check" or "briefing"; Discipline names the discipline for the last two.
+type PlanGap struct {
+	Kind       string `json:"kind"`
+	Discipline string `json:"discipline,omitempty"`
+	Name       string `json:"name,omitempty"`
+}
+
+// ViewPlan fills in the plan's own part of the forecast view: what the planning panel
+// edits, and what it is missing. Shared with the browser demo.
+func ViewPlan(v *ForecastView, plan store.Plan, ev store.Event, inputs []MatsInput) {
+	v.Breaks = BreaksOf(plan, ev)
+	if v.Breaks == nil {
+		v.Breaks = []store.Break{}
+	}
+	v.Prep, v.Starts = plan.Prep, plan.Starts
+	v.Gaps = []PlanGap{}
+	planned := map[string]bool{}
+	for _, r := range v.Programme {
+		planned[r.Discipline] = true
+	}
+	if len(planned) > 0 && len(v.Breaks) == 0 {
+		v.Gaps = append(v.Gaps, PlanGap{Kind: "lunch"})
+	}
+	for _, d := range inputs {
+		if !planned[d.Slug] {
+			continue
+		}
+		if plan.Prep[d.Slug].GearCheck == 0 {
+			v.Gaps = append(v.Gaps, PlanGap{Kind: "gear-check", Discipline: d.Slug, Name: d.Name})
+		}
+		if plan.Prep[d.Slug].Briefing == 0 {
+			v.Gaps = append(v.Gaps, PlanGap{Kind: "briefing", Discipline: d.Slug, Name: d.Name})
+		}
+	}
 }
 
 func stamp(t time.Time) string {
@@ -440,10 +560,50 @@ func programme(in forecast.Input, r forecast.Result, inputs []MatsInput) []Progr
 		}
 	}
 	out := []ProgrammeRow{}
+	begun := map[string]bool{}
+	for _, it := range in.Items {
+		for _, m := range it.Matches {
+			begun[it.Discipline] = begun[it.Discipline] || m.Done || !m.Started.IsZero()
+		}
+	}
+	for _, d := range inputs {
+		// The gear check and the staff briefing end as the first pool starts (#149).
+		first := rows[key{d.Slug, "pools"}]
+		if first == nil {
+			first = rows[key{d.Slug, "eliminations"}]
+		}
+		if first == nil || first.Start == "" {
+			continue
+		}
+		at, err := time.Parse(time.RFC3339, first.Start)
+		if err != nil {
+			continue
+		}
+		p := in.Prep[d.Slug]
+		for _, prep := range []struct {
+			stage string
+			took  time.Duration
+		}{{"gear-check", p.GearCheck}, {"briefing", p.Briefing}} {
+			if prep.took > 0 {
+				out = append(out, ProgrammeRow{Discipline: d.Slug, Name: d.Name, Stage: prep.stage,
+					Start: stamp(at.Add(-prep.took)), End: first.Start, Mats: []int{}, Done: begun[d.Slug]})
+			}
+		}
+	}
 	for _, k := range order {
 		if row := rows[k]; row != nil {
 			out = append(out, *row)
 		}
+	}
+	live := false
+	for _, b := range begun {
+		live = live || b
+	}
+	for _, b := range in.Breaks {
+		// Over once the day is under way and the clock is past it; before the day, a
+		// planned lunch is never done.
+		out = append(out, ProgrammeRow{Name: b.Label, Stage: "break", Start: stamp(b.From), End: stamp(b.To), Mats: []int{},
+			Done: live && in.Now.After(b.To)})
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Start < out[j].Start })
 	return out
@@ -611,4 +771,46 @@ func ApplySuggestion(placed map[string]store.Placement, s forecast.Suggestion) m
 		}
 	}
 	return next
+}
+
+// SetPrep writes the gear check and staff briefing of the disciplines named, of those the
+// event has. Shared with the browser demo.
+func SetPrep(plan *store.Plan, in map[string]store.Prep, slugs []string) error {
+	for slug, p := range in {
+		if !slices.Contains(slugs, slug) {
+			return fmt.Errorf("this event has no discipline %q", slug)
+		}
+		p, err := CleanPrep(p)
+		if err != nil {
+			return err
+		}
+		if plan.Prep == nil {
+			plan.Prep = map[string]store.Prep{}
+		}
+		plan.Prep[slug] = p
+	}
+	return nil
+}
+
+// SetStarts writes when the disciplines named start at the earliest; blank takes the time
+// off. Shared with the browser demo.
+func SetStarts(plan *store.Plan, in map[string]string, slugs []string) error {
+	for slug, s := range in {
+		if !slices.Contains(slugs, slug) {
+			return fmt.Errorf("this event has no discipline %q", slug)
+		}
+		s, err := CleanStart(s)
+		if err != nil {
+			return err
+		}
+		if s == "" {
+			delete(plan.Starts, slug)
+			continue
+		}
+		if plan.Starts == nil {
+			plan.Starts = map[string]string{}
+		}
+		plan.Starts[slug] = s
+	}
+	return nil
 }

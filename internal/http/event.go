@@ -31,6 +31,8 @@ const maxSchedule = 40
 type EventInfo interface {
 	EventInfo() (store.Event, error)
 	SaveEventInfo(store.Event) error
+	// Programme is the day as the plan has it, for the info sheet (#149).
+	Programme() []ProgrammeRow
 }
 
 // UseEvent puts this discipline inside an event. Called once, before it serves anything.

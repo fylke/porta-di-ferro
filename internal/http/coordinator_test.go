@@ -35,6 +35,28 @@ func openHall(t *testing.T, dir string) *hall {
 	if err != nil {
 		t.Fatalf("opening the event folder: %v", err)
 	}
+	// Most of these tests are about an event with a discipline in it, as a first start
+	// was before #149: one, unnamed, made here. A fresh event has none (openEmptyHall).
+	if slugs, err := f.Slugs(); err == nil && len(slugs) == 0 {
+		if _, err := f.Create(""); err != nil {
+			t.Fatalf("making the first discipline: %v", err)
+		}
+	}
+	return serveHall(t, dir, f)
+}
+
+// openEmptyHall is a first start: an event with no disciplines (#149).
+func openEmptyHall(t *testing.T, dir string) *hall {
+	t.Helper()
+	f, err := event.Open(dir)
+	if err != nil {
+		t.Fatalf("opening the event folder: %v", err)
+	}
+	return serveHall(t, dir, f)
+}
+
+func serveHall(t *testing.T, dir string, f *event.Folder) *hall {
+	t.Helper()
 	c, err := httpapi.NewCoordinator(f, nil)
 	if err != nil {
 		t.Fatalf("starting the coordinator: %v", err)
@@ -86,9 +108,34 @@ type snap struct {
 	Instance httpapi.Instance `json:"instance"`
 }
 
-// A first start is one discipline, answering on the paths it always did. Nothing about an
-// event with one discipline may look different from a run of the application before
-// events existed (proposal R10).
+// A first start has no disciplines (#149): the welcome and the plan come before any. The
+// unprefixed paths say there is nothing to answer as, and adding one makes it the one.
+func TestAFirstStartHasNoDisciplines(t *testing.T) {
+	h := openEmptyHall(t, t.TempDir())
+	var view httpapi.EventView
+	h.must("GET", "/api/event", nil, &view)
+	if len(view.Disciplines) != 0 {
+		t.Fatalf("a new event should have no disciplines, got %+v", view.Disciplines)
+	}
+	if code := h.do("GET", "/api/state", nil, nil); code != http.StatusConflict {
+		t.Errorf("with no discipline the unprefixed paths have nothing to answer as; want 409, got %d", code)
+	}
+	h.must("POST", "/api/disciplines", map[string]string{"name": "Open Sabre"}, nil)
+	var s snap
+	h.must("GET", "/api/state", nil, &s)
+	if s.Instance.Slug != "open-sabre" {
+		t.Errorf("the one discipline should answer the unprefixed paths, got %+v", s.Instance)
+	}
+	h.must("DELETE", "/api/disciplines/open-sabre", nil, nil)
+	h.must("GET", "/api/event", nil, &view)
+	if len(view.Disciplines) != 0 {
+		t.Errorf("the last discipline can be taken out, leaving none: %+v", view.Disciplines)
+	}
+}
+
+// One discipline answers on the paths it always did. Nothing about an event with one
+// discipline may look different from a run of the application before events existed
+// (proposal R10).
 func TestOneDisciplineAnswersAsItAlwaysDid(t *testing.T) {
 	h := openHall(t, t.TempDir())
 
@@ -289,8 +336,8 @@ func TestRetiringADisciplineKeepsItsFolder(t *testing.T) {
 
 	var view httpapi.EventView
 	h.must("GET", "/api/event", nil, &view)
-	if code := h.do("DELETE", "/api/disciplines/"+view.Disciplines[0].Slug, nil, nil); code != 400 {
-		t.Errorf("the last discipline should not be retired, got %d", code)
+	if code := h.do("DELETE", "/api/disciplines/"+view.Disciplines[0].Slug, nil, nil); code != 200 {
+		t.Errorf("the last discipline can be retired too (#149), got %d", code)
 	}
 }
 
@@ -359,5 +406,49 @@ func TestALegacyFolderServesAsBefore(t *testing.T) {
 	}
 	if s.Instance.Slug != "open-steel-longsword" {
 		t.Errorf("it should be the event's discipline by its name, got %q", s.Instance.Slug)
+	}
+}
+
+// A discipline is set up once the organizer finishes its setup (#149), and an ordinary
+// save of its mats leaves the mark alone.
+func TestADisciplineIsSetUpWhenItsSetupIsFinished(t *testing.T) {
+	h := openEmptyHall(t, t.TempDir())
+	h.must("POST", "/api/disciplines", map[string]string{"name": "Open Sabre"}, nil)
+	setUp := func() bool {
+		var view httpapi.EventView
+		h.must("GET", "/api/event", nil, &view)
+		return view.Disciplines[0].SetUp
+	}
+	if setUp() {
+		t.Fatal("a discipline just added is not set up yet")
+	}
+	h.must("PUT", "/api/d/open-sabre/tournament", map[string]any{"mats": 2, "minPoolSize": 4, "maxPoolSize": 6, "setUp": true}, nil)
+	if !setUp() {
+		t.Error("finishing the setup should mark the discipline set up")
+	}
+	h.must("PUT", "/api/d/open-sabre/tournament", map[string]any{"mats": 1, "minPoolSize": 4, "maxPoolSize": 6}, nil)
+	if !setUp() {
+		t.Error("a later save of the mats should leave it set up")
+	}
+}
+
+// Two adds of one name at the same moment are one discipline (#149's Playwright run found
+// two "Open Steel Longsword"s): the check that a name is free and the add are one step.
+func TestTwoAddsOfOneNameMakeOneDiscipline(t *testing.T) {
+	h := openEmptyHall(t, t.TempDir())
+	codes := make(chan int, 8)
+	for i := 0; i < 8; i++ {
+		go func() { codes <- h.do("POST", "/api/disciplines", map[string]string{"name": "Open Sabre"}, nil) }()
+	}
+	made := 0
+	for i := 0; i < 8; i++ {
+		if <-codes == http.StatusCreated {
+			made++
+		}
+	}
+	var view httpapi.EventView
+	h.must("GET", "/api/event", nil, &view)
+	if made != 1 || len(view.Disciplines) != 1 {
+		t.Errorf("eight adds of one name should make one discipline, made %d: %+v", made, view.Disciplines)
 	}
 }

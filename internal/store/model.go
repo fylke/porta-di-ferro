@@ -142,10 +142,13 @@ type Tournament struct {
 	// Capacity is how many this discipline can take, or 0 for no limit. A signup import
 	// warns past it rather than refusing: an organizer who wants a twenty-ninth in a
 	// discipline of twenty-eight is allowed one, and should be told.
-	Capacity    int `json:"capacity,omitempty"`
-	Mats        int `json:"mats"`
-	MinPoolSize int `json:"minPoolSize"`
-	MaxPoolSize int `json:"maxPoolSize"`
+	Capacity int `json:"capacity,omitempty"`
+	// SetUp says the organizer has been through the discipline's setup -- its mats and
+	// the size of its pools -- and finished it (#149): what "done setting it up" means.
+	SetUp       bool `json:"setUp,omitempty"`
+	Mats        int  `json:"mats"`
+	MinPoolSize int  `json:"minPoolSize"`
+	MaxPoolSize int  `json:"maxPoolSize"`
 	// Event is the day around the tournament: the welcome message, the agenda and the
 	// venue wifi (issue #98). Nothing here reaches a result.
 	Event Event `json:"event,omitempty"`
@@ -277,6 +280,30 @@ type Plan struct {
 	// MatSettings are each mat's name and the times it is not available, mat 1 first
 	// (#123). A mat with none is "Mat n", there all day.
 	MatSettings []MatSetting `json:"matSettings,omitempty"`
+	// Breaks are the times no mat in the hall fences: lunch, the prize giving (#149). They
+	// stop the mats and go in the programme.
+	Breaks []Break `json:"breaks,omitempty"`
+	// Prep is what comes before each discipline's first pool, by slug (#149): its gear
+	// check and its staff briefing. Not timed against the mats -- the fencers and the staff
+	// are busy, not the mats -- only put in the programme, ending as the first pool starts.
+	Prep map[string]Prep `json:"prep,omitempty"`
+	// Starts is when each discipline starts at the earliest, "HH:MM", by slug (#149). No
+	// work of the discipline is planned before it.
+	Starts map[string]string `json:"starts,omitempty"`
+}
+
+// Break is a time the whole hall stops, as times of day, with what it is for.
+type Break struct {
+	Label string `json:"label,omitempty"`
+	From  string `json:"from"`
+	To    string `json:"to"`
+}
+
+// Prep is how long a discipline's gear check and staff briefing take, in seconds. Zero is
+// none, which the plan points out.
+type Prep struct {
+	GearCheck int `json:"gearCheck,omitempty"`
+	Briefing  int `json:"briefing,omitempty"`
 }
 
 // MatSetting is one mat's name, and when it is not there: shared with a children's class
@@ -347,6 +374,9 @@ type Placement struct {
 	// keeps a projected item where it is and hands the place to the drawn item; unlike a
 	// pin, the next suggestion may move it.
 	Planned bool `json:"planned,omitempty"`
+	// WithFinal lets a bronze match run at the same time as its final (#149). Without it
+	// the final waits for the bronze match.
+	WithFinal bool `json:"withFinal,omitempty"`
 }
 
 // Defaults returns the MVP tournament setup: two mats, pools of four to seven.

@@ -88,6 +88,10 @@ func (c *Coordinator) SignupDefinition(withTimes bool) (signup.Definition, error
 func FirstStarts(programme []ProgrammeRow) map[string]string {
 	first := map[string]time.Time{}
 	for _, row := range programme {
+		// When the fencing starts: not the gear check before it, nor a break.
+		if row.Stage != "pools" && row.Stage != "eliminations" && row.Stage != "final" {
+			continue
+		}
 		at, err := time.Parse(time.RFC3339, row.Start)
 		if err != nil {
 			continue

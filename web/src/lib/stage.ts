@@ -4,10 +4,14 @@
 import type { DisciplineSummary } from '../api';
 import { t } from './i18n.svelte';
 
-export function stageLabel(d: Pick<DisciplineSummary, 'stage' | 'matchesDone' | 'matchesTotal' | 'competitors'>): string {
+export function stageLabel(
+  d: Pick<DisciplineSummary, 'stage' | 'matchesDone' | 'matchesTotal' | 'competitors'> & { setUp?: boolean },
+): string {
   switch (d.stage) {
     case 'setup':
-      return d.competitors > 0 ? t('{n} entered, pools not drawn yet', { n: d.competitors }) : t('Not set up yet');
+      if (d.competitors > 0) return t('{n} entered, pools not drawn yet', { n: d.competitors });
+      // Set up is the organizer's word for having finished its setup (#149).
+      return d.setUp ? t('Set up, nobody entered yet') : t('Not set up yet');
     case 'pools':
       return t('Pools: {done} of {total} matches fenced', { done: d.matchesDone, total: d.matchesTotal });
     case 'waiting':
