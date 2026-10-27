@@ -408,3 +408,47 @@ func TestALegacyFolderServesAsBefore(t *testing.T) {
 		t.Errorf("it should be the event's discipline by its name, got %q", s.Instance.Slug)
 	}
 }
+
+// A discipline is set up once the organizer finishes its setup (#149), and an ordinary
+// save of its mats leaves the mark alone.
+func TestADisciplineIsSetUpWhenItsSetupIsFinished(t *testing.T) {
+	h := openEmptyHall(t, t.TempDir())
+	h.must("POST", "/api/disciplines", map[string]string{"name": "Open Sabre"}, nil)
+	setUp := func() bool {
+		var view httpapi.EventView
+		h.must("GET", "/api/event", nil, &view)
+		return view.Disciplines[0].SetUp
+	}
+	if setUp() {
+		t.Fatal("a discipline just added is not set up yet")
+	}
+	h.must("PUT", "/api/d/open-sabre/tournament", map[string]any{"mats": 2, "minPoolSize": 4, "maxPoolSize": 6, "setUp": true}, nil)
+	if !setUp() {
+		t.Error("finishing the setup should mark the discipline set up")
+	}
+	h.must("PUT", "/api/d/open-sabre/tournament", map[string]any{"mats": 1, "minPoolSize": 4, "maxPoolSize": 6}, nil)
+	if !setUp() {
+		t.Error("a later save of the mats should leave it set up")
+	}
+}
+
+// Two adds of one name at the same moment are one discipline (#149's Playwright run found
+// two "Open Steel Longsword"s): the check that a name is free and the add are one step.
+func TestTwoAddsOfOneNameMakeOneDiscipline(t *testing.T) {
+	h := openEmptyHall(t, t.TempDir())
+	codes := make(chan int, 8)
+	for i := 0; i < 8; i++ {
+		go func() { codes <- h.do("POST", "/api/disciplines", map[string]string{"name": "Open Sabre"}, nil) }()
+	}
+	made := 0
+	for i := 0; i < 8; i++ {
+		if <-codes == http.StatusCreated {
+			made++
+		}
+	}
+	var view httpapi.EventView
+	h.must("GET", "/api/event", nil, &view)
+	if made != 1 || len(view.Disciplines) != 1 {
+		t.Errorf("eight adds of one name should make one discipline, made %d: %+v", made, view.Disciplines)
+	}
+}

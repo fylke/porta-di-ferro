@@ -53,6 +53,9 @@ type Coordinator struct {
 	// staffMu serialises changes to the event's staff. Taken after a discipline's lock and
 	// before the people's (coordinator_staff.go).
 	staffMu sync.Mutex
+	// namesMu serialises adding and renaming disciplines, so two adds of one name at the
+	// same moment cannot both pass the check that it is free.
+	namesMu sync.Mutex
 
 	mu      sync.Mutex
 	order   []string
@@ -629,6 +632,8 @@ func (c *Coordinator) addDiscipline(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
+	c.namesMu.Lock()
+	defer c.namesMu.Unlock()
 	name, err := CleanName(in.Name)
 	if err == nil {
 		err = c.nameTaken(name, "")
@@ -678,6 +683,8 @@ func (c *Coordinator) renameDiscipline(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusConflict, fmt.Errorf("%s cannot be renamed until its files can be read: %w", slug, wk.err))
 		return
 	}
+	c.namesMu.Lock()
+	defer c.namesMu.Unlock()
 	name, err := CleanName(in.Name)
 	if err == nil {
 		err = c.nameTaken(name, slug)
