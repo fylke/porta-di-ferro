@@ -371,6 +371,9 @@ type Placement struct {
 	// keeps a projected item where it is and hands the place to the drawn item; unlike a
 	// pin, the next suggestion may move it.
 	Planned bool `json:"planned,omitempty"`
+	// WithFinal lets a bronze match run at the same time as its final (#149). Without it
+	// the final waits for the bronze match.
+	WithFinal bool `json:"withFinal,omitempty"`
 }
 
 // Defaults returns the MVP tournament setup: two mats, pools of four to seven.

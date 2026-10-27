@@ -80,6 +80,9 @@ type Item struct {
 	Session   int
 	Held      bool
 	NotBefore time.Time
+	// WithFinal is a bronze match let run at the same time as its final (#149); otherwise
+	// the final waits for it.
+	WithFinal bool
 	// People are everyone fencing in the item, by person, for the overlap check.
 	People []string
 }

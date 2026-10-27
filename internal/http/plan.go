@@ -374,6 +374,8 @@ type ItemView struct {
 	// Pinned and NotBefore are the organizer's, from the plan (phase 4).
 	Pinned    bool   `json:"pinned,omitempty"`
 	NotBefore string `json:"notBefore,omitempty"`
+	// WithFinal is a bronze match let run at the same time as the final (#149).
+	WithFinal bool `json:"withFinal,omitempty"`
 }
 
 // MatsView is the whole hall: every mat, and every work item on them.
@@ -513,7 +515,7 @@ func BuildMats(inputs []MatsInput, placed map[string]store.Placement, mats int,
 				Kind: e.item.Kind, Number: e.item.Number, Mat: mat, Position: position,
 				Status: e.status, Done: e.done, Total: total,
 				Movable:   e.status == "ready" || e.status == "waiting" || e.status == "planned" || e.status == "queued",
-				Projected: e.item.Projected, Pinned: e.place.Pinned, NotBefore: e.place.NotBefore,
+				Projected: e.item.Projected, Pinned: e.place.Pinned, NotBefore: e.place.NotBefore, WithFinal: e.place.WithFinal,
 			})
 			mv.Queue = append(mv.Queue, e.slots...)
 			// Work that is not drawn yet is never what a mat waits for.
@@ -557,6 +559,9 @@ func (e ErrNotMovable) Error() string {
 	if e.Status == "done" {
 		return "that item is already fenced"
 	}
+	if e.Status == "follows" {
+		return "only pools are moved by hand: the eliminations and the finals follow them"
+	}
 	return "that item is under way; it can be moved once it is done, or what comes after it can"
 }
 
@@ -580,6 +585,11 @@ func Move(view MatsView, placed map[string]store.Placement, id string, mat, inde
 	if !moving.Movable {
 		return placed, false, ErrNotMovable{Status: moving.Status}
 	}
+	// Only pools are moved by hand (#149): the eliminations follow the pools, and the
+	// bronze match and the final follow the eliminations, wherever the plan puts them.
+	if moving.Kind != ItemPool {
+		return placed, false, ErrNotMovable{Status: "follows"}
+	}
 
 	var queue []ItemView
 	for _, it := range view.Items {
@@ -594,7 +604,15 @@ func Move(view MatsView, placed map[string]store.Placement, id string, mat, inde
 			floor = i + 1
 		}
 	}
-	index = min(max(index, floor), len(queue))
+	// Never behind the eliminations or finals of its own discipline on this mat: they
+	// wait for it, and the mat would stand idle until somebody noticed (#149).
+	ceiling := len(queue)
+	for i := len(queue) - 1; i >= 0; i-- {
+		if queue[i].Discipline == moving.Discipline && queue[i].Kind != ItemPool {
+			ceiling = i
+		}
+	}
+	index = min(max(index, floor), max(ceiling, floor))
 
 	order := make([]string, 0, len(queue)+1)
 	for _, it := range queue[:index] {

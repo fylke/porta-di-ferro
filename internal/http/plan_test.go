@@ -1,6 +1,7 @@
 package httpapi_test
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"testing"
@@ -371,5 +372,27 @@ func TestTheProjectionsOwnPlacementsGiveWay(t *testing.T) {
 	placed, _ := httpapi.Place(items(ls), plan, 2)
 	if p := placed["ls/pool-2"]; p.Mat != 2 || p.Stamp != "drawn" {
 		t.Errorf("pool 2 should go to its drawn lane, mat 2: %+v", p)
+	}
+}
+
+// Only pools are moved by hand, and never behind their own discipline's eliminations
+// (#149): the eliminations follow the pools, the finals the eliminations.
+func TestOnlyPoolsMoveAndNeverBehindTheirBracket(t *testing.T) {
+	ls := discipline("ls", "d", []pool{{1, 1, 2, ""}, {2, 1, 2, ""}}, eightBracket(), nil, nil)
+	placed, _ := httpapi.Place(items(ls), store.Plan{}, 2)
+	view := httpapi.BuildMats([]httpapi.MatsInput{ls}, placed, 2, func(int) (string, string) { return "", "" })
+
+	for _, id := range []string{"ls/elim-1", "ls/bronze", "ls/final"} {
+		var locked httpapi.ErrNotMovable
+		if _, _, err := httpapi.Move(view, placed, id, 2, 0, 2); !errors.As(err, &locked) {
+			t.Errorf("%s follows the pools and should not be moved by hand: %v", id, err)
+		}
+	}
+	next, _, err := httpapi.Move(view, placed, "ls/pool-1", 1, 99, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if next["ls/pool-1"].Seq > next["ls/elim-1"].Seq {
+		t.Errorf("pool 1 should stay in front of its eliminations: %+v", next)
 	}
 }

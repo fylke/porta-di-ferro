@@ -323,20 +323,38 @@ func SetAnomaly(list []string, key string, on bool) []string {
 	return out
 }
 
-// SetItemFlags pins or unpins a work item, or holds it to a time, in the placements.
-func SetItemFlags(placed map[string]store.Placement, id string, pinned *bool, notBefore *string) (map[string]store.Placement, error) {
+// ItemFlags are what the card menu sets on a work item: a pin, a time to hold it to, and
+// for a bronze match whether it may run at the same time as the final (#149).
+type ItemFlags struct {
+	Pinned    *bool   `json:"pinned"`
+	NotBefore *string `json:"notBefore"`
+	WithFinal *bool   `json:"withFinal"`
+}
+
+// Any says the request sets a flag.
+func (f ItemFlags) Any() bool { return f.Pinned != nil || f.NotBefore != nil || f.WithFinal != nil }
+
+// SetItemFlags pins or unpins a work item, holds it to a time, or lets a bronze match run
+// with its final, in the placements.
+func SetItemFlags(placed map[string]store.Placement, id string, f ItemFlags) (map[string]store.Placement, error) {
 	p, ok := placed[id]
 	if !ok {
 		return placed, errors.New("no work item " + id)
 	}
-	if notBefore != nil {
-		if _, ok := ParseClock(time.Now(), *notBefore); *notBefore != "" && !ok {
+	if f.NotBefore != nil {
+		if _, ok := ParseClock(time.Now(), *f.NotBefore); *f.NotBefore != "" && !ok {
 			return placed, errors.New("write the time as 16:30")
 		}
-		p.NotBefore = *notBefore
+		p.NotBefore = *f.NotBefore
 	}
-	if pinned != nil {
-		p.Pinned = *pinned
+	if f.Pinned != nil {
+		p.Pinned = *f.Pinned
+	}
+	if f.WithFinal != nil {
+		if !strings.HasSuffix(id, "/"+ItemBronze) {
+			return placed, errors.New("only a bronze match can run with the final")
+		}
+		p.WithFinal = *f.WithFinal
 	}
 	next := make(map[string]store.Placement, len(placed))
 	for k, v := range placed {
@@ -347,10 +365,10 @@ func SetItemFlags(placed map[string]store.Placement, id string, pinned *bool, no
 }
 
 // flagItem is the card menu's pin, unpin and hold-until.
-func (c *Coordinator) flagItem(id string, pinned *bool, notBefore *string) error {
+func (c *Coordinator) flagItem(id string, f ItemFlags) error {
 	c.planMu.Lock()
 	placed, _ := c.placementsLocked()
-	next, err := SetItemFlags(placed, id, pinned, notBefore)
+	next, err := SetItemFlags(placed, id, f)
 	if err == nil {
 		err = c.savePlacementsLocked(next)
 	}

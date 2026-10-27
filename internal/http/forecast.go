@@ -241,7 +241,7 @@ func ForecastInput(inputs []MatsInput, placed map[string]store.Placement, plan s
 		}
 		fi := forecast.Item{ID: it.w.ID(), Discipline: it.w.Discipline, Kind: it.w.Kind,
 			Mat: it.place.Mat, Seq: it.place.Seq, Projected: it.w.Projected, Pinned: it.place.Pinned, NotBefore: notBefore,
-			Session: it.session, Held: it.held}
+			Session: it.session, Held: it.held, WithFinal: it.place.WithFinal}
 		people := map[string]bool{}
 		for _, id := range it.w.Matches {
 			m := forecast.Match{Key: it.w.Discipline + "/" + id}

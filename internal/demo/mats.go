@@ -143,18 +143,17 @@ func (e *Event) moveItem(id string, mat, index int, move string) error {
 
 func (e *Event) patchItem(id string, body []byte) Response {
 	var in struct {
-		Mat       int     `json:"mat"`
-		Index     *int    `json:"index"`
-		Move      string  `json:"move"`
-		Pinned    *bool   `json:"pinned"`
-		NotBefore *string `json:"notBefore"`
+		Mat   int    `json:"mat"`
+		Index *int   `json:"index"`
+		Move  string `json:"move"`
+		httpapi.ItemFlags
 	}
 	if err := json.Unmarshal(body, &in); err != nil {
 		return fail(400, err)
 	}
-	if in.Pinned != nil || in.NotBefore != nil {
+	if in.Any() {
 		placed, _ := e.placements()
-		next, err := httpapi.SetItemFlags(placed, id, in.Pinned, in.NotBefore)
+		next, err := httpapi.SetItemFlags(placed, id, in.ItemFlags)
 		if err != nil {
 			return fail(400, err)
 		}
