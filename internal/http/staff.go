@@ -73,6 +73,9 @@ type StaffingView struct {
 	Short       []ShortView         `json:"short"`
 	Warnings    []StaffWarning      `json:"warnings"`
 	Physicians  []string            `json:"physicians"`
+	// Needed is the fewest people who could staff the plan: a crew on every mat running
+	// at the busiest moment (#149).
+	Needed int `json:"needed"`
 	// Unsure are the members, by id, whose person may be somebody else in the event too
 	// (#133): two records of one human, one fencing and one on the staff, and a
 	// suggestion could put them on a mat while they fence. The People panel settles it.
@@ -135,6 +138,7 @@ func ViewStaffing(si staffing.Input, st store.Staff, mats MatsView) StaffingView
 	for _, m := range staffing.Physicians(st.Members) {
 		v.Physicians = append(v.Physicians, m.ID)
 	}
+	v.Needed = staffing.Needed(si.Items, si.Crew)
 	return v
 }
 

@@ -46,8 +46,8 @@ func TestEachDisciplinesStaffIsLifted(t *testing.T) {
 	if len(v.Members) != 2 || len(v.Members[0].Disciplines) != 2 || v.Members[0].Person == "" {
 		t.Fatalf("Dag is one member in both, with a person: %+v", v.Members)
 	}
-	if v.Crew["assistant-ref"] != 2 {
-		t.Errorf("the crew should default to the SM rules': %+v", v.Crew)
+	if v.Crew["head-ref"] != 1 || v.Crew["assistant-ref"] != 1 || v.Crew["score-keeper"] != 1 {
+		t.Errorf("the crew should default to two referees, a head and an assistant, and a score keeper (#149): %+v", v.Crew)
 	}
 	var s snapWithStaff
 	h.must("GET", "/api/d/sabre/state", nil, &s)

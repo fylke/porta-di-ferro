@@ -33,9 +33,9 @@ const (
 // scarcest first. A physician is on call for the hall, not on a mat.
 var MatRoles = []string{HeadRef, AssistantRef, ScoreKeeper}
 
-// DefaultCrew is a mat's crew under the SM rules: a head referee, two assistants and a
-// score keeper.
-var DefaultCrew = map[string]int{HeadRef: 1, AssistantRef: 2, ScoreKeeper: 1}
+// DefaultCrew is a mat's crew until the ruleset says otherwise: two referees -- a head
+// referee and an assistant -- and a score keeper (#149).
+var DefaultCrew = map[string]int{HeadRef: 1, AssistantRef: 1, ScoreKeeper: 1}
 
 // CrewOf is the crew in force: the organizer's numbers over the defaults.
 func CrewOf(c map[string]int) map[string]int {
