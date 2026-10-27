@@ -11,7 +11,10 @@
 
   /**
    * Plan the event (#142): what is set once, before the day, in the order it is set -- the
-   * day around the fencing, the disciplines, and how long it all takes on how many mats.
+   * event itself, the disciplines, and how long it all takes on how many mats. The first
+   * step's name, venue, date and identifier are needed to go on (#149): the signup and the
+   * info sheet are built from them. The programme is not typed anywhere; it is generated
+   * from the plan, and shown at the end of it.
    * It used to be half the admin page, between the mats and the screens an organizer
    * watches all day; it is here now, a step at a time, and the admin page links to it.
    *
@@ -19,9 +22,9 @@
    * straight from wherever it is wanted -- the landing page's Edit opens the first.
    */
   const steps = [
-    { title: () => t('The day'), hint: () => t('The welcome, the programme and the venue wifi: what the landing page and the info sheet put around the fencing.') },
-    { title: () => t('Disciplines'), hint: () => t('What is fenced. Each discipline has its own competitors, pools and admin page.') },
-    { title: () => t('Planning the day'), hint: () => t('How long things take, how many mats there are, and in what order the day runs.') },
+    { title: () => t('The event'), hint: () => t('What it is called, where and when, and what the info sheet says to everyone in the hall.') },
+    { title: () => t('Disciplines'), hint: () => t('What is fenced. Set up each one: the mats it uses and the size of its pools.') },
+    { title: () => t('Planning the day'), hint: () => t('How long things take, the mats, the breaks, and in what order the day runs. The programme is written from this.') },
   ];
 
   onMount(() => {
@@ -31,15 +34,23 @@
   });
 
   const view = $derived(hall.view);
-  const step = $derived(Math.min(steps.length, Math.max(1, Number(query().get('step')) || 1)));
+  // The event's four that go in every signup file: no planning past the first step without them.
+  const named = $derived.by(() => {
+    const s = view?.info.signup;
+    return !!(s?.definitionId?.trim() && s?.name?.trim() && s?.venue?.trim() && s?.date?.trim());
+  });
+  const asked = $derived(Math.min(steps.length, Math.max(1, Number(query().get('step')) || 1)));
+  const step = $derived(view && !named ? 1 : asked);
+  let editor = $state<{ commit: () => Promise<boolean> } | undefined>();
 
-  function go(n: number) {
+  async function go(n: number) {
+    if (step === 1 && n > 1 && editor && !(await editor.commit())) return;
     navigate(n > steps.length ? '/admin' : `/plan?step=${n}`);
     window.scrollTo(0, 0);
   }
 </script>
 
-<main>
+<main class="admin">
   <header>
     <h1>
       {t('Plan the event')}
@@ -54,9 +65,13 @@
   <ol class="steps">
     {#each steps as s, i (i)}
       <li class:current={step === i + 1}>
-        <a href="/plan?step={i + 1}" aria-current={step === i + 1 ? 'step' : undefined}>
-          <span class="n">{i + 1}</span>{s.title()}
-        </a>
+        {#if i === 0 || named}
+          <a href="/plan?step={i + 1}" aria-current={step === i + 1 ? 'step' : undefined}>
+            <span class="n">{i + 1}</span>{s.title()}
+          </a>
+        {:else}
+          <span class="locked" title={t('Fill in the event first')}><span class="n">{i + 1}</span>{s.title()}</span>
+        {/if}
       </li>
     {/each}
   </ol>
@@ -68,19 +83,19 @@
     <!-- Keyed on the event, so a new event after a delete is a new form; never on the
          view itself, which changes with every exchange and would lose what is typed. -->
     {#key view.id}
-      <EventEditor event={view.info} save={api.saveEventInfo} onchange={() => void hall.refresh()} />
+      <EventEditor bind:this={editor} event={view.info} save={api.saveEventInfo} onchange={() => void hall.refresh()} />
     {/key}
   {:else if step === 2}
-    <Disciplines />
+    <div data-tour="plan-disciplines"><Disciplines setup /></div>
   {:else}
     <Planning />
   {/if}
 
   <div class="pager">
     {#if step > 1}
-      <button onclick={() => go(step - 1)}>{t('Back')}</button>
+      <button class="secondary" onclick={() => go(step - 1)}>{t('Back')}</button>
     {/if}
-    <button class="next" onclick={() => go(step + 1)}>
+    <button onclick={() => go(step + 1)}>
       {step < steps.length ? t('Next: {step}', { step: steps[step].title() }) : t('Done')}
     </button>
   </div>
@@ -127,7 +142,8 @@
     flex-wrap: wrap;
     gap: 0.4rem;
   }
-  .steps a {
+  .steps a,
+  .steps .locked {
     display: inline-flex;
     align-items: center;
     gap: 0.45rem;
@@ -137,6 +153,9 @@
     color: var(--ink-dim);
     text-decoration: none;
     font-size: 0.9rem;
+  }
+  .steps .locked {
+    opacity: 0.5;
   }
   .steps .current a {
     border-color: var(--amber-bright);
@@ -166,12 +185,5 @@
     display: flex;
     justify-content: flex-end;
     gap: 0.6rem;
-  }
-  .next {
-    font-weight: 700;
-    background: var(--ink);
-    color: #0d0f14;
-    border: none;
-    padding: 0.55rem 1.1rem;
   }
 </style>
