@@ -312,6 +312,7 @@ export const sv: Record<string, string> = {
   "showing the server's scoring": 'visar serverns poäng',
   'Offline · schedule from {time}': 'Offline · schema från {time}',
   'Another device has taken over this match.': 'En annan enhet har tagit över matchen.',
+  '{device} has taken over this match.': '{device} har tagit över matchen.',
   '1 exchange from this device was set aside for the organizer.': '1 utväxling från den här enheten lades undan till arrangören.',
   '{n} exchanges from this device were set aside for the organizer.': '{n} utväxlingar från den här enheten lades undan till arrangören.',
   'Leave the mat': 'Lämna mattan',
@@ -328,6 +329,12 @@ export const sv: Record<string, string> = {
   'Waiting for a match on mat {n}.': 'Väntar på en match på matta {n}.',
   'This screen follows the mat. It fills in when a match is up.': 'Den här skärmen följer mattan. Den fylls i när en match står på tur.',
   'Mat {n} is being scored by {device}': 'Matta {n} förs av {device}',
+  'Mat {n} was being scored by {device}': 'Matta {n} fördes av {device}',
+  'another device': 'en annan enhet',
+  'It has not been heard from since {time}.': 'Den har inte hörts av sedan {time}.',
+  'It has not been heard from since the server started.': 'Den har inte hörts av sedan servern startade.',
+  'Take it over on this device? Anything it has not yet sent will be set aside for the organizer rather than counted.':
+    'Ta över den på den här enheten? Allt den inte hunnit skicka läggs undan till arrangören i stället för att räknas.',
   'Take it over on this device? Anything the other device has not yet sent will be set aside for the organizer rather than counted.':
     'Ta över den på den här enheten? Allt den andra enheten inte hunnit skicka läggs undan till arrangören i stället för att räknas.',
   'Take over on this device': 'Ta över på den här enheten',

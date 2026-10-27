@@ -85,8 +85,13 @@ export class MatchLog {
    * with no LAN -- claims on its first successful contact and pushes after.
    */
   epoch = $state(0);
-  /** Set when another live device holds this match. The score keeper decides what to do. */
+  /**
+   * Set when another device holds this match, live or gone quiet. The score keeper
+   * decides what to do: nothing is taken from a device without asking (#150).
+   */
   contested = $state<Client | null>(null);
+  /** The device that took this match over from this one, once the server has said. */
+  takenBy = $state<Client | null>(null);
   /** How many of this device's events the server set aside when it found them stale. */
   quarantined = $state(0);
 
@@ -166,9 +171,8 @@ export class MatchLog {
 
   /**
    * Asks the server for the match. Granted when nobody holds it, or the holder is this
-   * device, or the holder has gone quiet; refused when another live device has it, in
-   * which case `contested` names it and nothing is pushed until the score keeper takes
-   * over or walks away.
+   * device; refused when another device has it, alive or not, in which case `contested`
+   * names it and nothing is pushed until the score keeper takes over or walks away.
    */
   private async claim(force = false): Promise<boolean> {
     if (this.epoch > 0 && !force) return true;
@@ -180,7 +184,7 @@ export class MatchLog {
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
         const holder = (e.body as { holder?: Client } | null)?.holder ?? null;
-        this.contested = holder ?? { id: '?', role: 'scorekeeper', name: 'another device', lastSeen: '', alive: true };
+        this.contested = holder ?? { id: '?', role: 'scorekeeper', name: '', lastSeen: '', alive: true };
         return false;
       }
       // Offline. The claim happens on the first contact that works.
@@ -281,6 +285,7 @@ export class MatchLog {
         this.quarantined = batch.length;
         this.sync = 'stale';
         this.stop();
+        void this.stillOurs();
         return;
       }
       // The LAN is down, or the server is. Neither stops the match: the log is already on
@@ -326,9 +331,33 @@ export class MatchLog {
     this.drift = null;
   }
 
+  /**
+   * Asks the server whether this device still holds the match, and stops if it does not.
+   * A score keeper between exchanges sends nothing, so without asking it would only find
+   * out it had been taken over by having its next exchange set aside (#150).
+   */
+  private async stillOurs(): Promise<void> {
+    let claim: Awaited<ReturnType<typeof this.api.claimOf>>;
+    try {
+      claim = await this.api.claimOf(this.matchId);
+    } catch {
+      return;
+    }
+    if ((claim.client && claim.client !== clientId()) || claim.epoch > this.epoch) {
+      this.takenBy = claim.holder ?? null;
+      this.sync = 'stale';
+      this.stop();
+    }
+  }
+
+  private async tick(): Promise<void> {
+    await this.flush();
+    if (this.epoch > 0 && this.sync === 'idle' && this.pendingCount === 0) await this.stillOurs();
+  }
+
   private start(): void {
     if (this.timer) return;
-    this.timer = setInterval(() => void this.flush(), 5000);
+    this.timer = setInterval(() => void this.tick(), 5000);
   }
 
   stop(): void {
