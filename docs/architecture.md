@@ -48,7 +48,7 @@ flowchart TB
 
 ### 1a. One event, many disciplines
 
-One run of `porta` is one **event**: every discipline of the day in one process, at one address, each in a folder of its own (issue #102, [docs/proposals/one-event-many-disciplines.md](proposals/one-event-many-disciplines.md), phase 1). Each discipline is an `httpapi.Server` exactly as it was when it was a process of its own — its own `store.Store`, lock, SSE hub and presence — mounted by `httpapi.Coordinator` under `/api/d/{slug}/`. The coordinator owns what is about the event: `event.json` (the welcome, the programme, the wifi, the signup settings and the order of the disciplines), the event's stream, and the address everything is served from.
+One run of `porta` is one **event**: every discipline of the day in one process, at one address, each in a folder of its own (issue #102, [docs/proposals/one-event-many-disciplines.md](proposals/one-event-many-disciplines.md), phase 1). Each discipline is an `httpapi.Server` exactly as it was when it was a process of its own — its own `store.Store`, lock, SSE hub and presence — mounted by `httpapi.Coordinator` under `/api/d/{slug}/`. The coordinator owns what is about the event: `event.json` (the welcome, the wifi, the signup settings, the plan and the order of the disciplines), the event's stream, and the address everything is served from.
 
 ```mermaid
 flowchart TB
@@ -78,13 +78,14 @@ flowchart TB
     Phones["Every phone, tablet and screen: one address"] --> Router
 ```
 
-- **Addresses.** A discipline's API is `/api/d/{slug}/…` and its pages `/d/{slug}/…` (`/admin/{slug}` for its admin). While the event has one discipline, the unprefixed paths answer as it, so a one-discipline event is exactly what a run of the application always was; with several they answer 409 and name the disciplines, and the client's unprefixed pages ask which one. The slug comes from the name and never changes, except once for a discipline made before it had a name, whose old slug stays as an alias.
+- **A new event has no disciplines** (#149). A first start, and a deleted event, are an empty folder: `/admin` is a welcome with two ways in, a guided tour (`web/src/lib/tour.svelte.ts`) and Plan the event, and the disciplines are added while planning it. The last discipline can be taken out too.
+- **Addresses.** A discipline's API is `/api/d/{slug}/…` and its pages `/d/{slug}/…` (`/d/{slug}/admin` or `/admin/{slug}` for its admin, `/d/{slug}/setup` for its setup). `/admin` is always the event's admin page. While the event has one discipline, the unprefixed paths answer as it, so a one-discipline event is exactly what a run of the application always was; with several, or none, they answer 409, and the client's unprefixed pages ask which one. The slug comes from the name and never changes, except once for a discipline made before it had a name, whose old slug stays as an alias.
 - **The day is the event's.** A discipline's snapshot carries `event.json` laid over its own tournament, which keeps none of it. A discipline's `PUT /api/d/{slug}/event` writes the day to the event, so every admin screen saves as it always did.
 - **A broken discipline is contained.** Each discipline's files are read when it loads; one that does not parse is listed with the reason, served as 503, shown on the landing page from its last summary, and reloaded with `POST /api/disciplines/{slug}/reload` once fixed. A broken `event.json` blanks the day and nothing else.
 - **The event's stream** carries `httpapi.Summarize` of every discipline — stage, progress, what is on each mat, the podium, the entrants — coalesced over 150 ms, so the event landing page holds one stream however many disciplines there are.
 - **Clients keep disciplines apart.** IndexedDB is keyed `[discipline, match, seq]`, and an unsent exchange is pushed to the discipline it was scored in whatever page is open; the snapshot cache and the score keeper's remembered state are namespaced per discipline (`web/src/lib/paths.ts`).
 - **Opening an old folder** moves its files into `disciplines/<slug>/` and lifts its day into `event.json` (`internal/event/migrate.go`); the move resumes if interrupted.
-- **Deleting the event** (`DELETE /api/event`, #141) lets every discipline go, moves everything in the folder under `deleted/<time>-<name>/`, and starts an empty event in its place, as a first start does. Every event has an identity (`id` in `event.json`, carried on `GET /api/event` and `GET /api/mats`); a device that sees a different one from the one it last saw clears its match logs and cached views before using the new one (`web/src/lib/forget.ts`), because the new event's `open-sabre/p1m1` has the same key as the old one's.
+- **Deleting the event** (`DELETE /api/event`, #141) lets every discipline go, moves everything in the folder under `deleted/<time>-<name>/`, and starts an empty event in its place, with no disciplines, as a first start does. Every event has an identity (`id` in `event.json`, carried on `GET /api/event` and `GET /api/mats`); a device that sees a different one from the one it last saw clears its match logs and cached views before using the new one (`web/src/lib/forget.ts`), because the new event's `open-sabre/p1m1` has the same key as the old one's.
 
 ### Event-wide mats (phase 2)
 
@@ -144,18 +145,21 @@ flowchart LR
     Logs["match logs: StartedAt, EndedAt"] --> Pace["each mat's pace:<br/>template blended with its own and the hall's matches"]
     Plan["plan: mats, order, pins, not-before,<br/>timings, expected entrants"] --> Run["forecast.Run"]
     Pace --> Run
-    Breaks["programme breaks"] --> Run
+    Breaks["the hall's breaks"] --> Run
     Run --> Board["mat board: times, drift, timeline, warnings"]
-    Run --> Hall["derived programme, Eta on every match"]
+    Run --> Hall["generated programme, Eta on every match"]
     Plan --> Suggest["forecast.Suggest (writes nothing)"]
     Suggest -->|"apply, re-checked by signature"| Plan
 ```
 
 - **Timings** (`store.Timings` in the plan): a match, the changeover, the pause before a discipline's eliminations, the day's start and the venue's close. Zero fields fall back to `porta-timings.json` beside the event folder, the organizer's template for new events, and then to the built-in one. The measured day (`GET /api/plan/report`) can be written back into them (`POST /api/plan/timings/learn`) and kept for new events (`POST /api/plan/timings/default`), leaving out matches marked as anomalies.
+- **The plan's day** (#149): the hall's breaks (`PUT /api/plan/breaks`; lunch when unnamed) stop every mat; each discipline's gear check and staff briefing (`PUT /api/plan/prep`, in seconds) end as its first pool starts and are not timed against the mats; and a discipline's earliest start (`PUT /api/plan/starts`) holds all of its work. An event planned before the plan held breaks reads the break rows of its old typed programme instead.
+- **The programme is generated, never typed** (#149): `httpapi.ViewForecast` lists each discipline's gear check, staff briefing, pools, eliminations and final, and the breaks, in the order of the day. The landing pages, the info sheet and its PDF (`httpapi.ProgrammeSchedule`) and the signup's planned starts all read it. The forecast view's `gaps` point out a day with no break and a discipline with no gear check or briefing; nothing is refused.
 - **Projected work**: a discipline with entrants, or the number it expects (`PUT /api/plan/expected`), and no draw yet has the items `tournament.Generate` and `tournament.Bracket` would give it over stand-in entrants (`httpapi.ProjectedItems`). They are planned cards on the board, after all real work; a mat never waits on one; a place the organizer gave one (a move, a hold, an applied suggestion) is the drawn item's.
-- **The forecast** simulates each mat match by match: logged matches where the logs put them, the rest at the mat's pace, around programme breaks, after what each item waits for (eliminations after the discipline's pools plus the pause, the final after the eliminations), not before an item's hold time, and once the day is live never before now. The same run on the template from the day's start is the planned day, drawn as a ghost. It warns of a person in two items at once, an item placed before what it waits for, and a day ending after the venue closes.
+- **The forecast** simulates each mat match by match: logged matches where the logs put them, the rest at the mat's pace, around programme breaks, after what each item waits for (eliminations after the discipline's pools plus the pause, the final after the eliminations and after the bronze match -- unless the bronze is let run with it, a flag on its card, #149), not before an item's hold time, and once the day is live never before now. The same run on the template from the day's start is the planned day, drawn as a ghost. It warns of a person in two items at once, an item placed before what it waits for, and a day ending after the venue closes.
+- **Only pools move by hand** (#149). `httpapi.Move` refuses an elimination, bronze match or final, which follow the pools wherever the plan puts them, and a pool dropped behind its own discipline's bracket on a mat lands in front of it. A pool held to a later start pushes what follows on its mat only as far as they would overlap.
 - **Suggestions** (`POST /api/plan/suggest`) are greedy list scheduling: what is under way stays, pinned items keep their mat, the rest go in priority order to the mat where each can start soonest. The order never depends on the current plan, so suggesting again after applying moves nothing. `POST /api/plan/apply` works it out again and refuses a stale signature.
-- **Where the hall sees it**: `GET /api/forecast` for the board and the planning panel; the event view's `programme`, which both landing pages list under the typed programme; and `Eta` on every pending match in a discipline's snapshot (filled through `EventMats.Hall`), which a person's page shows as "about 10:40". Times go out in the server's zone and are printed as written.
+- **Where the hall sees it**: `GET /api/forecast` for the board and the planning panel; the event view's `programme`, which both landing pages and the info sheet list; and `Eta` on every pending match in a discipline's snapshot (filled through `EventMats.Hall`), which a person's page shows as "about 10:40". Times go out in the server's zone and are printed as written.
 
 
 ### Staff (phase 5)
@@ -175,9 +179,9 @@ flowchart LR
 ```
 
 - **Members.** A signup response offering to work is one member however many disciplines it offers; the same submission as a competitor entry is the same person, which is how their fencing is known. The organizer adds members by hand, picking the competitor they are when the desk suggests one. Each discipline's own staff list -- what every run kept in its tournament before -- is lifted into `staff.json` the first time the event opens, and a discipline's pages still list and remove its members (`EventStaff`).
-- **Assigning** (`staffing.Assign`) walks the items in the order the forecast runs them and fills each mat's crew (by default a head referee, two assistants and a score keeper; `PUT /api/staff/crew`), the scarcest role first. Never anyone fencing at the time or on another mat; only roles offered, in disciplines they work. Among those who may: whoever held this role on this mat just before, then this role anywhere, then this mat, else whoever has worked least; and past two and a half hours without a pause, anybody else free first. A physician is on call for the hall, not on a mat.
+- **Assigning** (`staffing.Assign`) walks the items in the order the forecast runs them and fills each mat's crew (by default two referees -- a head referee and an assistant -- and a score keeper, until the ruleset says otherwise; `PUT /api/staff/crew`), the scarcest role first. Never anyone fencing at the time or on another mat; only roles offered, in disciplines they work. Among those who may: whoever held this role on this mat just before, then this role anywhere, then this mat, else whoever has worked least; and past two and a half hours without a pause, anybody else free first. A physician is on call for the hall, not on a mat: the board's timeline draws them as a bar across the whole day, orange when nobody is. `StaffingView.needed` is the fewest people who could staff the plan, a crew on every mat at the busiest moment.
 - **The organizer's choices stand.** A slot chosen by hand (`PUT /api/staff/assignments`) is pinned, and the crew of an item under way is kept. `staffing.Check` reports every empty slot and every kept assignment that breaks a rule; nothing is refused. `POST /api/staff/suggest` writes nothing; `POST /api/staff/apply` works it out again and refuses a stale signature.
-- **Where it is seen.** The staff panel on the event admin (and a one-discipline admin page) lists members, the crew, and every item of the plan with a picker per slot. `GET /api/people/{person}` carries `duties` and `physician`, which a person's page lists beside their fencing; somebody who only works has a page too.
+- **Where it is seen.** The staff panel on the event admin lists members with the pools they are the crew of, the crew, and every item of the plan with a picker per slot. A pool's crew stays with it from the first match to the last. `GET /api/people/{person}` carries `duties` and `physician`, which a person's page lists beside their fencing; somebody who only works has a page too.
 
 ### 1b. The public demo
 
@@ -215,7 +219,7 @@ flowchart LR
     L["/ participant view<br/>welcome · programme · competitors · mats · results"]
     L --> WHO["/who/:person<br/>one person's matches, every discipline"]
     L --> D["/display/mat/N<br/>the scoreboard"]
-    A["/admin<br/>every edit control"] -.->|writes the welcome,<br/>the programme, the wifi| L
+    A["/admin, /plan<br/>every edit control"] -.->|writes the welcome,<br/>the plan, the wifi| L
     A -.-> P
     A --> SK["/score/N<br/>score keeper"]
 ```
@@ -225,9 +229,9 @@ flowchart LR
 | `/` | competitors and spectators | no |
 | `/who/:person` | the same, one person at a time, across the event (`/who/c7` moves on to its person) | no |
 | `/info` | the wall by the entrance, on screen or printed | no |
-| `/admin` | the organizer | everything |
+| `/admin`, `/plan` | the organizer | everything |
 
-`Tournament.Event` — the welcome message, the programme and the venue wifi — is written only from `/admin` and read by the other two. None of it reaches a result.
+`Tournament.Event` — the welcome message, the event's name, venue and date, and the venue wifi — is written only from Plan the event and read by the other two; the programme beside it is generated from the plan (#149). None of it reaches a result.
 
 ### 1d. Offline signup
 
