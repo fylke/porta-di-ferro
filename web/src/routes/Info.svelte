@@ -5,7 +5,7 @@
   import { t, lang } from '../lib/i18n.svelte';
   import { hallURL, qrSrc } from '../lib/qr';
   import LangToggle from './LangToggle.svelte';
-  import Schedule from './Schedule.svelte';
+  import Programme from './Programme.svelte';
 
   /**
    * The sheet that goes on the door (issue #98).
@@ -127,7 +127,7 @@
 
     <section class="programme">
       <h2>{t('Programme')}</h2>
-      <Schedule items={event.schedule ?? []} />
+      <Programme rows={hall.view?.programme ?? []} />
     </section>
   </div>
 </main>

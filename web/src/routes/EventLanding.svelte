@@ -4,8 +4,7 @@
   import { stageLabel } from '../lib/stage';
   import { t } from '../lib/i18n.svelte';
   import LangToggle from './LangToggle.svelte';
-  import Schedule from './Schedule.svelte';
-  import FencingProgramme from './FencingProgramme.svelte';
+  import Programme from './Programme.svelte';
   import { onOrganizerPC } from '../lib/organizer';
 
   /**
@@ -103,8 +102,7 @@
       <div class="side">
         <section class="schedule">
           <h2>{t('Programme')}</h2>
-          <Schedule items={info.schedule ?? []} />
-          <FencingProgramme rows={view.programme ?? []} />
+          <Programme rows={view.programme ?? []} />
         </section>
 
         <section class="find">

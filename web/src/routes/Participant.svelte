@@ -6,8 +6,7 @@
   import { t } from '../lib/i18n.svelte';
   import { fitRows, type Layout } from '../lib/fit';
   import LangToggle from './LangToggle.svelte';
-  import Schedule from './Schedule.svelte';
-  import FencingProgramme from './FencingProgramme.svelte';
+  import Programme from './Programme.svelte';
   import Standings from './Standings.svelte';
   import FoldButton from './FoldButton.svelte';
   import { Folds } from '../lib/folds.svelte';
@@ -57,8 +56,8 @@
     [...(snapshot?.competitors ?? [])].sort((a, b) => a.name.localeCompare(b.name)),
   );
 
-  // The fencing part of the programme, as the forecast has it (phase 4): this discipline's
-  // rows of the event's. Looked at again as the tournament moves: at most every few
+  // The programme, as the plan and the forecast have it (#149): this discipline's rows of
+  // the event's, and the hall's breaks. Looked at again as the tournament moves: at most every few
   // seconds, and once more after the last change, so it never lags the event's page by
   // more than that (#128). Not a second stream: a phone holds this discipline's only.
   const LOOK_MS = 5000;
@@ -76,7 +75,9 @@
     else pending ??= setTimeout(look, wait);
   });
   onMount(() => () => clearTimeout(pending));
-  const fencing = $derived((hall.view?.programme ?? []).filter((r) => r.discipline === snapshot?.instance.slug));
+  const fencing = $derived(
+    (hall.view?.programme ?? []).filter((r) => r.discipline === snapshot?.instance.slug || r.stage === 'break'),
+  );
 
   const folds = new Folds(`${discipline()}/landing-page`);
 
@@ -114,8 +115,7 @@
 
       <section class="schedule">
         <h2>{t('Programme')}</h2>
-        <Schedule items={event.schedule ?? []} />
-        <FencingProgramme rows={fencing} names={false} />
+        <Programme rows={fencing} names={false} />
       </section>
 
       <section class="people">
