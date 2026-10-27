@@ -42,6 +42,7 @@
 
   function touch() {
     dirty = true;
+    error = '';
     if (!ownId) definitionId = suggestId(name, date);
   }
 
