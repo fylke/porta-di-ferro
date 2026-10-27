@@ -277,6 +277,30 @@ type Plan struct {
 	// MatSettings are each mat's name and the times it is not available, mat 1 first
 	// (#123). A mat with none is "Mat n", there all day.
 	MatSettings []MatSetting `json:"matSettings,omitempty"`
+	// Breaks are the times no mat in the hall fences: lunch, the prize giving (#149). They
+	// stop the mats and go in the programme.
+	Breaks []Break `json:"breaks,omitempty"`
+	// Prep is what comes before each discipline's first pool, by slug (#149): its gear
+	// check and its staff briefing. Not timed against the mats -- the fencers and the staff
+	// are busy, not the mats -- only put in the programme, ending as the first pool starts.
+	Prep map[string]Prep `json:"prep,omitempty"`
+	// Starts is when each discipline starts at the earliest, "HH:MM", by slug (#149). No
+	// work of the discipline is planned before it.
+	Starts map[string]string `json:"starts,omitempty"`
+}
+
+// Break is a time the whole hall stops, as times of day, with what it is for.
+type Break struct {
+	Label string `json:"label,omitempty"`
+	From  string `json:"from"`
+	To    string `json:"to"`
+}
+
+// Prep is how long a discipline's gear check and staff briefing take, in seconds. Zero is
+// none, which the plan points out.
+type Prep struct {
+	GearCheck int `json:"gearCheck,omitempty"`
+	Briefing  int `json:"briefing,omitempty"`
 }
 
 // MatSetting is one mat's name, and when it is not there: shared with a children's class

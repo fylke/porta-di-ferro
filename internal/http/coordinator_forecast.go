@@ -134,6 +134,7 @@ func (c *Coordinator) ForecastNow() ForecastView {
 	file, _ := c.folder.Read()
 	v.Expected = file.Plan.Expected
 	v.Sessions, v.FinalsLast = Sessions(file.Plan, c.slugs()), file.Plan.FinalsLast
+	ViewPlan(&v, file.Plan, file.Event, h.inputs)
 	return v
 }
 
@@ -400,5 +401,54 @@ func (c *Coordinator) applySuggestion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	c.republish()
+	writeJSON(w, http.StatusOK, c.ForecastNow())
+}
+
+// putBreaks is the hall's breaks, the whole list (#149).
+func (c *Coordinator) putBreaks(w http.ResponseWriter, r *http.Request) {
+	var in []store.Break
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	in, err := CleanBreaks(in)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	if err := c.changePlan(func(p *store.Plan) error { p.Breaks = in; return nil }); err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, c.ForecastNow())
+}
+
+// putPrep is the gear check and staff briefing of the disciplines named (#149).
+func (c *Coordinator) putPrep(w http.ResponseWriter, r *http.Request) {
+	var in map[string]store.Prep
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	slugs := c.slugs()
+	if err := c.changePlan(func(p *store.Plan) error { return SetPrep(p, in, slugs) }); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, c.ForecastNow())
+}
+
+// putStarts is when the disciplines named start at the earliest (#149).
+func (c *Coordinator) putStarts(w http.ResponseWriter, r *http.Request) {
+	var in map[string]string
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	slugs := c.slugs()
+	if err := c.changePlan(func(p *store.Plan) error { return SetStarts(p, in, slugs) }); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, c.ForecastNow())
 }

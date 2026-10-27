@@ -43,6 +43,7 @@ func (e *Event) forecastView() httpapi.ForecastView {
 	v := httpapi.ViewForecast(in, r, inputs, e.timings())
 	v.Expected = e.plan.Expected
 	v.Sessions, v.FinalsLast = httpapi.Sessions(e.plan, e.slugs()), e.plan.FinalsLast
+	httpapi.ViewPlan(&v, e.plan, e.info, inputs)
 	return v
 }
 
@@ -158,6 +159,35 @@ func (e *Event) planRequest(method, bare string, body []byte) (Response, bool) {
 			return fail(400, err), true
 		}
 		e.plan.FinalsLast = in.Last
+		return changed(e.forecastView()), true
+	case method == "PUT" && bare == "/api/plan/breaks":
+		var in []store.Break
+		if err := json.Unmarshal(body, &in); err != nil {
+			return fail(400, err), true
+		}
+		in, err := httpapi.CleanBreaks(in)
+		if err != nil {
+			return fail(400, err), true
+		}
+		e.plan.Breaks = in
+		return changed(e.forecastView()), true
+	case method == "PUT" && bare == "/api/plan/prep":
+		var in map[string]store.Prep
+		if err := json.Unmarshal(body, &in); err != nil {
+			return fail(400, err), true
+		}
+		if err := httpapi.SetPrep(&e.plan, in, e.slugs()); err != nil {
+			return fail(400, err), true
+		}
+		return changed(e.forecastView()), true
+	case method == "PUT" && bare == "/api/plan/starts":
+		var in map[string]string
+		if err := json.Unmarshal(body, &in); err != nil {
+			return fail(400, err), true
+		}
+		if err := httpapi.SetStarts(&e.plan, in, e.slugs()); err != nil {
+			return fail(400, err), true
+		}
 		return changed(e.forecastView()), true
 	case method == "POST" && bare == "/api/plan/suggest":
 		in, _, _ := e.times()

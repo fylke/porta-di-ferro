@@ -84,8 +84,16 @@ type Item struct {
 	People []string
 }
 
-// Break is a time no mat fences: lunch, the prize giving.
-type Break struct{ From, To time.Time }
+// Break is a time no mat fences: lunch, the prize giving. Label is what the programme
+// calls it.
+type Break struct {
+	From, To time.Time
+	Label    string
+}
+
+// Prep is what comes before a discipline's first pool: its gear check and its staff
+// briefing (#149). Not timed against the mats; the programme puts them before the pool.
+type Prep struct{ GearCheck, Briefing time.Duration }
 
 // Input is everything the forecast needs.
 type Input struct {
@@ -100,6 +108,8 @@ type Input struct {
 	// MatBreaks are the times one mat is not available, by mat (#123): breaks for that
 	// mat alone.
 	MatBreaks map[int][]Break
+	// Prep is each discipline's gear check and staff briefing, by slug, for the programme.
+	Prep map[string]Prep
 }
 
 // breaksOn is every break a mat keeps: the hall's and its own.
