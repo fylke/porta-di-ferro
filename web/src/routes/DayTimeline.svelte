@@ -12,6 +12,9 @@
    * Pointing at a block, or tabbing to it, says what it is (#142): when it runs against
    * when it was planned, how far it has got, and who it is short of. A block short of
    * staff is orange, and opens the staff.
+   *
+   * Under the mats, the physician (#149): on no mat, but on site for the whole day, so a
+   * bar across all of it -- with their names, or in orange when nobody is.
    */
   let {
     forecast,
@@ -21,6 +24,7 @@
     name,
     short = new Map(),
     onshort,
+    physicians,
   }: {
     forecast: ForecastView;
     items: ItemView[];
@@ -30,6 +34,8 @@
     /** The roles each item is short of, by item. */
     short?: Map<string, string[]>;
     onshort?: () => void;
+    /** The physicians on site, by name; undefined while the event plans no staff. */
+    physicians?: string[];
   } = $props();
 
   let shown = $state<{ x: ItemTimes; left: number; top: number } | null>(null);
@@ -118,7 +124,7 @@
             {#if isShort(x.id) && onshort}
               <!-- Short of staff: a way to them. -->
               <button
-                class="block short {statusOf.get(x.id)?.status ?? ''}"
+                class="block short plain {statusOf.get(x.id)?.status ?? ''}"
                 style="left: {pct(x.start)}%; width: {width(x.start, x.end)}%"
                 aria-label="{name(x.id)}: {clockOf(x.start)}–{clockOf(x.end)}"
                 onpointerenter={(e) => show(e, x)}
@@ -147,6 +153,27 @@
         </div>
       </div>
     {/each}
+    {#if physicians}
+      <div class="row">
+        <span class="mat">{t('Physician')}</span>
+        <div class="lane">
+          {#if physicians.length > 0}
+            <span class="onsite" role="img" aria-label={t('On site all day: {names}', { names: physicians.join(', ') })}>
+              <span class="label">{t('On site all day: {names}', { names: physicians.join(', ') })}</span>
+            </span>
+          {:else if onshort}
+            <button class="onsite none plain" onclick={onshort}>
+              <span class="label">{t('No physician on site')}</span>
+            </button>
+          {:else}
+            <span class="onsite none" role="img" aria-label={t('No physician on site')}>
+              <span class="label">{t('No physician on site')}</span>
+            </span>
+          {/if}
+          {#if now >= 0 && now <= 100}<span class="now" style="left: {now}%"></span>{/if}
+        </div>
+      </div>
+    {/if}
   </div>
   {#if shown}
     {@const x = shown.x}
@@ -282,6 +309,28 @@
   .tip .warn {
     color: var(--amber-bright);
     font-weight: 700;
+  }
+  /* The physician's day: the whole of it, in the colour of nothing to worry about. */
+  .onsite {
+    position: absolute;
+    inset: 0.2rem 0;
+    border-radius: 4px;
+    background: var(--ok);
+    overflow: hidden;
+  }
+  button.onsite {
+    padding: 0;
+    border: none;
+    text-align: left;
+    font: inherit;
+    cursor: pointer;
+  }
+  .onsite.none {
+    background: repeating-linear-gradient(135deg, rgba(242, 177, 52, 0.75) 0 4px, transparent 4px 9px);
+    box-shadow: inset 0 0 0 2px var(--amber-bright);
+  }
+  .onsite.none .label {
+    color: var(--ink);
   }
   .now {
     position: absolute;

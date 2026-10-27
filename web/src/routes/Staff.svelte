@@ -111,7 +111,7 @@
 
   // --- the assignments ---------------------------------------------------------------------
 
-  const crew = $derived(view?.crew ?? { 'head-ref': 1, 'assistant-ref': 2, 'score-keeper': 1 });
+  const crew = $derived(view?.crew ?? { 'head-ref': 1, 'assistant-ref': 1, 'score-keeper': 1 });
   /** Every slot a mat has: "head-ref" 1, "assistant-ref" 1 and 2, ... */
   const slots = $derived(MAT_ROLES.flatMap((role) => Array.from({ length: crew[role] ?? 0 }, (_, i) => ({ role, slot: i + 1 }))));
 
@@ -196,6 +196,18 @@
   }
 
   const shortCount = $derived(view?.short.length ?? 0);
+  /**
+   * The pools, and the rest, each member is the crew of (#149): a crew stays with its pool
+   * from the first match to the last, so this is where each of them belongs.
+   */
+  const worksOn = $derived.by(() => {
+    const out = new Map<string, string[]>();
+    for (const it of view?.items ?? []) {
+      const who = new Set((view?.assignments ?? []).filter((a) => a.item === it.id).map((a) => a.staff));
+      for (const id of who) out.set(id, [...(out.get(id) ?? []), itemName(it.id)]);
+    }
+    return out;
+  });
   const physicians = $derived((view?.physicians ?? []).map((id) => byId.get(id)).filter((m): m is StaffMember => !!m));
 </script>
 
@@ -233,13 +245,13 @@
         <span class="hint">{t('None ticked: any discipline.')}</span>
       </fieldset>
     {/if}
-    <button class="save" type="submit" disabled={busy}>{t('Add to the staff')}</button>
+    <button type="submit" disabled={busy}>{t('Add to the staff')}</button>
   </form>
   {#if suggestions.length > 0}
     <div class="suggest-people">
       <p class="hint">{t('Already entered as a competitor. Is this them?')}</p>
       {#each suggestions as s (s.person)}
-        <button type="button" class="pick" onclick={() => ((want = s.person), (name = s.name), (club = s.club ?? club))}>
+        <button type="button" class="pick plain" onclick={() => ((want = s.person), (name = s.name), (club = s.club ?? club))}>
           <span class="strong">{s.name}</span> <span class="hint">{s.club ?? ''} &middot; {s.in.join(', ')}</span>
         </button>
       {/each}
@@ -267,6 +279,7 @@
             <th>{t('Name')}</th>
             {#each ROLES as r (r)}<th class="c">{roleLabel(r)}</th>{/each}
             {#if several}<th>{t('Works')}</th>{/if}
+            <th>{t('Crew of')}</th>
             <th></th>
           </tr>
         </thead>
@@ -307,7 +320,8 @@
                   {/each}
                 </td>
               {/if}
-              <td><button class="quiet" disabled={busy} onclick={() => run(() => api.removeMember(m.id))}>{t('Remove')}</button></td>
+              <td class="crewof">{(worksOn.get(m.id) ?? []).join(', ') || '–'}</td>
+              <td><button class="secondary" disabled={busy} onclick={() => run(() => api.removeMember(m.id))}>{t('Remove')}</button></td>
             </tr>
           {/each}
         </tbody>
@@ -319,7 +333,13 @@
     <p class="oncall">{t('On call as physician: {names}', { names: physicians.map((m) => m.name).join(', ') })}</p>
   {/if}
 
-  <h3>{t('A mat needs')}</h3>
+  <h3>
+    {t('A mat needs')}
+    {#if view && view.needed > 0}
+      <!-- The fewest who could staff the day: a crew on every mat at the busiest moment (#149). -->
+      <span class="needed">{t('{n} people in all, at the busiest time', { n: view.needed })}</span>
+    {/if}
+  </h3>
   <div class="crew">
     {#each MAT_ROLES as r (r)}
       <label>
@@ -330,12 +350,13 @@
   </div>
 
   {#if view && view.items.length > 0}
-    <h3>{t('Who works what')}</h3>
+    <h3>{t('Each pool’s crew')}</h3>
+    <p class="hint">{t('A crew stays with its pool from the first match to the last.')}</p>
     <div class="head">
       <p class:warn={shortCount > 0} class:ok={shortCount === 0}>
         {shortCount === 0 ? t('Every slot is filled.') : shortCount === 1 ? t('1 slot has nobody.') : t('{n} slots have nobody.', { n: shortCount })}
       </p>
-      <button class="save" disabled={busy || view.members.length === 0} onclick={suggest}>{t('Suggest who works where')}</button>
+      <button disabled={busy || view.members.length === 0} onclick={suggest}>{t('Suggest who works where')}</button>
     </div>
     {#each view.warnings as w, i (i)}
       <p class="warn">{warningText(w)}</p>
@@ -355,8 +376,8 @@
           {/if}
         </p>
         <div class="actions">
-          {#if suggestion.changes > 0}<button class="save" disabled={busy} onclick={apply}>{t('Apply')}</button>{/if}
-          <button disabled={busy} onclick={() => (suggestion = null)}>{t('Dismiss')}</button>
+          {#if suggestion.changes > 0}<button disabled={busy} onclick={apply}>{t('Apply')}</button>{/if}
+          <button class="secondary" disabled={busy} onclick={() => (suggestion = null)}>{t('Dismiss')}</button>
         </div>
         <p class="hint">{t('Anyone chosen by hand stays where they are, and so does the crew of a mat already fencing.')}</p>
       </div>
@@ -497,19 +518,6 @@
     font-size: 0.8rem;
     margin-right: 0.5rem;
   }
-  .save {
-    padding: 0.5rem 1rem;
-    font-weight: 700;
-    background: var(--ink);
-    color: #0d0f14;
-    border: none;
-  }
-  .quiet {
-    padding: 0.25rem 0.6rem;
-    font-size: 0.8rem;
-    background: var(--panel-2);
-    border: 1px solid var(--line);
-  }
   .unsure {
     margin-left: 0.4rem;
     font-size: 0.75rem;
@@ -522,9 +530,22 @@
     gap: 0.4rem;
     align-items: center;
   }
+  .needed {
+    margin-left: 0.6rem;
+    font-weight: 600;
+    letter-spacing: normal;
+    text-transform: none;
+    color: var(--ink);
+  }
+  .crewof {
+    font-size: 0.8rem;
+    color: var(--ink-dim);
+    max-width: 14rem;
+  }
   .pick {
     padding: 0.3rem 0.6rem;
     background: var(--panel-2);
+    color: var(--ink);
     border: 1px solid var(--line);
     border-radius: 6px;
   }
