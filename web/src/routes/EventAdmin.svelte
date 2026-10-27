@@ -66,7 +66,7 @@
   const scoreURL = $derived(hallURL(clientURL) ? `${hallURL(clientURL)}/score` : '');
 </script>
 
-<main>
+<main class="admin">
   <header>
     <h1>
       Porta di Ferro
@@ -130,7 +130,7 @@
     <!-- One address for every tablet: it picks a physical mat and follows it through
          whatever disciplines the plan puts there (phase 2). The code is for the tablets to
          scan (#138); a code per mat, printed, skips the question. -->
-    <section class="join">
+    <section class="join" data-tour="join">
       <div>
         <h2>{t('Score keepers')}</h2>
         <p class="url">{scoreURL || '/score'}</p>
@@ -161,18 +161,18 @@
     </div>
 
     {#if dashboard === 'day'}
-      <MatBoard canSetCount onshort={() => void toStaff()} />
+      <div data-tour="matboard"><MatBoard canSetCount onshort={() => void toStaff()} /></div>
 
       <Screens />
     {:else}
       <!-- One signup for the whole event, and the people it and the desks make (phase 3). -->
-      <Signup scope="event" info={view.info} onchange={() => void hall.refresh()} />
+      <div data-tour="signup"><Signup scope="event" info={view.info} onchange={() => void hall.refresh()} /></div>
 
       <!-- Only when two entries may be one person: the desks' doing, not the signup's. -->
       <People whenNeeded />
 
       <!-- Who works the mats, at event level (phase 5). -->
-      <div id="staff"><Staff /></div>
+      <div id="staff" data-tour="staff"><Staff /></div>
 
       <DeleteEvent name={view.name} dir={view.dir} />
     {/if}
