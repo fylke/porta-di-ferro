@@ -120,6 +120,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/matches/{id}/events", s.postEvents)
 	mux.HandleFunc("PUT /api/matches/{id}/events", s.replaceEvents)
 	mux.HandleFunc("GET /api/matches/{id}/backups", s.backups)
+	mux.HandleFunc("GET /api/matches/{id}/claim", s.getClaim)
 	mux.HandleFunc("POST /api/matches/{id}/claim", s.claimMatch)
 	mux.HandleFunc("DELETE /api/matches/{id}/claim", s.releaseClaim)
 

@@ -698,7 +698,8 @@ function disciplineApi(base: () => string) {
     /**
      * Stamped with who is pushing and which epoch it holds, so a device whose match has
      * been handed to another is told so -- a 409 -- rather than having its backlog appended
-     * or silently dropped. No stamp is the anonymous path: the tests and paper entry.
+     * or silently dropped. No stamp is the anonymous path, for the tests: refused while
+     * a device holds the match.
      */
     pushEvents: (matchId: string, events: Event[], writer?: { client: string; epoch: number }) =>
       req<{ written: number; state: State; lastSeq: number }>(
@@ -712,6 +713,9 @@ function disciplineApi(base: () => string) {
         client,
         force,
       }),
+    /** Who holds a match now: how a score keeper finds out it has been taken over. */
+    claimOf: (matchId: string) =>
+      req<{ client: string; epoch: number; holder?: Client }>('GET', `${base()}/matches/${matchId}/claim`),
     releaseClaim: (matchId: string, client: string) =>
       req<{ ok: boolean }>('DELETE', `${base()}/matches/${matchId}/claim?client=${encodeURIComponent(client)}`),
     discardQuarantine: (matchId: string) => req<{ ok: boolean }>('DELETE', `${base()}/quarantine/${matchId}`),

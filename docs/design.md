@@ -286,8 +286,9 @@ screen — because by then the earlier matches are closed and nobody would reope
 **One writer per match, made safe by an epoch.** A device claims a match before it writes and stamps
 every push with the epoch it was granted. A handover — graceful or not — moves the epoch on, and a
 push stamped with an older one is quarantined and shown to the organizer rather than appended or
-dropped (§7 item 10). A push with no stamp is the anonymous path — paper entry, the tests — and is
-accepted as it always was.
+dropped (§7 item 10). Nothing is taken from a device without somebody asking for it, not even from
+one that has gone quiet (#150). A push with no stamp is the anonymous path — the tests — and is
+refused while a device holds the match.
 
 Corrections made at the mat are appended as new events rather than mutating history: the score
 keeper's undo is a record that says "not that one", and the log still shows what was entered.
@@ -877,7 +878,10 @@ Deliberate, and listed so nobody is surprised on the day:
    writer epoch, and any late events from the old device are quarantined and shown to the organizer
    rather than silently dropped. *(Built. A device claims a match before it writes and stamps every
    push with its epoch; a contested claim is refused with who holds it and can be taken over
-   explicitly; a claim on a dead device goes through without asking. The graceful case is *Hand over
+   explicitly. A device that has gone quiet is asked about just the same (#150): a dark screen looks
+   exactly like a flat battery, and a silent takeover cost the quiet one its next exchange. The
+   holder checks its claim while it is idle, so a device that has been taken over locks its scoring
+   and names the device that took it before anyone scores on it. The graceful case is *Hand over
    this mat* in the `…` menu, and *Next match* releases the finished match on the way out. It needed
    no round trip: heartbeats are `POST`s and the registry comes back over SSE.)*
 11. **Swedish localisation** alongside English. *(Built. The English text is the key and the Swedish is

@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -249,6 +250,10 @@ func (s *Server) postEvents(w http.ResponseWriter, r *http.Request) {
 		written, err = s.store.Append(id, events)
 	}
 	s.writeMu.Unlock()
+	if errors.Is(err, errHeld) {
+		writeErr(w, http.StatusConflict, err)
+		return
+	}
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return

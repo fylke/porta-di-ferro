@@ -373,6 +373,10 @@ func (d *Demo) Request(method, path string, body []byte) Response {
 		// outlives the browser.
 		return ok([]string{})
 	case len(parts) == 4 && parts[1] == "matches" && parts[3] == "claim":
+		// One browser is one device: nobody else can hold a match.
+		if method == "GET" {
+			return ok(map[string]any{"client": "", "epoch": 0})
+		}
 		return ok(map[string]bool{"ok": true})
 
 	// Demo-only. Not part of the application's API, and the adapter is the only caller.

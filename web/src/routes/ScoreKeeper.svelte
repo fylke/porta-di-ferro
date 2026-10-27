@@ -10,12 +10,12 @@
   import OptionsSheet from './OptionsSheet.svelte';
   import { roundLabel } from './lib-display.svelte';
   import { MSL, replay, type Side } from '../lib/match';
-  import type { Slot } from '../api';
+  import type { Client, Slot } from '../api';
   import * as db from '../lib/db';
   import { ended, penaltyLoss } from '../lib/outcome';
   import { summarise } from '../lib/drift';
   import { inSuddenDeath, suddenDeathDecided as decidedOnSuddenDeath } from '../lib/knockout';
-  import { Heartbeat } from '../lib/presence.svelte';
+  import { Heartbeat, deviceName } from '../lib/presence.svelte';
   import { navigate } from '../router.svelte';
   import { namespace } from '../lib/paths';
   import { t, locale } from '../lib/i18n.svelte';
@@ -157,6 +157,15 @@
       // Fine without it.
     }
   });
+
+  /** How long the device holding the match has been silent, as far as the server knows. */
+  function quietSince(c: Client): string {
+    const at = new Date(c.lastSeen);
+    if (!c.lastSeen || isNaN(at.getTime()) || at.getFullYear() < 2000) return t('It has not been heard from since the server started.');
+    return t('It has not been heard from since {time}.', {
+      time: at.toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    });
+  }
 
   /** The score keeper has read the result and is ready for the next two. */
   function nextMatch() {
@@ -471,7 +480,7 @@
         <button role="menuitem" disabled={!matchState} onclick={openOptions}>
           <span>{t('Colours and sides…')}</span>
         </button>
-        <div class="menu-head">{t('This screen')}</div>
+        <div class="menu-head">{t('This screen')} &middot; {deviceName()}</div>
         <button role="menuitem" onclick={() => void handOver()}>
           <span>{t('Hand over this mat')}</span><span class="why">{t('to another device')}</span>
         </button>
@@ -571,7 +580,9 @@
            exchanges are with the organizer, and nothing it writes now would be kept. -->
       <div class="drift stale" role="alert">
         <span>
-          {t('Another device has taken over this match.')}
+          {sk.log.takenBy?.name
+            ? t('{device} has taken over this match.', { device: sk.log.takenBy.name })
+            : t('Another device has taken over this match.')}
           {#if sk.log.quarantined > 0}
             {sk.log.quarantined === 1
               ? t('1 exchange from this device was set aside for the organizer.')
@@ -623,11 +634,18 @@
   {/if}
 
   {#if sk?.log.contested}
-    <!-- Another live device holds this match. Taking over is deliberate: whatever that
-         device still has unsent will be set aside for the organizer, not merged. -->
+    <!-- Another device holds this match. Taking over is deliberate, even from a device
+         that has gone quiet -- a dark screen looks just like a flat battery -- and
+         whatever that device still has unsent will be set aside for the organizer. -->
+    {@const holder = sk.log.contested}
+    {@const device = holder.name || t('another device')}
     <ConfirmDialog
-      headline={t('Mat {n} is being scored by {device}', { n: mat, device: sk.log.contested.name })}
-      detail={t('Take it over on this device? Anything the other device has not yet sent will be set aside for the organizer rather than counted.')}
+      headline={holder.alive
+        ? t('Mat {n} is being scored by {device}', { n: mat, device })
+        : t('Mat {n} was being scored by {device}', { n: mat, device })}
+      detail={holder.alive
+        ? t('Take it over on this device? Anything the other device has not yet sent will be set aside for the organizer rather than counted.')
+        : `${quietSince(holder)} ${t('Take it over on this device? Anything it has not yet sent will be set aside for the organizer rather than counted.')}`}
       confirmLabel={t('Take over on this device')}
       onConfirm={() => void sk?.log.takeOver()}
       onCancel={() => navigate('/score')}
