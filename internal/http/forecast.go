@@ -415,9 +415,9 @@ type ForecastView struct {
 	Sessions   map[string]int `json:"sessions,omitempty"`
 	FinalsLast bool           `json:"finalsLast,omitempty"`
 	// Breaks, Prep and Starts are the plan's, for the planning panel (#149).
-	Breaks []store.Break          `json:"breaks"`
-	Prep   map[string]store.Prep  `json:"prep,omitempty"`
-	Starts map[string]string      `json:"starts,omitempty"`
+	Breaks []store.Break         `json:"breaks"`
+	Prep   map[string]store.Prep `json:"prep,omitempty"`
+	Starts map[string]string     `json:"starts,omitempty"`
 	// Gaps are what the plan looks to be missing: a lunch break, a discipline's gear
 	// check or staff briefing. Pointed out, never required.
 	Gaps []PlanGap `json:"gaps"`
@@ -595,9 +595,15 @@ func programme(in forecast.Input, r forecast.Result, inputs []MatsInput) []Progr
 			out = append(out, *row)
 		}
 	}
+	live := false
+	for _, b := range begun {
+		live = live || b
+	}
 	for _, b := range in.Breaks {
+		// Over once the day is under way and the clock is past it; before the day, a
+		// planned lunch is never done.
 		out = append(out, ProgrammeRow{Name: b.Label, Stage: "break", Start: stamp(b.From), End: stamp(b.To), Mats: []int{},
-			Done: !in.Now.IsZero() && in.Now.After(b.To)})
+			Done: live && in.Now.After(b.To)})
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Start < out[j].Start })
 	return out

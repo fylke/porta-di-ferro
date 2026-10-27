@@ -374,7 +374,7 @@ func (e *Event) infoPDF(query string) Response {
 	view := e.View()
 	snap := httpapi.Snapshot{Tournament: store.Tournament{Event: view.Info}, Instance: httpapi.Instance{Name: view.Name}}
 	var buf bytes.Buffer
-	if err := httpapi.BuildInfoPDF(snap, landing, strings.Contains(query, "lang=sv")).Output(&buf); err != nil {
+	if err := httpapi.BuildInfoPDF(snap, view.Programme, landing, strings.Contains(query, "lang=sv")).Output(&buf); err != nil {
 		return fail(500, err)
 	}
 	return Response{

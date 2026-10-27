@@ -278,6 +278,11 @@ func (c *Coordinator) SaveEventInfo(ev store.Event) error {
 	return nil
 }
 
+// Programme is the day as the plan has it (#149), for a discipline's info sheet.
+func (c *Coordinator) Programme() []ProgrammeRow {
+	return c.View().Programme
+}
+
 // --- the event view ---------------------------------------------------------------------
 
 func (c *Coordinator) snapshotWorkers() []*worker {
@@ -544,7 +549,7 @@ func (c *Coordinator) putInfo(w http.ResponseWriter, r *http.Request) {
 func (c *Coordinator) infoPDF(w http.ResponseWriter, r *http.Request) {
 	view := c.View()
 	snap := Snapshot{Tournament: store.Tournament{Event: view.Info}, Instance: Instance{Name: view.Name}}
-	doc := BuildInfoPDF(snap, r.URL.Query().Get("url"), r.URL.Query().Get("lang") == "sv")
+	doc := BuildInfoPDF(snap, view.Programme, r.URL.Query().Get("url"), r.URL.Query().Get("lang") == "sv")
 	var buf bytes.Buffer
 	if err := doc.Output(&buf); err != nil {
 		writeErr(w, http.StatusInternalServerError, err)

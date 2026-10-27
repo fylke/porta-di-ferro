@@ -542,7 +542,11 @@ func (d *Demo) infoPDF(query string) Response {
 		}
 	}
 	var buf bytes.Buffer
-	if err := httpapi.BuildInfoPDF(snap, landing, strings.Contains(query, "lang=sv")).Output(&buf); err != nil {
+	var programme []httpapi.ProgrammeRow
+	if d.event != nil {
+		programme = d.event.View().Programme
+	}
+	if err := httpapi.BuildInfoPDF(snap, programme, landing, strings.Contains(query, "lang=sv")).Output(&buf); err != nil {
 		return fail(500, err)
 	}
 	return Response{

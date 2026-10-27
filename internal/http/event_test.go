@@ -55,6 +55,22 @@ func TestWifiQRPayload(t *testing.T) {
 	}
 }
 
+// The generated programme goes on the sheet in the sheet's language (#149): a discipline's
+// stages under its name, a nameless break as lunch.
+func TestTheInfoSheetPrintsTheGeneratedProgramme(t *testing.T) {
+	rows := []httpapi.ProgrammeRow{
+		{Discipline: "ls", Name: "Longsword", Stage: "gear-check", Start: "2026-11-14T08:30:00+01:00"},
+		{Discipline: "ls", Name: "Longsword", Stage: "pools", Start: "2026-11-14T09:00:00+01:00"},
+		{Name: "Lunch", Stage: "break", Start: "2026-11-14T12:00:00+01:00"},
+	}
+	sv := map[string]string{"Gear check": "Utrustningskontroll", "Pools": "Pooler", "Lunch": "Lunch"}
+	got := httpapi.ProgrammeSchedule(rows, func(s string) string { return sv[s] })
+	if len(got) != 3 || got[0].At != "08:30" || got[0].Label != "Longsword: Utrustningskontroll" ||
+		got[1].Kind != "discipline" || got[2].Kind != "break" || got[2].Label != "Lunch" {
+		t.Errorf("the programme should be the sheet's rows: %+v", got)
+	}
+}
+
 // The info sheet is a poster: it has to come out of the printer with everything a
 // spectator needs, including when half of it has not been filled in.
 func TestTheInfoSheetIsAPrintableDocument(t *testing.T) {
@@ -68,7 +84,7 @@ func TestTheInfoSheetIsAPrintableDocument(t *testing.T) {
 	}
 
 	var buf strings.Builder
-	doc := httpapi.BuildInfoPDF(snap, "http://192.168.1.20:8080/", false)
+	doc := httpapi.BuildInfoPDF(snap, nil, "http://192.168.1.20:8080/", false)
 	if err := doc.Output(&writerOnly{&buf}); err != nil {
 		t.Fatalf("writing the sheet: %v", err)
 	}
@@ -81,7 +97,7 @@ func TestTheInfoSheetIsAPrintableDocument(t *testing.T) {
 
 	// An event nobody has configured yet still prints: an organizer testing the printer
 	// on the morning should not meet a crash.
-	empty := httpapi.BuildInfoPDF(httpapi.Snapshot{}, "", false)
+	empty := httpapi.BuildInfoPDF(httpapi.Snapshot{}, nil, "", false)
 	var bare strings.Builder
 	if err := empty.Output(&writerOnly{&bare}); err != nil {
 		t.Fatalf("an empty event should still print: %v", err)
