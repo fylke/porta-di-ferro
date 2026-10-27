@@ -142,10 +142,13 @@ type Tournament struct {
 	// Capacity is how many this discipline can take, or 0 for no limit. A signup import
 	// warns past it rather than refusing: an organizer who wants a twenty-ninth in a
 	// discipline of twenty-eight is allowed one, and should be told.
-	Capacity    int `json:"capacity,omitempty"`
-	Mats        int `json:"mats"`
-	MinPoolSize int `json:"minPoolSize"`
-	MaxPoolSize int `json:"maxPoolSize"`
+	Capacity int `json:"capacity,omitempty"`
+	// SetUp says the organizer has been through the discipline's setup -- its mats and
+	// the size of its pools -- and finished it (#149): what "done setting it up" means.
+	SetUp       bool `json:"setUp,omitempty"`
+	Mats        int  `json:"mats"`
+	MinPoolSize int  `json:"minPoolSize"`
+	MaxPoolSize int  `json:"maxPoolSize"`
 	// Event is the day around the tournament: the welcome message, the agenda and the
 	// venue wifi (issue #98). Nothing here reaches a result.
 	Event Event `json:"event,omitempty"`

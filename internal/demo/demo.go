@@ -660,16 +660,20 @@ func (d *Demo) putEvent(body []byte) Response {
 
 func (d *Demo) putTournament(body []byte) Response {
 	var in struct {
-		Mats        int  `json:"mats"`
-		MinPoolSize int  `json:"minPoolSize"`
-		MaxPoolSize int  `json:"maxPoolSize"`
-		ElimMats    *int `json:"elimMats"`
-		Capacity    *int `json:"capacity"`
+		Mats        int   `json:"mats"`
+		MinPoolSize int   `json:"minPoolSize"`
+		MaxPoolSize int   `json:"maxPoolSize"`
+		ElimMats    *int  `json:"elimMats"`
+		Capacity    *int  `json:"capacity"`
+		SetUp       *bool `json:"setUp"`
 	}
 	if err := json.Unmarshal(body, &in); err != nil {
 		return fail(400, err)
 	}
 	d.tournament.Mats, d.tournament.MinPoolSize, d.tournament.MaxPoolSize = in.Mats, in.MinPoolSize, in.MaxPoolSize
+	if in.SetUp != nil {
+		d.tournament.SetUp = *in.SetUp
+	}
 	if in.Capacity != nil {
 		d.tournament.Capacity = max(0, *in.Capacity)
 	}

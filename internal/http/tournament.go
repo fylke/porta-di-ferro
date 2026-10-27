@@ -22,6 +22,9 @@ func (s *Server) putTournament(w http.ResponseWriter, r *http.Request) {
 		// How many the discipline can take, for the signup's warning (#142). A pointer for
 		// the same reason; 0 is no limit.
 		Capacity *int `json:"capacity"`
+		// SetUp marks the discipline's setup finished (#149). A pointer, so an ordinary
+		// save of the mats leaves it as it is.
+		SetUp *bool `json:"setUp"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		writeErr(w, http.StatusBadRequest, err)
@@ -43,6 +46,9 @@ func (s *Server) putTournament(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.Capacity != nil {
 		t.Capacity = max(0, *in.Capacity)
+	}
+	if in.SetUp != nil {
+		t.SetUp = *in.SetUp
 	}
 	if err := s.store.SaveTournament(t); err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
