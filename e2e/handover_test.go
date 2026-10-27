@@ -124,8 +124,10 @@ func TestHandoverQuarantinesTheOldDevice(t *testing.T) {
 		t.Errorf("discarding should empty the quarantine, got %d", len(p.Quarantined))
 	}
 
-	// An anonymous push -- no epoch -- is the paper-entry path and still works.
-	s.mustDo(t, "POST", "/api/matches/"+id+"/events", []match.Event{exchangeAt(5, 5000)}, nil)
+	// An anonymous push -- no epoch -- is refused while B holds the match (#150).
+	if code := s.do(t, "POST", "/api/matches/"+id+"/events", []match.Event{exchangeAt(5, 5000)}, nil); code != http.StatusConflict {
+		t.Errorf("an unclaimed push to a held match should be refused, got %d", code)
+	}
 }
 
 // TestGracefulHandoverNeedsNoForce: the outgoing device releases, the next claims without
@@ -148,16 +150,22 @@ func TestGracefulHandoverNeedsNoForce(t *testing.T) {
 	}
 }
 
-// TestADeadDeviceIsTakenOverWithoutAsking: a claim that was never heartbeated -- or
-// whose device has gone quiet -- is not contested.
-func TestADeadDeviceIsTakenOverWithoutAsking(t *testing.T) {
+// TestADeadDeviceIsAskedAbout: a claim that was never heartbeated -- or whose device has
+// gone quiet -- is still contested, and the refusal says the holder is not alive (#150).
+// A dark screen looks exactly like a flat battery; taking over is the score keeper's call.
+func TestADeadDeviceIsAskedAbout(t *testing.T) {
 	s := start(t)
 	id := setupOneMatch(t, s)
 	s.claim(t, id, "ghost", false) // claimed, never registered: as dead as a device gets
 	s.heartbeat(t, "B", "scorekeeper", 1, id)
 	code, out := s.claim(t, id, "B", false)
+	holder, _ := out["holder"].(map[string]any)
+	if code != http.StatusConflict || holder["id"] != "ghost" || holder["alive"] != false {
+		t.Fatalf("a dead holder should be named, not alive, and not displaced, got %d %v", code, out)
+	}
+	code, out = s.claim(t, id, "B", true)
 	if code != 200 || out["tookOverFrom"] != "ghost" || out["epoch"].(float64) != 2 {
-		t.Fatalf("a dead holder should be displaced without force, got %d %v", code, out)
+		t.Fatalf("taking over a dead holder should bump the epoch, got %d %v", code, out)
 	}
 }
 
