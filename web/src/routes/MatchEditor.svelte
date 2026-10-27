@@ -136,7 +136,7 @@
   <div class="card">
     <header>
       <h2>{t('Edit the log')} &middot; <span class="red">{names.red}</span> {t('v')} <span class="blue">{names.blue}</span></h2>
-      <button class="close" onclick={onClose} aria-label={t('Close')}>&times;</button>
+      <button class="close plain" onclick={onClose} aria-label={t('Close')}>&times;</button>
     </header>
 
     {#if loading}
@@ -204,7 +204,7 @@
                 <td colspan="2"></td>
               {/if}
               <td class="actions">
-                <button title={t('Delete this event')} aria-label={t('Delete')} onclick={() => remove(i)}>&times;</button>
+                <button class="plain" title={t('Delete this event')} aria-label={t('Delete')} onclick={() => remove(i)}>&times;</button>
               </td>
             </tr>
           {/each}
@@ -330,6 +330,7 @@
     font-size: 0.85rem;
     background: var(--panel-2);
     border: 1px solid var(--line);
+    color: var(--ink);
   }
   .add {
     margin: 0;
@@ -347,6 +348,7 @@
     font-size: 0.9rem;
     background: var(--panel-2);
     border: 1px solid var(--line);
+    color: var(--ink);
   }
   .preview {
     display: flex;

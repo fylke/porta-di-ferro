@@ -135,6 +135,7 @@
     font-weight: 700;
     background: var(--panel-2);
     border: 2px solid var(--line);
+    color: var(--ink);
   }
   .warn,
   .err {

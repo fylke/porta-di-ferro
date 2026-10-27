@@ -63,6 +63,7 @@
     font-weight: 700;
     border: 2px solid var(--line);
     background: var(--panel-2);
+    color: var(--ink);
   }
   .confirm {
     background: var(--amber);

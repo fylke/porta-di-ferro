@@ -140,7 +140,7 @@
       <ul class="suggestions">
         {#each suggestions as s (s.person)}
           <li>
-            <button type="button" class="pick" onclick={() => void enter(s)}>
+            <button type="button" class="pick plain" onclick={() => void enter(s)}>
               <span class="name">{s.name}</span>
               <span class="club">{s.club ?? ''}</span>
               <span class="in">{s.in.join(', ')}</span>
@@ -166,11 +166,11 @@
         <span class="actions">
           {#if c.withdrawn}
             <span class="tag">{t('Withdrawn')}</span>
-            <button class="link" onclick={() => setWithdrawn(c, false)}>{t('Reinstate')}</button>
+            <button class="link plain" onclick={() => setWithdrawn(c, false)}>{t('Reinstate')}</button>
           {:else if poolsDrawn}
-            <button class="link" onclick={() => setWithdrawn(c, true)}>{t('Withdraw')}</button>
+            <button class="link plain" onclick={() => setWithdrawn(c, true)}>{t('Withdraw')}</button>
           {:else}
-            <button class="link" onclick={() => remove(c)}>{t('Remove')}</button>
+            <button class="link plain" onclick={() => remove(c)}>{t('Remove')}</button>
           {/if}
         </span>
       </li>
@@ -211,6 +211,7 @@
     font-weight: 700;
     background: var(--panel-2);
     border: 1px solid var(--line);
+    color: var(--ink);
   }
   ul {
     list-style: none;

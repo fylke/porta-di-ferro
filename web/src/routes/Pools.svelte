@@ -58,8 +58,8 @@
             {#each mats as m (m)}<option value={m}>{m}</option>{/each}
           </select>
         </label>
-        <button title={t('Run this pool earlier on its mat')} aria-label={t('Move pool {n} up', { n: pool.number })} onclick={() => void override(() => api.reorderPool(pool.number, 'up'))}>&uarr;</button>
-        <button title={t('Run this pool later on its mat')} aria-label={t('Move pool {n} down', { n: pool.number })} onclick={() => void override(() => api.reorderPool(pool.number, 'down'))}>&darr;</button>
+        <button class="plain" title={t('Run this pool earlier on its mat')} aria-label={t('Move pool {n} up', { n: pool.number })} onclick={() => void override(() => api.reorderPool(pool.number, 'up'))}>&uarr;</button>
+        <button class="plain" title={t('Run this pool later on its mat')} aria-label={t('Move pool {n} down', { n: pool.number })} onclick={() => void override(() => api.reorderPool(pool.number, 'down'))}>&darr;</button>
       </span>
     </h2>
 
@@ -76,7 +76,7 @@
             <span class="blue">{name(m.blue)}</span>
             {#if m.state.endReason === 'forfeit'}<span class="tag">{t('forfeit')}</span>{/if}
             {#if m.state.endReason === 'penalty'}<span class="tag">{t('penalty')}</span>{/if}
-            <button class="edit" title={t("Edit this match's log")} aria-label={t('Edit the log of match {n}', { n: m.order })} onclick={() => (editing = m)}>&#9998;</button>
+            <button class="edit plain" title={t("Edit this match's log")} aria-label={t('Edit the log of match {n}', { n: m.order })} onclick={() => (editing = m)}>&#9998;</button>
           </li>
         {/each}
       </ol>

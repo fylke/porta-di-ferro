@@ -226,6 +226,7 @@
     font-size: 0.85rem;
     background: var(--panel-2);
     border: 1px solid var(--line);
+    color: var(--ink);
   }
   .dim {
     margin: 0;
