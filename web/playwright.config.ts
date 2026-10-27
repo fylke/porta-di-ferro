@@ -33,7 +33,8 @@ export default defineConfig({
   webServer: {
     // Loopback only, so Windows Firewall does not ask about the executable go run builds.
     command: `go run ./cmd/porta -port ${port} -host 127.0.0.1 -no-browser -dir "${dir}"`,
-    url: `http://127.0.0.1:${port}/api/state`,
+    // The event, not /api/state: a new event has no discipline to answer as (#149).
+    url: `http://127.0.0.1:${port}/api/event`,
     reuseExistingServer: !process.env.CI,
     cwd: '..',
     timeout: 120 * 1000,

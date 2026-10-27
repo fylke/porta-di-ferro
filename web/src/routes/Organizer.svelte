@@ -10,21 +10,15 @@
   import Setup from './Setup.svelte';
   import Pools from './Pools.svelte';
   import Eliminations from './Eliminations.svelte';
-  import Screens from './Screens.svelte';
-  import Disciplines from './Disciplines.svelte';
-  import MatBoard from './MatBoard.svelte';
-  import Staff from './Staff.svelte';
   import Signup from './Signup.svelte';
   import LangToggle from './LangToggle.svelte';
-  import DeleteEvent from './DeleteEvent.svelte';
-  import { hall } from '../lib/event.svelte';
   import { t, lang } from '../lib/i18n.svelte';
 
   /**
    * One discipline's admin view (issue #98): everything that changes the tournament, and
-   * nothing that does not. At /admin while the event has one discipline, and at
-   * /d/{discipline}/admin -- or /admin/{discipline} -- once it has several, when /admin
-   * itself is the event's page (docs/proposals/one-event-many-disciplines.md §6).
+   * nothing that does not. At /d/{discipline}/admin -- or /admin/{discipline} -- however
+   * many disciplines the event has; /admin itself is always the event's page (#149), where
+   * the screens, the mats, the staff and the signup are.
    *
    * It used to be the landing page. It is not any more, because the address on the poster
    * by the door reaches every phone in the hall and this page can withdraw a competitor
@@ -34,8 +28,6 @@
    * because "now open your browser" is the cost of choosing a server over a desktop
    * application and this is the mitigation (docs/tech-stack.md §2).
    */
-  let { multi = false }: { multi?: boolean } = $props();
-
   const live = new Live();
   const lan = new LanAddress();
   // Substituted at build time, so this is a constant the normal build evaluates to
@@ -83,7 +75,7 @@
   const drawn = $derived((snapshot?.pools.length ?? 0) > 0);
 </script>
 
-<main>
+<main class="admin">
   <header>
     <h1>
       Porta di Ferro
@@ -91,7 +83,7 @@
       {#if snapshot?.instance.name}<span class="discipline">{snapshot.instance.name}</span>{/if}
     </h1>
     <nav>
-      {#if multi}<a href="/admin">&larr; {t('The event')}</a>{:else}<a href="/plan">{t('Plan the event')}</a>{/if}
+      <a href="/admin">&larr; {t('The event')}</a>
       <a href={dhref('/')}>{t('Landing page')}</a>
       <a href="/info">{t('Info sheet')}</a>
       <a href="/display/mats" target="_blank" rel="noreferrer">{t('Displays')}</a>
@@ -162,32 +154,15 @@
     </section>
 
     <div class="columns">
-      <Competitors competitors={snapshot.competitors} poolsDrawn={drawn} onchange={refresh} {multi} />
+      <Competitors competitors={snapshot.competitors} poolsDrawn={drawn} onchange={refresh} multi />
       <Setup {snapshot} onchange={refresh} />
     </div>
 
-    <Signup {snapshot} onchange={refresh} scope={multi ? 'share' : 'single'} />
-
-    <!-- Screens and score keepers are the event's: here while there is one discipline,
-         on the event's page once there are several. -->
-    {#if !multi}<Screens />{/if}
-
+    <!-- The signup, the screens, the mats, the staff and deleting the event are the
+         event's, on its own admin page (#149). -->
+    <Signup {snapshot} onchange={refresh} scope="share" />
     <Eliminations {snapshot} onchange={refresh} />
-
-    {#if !multi}
-      <Disciplines onchange={refresh} />
-    {/if}
-
-    <!-- The mat board, for dragging pools between mats (#101). With several disciplines it
-         is on the event's page, where it shows all of them. -->
-    <!-- Before the draw the board shows the day as it would be (phase 4). -->
-    {#if !multi && (drawn || snapshot.competitors.length > 0)}<MatBoard />{/if}
-    {#if !multi}<div id="staff"><Staff /></div>{/if}
-
     <Pools {snapshot} onchange={refresh} />
-
-    <!-- The event's, so here only while it has one discipline (#141). -->
-    {#if !multi}<DeleteEvent name={hall.view?.name ?? ''} dir={hall.view?.dir ?? ''} />{/if}
   {/if}
 </main>
 

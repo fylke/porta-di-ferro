@@ -4,6 +4,10 @@
   import { hall } from './lib/event.svelte';
   import Organizer from './routes/Organizer.svelte';
   import EventAdmin from './routes/EventAdmin.svelte';
+  import Welcome from './routes/Welcome.svelte';
+  import DisciplineSetup from './routes/DisciplineSetup.svelte';
+  import Tour from './routes/Tour.svelte';
+  import { tour } from './lib/tour.svelte';
   import PlanEvent from './routes/PlanEvent.svelte';
   import EventLanding from './routes/EventLanding.svelte';
   import DisciplinePicker from './routes/DisciplinePicker.svelte';
@@ -58,15 +62,24 @@
 {:else if !slug && route('/plan')}
   <!-- What is set once, before the day, for the event (#142). -->
   <PlanEvent />
-{:else if eventPage && route('/admin')}
+{:else if !slug && route('/admin') && hall.empty && !(tour.active && query().has('view'))}
+  <!-- Nothing planned yet: a welcome, not an admin page full of empty panels (#149). The
+       tour still shows the admin page's two dashboards, as they will be. -->
+  <Welcome />
+{:else if !slug && route('/admin')}
+  <!-- The event's admin page, however many disciplines it has (#149); each discipline's
+       own is at /d/{discipline}/admin. -->
   <EventAdmin />
 {:else if route('/')}
   <!-- The landing page is the competitors' and the spectators' (issue #98). What used to
        be here is at /admin: the address in the hall is on a poster by the door, and
        everyone who scans it lands somewhere they cannot break anything. -->
   <Participant />
-{:else if route('/admin')}
-  <Organizer multi={hall.multi} />
+{:else if slug && route('/admin')}
+  <Organizer />
+{:else if slug && route('/setup')}
+  <!-- One discipline's setup, opened from planning the event (#149). -->
+  <DisciplineSetup />
 {:else if route('/info')}
   <Info />
 {:else if eventPage && personMatch?.id.startsWith('pr-')}
@@ -103,6 +116,11 @@
       <code>/display/mat/1</code>{t(', or the roster at')} <code>/display/roster</code>.
     </p>
   </main>
+{/if}
+
+{#if tour.active}
+  <!-- The guided walkthrough, over whichever page it has got to (#149). -->
+  <Tour />
 {/if}
 
 {#if demo}

@@ -1,10 +1,12 @@
 import { test, expect } from '@playwright/test';
+import { aDiscipline } from './discipline';
 
 test.describe('Tournament & Organizer Flow', () => {
-  test('adds competitors, sets up mats, draws pools, and accesses scorekeeper', async ({ page }) => {
-    // 1. Visit the organizer's page. It moved to /admin when the landing page became the
-    //    participants' (issue #98); this spec still opened / and has failed since.
-    await page.goto('/admin');
+  test('adds competitors, sets up mats, draws pools, and accesses scorekeeper', async ({ page, request }) => {
+    // 1. Visit the discipline's admin page. /admin is the event's (#149), and a new event
+    //    has no discipline until one is added.
+    const slug = await aDiscipline(request);
+    await page.goto(`/d/${slug}/admin`);
     await expect(page.locator('h1')).toContainText('Porta di Ferro');
 
     // 2. Add competitors

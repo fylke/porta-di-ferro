@@ -29,9 +29,17 @@ export class EventLive {
   private source: EventSource | null = null;
   private followers = 0;
 
-  /** Several disciplines, so an address with none in it is the event's page. */
+  /**
+   * Not exactly one discipline, so an address with none in it is the event's page: several,
+   * or none yet while the event is being planned (#149).
+   */
   get multi(): boolean {
-    return (this.view?.disciplines.length ?? 1) > 1;
+    return (this.view?.disciplines.length ?? 1) !== 1;
+  }
+
+  /** Nothing planned yet: no discipline, so the organizer is welcomed rather than shown an empty admin page (#149). */
+  get empty(): boolean {
+    return !!this.view && this.view.disciplines.length === 0;
   }
 
   /** The first look, for the router. Never longer than a few seconds, never an error. */

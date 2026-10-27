@@ -17,8 +17,14 @@
 
 <main>
   <div class="top"><LangToggle /></div>
-  <h1>{t('Which discipline?')}</h1>
-  <p class="dim">{t('This event runs several disciplines, each with its own mats and screens. Pick the one you are here for.')}</p>
+  {#if (hall.view?.disciplines.length ?? 0) === 0}
+    <!-- Nothing planned yet (#149): no discipline for the address to mean. -->
+    <h1>{t('Nothing here yet')}</h1>
+    <p class="dim">{t('The event is still being planned. Its disciplines show up here once they are added.')}</p>
+  {:else}
+    <h1>{t('Which discipline?')}</h1>
+    <p class="dim">{t('This event runs several disciplines, each with its own mats and screens. Pick the one you are here for.')}</p>
+  {/if}
   <ul>
     {#each hall.view?.disciplines ?? [] as d (d.slug)}
       <li>

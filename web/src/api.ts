@@ -185,6 +185,8 @@ export interface ItemView {
   pinned?: boolean;
   /** The earliest it may start, "16:30". */
   notBefore?: string;
+  /** A bronze match let run at the same time as the final (#149). */
+  withFinal?: boolean;
 }
 
 /** How long things take, in seconds, and the day's start and close as "HH:MM" (phase 4). */
@@ -215,11 +217,15 @@ export interface Warning {
   to?: string;
 }
 
-/** One stage of a discipline in the derived programme. */
+/**
+ * One row of the programme, generated from the plan (#149): a discipline's gear check,
+ * staff briefing, pools, eliminations or final, or a break for the whole hall -- which has
+ * no discipline, and its own name.
+ */
 export interface ProgrammeRow {
   discipline: string;
   name: string;
-  stage: 'pools' | 'eliminations' | 'final';
+  stage: 'gear-check' | 'briefing' | 'pools' | 'eliminations' | 'final' | 'break';
   start: string;
   end: string;
   mats: number[];
@@ -241,6 +247,25 @@ export interface ForecastView {
   /** The block of the day each discipline runs in, and whether every final is held to the end (#136). */
   sessions?: Record<string, number>;
   finalsLast?: boolean;
+  /** The hall's breaks, each discipline's gear check and briefing, and its earliest start (#149). */
+  breaks: Break[];
+  prep?: Record<string, Prep>;
+  starts?: Record<string, string>;
+  /** What a day usually has and this plan does not. Pointed out, never required. */
+  gaps: { kind: 'lunch' | 'gear-check' | 'briefing'; discipline?: string; name?: string }[];
+}
+
+/** A time the whole hall stops, "12:00" to "13:00". */
+export interface Break {
+  label?: string;
+  from: string;
+  to: string;
+}
+
+/** How long a discipline's gear check and staff briefing take, in seconds. */
+export interface Prep {
+  gearCheck?: number;
+  briefing?: number;
 }
 
 /** A suggested plan: what moves, and when the day would end with it and without it. */
@@ -305,6 +330,8 @@ export interface DisciplineSummary {
   error?: string;
   stale?: boolean;
   stage: 'setup' | 'pools' | 'waiting' | 'eliminations' | 'done';
+  /** The organizer finished its setup, or it has a draw (#149). */
+  setUp: boolean;
   competitors: number;
   pools: number;
   matchesDone: number;
@@ -414,6 +441,8 @@ export interface StaffingView {
   physicians: string[];
   /** Members whose person may be somebody else in the event too, by id (#133). */
   unsure?: string[];
+  /** The fewest people who could staff the plan: a crew on every mat at the busiest moment. */
+  needed: number;
 }
 
 export interface StaffSuggestion {
@@ -548,6 +577,8 @@ export interface Snapshot {
     elimMats?: number;
     /** How many this discipline takes, or 0 for no limit (#142). */
     capacity?: number;
+    /** The organizer finished its setup (#149). */
+    setUp?: boolean;
     seed: number;
     pools: unknown[];
     generatedAt?: string;
@@ -621,13 +652,14 @@ function disciplineApi(base: () => string) {
      * saves mats and pool sizes without touching what the eliminations were set to, and the
      * eliminations panel leaves the capacity alone.
      */
-    saveTournament: (mats: number, minPoolSize: number, maxPoolSize: number, elimMats?: number, capacity?: number) =>
+    saveTournament: (mats: number, minPoolSize: number, maxPoolSize: number, elimMats?: number, capacity?: number, setUp?: boolean) =>
       req<unknown>('PUT', `${base()}/tournament`, {
         mats,
         minPoolSize,
         maxPoolSize,
         ...(elimMats === undefined ? {} : { elimMats }),
         ...(capacity === undefined ? {} : { capacity }),
+        ...(setUp === undefined ? {} : { setUp }),
       }),
     /**
      * The welcome message, the agenda, the wifi and the signup settings, through the
@@ -763,8 +795,8 @@ export const api = {
   /** Moves a work item: to a place on a mat, or a step along its own. */
   moveItem: (id: string, to: { mat: number; index?: number } | { move: 'up' | 'down' }) =>
     req<MatsView>('PATCH', `/api/plan/items/${id.split('/').map(encodeURIComponent).join('/')}`, to),
-  /** Pins or unpins a work item, or holds it until a time ("" lets it go). */
-  flagItem: (id: string, flags: { pinned?: boolean; notBefore?: string }) =>
+  /** Pins or unpins a work item, holds it until a time ("" lets it go), or lets a bronze match run with the final. */
+  flagItem: (id: string, flags: { pinned?: boolean; notBefore?: string; withFinal?: boolean }) =>
     req<MatsView>('PATCH', `/api/plan/items/${id.split('/').map(encodeURIComponent).join('/')}`, flags),
 
   // The plan's times (phase 4).
@@ -777,6 +809,12 @@ export const api = {
   setSessions: (sessions: Record<string, number>) => req<ForecastView>('PUT', '/api/plan/sessions', sessions),
   /** Holds every final to the end of the day, one after another on mat 1. */
   setFinalsLast: (last: boolean) => req<ForecastView>('PUT', '/api/plan/finals', { last }),
+  /** The hall's breaks, the whole list (#149). */
+  setBreaks: (breaks: Break[]) => req<ForecastView>('PUT', '/api/plan/breaks', breaks),
+  /** The gear check and staff briefing of the disciplines named. */
+  setPrep: (prep: Record<string, Prep>) => req<ForecastView>('PUT', '/api/plan/prep', prep),
+  /** When the disciplines named start at the earliest; "" takes it off. */
+  setStarts: (starts: Record<string, string>) => req<ForecastView>('PUT', '/api/plan/starts', starts),
   report: () => req<ReportView>('GET', '/api/plan/report'),
   setAnomaly: (key: string, anomaly: boolean) => req<ReportView>('PUT', '/api/plan/anomalies', { key, anomaly }),
   /** A suggested plan. Writes nothing. */

@@ -1,7 +1,11 @@
 import { test, expect } from '@playwright/test';
+import { aDiscipline } from './discipline';
 
 test.describe('Display & Spectator Views', () => {
-  test('renders display views cleanly', async ({ page }) => {
+  test('renders display views cleanly', async ({ page, request }) => {
+    // The roster and the pool sheets are a discipline's: with exactly one, the unprefixed
+    // addresses are its own (#149).
+    await aDiscipline(request);
     // 1. Visit /display/mats
     await page.goto('/display/mats');
     await expect(page).toHaveURL('/display/mats');
