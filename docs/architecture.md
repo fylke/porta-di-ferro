@@ -333,7 +333,7 @@ sequenceDiagram
 
 ## 3b. Connected Clients, Handover and Server-Assigned Displays
 
-Every score keeper client and every `/display` screen announces itself with a stable id and heartbeats every five seconds (`POST /api/clients/{id}`); the registry lives in memory and is pushed to the organizer over SSE as `presence`. A score keeper claims its match before writing (`POST /api/matches/{id}/claim`) and stamps every push with the granted epoch; the claims live in `writers.json` so they survive a restart. The mat's own idea of which match is up follows the live score keeper on it, so displays show a finished match's result for exactly as long as the score keeper holds it.
+Every score keeper client and every `/display` screen announces itself with a stable id and heartbeats every five seconds (`POST /api/clients/{id}`); the registry lives in memory and is pushed to the organizer over SSE as `presence`. A score keeper claims its match before writing (`POST /api/matches/{id}/claim`) and stamps every push with the granted epoch; the claims live in `writers.json` so they survive a restart. A match held by another device is never handed on without the new device asking: the claim is refused with who holds it and whether it is alive or has gone quiet, and the score keeper takes it over by saying so (#150). The holder asks `GET /api/matches/{id}/claim` every five seconds while it has nothing to send, so a device that has been taken over locks its scoring before its next exchange rather than having it set aside. A push with no epoch is refused while a device holds the match. The mat's own idea of which match is up follows the live score keeper on it, so displays show a finished match's result for exactly as long as the score keeper holds it.
 
 ```mermaid
 sequenceDiagram
@@ -351,15 +351,19 @@ sequenceDiagram
 
     Note over A: A dies, or B wants the mat while A is alive
     B->>S: POST /api/matches/M/claim {client B}
-    alt A alive
-        S-->>B: 409 {holder: A}
+    alt A holds M, alive or silent for 15 s
+        S-->>B: 409 {holder: A, alive}
+        Note over B: "Mat 1 is (was) being scored by Tablet A. Take over?"
         B->>S: POST claim {client B, force: true}
-    else A silent for 15 s, or A released
+    else A released
         Note over S: no contest
     end
     S-->>B: {epoch 2, tookOverFrom A}
 
-    A->>S: POST events (X-Porta-Epoch: 1)
+    A->>S: GET /api/matches/M/claim (every 5 s while idle)
+    S-->>A: {client B, epoch 2}
+    Note over A: scoring locked: "Tablet B has taken over this match"
+    A->>S: POST events (X-Porta-Epoch: 1), had A been mid-push
     S->>S: quarantine to matches/M.quarantine.ndjson
     S-->>A: 409 {quarantined: n}
     S-)O: SSE presence (set aside: n events from A on M)

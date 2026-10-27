@@ -51,8 +51,9 @@ installer below. [How the demo works](docs/demo.md).
    the next match along the bottom, the next few down the right, or nothing. Any browser on the
    venue wifi can open them — a spectator's phone included.
 8. To hand a mat to another tablet, pick *Hand over this mat* in the `…` menu; the new tablet
-   picks the mat and carries on. If a tablet dies mid-match, the new one takes over and
-   anything the old one had not sent is set aside for you on the organizer page.
+   picks the mat and carries on. If a tablet dies mid-match, the new one is told which tablet
+   had the mat and asked whether to take over; anything the old one had not sent is set aside
+   for you on the organizer page, and the old one stops scoring as soon as it is taken over.
 
 Everything is stored as plain JSON in a folder you own, so you can read it, back it up, and
 in a pinch fix it in a text editor.
