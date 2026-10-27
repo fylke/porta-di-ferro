@@ -19,15 +19,15 @@ import (
 // registry is in memory only -- who is alive is a fact about now -- and everything that
 // has to outlive a restart lives in the store: writer claims, and what each screen shows.
 //
-// Two things hang off it. Score keeper handover asks it whether the device that holds a
-// match is still there before letting another take over. Server-assigned displays are a
+// Two things hang off it. Score keeper handover asks it who holds a match, and whether
+// that device is still there, so the one asking to take over knows what it is taking. Server-assigned displays are a
 // client whose role is "display" and whose target the organizer sets; and the mat's own
 // idea of which match is up follows the score keeper registered on it, so the displays
 // show a finished match's result for exactly as long as the score keeper holds it.
 
 const (
-	// deadAfter is how long without a heartbeat before a client is shown as gone and a
-	// match it holds can be taken over without asking. Heartbeats are every five seconds.
+	// deadAfter is how long without a heartbeat before a client is shown as gone, and a
+	// device asking for a match it holds is told so. Heartbeats are every five seconds.
 	deadAfter = 15 * time.Second
 	// forgetAfter is how long a dead client stays in the list, so an organizer can see a
 	// screen that has just dropped rather than wonder where it went.
@@ -112,12 +112,6 @@ func (p *presence) get(id string) *Client {
 		return &copy
 	}
 	return nil
-}
-
-// alive reports whether a client has been heard from recently enough to hold a match.
-func (p *presence) alive(id string) bool {
-	c := p.get(id)
-	return c != nil && time.Since(c.LastSeen) < deadAfter
 }
 
 // scorekeeperOn is the live score keeper registered on a mat, if there is one. Two on
