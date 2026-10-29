@@ -241,7 +241,10 @@ Registration without an internet-facing server (issue #91, [docs/proposals/offli
 flowchart LR
     A["/admin · Signup files"] -->|"one .html with the event baked in"| P[Participant, offline]
     P -->|"one .json per person"| F[(A folder<br/>email or a stick)]
-    F -->|choose a folder| PR[POST /api/signup/preview<br/>writes nothing]
+    A -->|fillable PDF| PP[Participant, offline PDF viewer]
+    PP -->|saved PDF form| F
+    F -->|choose files| CV[Organizer's browser<br/>PDF fields to signup JSON]
+    CV -->|JSON only| PR[POST /api/signup/preview<br/>writes nothing]
     PR --> D{Organizer looks}
     D -->|confirm| IM[POST /api/signup/import]
     IM --> C[(competitors.json)]
@@ -249,6 +252,16 @@ flowchart LR
 ```
 
 `internal/signup` decides everything and touches nothing: formats, validation, duplicate detection and the preview are pure functions over data. The confirm re-runs the same check rather than trusting the preview posted back to it, so the competitor list moving between the two calls cannot break the duplicate rule.
+
+The installed server also generates a fillable PDF at `signup/form.pdf` using
+`signup.BuildPDF`. Participants fill its standard AcroForm fields and return the saved
+PDF without needing a server. On selection in the organizer's web app,
+`web/src/lib/signup-pdf.ts` reads the named fields locally with a lazy-loaded `pdf-lib`
+and produces the same versioned signup JSON as the HTML form. The import API accepts
+JSON only, never PDF bytes or base64 uploads. A PDF response's submission identifier
+is stable for its event identifier and normalized email. Scans, handwriting, and
+flattened forms are unsupported. The browser-only demo cannot generate blank PDFs,
+but it can convert and import completed ones through the same browser converter.
 
 Importing the same folder twice adds nobody twice. Name and club are not an identity — two Anna Nilssons from the same club is a real thing — so the response carries a submission identifier made by the participant app, and the imported competitor remembers it in `Competitor.Signup`.
 

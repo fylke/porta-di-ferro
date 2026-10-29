@@ -222,6 +222,26 @@ attachment. `GET /api/signup/definition.json` is still there for anyone who want
 files separately, and a bare copy of the app asks for a definition. "Open both of these,
 the second one from inside the first" is an instruction people get wrong.
 
+**iPhone and iPad file previews are not browsers.** Opening the downloaded HTML in a
+Files or attachment preview may block JavaScript and cannot run the form. The file
+includes an explanation rather than leaving its content area empty. Use the fillable
+PDF alternative on these devices; it preserves signup without hosting or a running
+server. Opening the HTML over HTTP in Safari is another option when a server is
+available, but is not required for offline signup.
+
+**A fillable PDF is the alternative to the HTML app.** The organizer downloads it from
+`/api/event/signup/form.pdf` (or a discipline's `signup/form.pdf` route). Participants
+fill its text fields and checkboxes, save it without printing or flattening, and
+return it. When the organizer selects the PDF, the web app reads the standard AcroForm
+fields locally using `pdf-lib` and converts them to `porta.signup.response` JSON
+before preview and import continue. Only JSON reaches the import API; there is no
+server-side PDF import. Files over 2 MB, scans, and PDFs without the signup format and
+event fields are rejected. Copies share a submission identifier derived from event
+and normalized email, preserving repeat-import detection. PDF JavaScript is not run.
+The browser-only demo cannot generate blank PDFs, but can convert and import filled
+ones. Saving filled fields still needs verification in the actual iPhone PDF viewer;
+programmatic round trips do not replace that device check.
+
 **Each discipline imports its own.** One import on the event's page gives every discipline
 the responses naming it, through the same check each runs on its own (issue #102);
 responses for a discipline the event does not have are reported as such.

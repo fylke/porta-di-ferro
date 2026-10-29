@@ -114,6 +114,27 @@ func (s *Server) signupApp(w http.ResponseWriter, r *http.Request) {
 	w.Write(baked)
 }
 
+func (s *Server) signupPDF(w http.ResponseWriter, r *http.Request) {
+	def, err := s.definition(true)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeSignupPDF(w, def)
+}
+
+func writeSignupPDF(w http.ResponseWriter, def signup.Definition) {
+	body, err := signup.BuildPDF(def)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename=%q`, "signup-"+eventSlug(def)+".pdf"))
+	w.Write(body)
+}
+
 // definitionMarker is the line in the app that carries the event. Kept as an exact
 // string so a change to the app that loses it fails a test rather than silently shipping
 // a file that asks every participant for a definition they were never sent.
@@ -161,10 +182,7 @@ func eventSlug(def signup.Definition) string {
 // --- the import -----------------------------------------------------------------------
 
 type importRequest struct {
-	Files []struct {
-		Source string `json:"source"`
-		Body   string `json:"body"`
-	} `json:"files"`
+	Files []signup.UploadFile `json:"files"`
 }
 
 func readFiles(r *http.Request) ([]signup.File, error) {
@@ -172,11 +190,7 @@ func readFiles(r *http.Request) ([]signup.File, error) {
 	if err := json.NewDecoder(http.MaxBytesReader(nil, r.Body, maxImport)).Decode(&in); err != nil {
 		return nil, err
 	}
-	files := make([]signup.File, 0, len(in.Files))
-	for _, f := range in.Files {
-		files = append(files, signup.File{Source: f.Source, Body: []byte(f.Body)})
-	}
-	return files, nil
+	return signup.DecodeFiles(in.Files)
 }
 
 func (s *Server) readImport(r *http.Request) (signup.Preview, store.Tournament, error) {

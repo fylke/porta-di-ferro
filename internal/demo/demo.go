@@ -314,6 +314,8 @@ func (d *Demo) Request(method, path string, body []byte) Response {
 		return ok(d.definition(true))
 	case method == "GET" && path == "/api/signup/app.html":
 		return d.signupApp()
+	case method == "GET" && path == "/api/signup/form.pdf":
+		return signupPDF(d.definition(true))
 	case method == "POST" && path == "/api/signup/preview":
 		return d.signupImport(body, false)
 	case method == "POST" && path == "/api/signup/import":
@@ -443,6 +445,10 @@ func (d *Demo) signupApp() Response {
 		return fail(500, err)
 	}
 	return Response{Status: 200, ContentType: "text/html; charset=utf-8", Body: string(baked)}
+}
+
+func signupPDF(def signup.Definition) Response {
+	return fail(400, fmt.Errorf("PDF signup forms are not available in the browser demo; use the installed server"))
 }
 
 // signupImport previews an import, and performs it when confirm is set. Two calls on the

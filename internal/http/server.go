@@ -105,6 +105,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/event", s.putEvent)
 	mux.HandleFunc("GET /api/signup/definition.json", s.signupDefinition)
 	mux.HandleFunc("GET /api/signup/app.html", s.signupApp)
+	mux.HandleFunc("GET /api/signup/form.pdf", s.signupPDF)
 	mux.HandleFunc("GET /api/signup/ready", s.signupReady)
 	mux.HandleFunc("POST /api/signup/preview", s.previewImport)
 	mux.HandleFunc("POST /api/signup/import", s.confirmImport)

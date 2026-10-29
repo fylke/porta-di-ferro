@@ -179,6 +179,15 @@ func (c *Coordinator) signupApp(w http.ResponseWriter, r *http.Request) {
 	w.Write(baked)
 }
 
+func (c *Coordinator) signupPDF(w http.ResponseWriter, r *http.Request) {
+	def, err := c.SignupDefinition(true)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeSignupPDF(w, def)
+}
+
 // PreviewSignups is what importing these files would do, across the event.
 func (c *Coordinator) PreviewSignups(files []signup.File) (EventSignupPreview, error) {
 	def, err := c.SignupDefinition(false)
