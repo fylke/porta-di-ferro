@@ -58,6 +58,7 @@ async function save(page: Page) {
 test.describe('The offline signup app', () => {
   test('offers to staff what you are not fencing, and writes it into the file', async ({ page }, info) => {
     const errors = await openFromDisk(page, info.outputPath('signup.html'));
+    await expect(page.getByText('This signup form needs JavaScript to run.')).toHaveCount(0);
 
     // Down for everything by default: both disciplines, and every role but physician.
     await expect(page.locator('#staff-longsword')).toBeChecked();
@@ -114,5 +115,19 @@ test.describe('The offline signup app', () => {
     const response = await save(page);
     expect(response.entries).toEqual([]);
     expect(response.staff.tournaments).toEqual(['sabre']);
+  });
+});
+
+test.describe('A signup file preview without JavaScript', () => {
+  test.use({ javaScriptEnabled: false, viewport: { width: 390, height: 844 } });
+
+  test('explains how to open the form instead of showing an empty page', async ({ page }) => {
+    const app = await readFile(new URL('../signup/signup.html', import.meta.url), 'utf8');
+    await page.route('**/signup-preview.html', (route) => route.fulfill({ contentType: 'text/html', body: app }));
+    await page.goto('/signup-preview.html');
+    await expect(page.getByRole('heading', { name: 'Sign up' })).toBeVisible();
+    await expect(page.getByText('This signup form needs JavaScript to run.')).toBeVisible();
+    await expect(page.getByText(/Ask the organizer for a web link/)).toBeVisible();
+    expect(await page.locator('body').evaluate((body) => body.scrollWidth)).toBeLessThanOrEqual(390);
   });
 });

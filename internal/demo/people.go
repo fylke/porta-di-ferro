@@ -155,19 +155,12 @@ func (e *Event) signupImport(body []byte, confirm bool) Response {
 
 func signupFiles(body []byte) ([]signup.File, error) {
 	var in struct {
-		Files []struct {
-			Source string `json:"source"`
-			Body   string `json:"body"`
-		} `json:"files"`
+		Files []signup.UploadFile `json:"files"`
 	}
 	if err := json.Unmarshal(body, &in); err != nil {
 		return nil, err
 	}
-	files := make([]signup.File, 0, len(in.Files))
-	for _, f := range in.Files {
-		files = append(files, signup.File{Source: f.Source, Body: []byte(f.Body)})
-	}
-	return files, nil
+	return signup.DecodeFiles(in.Files)
 }
 
 // peopleRequest answers the event's people and signup paths, or reports it has none.
@@ -186,6 +179,8 @@ func (e *Event) peopleRequest(method, bare string, parts []string, body []byte) 
 		return ok(e.definition(true)), true
 	case method == "GET" && bare == "/api/event/signup/app.html":
 		return e.signupApp(), true
+	case method == "GET" && bare == "/api/event/signup/form.pdf":
+		return signupPDF(e.definition(true)), true
 	case method == "POST" && bare == "/api/event/signup/preview":
 		return e.signupImport(body, false), true
 	case method == "POST" && bare == "/api/event/signup/import":

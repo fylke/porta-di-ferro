@@ -377,6 +377,11 @@ export interface Wifi {
  * info sheet put around the fencing. None of it reaches a result.
  */
 /** What the offline signup files carry about the event (issue #91). */
+export interface SignupUpload {
+  source: string;
+  body: string;
+}
+
 export interface SignupInfo {
   definitionId?: string;
   name?: string;
@@ -672,9 +677,9 @@ function disciplineApi(base: () => string) {
      * What an import would do. Writes nothing: the organizer looks first, and confirming
      * runs the same check again on the server rather than trusting what came back here.
      */
-    previewSignups: (files: { source: string; body: string }[]) =>
+    previewSignups: (files: SignupUpload[]) =>
       req<SignupPreview>('POST', `${base()}/signup/preview`, { files }),
-    importSignups: (files: { source: string; body: string }[]) =>
+    importSignups: (files: SignupUpload[]) =>
       req<{ added: number; addedStaff: number; preview: SignupPreview }>('POST', `${base()}/signup/import`, {
         files,
       }),
@@ -768,9 +773,9 @@ export const api = {
 
   /** The signup for the whole event: one file out, one folder back, every discipline its share. */
   eventSignupReady: () => req<EventSignupReady>('GET', '/api/event/signup/ready'),
-  previewEventSignups: (files: { source: string; body: string }[]) =>
+  previewEventSignups: (files: SignupUpload[]) =>
     req<EventSignupPreview>('POST', '/api/event/signup/preview', { files }),
-  importEventSignups: (files: { source: string; body: string }[]) =>
+  importEventSignups: (files: SignupUpload[]) =>
     req<{ added: number; addedStaff: number; preview: EventSignupPreview; error?: string }>(
       'POST',
       '/api/event/signup/import',

@@ -17,6 +17,24 @@ import (
 // past this is not one, and an import screen is not a place to find that out by waiting.
 const maxResponse = 64 << 10
 
+type UploadFile struct {
+	Source   string `json:"source"`
+	Body     string `json:"body"`
+	Encoding string `json:"encoding,omitempty"`
+}
+
+func DecodeFiles(uploads []UploadFile) ([]File, error) {
+	files := make([]File, 0, len(uploads))
+	for _, upload := range uploads {
+		body := []byte(upload.Body)
+		if upload.Encoding != "" {
+			return nil, fmt.Errorf("%s: unsupported file encoding", upload.Source)
+		}
+		files = append(files, File{Source: upload.Source, Body: body})
+	}
+	return files, nil
+}
+
 // ParseResponse reads one participant's file and checks it is usable.
 func ParseResponse(body []byte) (Response, error) {
 	if len(body) == 0 {

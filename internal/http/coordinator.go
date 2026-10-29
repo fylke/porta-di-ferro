@@ -384,6 +384,7 @@ func (c *Coordinator) Handler() http.Handler {
 	mux.HandleFunc("GET /api/event/signup/ready", c.signupReady)
 	mux.HandleFunc("GET /api/event/signup/definition.json", c.signupDefinition)
 	mux.HandleFunc("GET /api/event/signup/app.html", c.signupApp)
+	mux.HandleFunc("GET /api/event/signup/form.pdf", c.signupPDF)
 	mux.HandleFunc("POST /api/event/signup/preview", c.previewSignups)
 	mux.HandleFunc("POST /api/event/signup/import", c.importSignups)
 	mux.HandleFunc("GET /api/info.pdf", c.infoPDF)

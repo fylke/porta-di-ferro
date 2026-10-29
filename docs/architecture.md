@@ -241,7 +241,12 @@ Registration without an internet-facing server (issue #91, [docs/proposals/offli
 flowchart LR
     A["/admin · Signup files"] -->|"one .html with the event baked in"| P[Participant, offline]
     P -->|"one .json per person"| F[(A folder<br/>email or a stick)]
-    F -->|choose a folder| PR[POST /api/signup/preview<br/>writes nothing]
+    A -->|fillable PDF| PP[Participant, offline PDF viewer]
+    PP -->|saved PDF form| F
+    F -->|choose files| CV[Organizer's browser<br/>PDF fields to signup JSON]
+    CV -->|usable signup JSON| PR[POST /api/signup/preview<br/>writes nothing]
+    CV -->|unreadable PDF| M[Organizer reads and enters response]
+    M -->|signup JSON| PR
     PR --> D{Organizer looks}
     D -->|confirm| IM[POST /api/signup/import]
     IM --> C[(competitors.json)]
@@ -249,6 +254,18 @@ flowchart LR
 ```
 
 `internal/signup` decides everything and touches nothing: formats, validation, duplicate detection and the preview are pure functions over data. The confirm re-runs the same check rather than trusting the preview posted back to it, so the competitor list moving between the two calls cannot break the duplicate rule.
+
+The installed server also generates a fillable PDF at `signup/form.pdf` using
+`signup.BuildPDF`. Participants fill its standard AcroForm fields and return the saved
+PDF without needing a server. On selection in the organizer's web app,
+`web/src/lib/signup-pdf.ts` reads the named fields locally with a lazy-loaded `pdf-lib`
+and produces the same versioned signup JSON as the HTML form. The import API accepts
+JSON only, never PDF bytes or base64 uploads. A PDF response's submission identifier
+is a SHA-256 hash of its event identifier and normalized email, so it is stable without
+exposing the address and works on the plain HTTP LAN origin. Scans, handwriting, and
+flattened forms are unsupported; they are reported by filename while readable files
+still preview, and organizers can enter unreadable responses manually. The browser-only
+demo hides the unsupported blank-PDF download action.
 
 Importing the same folder twice adds nobody twice. Name and club are not an identity — two Anna Nilssons from the same club is a real thing — so the response carries a submission identifier made by the participant app, and the imported competitor remembers it in `Competitor.Signup`.
 
