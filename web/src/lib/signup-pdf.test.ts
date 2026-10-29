@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PDFDocument } from 'pdf-lib';
 import { pdfSignupJSON } from './signup-pdf';
+import { signupSubmissionId } from './signup-id';
 
 async function savedPDF(email = ' ASA@Example.org ') {
     const document = await PDFDocument.create();
@@ -40,6 +41,14 @@ describe('PDF to signup JSON', () => {
         const other = JSON.parse(await pdfSignupJSON(await savedPDF('other@example.org')));
         expect(copy.submissionId).toBe(first.submissionId);
         expect(other.submissionId).not.toBe(first.submissionId);
+        expect(first.submissionId).toBe('pdf-e6f9f38106344daaaa6c530f1e118084b26583036581c12b7683f08d012d0422');
+        expect(first.submissionId).not.toContain('asa@example.org');
+    });
+
+    it('matches the server identity hash for manual responses', () => {
+        expect(signupSubmissionId(' open-2026 ', ' ASA@Example.org ')).toBe(
+            'pdf-e6f9f38106344daaaa6c530f1e118084b26583036581c12b7683f08d012d0422',
+        );
     });
 
     it('rejects PDFs without signup fields, including flattened forms', async () => {

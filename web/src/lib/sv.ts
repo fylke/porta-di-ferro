@@ -673,6 +673,16 @@ export const sv: Record<string, string> = {
   'Not a supported Porta signup PDF. Ask the organizer for a new form.':
     'Det här är inte ett PDF-anmälningsformulär som Porta stöder. Be arrangören om ett nytt formulär.',
   'Could not read {file}.': 'Kunde inte läsa {file}.',
+  'Readable responses will still be previewed. Open each unreadable PDF and enter its response below.':
+    'Svar som går att läsa förhandsvisas ändå. Öppna varje oläsbar PDF och fyll i svaret nedan.',
+  'Add a response manually': 'Lägg till ett svar manuellt',
+  'Offering to work': 'Erbjuder sig att arbeta',
+  Email: 'E-post',
+  'Add response': 'Lägg till svar',
+  'Manual response': 'Manuellt svar',
+  'Set up signup before adding responses.': 'Ställ in anmälan innan du lägger till svar.',
+  'Choose an entry or staff duty, and at least one role for staff.':
+    'Välj en anmälan eller ett funktionärsuppdrag, och minst en roll för funktionärer.',
   'Preview it': 'Förhandsgranska',
   'Just the definition': 'Bara definitionen',
   'Bring responses in': 'Hämta in svar',

@@ -15,8 +15,11 @@
   } from "../api";
   import { t } from "../lib/i18n.svelte";
   import { apiBase } from "../lib/paths";
+  import { signupSubmissionId } from "../lib/signup-id";
   import { discipline } from "../router.svelte";
   import SaveButton from "./SaveButton.svelte";
+
+  const demo = import.meta.env.VITE_DEMO === "true";
 
   /**
    * Offline signup, the organizer's half (issue #91).
@@ -79,6 +82,23 @@
   // look, change their mind, and pick a different folder without anything having
   // happened.
   let files = $state<SignupUpload[]>([]);
+  let pdfErrors = $state<{ source: string; message: string }[]>([]);
+  let manualSource = $state("");
+  let manualName = $state("");
+  let manualClub = $state("");
+  let manualEmail = $state("");
+  let manualEntries = $state<string[]>([]);
+  let manualStaff = $state<string[]>([]);
+  let manualRoles = $state<string[]>([]);
+  const unresolvedPdfErrors = $derived(
+    pdfErrors.filter((issue) => !files.some((file) => file.source === issue.source)),
+  );
+  const manualTournaments = $derived(
+    (ready?.tournaments ?? []).filter((tournament) => !manualEntries.includes(tournament.id)),
+  );
+  const manualStaffTournaments = $derived(
+    manualStaff.filter((id) => !manualEntries.includes(id)),
+  );
   let preview = $state<SignupPreview | EventSignupPreview | null>(null);
   const rows: EventSignupRow[] = $derived(preview?.rows ?? []);
   // Over capacity, and imported after the draw: per discipline at the event's import.
@@ -185,35 +205,88 @@
     preview = null;
     imported = null;
     files = [];
+    pdfErrors = [];
+    manualName = "";
+    manualClub = "";
+    manualEmail = "";
+    manualEntries = [];
+    manualStaff = [];
+    manualRoles = [];
     const picked: SignupUpload[] = [];
-    try {
-      for (const file of Array.from(list)) {
-        const pdf = file.name.toLowerCase().endsWith(".pdf");
-        if (!pdf && !file.name.toLowerCase().endsWith(".json")) continue;
-        const source = file.webkitRelativePath || file.name;
-        if (pdf) {
-          try {
-            const { pdfSignupJSON } = await import("../lib/signup-pdf");
-            const body = await pdfSignupJSON(await file.arrayBuffer());
-            picked.push({ source, body });
-          } catch (e) {
-            throw new Error(
-              `${t("Could not read {file}.", { file: file.name })} ${e instanceof Error ? e.message : String(e)}`,
-            );
-          }
-        } else {
-          picked.push({ source, body: await file.text() });
+    const failed: { source: string; message: string }[] = [];
+    for (const file of Array.from(list)) {
+      const pdf = file.name.toLowerCase().endsWith(".pdf");
+      if (!pdf && !file.name.toLowerCase().endsWith(".json")) continue;
+      const source = file.webkitRelativePath || file.name;
+      if (pdf) {
+        try {
+          const { pdfSignupJSON } = await import("../lib/signup-pdf");
+          const body = await pdfSignupJSON(await file.arrayBuffer());
+          picked.push({ source, body });
+        } catch (e) {
+          failed.push({
+            source,
+            message: e instanceof Error ? e.message : String(e),
+          });
         }
+      } else {
+        picked.push({ source, body: await file.text() });
       }
-    } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
-      return;
     }
     files = picked;
-    if (picked.length === 0) {
+    pdfErrors = failed;
+    manualSource = failed[0]?.source ?? "";
+    if (picked.length === 0 && failed.length === 0) {
       error = t("No .json or .pdf files in there.");
       return;
     }
+    if (picked.length > 0) await look();
+  }
+
+  async function addManual(event: SubmitEvent) {
+    event.preventDefault();
+    const source = manualSource.trim();
+    const entries = [...manualEntries];
+    const staffTournaments = [...manualStaffTournaments];
+    if (!definitionId.trim()) {
+      error = t("Set up signup before adding responses.");
+      return;
+    }
+    if (
+      (entries.length === 0 && staffTournaments.length === 0) ||
+      (staffTournaments.length > 0 && manualRoles.length === 0)
+    ) {
+      error = t("Choose an entry or staff duty, and at least one role for staff.");
+      return;
+    }
+
+    error = "";
+    const email = manualEmail.trim().toLowerCase();
+    const response = {
+      format: "porta.signup.response",
+      version: 2,
+      definitionId: definitionId.trim(),
+      submissionId: signupSubmissionId(definitionId, email),
+      participant: {
+        name: manualName.trim(),
+        club: manualClub.trim(),
+        email,
+      },
+      entries,
+      ...(staffTournaments.length > 0 && manualRoles.length > 0
+        ? { staff: { tournaments: staffTournaments, roles: [...manualRoles] } }
+        : {}),
+    };
+    const added = [...files, { source: source || t("Manual response"), body: JSON.stringify(response) }];
+    files = added;
+    manualName = "";
+    manualClub = "";
+    manualEmail = "";
+    manualEntries = [];
+    manualStaff = [];
+    manualRoles = [];
+    manualSource =
+      pdfErrors.find((issue) => !added.some((file) => file.source === issue.source))?.source ?? "";
     await look();
   }
 
@@ -262,6 +335,7 @@
 
   function clear() {
     files = [];
+    pdfErrors = [];
     preview = null;
     imported = null;
     error = "";
@@ -495,8 +569,9 @@
           <a class="button" href="{base}/signup/app.html?download=1"
             >{t("The signup app")}</a
           >
-          <a class="button" href="{base}/signup/form.pdf">{t("Fillable PDF")}</a
-          >
+          {#if !demo}
+            <a class="button" href="{base}/signup/form.pdf">{t("Fillable PDF")}</a>
+          {/if}
           <a
             class="quiet"
             href="{base}/signup/app.html"
@@ -533,10 +608,90 @@
             onchange={(e) => void choose(e.currentTarget.files)}
           />
         </label>
-        {#if files.length > 0}
+        {#if files.length > 0 || pdfErrors.length > 0}
           <button class="quiet" onclick={clear}>{t("Clear")}</button>
         {/if}
       </p>
+
+      {#if unresolvedPdfErrors.length > 0}
+        <div class="manual-fallback">
+          {#each unresolvedPdfErrors as issue (issue.source)}
+            <p class="warn">
+              {t("Could not read {file}.", { file: issue.source })} {issue.message}
+            </p>
+          {/each}
+          <p class="dim small">
+            {t(
+              "Readable responses will still be previewed. Open each unreadable PDF and enter its response below.",
+            )}
+          </p>
+          <form class="manual-form" onsubmit={addManual}>
+            <h3>{t("Add a response manually")}</h3>
+            <div class="fields">
+              <label>
+                {t("File")}
+                <input type="text" bind:value={manualSource} required />
+              </label>
+              <label>
+                {t("Name")}
+                <input type="text" bind:value={manualName} autocomplete="name" required />
+              </label>
+              <label>
+                {t("Club")}
+                <input type="text" bind:value={manualClub} />
+              </label>
+              <label>
+                {t("Email")}
+                <input type="email" bind:value={manualEmail} autocomplete="email" required />
+              </label>
+            </div>
+            <fieldset>
+              <legend>{t("Entering")}</legend>
+              {#each ready?.tournaments ?? [] as tournament (tournament.id)}
+                <label class="choice">
+                  <input type="checkbox" value={tournament.id} bind:group={manualEntries} />
+                  {tournament.label}
+                </label>
+              {/each}
+            </fieldset>
+            <fieldset>
+              <legend>{t("Offering to work")}</legend>
+              {#each manualTournaments as tournament (tournament.id)}
+                <label class="choice">
+                  <input type="checkbox" value={tournament.id} bind:group={manualStaff} />
+                  {tournament.label}
+                </label>
+              {/each}
+            </fieldset>
+            {#if manualStaffTournaments.length > 0}
+              <fieldset>
+                <legend>{t("Roles")}</legend>
+                {#each Object.entries(roleLabel) as [id, label] (id)}
+                  <label class="choice">
+                    <input type="checkbox" value={id} bind:group={manualRoles} />
+                    {label}
+                  </label>
+                {/each}
+              </fieldset>
+            {/if}
+            <div class="actions">
+              <button
+                class="save"
+                type="submit"
+                disabled={
+                  !manualName.trim() ||
+                  !manualEmail.trim() ||
+                  (manualEntries.length === 0 &&
+                    manualStaffTournaments.length === 0) ||
+                  (manualStaffTournaments.length > 0 && manualRoles.length === 0)
+                }
+              >
+                {t("Add response")}
+              </button>
+            </div>
+          </form>
+        </div>
+      {/if}
 
       {#if busy}
         <p class="dim">{t("Reading…")}</p>
@@ -711,6 +866,31 @@
     padding: 0.4rem 0.5rem;
     min-width: 0;
   }
+  .manual-form {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 0.8rem;
+  }
+  .manual-form fieldset {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 0.8rem;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    margin: 0 0 0.7rem;
+    padding: 0.5rem 0.7rem;
+  }
+  .manual-form legend {
+    padding: 0 0.25rem;
+    color: var(--ink-dim);
+    font-size: 0.85rem;
+  }
+  .manual-form .choice {
+    display: inline-flex;
+    gap: 0.35rem;
+    align-items: center;
+    font-size: 0.9rem;
+  }
 
   .offered ul {
     list-style: none;
@@ -729,6 +909,7 @@
   .offered,
   .send,
   .import,
+  .manual-fallback,
   .staff-list {
     margin-top: 1.2rem;
     padding-top: 1rem;

@@ -1,4 +1,5 @@
 import { t } from './i18n.svelte';
+import { signupSubmissionId } from './signup-id';
 
 export async function pdfSignupJSON(data: ArrayBuffer): Promise<string> {
     if (data.byteLength > 2 * 1024 * 1024) {
@@ -36,7 +37,7 @@ export async function pdfSignupJSON(data: ArrayBuffer): Promise<string> {
         format: 'porta.signup.response',
         version: 2,
         definitionId,
-        submissionId: `pdf-${JSON.stringify([definitionId, email])}`,
+        submissionId: signupSubmissionId(definitionId, email),
         participant: { name: values.get('name') ?? '', club: values.get('club') ?? '', email },
         entries,
         staff: { tournaments, roles },

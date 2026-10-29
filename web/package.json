@@ -25,6 +25,7 @@
     "vitest": "^3.0.5"
   },
   "dependencies": {
+    "@noble/hashes": "^1.8.0",
     "pdf-lib": "^1.17.1"
   }
 }

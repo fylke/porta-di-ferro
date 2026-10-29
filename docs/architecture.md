@@ -244,7 +244,9 @@ flowchart LR
     A -->|fillable PDF| PP[Participant, offline PDF viewer]
     PP -->|saved PDF form| F
     F -->|choose files| CV[Organizer's browser<br/>PDF fields to signup JSON]
-    CV -->|JSON only| PR[POST /api/signup/preview<br/>writes nothing]
+    CV -->|usable signup JSON| PR[POST /api/signup/preview<br/>writes nothing]
+    CV -->|unreadable PDF| M[Organizer reads and enters response]
+    M -->|signup JSON| PR
     PR --> D{Organizer looks}
     D -->|confirm| IM[POST /api/signup/import]
     IM --> C[(competitors.json)]
@@ -259,9 +261,11 @@ PDF without needing a server. On selection in the organizer's web app,
 `web/src/lib/signup-pdf.ts` reads the named fields locally with a lazy-loaded `pdf-lib`
 and produces the same versioned signup JSON as the HTML form. The import API accepts
 JSON only, never PDF bytes or base64 uploads. A PDF response's submission identifier
-is stable for its event identifier and normalized email. Scans, handwriting, and
-flattened forms are unsupported. The browser-only demo cannot generate blank PDFs,
-but it can convert and import completed ones through the same browser converter.
+is a SHA-256 hash of its event identifier and normalized email, so it is stable without
+exposing the address and works on the plain HTTP LAN origin. Scans, handwriting, and
+flattened forms are unsupported; they are reported by filename while readable files
+still preview, and organizers can enter unreadable responses manually. The browser-only
+demo hides the unsupported blank-PDF download action.
 
 Importing the same folder twice adds nobody twice. Name and club are not an identity — two Anna Nilssons from the same club is a real thing — so the response carries a submission identifier made by the participant app, and the imported competitor remembers it in `Competitor.Signup`.
 
