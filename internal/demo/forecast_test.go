@@ -10,6 +10,46 @@ import (
 	httpapi "github.com/fylke/porta-di-ferro/internal/http"
 )
 
+func TestDemoUsesTypicalPoolAndEliminationTimings(t *testing.T) {
+	e := demo.NewEvent()
+	for _, slug := range []string{"open-steel-longsword", "open-sabre", "sword-and-buckler"} {
+		if response := e.Request("DELETE", "/api/disciplines/"+slug, nil); response.Status != 200 {
+			t.Fatalf("removing fixture discipline: %d %s", response.Status, response.Body)
+		}
+	}
+	for _, request := range []struct{ method, path, body string }{
+		{"POST", "/api/disciplines", `{"name":"Timing"}`},
+		{"PUT", "/api/d/timing/tournament", `{"mats":2,"minPoolSize":4,"maxPoolSize":6}`},
+		{"PUT", "/api/plan/expected", `{"timing":8}`},
+	} {
+		if response := e.Request(request.method, request.path, []byte(request.body)); response.Status >= 300 {
+			t.Fatalf("%s: %d %s", request.path, response.Status, response.Body)
+		}
+	}
+	response := e.Request("GET", "/api/forecast", nil)
+	var view httpapi.ForecastView
+	if err := json.Unmarshal([]byte(response.Body), &view); err != nil || response.Status != 200 {
+		t.Fatalf("forecast: %d %v", response.Status, err)
+	}
+	var first, final time.Time
+	for _, span := range view.Items {
+		start, _ := time.Parse(time.RFC3339, span.PlannedStart)
+		end, _ := time.Parse(time.RFC3339, span.PlannedEnd)
+		if strings.HasPrefix(span.ID, "timing/pool-") && end.Sub(start) != 40*time.Minute {
+			t.Errorf("projected four-person pool: %s", end.Sub(start))
+		}
+		if strings.HasPrefix(span.ID, "timing/elim-") && (first.IsZero() || start.Before(first)) {
+			first = start
+		}
+		if span.ID == "timing/final" {
+			final = end
+		}
+	}
+	if got := final.Sub(first); first.IsZero() || got != 40*time.Minute {
+		t.Errorf("projected eight-person bracket on two mats: %s", got)
+	}
+}
+
 // The demo's day has a past -- the fixture's matches carry the times they were fenced at --
 // so its forecast has a pace to learn and its pages have times to show (phase 4).
 func TestTheDemoForecastsItsDay(t *testing.T) {
