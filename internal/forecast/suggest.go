@@ -46,6 +46,7 @@ func Suggest(in Input, mats int) Suggestion {
 		in.Timings.Match = Defaults.Match
 	}
 	pace := Paces(in)
+	scales := eliminationScales(in)
 	live := false
 	for _, it := range in.Items {
 		for _, m := range it.Matches {
@@ -146,8 +147,9 @@ func Suggest(in Input, mats int) Suggestion {
 	timeOn := func(mat int, it Item) (time.Time, time.Time, int) {
 		p := pace[mat]
 		if p.Match <= 0 {
-			p = Pace{Match: in.Timings.Match, Changeover: in.Timings.Changeover}
+			p = pace[0]
 		}
+		p = calibratedPace(it, in.Timings, p, scales)
 		ready := in.Timings.Start
 		if c := cursor[mat]; c.After(ready) {
 			ready = c.Add(p.Changeover)
@@ -287,12 +289,22 @@ func Suggest(in Input, mats int) Suggestion {
 		}
 	}
 
-	out := Suggestion{Order: order, Before: before.End}
-	for _, e := range ends {
-		if e.After(out.End) {
-			out.End = e
+	proposed := in
+	proposed.Items = append([]Item{}, in.Items...)
+	for index := range proposed.Items {
+		for mat, ids := range order {
+			for seq, id := range ids {
+				if id == proposed.Items[index].ID {
+					proposed.Items[index].Mat, proposed.Items[index].Seq = mat, seq+1
+				}
+			}
 		}
 	}
+	result := Run(proposed)
+	for _, span := range result.Items {
+		placedAt[span.ID] = span.Start
+	}
+	out := Suggestion{Order: order, Before: before.End, End: result.End}
 	for _, it := range in.Items {
 		for mat, ids := range order {
 			for i, id := range ids {

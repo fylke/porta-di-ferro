@@ -39,8 +39,7 @@ type Timings struct {
 	Close time.Time
 }
 
-// Defaults are placeholders to calibrate (#64): a match of the SM rules' three minutes of
-// fencing takes about four on the mat, and the next pair is on in a minute.
+// Defaults are the generic match timings; pools also use the observed pool totals below.
 var Defaults = Timings{Match: 4 * time.Minute, Changeover: time.Minute, BeforeElims: 15 * time.Minute}
 
 // Match is one match of an item, with what its log says.
@@ -138,6 +137,8 @@ type Span struct {
 type Pace struct {
 	Match, Changeover time.Duration
 	Samples           int
+	templateWeight    float64
+	changeoverWeight  float64
 }
 
 // Warning is something the organizer should look at. Kinds: "overlap" (a person in two
@@ -233,18 +234,46 @@ func Paces(in Input) map[int]Pace {
 		all.match = append(all.match, s.match...)
 		all.gap = append(all.gap, s.gap...)
 	}
-	hall := Pace{Match: blend(all.match, in.Timings.Match), Changeover: blend(all.gap, in.Timings.Changeover), Samples: len(all.match)}
+	hall := Pace{Match: blend(all.match, in.Timings.Match), Changeover: blend(all.gap, in.Timings.Changeover), Samples: len(all.match),
+		templateWeight:   float64(prior) / float64(prior+len(all.match)),
+		changeoverWeight: float64(prior) / float64(prior+len(all.gap))}
 	out := map[int]Pace{0: hall}
 	for _, it := range in.Items {
 		s := byMat[it.Mat]
 		if s == nil {
 			// Nothing measured on this mat: the hall's pace, from none of its own.
-			out[it.Mat] = Pace{Match: hall.Match, Changeover: hall.Changeover}
+			out[it.Mat] = Pace{Match: hall.Match, Changeover: hall.Changeover,
+				templateWeight: hall.templateWeight, changeoverWeight: hall.changeoverWeight}
 			continue
 		}
-		out[it.Mat] = Pace{Match: blend(s.match, hall.Match), Changeover: blend(s.gap, hall.Changeover), Samples: len(s.match)}
+		out[it.Mat] = Pace{Match: blend(s.match, hall.Match), Changeover: blend(s.gap, hall.Changeover), Samples: len(s.match),
+			templateWeight:   hall.templateWeight * float64(prior) / float64(prior+len(s.match)),
+			changeoverWeight: hall.changeoverWeight * float64(prior) / float64(prior+len(s.gap))}
 	}
 	return out
+}
+
+func poolPace(it Item, tpl Timings, p Pace) Pace {
+	if it.Kind != KindPool || tpl.Match != Defaults.Match || tpl.Changeover != Defaults.Changeover {
+		return p
+	}
+	var total time.Duration
+	switch len(it.Matches) {
+	case 6:
+		total = 40 * time.Minute
+	case 10:
+		total = 50 * time.Minute
+	case 15:
+		total = 70 * time.Minute
+	case 21:
+		total = 95 * time.Minute
+	default:
+		return p
+	}
+	count := time.Duration(len(it.Matches))
+	match := (total - (count-1)*Defaults.Changeover) / count
+	p.Match += time.Duration(float64(match-Defaults.Match) * p.templateWeight)
+	return p
 }
 
 // fenced is every finished, unremarkable match on each mat, in the order it was fenced.
@@ -284,6 +313,10 @@ type timeline struct {
 // log are where the log puts them, the rest go at their mat's pace, and -- once the day is
 // live -- nothing still to come starts before now.
 func simulate(in Input, pace map[int]Pace, live bool) (timeline, []Warning) {
+	return simulateCalibrated(in, pace, live, eliminationScales(in))
+}
+
+func simulateCalibrated(in Input, pace map[int]Pace, live bool, scales map[string]float64) (timeline, []Warning) {
 	actual := pace != nil
 	type step struct {
 		item  Item
@@ -326,12 +359,14 @@ func simulate(in Input, pace map[int]Pace, live bool) (timeline, []Warning) {
 	warned := map[string]bool{}
 	var warnings []Warning
 
-	paceOn := func(mat int) Timings {
+	paceOn := func(mat int, it Item) Timings {
 		p := in.Timings
+		pc := Pace{Match: p.Match, Changeover: p.Changeover, templateWeight: 1, changeoverWeight: 1}
 		if actual {
-			pc := pace[mat]
-			p.Match, p.Changeover = pc.Match, pc.Changeover
+			pc = pace[mat]
 		}
+		pc = calibratedPace(it, in.Timings, pc, scales)
+		p.Match, p.Changeover = pc.Match, pc.Changeover
 		return p
 	}
 
@@ -390,7 +425,7 @@ func simulate(in Input, pace map[int]Pace, live bool) (timeline, []Warning) {
 		logged     bool
 	}
 	when := func(mat int, st step, ignore bool) (timing, bool) {
-		p := paceOn(mat)
+		p := paceOn(mat, st.item)
 		base, begun := itemReady[st.item.ID]
 		if !begun {
 			var ok bool

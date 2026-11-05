@@ -1,6 +1,7 @@
 package httpapi_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,6 +35,44 @@ func timesOf(v httpapi.ForecastView, id string) httpapi.ItemTimes {
 		}
 	}
 	return httpapi.ItemTimes{}
+}
+
+func TestForecastUsesTypicalPoolAndEliminationTimings(t *testing.T) {
+	for _, mats := range []int{1, 2} {
+		t.Run(fmt.Sprint(mats), func(t *testing.T) {
+			h := openHall(t, t.TempDir())
+			h.c.Clock = func() time.Time { return time.Date(2026, 11, 14, 8, 0, 0, 0, time.Local) }
+			var event httpapi.EventView
+			h.must("GET", "/api/event", nil, &event)
+			slug := event.Disciplines[0].Slug
+			h.draw("/api/d/"+slug, 8, mats)
+			view := h.forecast()
+			pool := timesOf(view, slug+"/pool-1")
+			start, _ := time.Parse(time.RFC3339, pool.Start)
+			end, _ := time.Parse(time.RFC3339, pool.End)
+			if got := end.Sub(start); got != 40*time.Minute {
+				t.Errorf("four-person pool should take 40 minutes: %s", got)
+			}
+			var first time.Time
+			for _, span := range view.Items {
+				if strings.HasPrefix(span.ID, slug+"/elim-") {
+					at, _ := time.Parse(time.RFC3339, span.Start)
+					if first.IsZero() || at.Before(first) {
+						first = at
+					}
+				}
+			}
+			final := timesOf(view, slug+"/final")
+			end, _ = time.Parse(time.RFC3339, final.End)
+			want := 45 * time.Minute
+			if mats == 2 {
+				want = 40 * time.Minute
+			}
+			if got := end.Sub(first); got != want {
+				t.Errorf("eight-person bracket on %d mats: got %s, want %s", mats, got, want)
+			}
+		})
+	}
 }
 
 func TestTheDayIsForecast(t *testing.T) {

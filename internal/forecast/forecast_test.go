@@ -38,22 +38,205 @@ func spanOf(r forecast.Result, id string) forecast.Span {
 
 func hm(t time.Time) string { return t.Format("15:04") }
 
+func TestTypicalPoolDurations(t *testing.T) {
+	for _, tc := range []struct {
+		size, matches, minutes int
+	}{{4, 6, 40}, {5, 10, 50}, {6, 15, 70}, {7, 21, 95}} {
+		t.Run(fmt.Sprint(tc.size), func(t *testing.T) {
+			in := forecast.Input{Timings: tpl, Items: []forecast.Item{
+				item("ls/pool-1", "ls", "pool", 1, 1, tc.matches),
+			}}
+			r := forecast.Run(in)
+			want := time.Duration(tc.minutes) * time.Minute
+			s := spanOf(r, "ls/pool-1")
+			if got := s.End.Sub(s.Start); got < want-time.Millisecond || got > want+time.Millisecond {
+				t.Errorf("%d-person pool: got %s, want %s", tc.size, got, want)
+			}
+			if s.PlannedEnd != s.End {
+				t.Error("an unfenced pool should match its planned duration")
+			}
+			in.Items[0].Projected = true
+			if projected := forecast.Run(in); projected.End != r.End {
+				t.Error("a projected pool should use the same calibration as a drawn pool")
+			}
+		})
+	}
+}
+
+func eliminationItems(size, mats int) []forecast.Item {
+	lanes := make([]forecast.Item, mats)
+	for index := range lanes {
+		lanes[index] = item(fmt.Sprintf("ls/elim-%d", index+1), "ls", "eliminations", index+1, 1, 0)
+	}
+	var previous []string
+	for count := size / 2; count >= 2; count /= 2 {
+		var current []string
+		for index := 0; index < count; index++ {
+			key := fmt.Sprintf("ls/round-%d-%d", count, index)
+			match := forecast.Match{Key: key}
+			if len(previous) > 0 {
+				match.After = previous[index*2 : index*2+2]
+			}
+			lane := index % mats
+			lanes[lane].Matches = append(lanes[lane].Matches, match)
+			current = append(current, key)
+		}
+		previous = current
+	}
+	for index, kind := range []string{"bronze", "final"} {
+		it := item("ls/"+kind, "ls", kind, index%mats+1, index+2, 1)
+		it.Matches[0].After = previous
+		lanes = append(lanes, it)
+	}
+	return lanes
+}
+
+func TestTypicalEliminationDurations(t *testing.T) {
+	for _, tc := range []struct{ size, mats, minutes int }{
+		{8, 1, 45}, {8, 2, 40},
+		{16, 1, 85}, {16, 2, 55}, {16, 3, 50}, {16, 4, 45},
+		{32, 1, 160}, {32, 2, 80}, {32, 3, 65}, {32, 4, 55},
+	} {
+		t.Run(fmt.Sprintf("%d-people-%d-mats", tc.size, tc.mats), func(t *testing.T) {
+			in := forecast.Input{Timings: tpl, Items: eliminationItems(tc.size, tc.mats)}
+			r := forecast.Run(in)
+			want := time.Duration(tc.minutes) * time.Minute
+			if got := r.End.Sub(tpl.Start); got < want-time.Millisecond || got > want+time.Millisecond {
+				t.Errorf("got %s, want %s", got, want)
+			}
+			suggestion := forecast.Suggest(in, tc.mats)
+			for mat, ids := range suggestion.Order {
+				for index, id := range ids {
+					for itemIndex := range in.Items {
+						if in.Items[itemIndex].ID == id {
+							in.Items[itemIndex].Mat, in.Items[itemIndex].Seq = mat, index+1
+						}
+					}
+				}
+			}
+			if applied := forecast.Run(in); applied.End != suggestion.End {
+				t.Errorf("suggestion ends at %s, but its forecast ends at %s", suggestion.End, applied.End)
+			}
+		})
+	}
+}
+
+func TestEliminationCalibrationPreservesOrganizerChoices(t *testing.T) {
+	in := forecast.Input{Timings: tpl, Items: eliminationItems(8, 2)}
+	in.Timings.Match = 5 * time.Minute
+	if got := forecast.Run(in).End.Sub(tpl.Start); got != 29*time.Minute {
+		t.Errorf("custom match timings should bypass calibration: %s", got)
+	}
+	in.Timings = tpl
+	in.Items[len(in.Items)-2].WithFinal = true
+	if got := forecast.Run(in).End.Sub(tpl.Start); got >= 40*time.Minute {
+		t.Errorf("running bronze beside the final should save time: %s", got)
+	}
+	in.Items[len(in.Items)-1].NotBefore = at("12:00")
+	if got := forecast.Run(in).End; !got.After(at("12:00")) {
+		t.Errorf("a final's hold must still apply: %s", got)
+	}
+}
+
+func TestEliminationCalibrationIsDisciplineLocal(t *testing.T) {
+	items := eliminationItems(8, 1)
+	for _, source := range eliminationItems(16, 2) {
+		source.ID = "sa/" + source.ID
+		source.Discipline = "sa"
+		source.Mat += 1
+		for index := range source.Matches {
+			source.Matches[index].Key = "sa/" + source.Matches[index].Key
+			var after []string
+			for _, key := range source.Matches[index].After {
+				after = append(after, "sa/"+key)
+			}
+			source.Matches[index].After = after
+		}
+		items = append(items, source)
+	}
+	r := forecast.Run(forecast.Input{Timings: tpl, Items: items})
+	for _, tc := range []struct {
+		id      string
+		minutes int
+	}{{"ls/final", 45}, {"sa/ls/final", 55}} {
+		if got := spanOf(r, tc.id).End.Sub(tpl.Start); got < time.Duration(tc.minutes)*time.Minute-time.Millisecond || got > time.Duration(tc.minutes)*time.Minute+time.Millisecond {
+			t.Errorf("%s: unexpected bracket end %s", tc.id, got)
+		}
+	}
+}
+
+func TestPoolCalibrationPreservesCustomTimingsAndOtherWork(t *testing.T) {
+	for _, tc := range []struct {
+		name, kind string
+		matches    int
+		match, gap time.Duration
+	}{
+		{"custom match", "pool", 6, 5 * time.Minute, time.Minute},
+		{"custom gap", "pool", 6, 4 * time.Minute, 2 * time.Minute},
+		{"small pool", "pool", 3, 4 * time.Minute, time.Minute},
+		{"large pool", "pool", 28, 4 * time.Minute, time.Minute},
+		{"eliminations", "eliminations", 6, 4 * time.Minute, time.Minute},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			timings := tpl
+			timings.Match, timings.Changeover = tc.match, tc.gap
+			r := forecast.Run(forecast.Input{Timings: timings, Items: []forecast.Item{
+				item("ls/work", "ls", tc.kind, 1, 1, tc.matches),
+			}})
+			want := time.Duration(tc.matches)*tc.match + time.Duration(tc.matches-1)*tc.gap
+			if got := r.End.Sub(timings.Start); got != want {
+				t.Errorf("got %s, want unchanged template duration %s", got, want)
+			}
+		})
+	}
+}
+
+func TestMeasuredPaceGraduallyReplacesPoolCalibration(t *testing.T) {
+	measured := item("ls/pool-1", "ls", "pool", 1, 1, 6)
+	for index := range measured.Matches {
+		start := tpl.Start.Add(time.Duration(index) * 5 * time.Minute)
+		measured.Matches[index].Started, measured.Matches[index].Ended = start, start.Add(4*time.Minute)
+	}
+	in := forecast.Input{Timings: tpl, Items: []forecast.Item{measured,
+		item("ls/pool-2", "ls", "pool", 1, 2, 6),
+		item("sa/pool-1", "sa", "pool", 2, 1, 6),
+	}}
+	r := forecast.Run(in)
+	local, hall := spanOf(r, "ls/pool-2"), spanOf(r, "sa/pool-1")
+	localDuration, hallDuration := local.End.Sub(local.Start), hall.End.Sub(hall.Start)
+	if localDuration <= 29*time.Minute || localDuration >= hallDuration || hallDuration >= 40*time.Minute {
+		t.Errorf("local measurements should replace more of the prior than hall measurements: local %s, hall %s", localDuration, hallDuration)
+	}
+	if local.PlannedEnd.Sub(local.PlannedStart) != 40*time.Minute {
+		t.Error("learning must not change the planned baseline")
+	}
+	in.Anomalies = map[string]bool{}
+	for _, match := range measured.Matches {
+		in.Anomalies[match.Key] = true
+	}
+	r = forecast.Run(in)
+	local = spanOf(r, "ls/pool-2")
+	if got := local.End.Sub(local.Start); got != 40*time.Minute {
+		t.Errorf("anomalies must not replace the calibrated baseline: %s", got)
+	}
+}
+
 func TestAPlannedDay(t *testing.T) {
 	r := forecast.Run(forecast.Input{Timings: tpl, Items: []forecast.Item{
 		item("ls/pool-1", "ls", "pool", 1, 1, 3),
 		item("ls/pool-2", "ls", "pool", 2, 1, 6),
 		item("ls/final", "ls", "final", 1, 2, 1),
 	}})
-	// Mat 1: 09:00, 09:05, 09:10, done 09:14. Mat 2: six matches, done 09:29.
+	// Mat 1: 09:00, 09:05, 09:10, done 09:14. Mat 2: a calibrated four-person pool.
 	if s := spanOf(r, "ls/pool-1"); hm(s.Start) != "09:00" || hm(s.End) != "09:14" {
 		t.Errorf("pool 1 should run 09:00-09:14: %s-%s", hm(s.Start), hm(s.End))
 	}
-	if s := spanOf(r, "ls/pool-2"); hm(s.End) != "09:29" {
-		t.Errorf("pool 2 should end 09:29: %s", hm(s.End))
+	if s := spanOf(r, "ls/pool-2"); hm(s.End) != "09:40" {
+		t.Errorf("pool 2 should end 09:40: %s", hm(s.End))
 	}
-	// The final waits for every pool, and the pause before the bracket: 09:29 + 15.
-	if s := spanOf(r, "ls/final"); hm(s.Start) != "09:45" {
-		t.Errorf("the final should start at 09:45, after both pools and the pause: %s", hm(s.Start))
+	// The final waits for every pool, and the pause before the bracket: 09:40 + 15.
+	if s := spanOf(r, "ls/final"); hm(s.Start) != "09:56" {
+		t.Errorf("the final should start at 09:56, after both pools and the pause: %s", hm(s.Start))
 	}
 	if s := spanOf(r, "ls/final"); s.PlannedStart != s.Start {
 		t.Errorf("with nothing fenced the forecast is the plan: %v %v", s.PlannedStart, s.Start)
@@ -99,7 +282,7 @@ func TestASlowMatPushesOnlyItself(t *testing.T) {
 		t.Errorf("a mat with nothing measured goes at the hall's pace, from no matches of its own: %+v", p)
 	}
 	ls2, sa2 := spanOf(r, "ls/pool-2"), spanOf(r, "sa/pool-2")
-	if !ls2.Start.After(ls2.PlannedStart.Add(30 * time.Minute)) {
+	if !ls2.Start.After(ls2.PlannedStart.Add(15 * time.Minute)) {
 		t.Errorf("mat 1 is running late, so its next pool should be well behind plan: %s vs %s", hm(ls2.Start), hm(ls2.PlannedStart))
 	}
 	if sa2.Start.After(sa2.PlannedStart.Add(15 * time.Minute)) {
