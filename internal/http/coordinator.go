@@ -840,8 +840,9 @@ func (c *Coordinator) reloadDiscipline(w http.ResponseWriter, r *http.Request) {
 	}
 	old.close()
 	wk := c.load(slug)
-	wk.last = old.last
+	// last is written under mu by every summary, so it is read under it here too.
 	c.mu.Lock()
+	wk.last = old.last
 	c.workers[slug] = wk
 	c.mu.Unlock()
 	c.ensurePeople()
