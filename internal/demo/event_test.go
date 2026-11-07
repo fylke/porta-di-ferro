@@ -115,6 +115,33 @@ func TestADisciplineCanBeAddedInTheDemo(t *testing.T) {
 	}
 }
 
+// A discipline's identifier can change in the demo as at the coordinator (#153).
+func TestAnIdentifierCanBeChangedInTheDemo(t *testing.T) {
+	e := demo.NewEvent()
+	e.Request("POST", "/api/disciplines", []byte(`{"name":"Foam"}`))
+	e.Request("POST", "/api/d/foam/competitors", []byte(`{"name":"Ny Fäktare","club":"X"}`))
+	e.Request("PUT", "/api/plan/prep", []byte(`{"foam":{"gearCheck":1200}}`))
+	if res := e.Request("PUT", "/api/disciplines/foam/identifier", []byte(`{"identifier":"open-sabre"}`)); res.Status != 400 {
+		t.Errorf("another discipline's identifier should be refused, got %d", res.Status)
+	}
+	if res := e.Request("PUT", "/api/disciplines/foam/identifier", []byte(`{"identifier":"Foam 2026"}`)); res.Status != 200 || !res.Changed {
+		t.Fatalf("changing it returned %d: %s", res.Status, res.Body)
+	}
+	if s := snapIn(t, e, "foam-2026"); len(s.Competitors) != 1 {
+		t.Errorf("its entries should come along: %+v", s.Instance)
+	}
+	if s := snapIn(t, e, "foam"); len(s.Competitors) != 1 {
+		t.Errorf("the old identifier should still lead there: %+v", s.Instance)
+	}
+	var v httpapi.ForecastView
+	if err := json.Unmarshal([]byte(e.Request("GET", "/api/forecast", nil).Body), &v); err != nil {
+		t.Fatal(err)
+	}
+	if v.Prep["foam-2026"].GearCheck != 1200 {
+		t.Errorf("its gear check should come along: %+v", v.Prep)
+	}
+}
+
 // The whole event survives the trip through localStorage (#108): the day, every
 // discipline, and one added in the demo.
 func TestTheDemoEventSavesAndLoads(t *testing.T) {
