@@ -28,6 +28,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -60,10 +61,10 @@ type File struct {
 	// that is not on the list is still part of the event, listed after the rest: the
 	// folders are the truth about what exists, this is only how to show them.
 	Disciplines []string `json:"disciplines,omitempty"`
-	// Aliases are slugs a discipline used to have, pointing at the one it has now. Only a
-	// discipline made before it had a name ever moves (see Reslug), and anything that
-	// learned the old address -- a bookmark, an unsent exchange on a tablet -- still
-	// reaches it.
+	// Aliases are slugs a discipline used to have, pointing at the one it has now: from
+	// being made before it had a name (see Reslug), or the organizer changing its
+	// identifier (see MoveTo). Anything that learned the old address -- a bookmark, an
+	// unsent exchange on a tablet, a signup file already sent -- still reaches it.
 	Aliases map[string]string `json:"aliases,omitempty"`
 	// Plan is the event's mats and where each discipline's work runs on them.
 	Plan store.Plan `json:"plan,omitempty"`
@@ -113,10 +114,51 @@ func (f *Folder) Reslug(old, name string) (string, error) {
 	if slug == old {
 		return old, nil
 	}
-	if err := os.Rename(f.DisciplineDir(old), f.DisciplineDir(slug)); err != nil {
-		return "", err
+	return slug, f.move(old, slug, slugs)
+}
+
+// ErrSlugTaken says an identifier is already another discipline's, now or in the past.
+var ErrSlugTaken = errors.New("another discipline has, or has had, that identifier")
+
+// Identifier cleans what the organizer typed as a discipline's identifier.
+func Identifier(s string) (string, error) {
+	slug := Slugify(s)
+	if slug == "" {
+		return "", errors.New("an identifier needs a letter or a digit")
 	}
-	_, err = f.Update(func(file *File) error {
+	if reserved[slug] {
+		return "", fmt.Errorf("%q means something else in an address; pick another identifier", slug)
+	}
+	return slug, nil
+}
+
+// MoveTo gives a discipline the identifier the organizer chose (#153), and remembers the
+// old one as an alias. Its own old identifiers are free to go back to; anybody else's are
+// not, because they still lead there.
+func (f *Folder) MoveTo(old, slug string) error {
+	slugs, err := f.Slugs()
+	if err != nil {
+		return err
+	}
+	file, err := f.Read()
+	if err != nil {
+		return err
+	}
+	if slices.Contains(slugs, slug) {
+		return ErrSlugTaken
+	}
+	if to, ok := file.Aliases[slug]; ok && to != old {
+		return ErrSlugTaken
+	}
+	return f.move(old, slug, slugs)
+}
+
+// move renames a discipline's folder and carries what the event keeps about it along.
+func (f *Folder) move(old, slug string, slugs []string) error {
+	if err := os.Rename(f.DisciplineDir(old), f.DisciplineDir(slug)); err != nil {
+		return err
+	}
+	_, err := f.Update(func(file *File) error {
 		order := withExisting(file.Disciplines, slugs)
 		for i, s := range order {
 			if s == old {
@@ -133,35 +175,16 @@ func (f *Folder) Reslug(old, name string) (string, error) {
 			}
 		}
 		file.Aliases[old] = slug
-		// The plan names the discipline's work by slug (#125).
-		items := map[string]store.Placement{}
-		for k, v := range file.Plan.Items {
-			items[moveKey(k, old, slug)] = v
-		}
-		if file.Plan.Items != nil {
-			file.Plan.Items = items
-		}
-		if n, ok := file.Plan.Expected[old]; ok {
-			delete(file.Plan.Expected, old)
-			file.Plan.Expected[slug] = n
-		}
-		for i, k := range file.Plan.Anomalies {
-			file.Plan.Anomalies[i] = moveKey(k, old, slug)
-		}
+		// Back to an identifier it once had: that one is the discipline again.
+		delete(file.Aliases, slug)
+		// The plan names the discipline's work and settings by slug (#125).
+		file.Plan.MoveDiscipline(old, slug)
 		return nil
 	})
 	if err != nil {
-		return slug, err
+		return err
 	}
-	return slug, f.moveKeys(old, slug)
-}
-
-// moveKey is "old/rest" as "slug/rest"; any other key is left as it is.
-func moveKey(key, old, slug string) string {
-	if rest, ok := strings.CutPrefix(key, old+"/"); ok {
-		return slug + "/" + rest
-	}
-	return key
+	return f.moveKeys(old, slug)
 }
 
 // moveKeys carries the rest of what the event keeps about a discipline to its new slug:
@@ -174,16 +197,7 @@ func (f *Folder) moveKeys(old, slug string) error {
 		if err != nil {
 			return err
 		}
-		for i := range st.Assignments {
-			st.Assignments[i].Item = moveKey(st.Assignments[i].Item, old, slug)
-		}
-		for i, m := range st.Members {
-			for j, d := range m.Disciplines {
-				if d == old {
-					st.Members[i].Disciplines[j] = slug
-				}
-			}
-		}
+		st.MoveDiscipline(old, slug)
 		if err := f.SaveStaff(st); err != nil {
 			return err
 		}
@@ -195,7 +209,7 @@ func (f *Folder) moveKeys(old, slug string) error {
 		}
 		for i := range people {
 			for j, k := range people[i].Moved {
-				people[i].Moved[j] = moveKey(k, old, slug)
+				people[i].Moved[j] = store.MoveKey(k, old, slug)
 			}
 		}
 		if err := f.SavePeople(people); err != nil {

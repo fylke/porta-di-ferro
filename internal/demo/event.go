@@ -41,6 +41,9 @@ type Event struct {
 	// id is the event's identity (event.File.ID): the same for the event a visitor
 	// arrives in, a new one for every event that replaces it (#141).
 	id string
+	// moved are identifiers disciplines used to have (event.File.Aliases). Not saved: only
+	// a page open in this tab can have learned one.
+	moved map[string]string
 }
 
 // NewEvent builds the event a visitor arrives in: the longsword halfway through its pools
@@ -107,6 +110,9 @@ func (e *Event) adopt(d *Demo) {
 }
 
 func (e *Event) find(slug string) *Demo {
+	if to, ok := e.moved[slug]; ok {
+		slug = to
+	}
 	for _, d := range e.disciplines {
 		if d.slug == slug {
 			return d
@@ -206,6 +212,8 @@ func (e *Event) Request(method, path string, body []byte) Response {
 		return e.rename(parts[2], body)
 	case len(parts) == 3 && parts[1] == "disciplines" && method == "DELETE":
 		return e.retire(parts[2])
+	case len(parts) == 4 && parts[1] == "disciplines" && parts[3] == "identifier" && method == "PUT":
+		return e.setIdentifier(parts[2], body)
 	case len(parts) == 4 && parts[1] == "disciplines" && parts[3] == "reload" && method == "POST":
 		// Nothing in the demo is read from a file, so there is nothing to read again.
 		if d := e.find(parts[2]); d != nil {
@@ -341,6 +349,59 @@ func (e *Event) rename(slug string, body []byte) Response {
 		return fail(400, err)
 	}
 	d.tournament.Discipline = name
+	res := e.summary(d)
+	res.Changed = true
+	return res
+}
+
+// setIdentifier is httpapi.Coordinator's: a discipline's address and how the signup files
+// name it, the old one still leading there (#153).
+func (e *Event) setIdentifier(slug string, body []byte) Response {
+	d := e.find(slug)
+	if d == nil {
+		return fail(404, fmt.Errorf("this event has no discipline %q", slug))
+	}
+	var in struct {
+		Identifier string `json:"identifier"`
+	}
+	if err := json.Unmarshal(body, &in); err != nil {
+		return fail(400, err)
+	}
+	want, err := event.Identifier(in.Identifier)
+	if err != nil {
+		return fail(400, err)
+	}
+	if want == d.slug {
+		return e.summary(d)
+	}
+	if other := e.find(want); other != nil && other != d {
+		return fail(400, event.ErrSlugTaken)
+	}
+	old := d.slug
+	d.slug = want
+	if e.moved == nil {
+		e.moved = map[string]string{}
+	}
+	for alias, to := range e.moved {
+		if to == old {
+			e.moved[alias] = want
+		}
+	}
+	e.moved[old] = want
+	delete(e.moved, want)
+	e.plan.MoveDiscipline(old, want)
+	e.staff.MoveDiscipline(old, want)
+	for i := range e.people {
+		for j, k := range e.people[i].Moved {
+			e.people[i].Moved[j] = store.MoveKey(k, old, want)
+		}
+	}
+	for id, k := range e.keepers {
+		if k.Discipline == old {
+			k.Discipline = want
+			e.keepers[id] = k
+		}
+	}
 	res := e.summary(d)
 	res.Changed = true
 	return res
