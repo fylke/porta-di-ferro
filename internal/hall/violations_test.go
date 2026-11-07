@@ -1,4 +1,4 @@
-package httpapi
+package hall
 
 import (
 	"reflect"

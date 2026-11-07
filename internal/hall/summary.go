@@ -1,4 +1,4 @@
-package httpapi
+package hall
 
 import (
 	"github.com/fylke/porta-di-ferro/internal/store"
@@ -169,6 +169,24 @@ func Summarize(slug string, snap Snapshot) DisciplineSummary {
 			ms.RedScore, ms.BlueScore = m.State.Red.Score, m.State.Blue.Score
 		}
 		out.Mats = append(out.Mats, ms)
+	}
+	return out
+}
+
+// SummaryMats is what each mat is running, for the discipline whose match it is.
+func SummaryMats(view MatsView, slug string) []MatSummary {
+	out := []MatSummary{}
+	for _, m := range view.Mats {
+		cur := m.Current
+		if cur == nil || cur.Discipline != slug {
+			continue
+		}
+		out = append(out, MatSummary{
+			Mat: m.Mat, Match: cur.Match.ID, Status: cur.Match.Status, Pool: cur.Match.Pool,
+			Round: cur.Match.Round, Red: cur.Red, Blue: cur.Blue,
+			RedColour: cur.Match.Options.Red, BlueColour: cur.Match.Options.Blue,
+			RedScore: cur.Match.State.Red.Score, BlueScore: cur.Match.State.Blue.Score,
+		})
 	}
 	return out
 }

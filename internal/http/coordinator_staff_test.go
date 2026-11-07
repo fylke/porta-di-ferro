@@ -7,12 +7,12 @@ import (
 	"testing"
 	"time"
 
-	httpapi "github.com/fylke/porta-di-ferro/internal/http"
+	"github.com/fylke/porta-di-ferro/internal/hall"
 )
 
-func (h *hall) staff() httpapi.StaffingView {
+func (h *testHall) staff() hall.StaffingView {
 	h.t.Helper()
-	var v httpapi.StaffingView
+	var v hall.StaffingView
 	h.must("GET", "/api/staff", nil, &v)
 	return v
 }
@@ -62,7 +62,7 @@ func TestStaffByHand(t *testing.T) {
 	astrid := h.personOf(ls, "Astrid")
 
 	// Astrid fences longsword and referees sabre: the desk says she is the same person.
-	var v httpapi.StaffingView
+	var v hall.StaffingView
 	if code := h.do("POST", "/api/staff", map[string]any{"name": "Astrid", "club": "Gbg", "roles": []string{"head-ref", "juggler"},
 		"disciplines": []string{"open-sabre"}, "want": astrid}, &v); code != 201 {
 		t.Fatalf("adding staff returned %d", code)
@@ -130,7 +130,7 @@ func TestStaffingThePlan(t *testing.T) {
 		h.must("POST", "/api/staff", map[string]any{"name": name, "roles": []string{"head-ref"}}, nil)
 	}
 	// One of the longsword's own fencers referees too.
-	var v httpapi.StaffingView
+	var v hall.StaffingView
 	h.must("POST", "/api/staff", map[string]any{"name": astrid.Name, "roles": []string{"head-ref"}, "want": astrid.Person}, &v)
 	astridStaff, bo := "", ""
 	for _, m := range v.Members {
@@ -145,7 +145,7 @@ func TestStaffingThePlan(t *testing.T) {
 		t.Fatalf("with nobody assigned every item is short of its head referee: %+v", v)
 	}
 
-	var sug httpapi.StaffSuggestion
+	var sug hall.StaffSuggestion
 	h.must("POST", "/api/staff/suggest", nil, &sug)
 	if sug.Changes == 0 || sug.Signature == "" {
 		t.Fatalf("a suggestion should fill the slots: %+v", sug)
@@ -183,7 +183,7 @@ func TestStaffingThePlan(t *testing.T) {
 	}
 
 	// Her page shows her duty beside her fencing; a member who only works has a page too.
-	var pv httpapi.PersonView
+	var pv hall.PersonView
 	h.must("GET", "/api/people/"+astrid.Person, nil, &pv)
 	if len(pv.Duties) == 0 || pv.Duties[0].Role != "head-ref" || pv.Duties[0].Start == "" || len(pv.Entries) != 1 {
 		t.Errorf("Astrid's page should list her refereeing beside her entry: %+v", pv)
@@ -198,7 +198,7 @@ func TestStaffingThePlan(t *testing.T) {
 // panel says so, until the People panel settles it (#133).
 func TestAStaffMemberWhoMayBeSomebodyElseIsFlagged(t *testing.T) {
 	h := openHall(t, t.TempDir())
-	var ev httpapi.EventView
+	var ev hall.EventView
 	h.must("GET", "/api/event", nil, &ev)
 	ls := ev.Disciplines[0].Slug
 	h.must("POST", "/api/d/"+ls+"/competitors", map[string]string{"name": "Bo Berg", "club": "Gbg"}, nil)
@@ -220,7 +220,7 @@ func TestAStaffMemberWhoMayBeSomebodyElseIsFlagged(t *testing.T) {
 func TestTheEventViewListsTheStaff(t *testing.T) {
 	h := openHall(t, t.TempDir())
 	h.must("POST", "/api/staff", map[string]any{"name": "Cleo", "club": "Gbg", "roles": []string{"head-ref"}}, nil)
-	var ev httpapi.EventView
+	var ev hall.EventView
 	h.must("GET", "/api/event", nil, &ev)
 	if len(ev.Staff) != 1 || ev.Staff[0].Name != "Cleo" || ev.Staff[0].Person == "" {
 		t.Errorf("the event view should list Cleo, with a page: %+v", ev.Staff)

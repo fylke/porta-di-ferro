@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/fylke/porta-di-ferro/internal/demo"
-	httpapi "github.com/fylke/porta-di-ferro/internal/http"
+	"github.com/fylke/porta-di-ferro/internal/hall"
 	"github.com/fylke/porta-di-ferro/internal/match"
 )
 
@@ -15,13 +15,13 @@ import (
 // so it is tested here instead: everything below runs in `go test ./...` on any platform,
 // and the wasm build is only the forty lines of glue in cmd/demo-wasm.
 
-func state(t *testing.T, d *demo.Demo) httpapi.Snapshot {
+func state(t *testing.T, d *demo.Demo) hall.Snapshot {
 	t.Helper()
 	res := d.Request("GET", "/api/state", nil)
 	if res.Status != 200 {
 		t.Fatalf("GET /api/state returned %d: %s", res.Status, res.Body)
 	}
-	var snap httpapi.Snapshot
+	var snap hall.Snapshot
 	if err := json.Unmarshal([]byte(res.Body), &snap); err != nil {
 		t.Fatalf("decoding the snapshot: %v", err)
 	}
@@ -223,7 +223,7 @@ func TestScoringMovesTheStandings(t *testing.T) {
 		t.Fatal("no pending match to score")
 	}
 
-	completedIn := func(snap httpapi.Snapshot, number int) int {
+	completedIn := func(snap hall.Snapshot, number int) int {
 		for _, p := range snap.Pools {
 			if p.Number != number {
 				continue

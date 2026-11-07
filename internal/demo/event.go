@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/fylke/porta-di-ferro/internal/event"
-	httpapi "github.com/fylke/porta-di-ferro/internal/http"
+	"github.com/fylke/porta-di-ferro/internal/hall"
 	"github.com/fylke/porta-di-ferro/internal/store"
 )
 
@@ -122,25 +122,25 @@ func (e *Event) find(slug string) *Demo {
 }
 
 // View is the event as its pages see it, built the way the coordinator builds it.
-func (e *Event) View() httpapi.EventView {
-	view := httpapi.EventView{Info: e.info, ID: e.id, Dir: "in this browser", Disciplines: []httpapi.DisciplineSummary{}}
+func (e *Event) View() hall.EventView {
+	view := hall.EventView{Info: e.info, ID: e.id, Dir: "in this browser", Disciplines: []hall.DisciplineSummary{}}
 	mats := e.mats()
 	for _, d := range e.disciplines {
 		snap, err := d.snapshot()
 		if err != nil {
-			view.Disciplines = append(view.Disciplines, httpapi.DisciplineSummary{
+			view.Disciplines = append(view.Disciplines, hall.DisciplineSummary{
 				Slug: d.slug, Name: d.tournament.Discipline, Error: err.Error(), Stage: "setup",
-				Mats: []httpapi.MatSummary{}, Entrants: []httpapi.Entrant{},
+				Mats: []hall.MatSummary{}, Entrants: []hall.Entrant{},
 			})
 			continue
 		}
-		s := httpapi.Summarize(d.slug, snap)
-		s.Mats = httpapi.SummaryMats(mats, d.slug)
+		s := hall.Summarize(d.slug, snap)
+		s.Mats = hall.SummaryMats(mats, d.slug)
 		view.Disciplines = append(view.Disciplines, s)
 	}
 	in, r, inputs := e.times()
-	view.Programme = httpapi.ViewForecast(in, r, inputs, e.timings()).Programme
-	view.Staff = httpapi.StaffEntrants(e.staff.Members)
+	view.Programme = hall.ViewForecast(in, r, inputs, e.timings()).Programme
+	view.Staff = hall.StaffEntrants(e.staff.Members)
 	view.Name = strings.TrimSpace(e.info.Signup.Name)
 	if view.Name == "" && len(view.Disciplines) == 1 {
 		view.Name = view.Disciplines[0].Name
@@ -205,7 +205,7 @@ func (e *Event) Request(method, path string, body []byte) Response {
 	case method == "GET" && bare == "/api/disciplines":
 		return ok(e.View().Disciplines)
 	case method == "GET" && bare == "/api/disciplines/presets":
-		return ok(httpapi.Disciplines)
+		return ok(hall.Disciplines)
 	case method == "POST" && bare == "/api/disciplines":
 		return e.add(body)
 	case len(parts) == 3 && parts[1] == "disciplines" && method == "PATCH":
@@ -275,7 +275,7 @@ func (e *Event) summary(d *Demo) Response {
 	if err != nil {
 		return fail(500, err)
 	}
-	return ok(httpapi.Summarize(d.slug, snap))
+	return ok(hall.Summarize(d.slug, snap))
 }
 
 func (e *Event) putInfo(body []byte) Response {
@@ -283,7 +283,7 @@ func (e *Event) putInfo(body []byte) Response {
 	if err := json.Unmarshal(body, &in); err != nil {
 		return fail(400, err)
 	}
-	ev, err := httpapi.CleanEvent(in)
+	ev, err := hall.CleanEvent(in)
 	if err != nil {
 		return fail(400, err)
 	}
@@ -308,7 +308,7 @@ func (e *Event) add(body []byte) Response {
 	if err := json.Unmarshal(body, &in); err != nil {
 		return fail(400, err)
 	}
-	name, err := httpapi.CleanName(in.Name)
+	name, err := hall.CleanName(in.Name)
 	if err == nil {
 		err = e.nameTaken(name, nil)
 	}
@@ -341,7 +341,7 @@ func (e *Event) rename(slug string, body []byte) Response {
 	if err := json.Unmarshal(body, &in); err != nil {
 		return fail(400, err)
 	}
-	name, err := httpapi.CleanName(in.Name)
+	name, err := hall.CleanName(in.Name)
 	if err == nil {
 		err = e.nameTaken(name, d)
 	}
@@ -433,9 +433,9 @@ func (e *Event) infoPDF(query string) Response {
 		}
 	}
 	view := e.View()
-	snap := httpapi.Snapshot{Tournament: store.Tournament{Event: view.Info}, Instance: httpapi.Instance{Name: view.Name}}
+	snap := hall.Snapshot{Tournament: store.Tournament{Event: view.Info}, Instance: hall.Instance{Name: view.Name}}
 	var buf bytes.Buffer
-	if err := httpapi.BuildInfoPDF(snap, view.Programme, landing, strings.Contains(query, "lang=sv")).Output(&buf); err != nil {
+	if err := hall.BuildInfoPDF(snap, view.Programme, landing, strings.Contains(query, "lang=sv")).Output(&buf); err != nil {
 		return fail(500, err)
 	}
 	return Response{

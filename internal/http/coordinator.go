@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/fylke/porta-di-ferro/internal/event"
+	"github.com/fylke/porta-di-ferro/internal/hall"
 	"github.com/fylke/porta-di-ferro/internal/store"
 )
 
@@ -84,7 +85,7 @@ type worker struct {
 	err     error
 	// last is the summary from the last time the discipline could be read, so a
 	// discipline that breaks mid-event still shows on the landing page, marked stale.
-	last     *DisciplineSummary
+	last     *hall.DisciplineSummary
 	unfollow func()
 }
 
@@ -151,7 +152,7 @@ func (c *Coordinator) load(slug string) *worker {
 		log.Printf("porta: discipline %s failed to load: %v", slug, err)
 		return w
 	}
-	w.srv = newServer(st, nil, Instance{Slug: slug}, c.presence)
+	w.srv = newServer(st, nil, hall.Instance{Slug: slug}, c.presence)
 	w.srv.UseEvent(c)
 	w.srv.UseMats(c)
 	w.srv.UsePeople(c)
@@ -280,7 +281,7 @@ func (c *Coordinator) SaveEventInfo(ev store.Event) error {
 }
 
 // Programme is the day as the plan has it (#149), for a discipline's info sheet.
-func (c *Coordinator) Programme() []ProgrammeRow {
+func (c *Coordinator) Programme() []hall.ProgrammeRow {
 	return c.View().Programme
 }
 
@@ -297,15 +298,15 @@ func (c *Coordinator) snapshotWorkers() []*worker {
 }
 
 // View is the event as its pages see it.
-func (c *Coordinator) View() EventView {
+func (c *Coordinator) View() hall.EventView {
 	snaps := c.snapshots()
 	return c.viewFrom(snaps, c.matsFrom(snaps))
 }
 
 // viewFrom builds the event view from snapshots already taken, with each discipline's
 // mats -- the event's mats it is running right now -- read off the hall's.
-func (c *Coordinator) viewFrom(snaps []snapped, mats MatsView) EventView {
-	view := EventView{Dir: c.folder.Dir(), Disciplines: []DisciplineSummary{}}
+func (c *Coordinator) viewFrom(snaps []snapped, mats hall.MatsView) hall.EventView {
+	view := hall.EventView{Dir: c.folder.Dir(), Disciplines: []hall.DisciplineSummary{}}
 	file, err := c.folder.Read()
 	if err != nil {
 		view.InfoError = err.Error()
@@ -315,14 +316,14 @@ func (c *Coordinator) viewFrom(snaps []snapped, mats MatsView) EventView {
 	for _, s := range snaps {
 		d := c.summarizeFrom(s)
 		if s.err == nil {
-			d.Mats = SummaryMats(mats, s.w.slug)
+			d.Mats = hall.SummaryMats(mats, s.w.slug)
 		}
 		view.Disciplines = append(view.Disciplines, d)
 	}
 	h := c.timesFrom(snaps)
-	view.Programme = ViewForecast(h.in, h.result, h.inputs, h.timings).Programme
+	view.Programme = hall.ViewForecast(h.in, h.result, h.inputs, h.timings).Programme
 	st, _ := c.folder.Staff()
-	view.Staff = StaffEntrants(st.Members)
+	view.Staff = hall.StaffEntrants(st.Members)
 	view.Name = strings.TrimSpace(view.Info.Signup.Name)
 	if view.Name == "" && len(view.Disciplines) == 1 {
 		view.Name = view.Disciplines[0].Name
@@ -330,7 +331,7 @@ func (c *Coordinator) viewFrom(snaps []snapped, mats MatsView) EventView {
 	return view
 }
 
-func (c *Coordinator) summarize(w *worker) DisciplineSummary {
+func (c *Coordinator) summarize(w *worker) hall.DisciplineSummary {
 	s := snapped{w: w}
 	if w.srv == nil {
 		s.err = w.err
@@ -340,14 +341,14 @@ func (c *Coordinator) summarize(w *worker) DisciplineSummary {
 	return c.summarizeFrom(s)
 }
 
-func (c *Coordinator) summarizeFrom(sn snapped) DisciplineSummary {
+func (c *Coordinator) summarizeFrom(sn snapped) hall.DisciplineSummary {
 	w := sn.w
-	failed := func(err error) DisciplineSummary {
+	failed := func(err error) hall.DisciplineSummary {
 		c.mu.Lock()
 		last := w.last
 		c.mu.Unlock()
-		out := DisciplineSummary{Slug: w.slug, URL: "/d/" + w.slug + "/", Stage: "setup",
-			Mats: []MatSummary{}, Entrants: []Entrant{}}
+		out := hall.DisciplineSummary{Slug: w.slug, URL: "/d/" + w.slug + "/", Stage: "setup",
+			Mats: []hall.MatSummary{}, Entrants: []hall.Entrant{}}
 		if last != nil {
 			out = *last
 			out.Stale = true
@@ -361,7 +362,7 @@ func (c *Coordinator) summarizeFrom(sn snapped) DisciplineSummary {
 	if sn.err != nil {
 		return failed(sn.err)
 	}
-	s := Summarize(w.slug, sn.snap)
+	s := hall.Summarize(w.slug, sn.snap)
 	c.mu.Lock()
 	w.last = &s
 	c.mu.Unlock()
@@ -398,7 +399,7 @@ func (c *Coordinator) Handler() http.Handler {
 		writeJSON(w, http.StatusOK, c.View().Disciplines)
 	})
 	mux.HandleFunc("GET /api/disciplines/presets", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, Disciplines)
+		writeJSON(w, http.StatusOK, hall.Disciplines)
 	})
 	mux.HandleFunc("POST /api/disciplines", c.addDiscipline)
 	mux.HandleFunc("PATCH /api/disciplines/{d}", c.renameDiscipline)
@@ -536,7 +537,7 @@ func (c *Coordinator) putInfo(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	in, err := CleanEvent(in)
+	in, err := hall.CleanEvent(in)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
@@ -551,8 +552,8 @@ func (c *Coordinator) putInfo(w http.ResponseWriter, r *http.Request) {
 // infoPDF is one poster for the door, for the whole event.
 func (c *Coordinator) infoPDF(w http.ResponseWriter, r *http.Request) {
 	view := c.View()
-	snap := Snapshot{Tournament: store.Tournament{Event: view.Info}, Instance: Instance{Name: view.Name}}
-	doc := BuildInfoPDF(snap, view.Programme, r.URL.Query().Get("url"), r.URL.Query().Get("lang") == "sv")
+	snap := hall.Snapshot{Tournament: store.Tournament{Event: view.Info}, Instance: hall.Instance{Name: view.Name}}
+	doc := hall.BuildInfoPDF(snap, view.Programme, r.URL.Query().Get("url"), r.URL.Query().Get("lang") == "sv")
 	var buf bytes.Buffer
 	if err := doc.Output(&buf); err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
@@ -642,7 +643,7 @@ func (c *Coordinator) addDiscipline(w http.ResponseWriter, r *http.Request) {
 	}
 	c.namesMu.Lock()
 	defer c.namesMu.Unlock()
-	name, err := CleanName(in.Name)
+	name, err := hall.CleanName(in.Name)
 	if err == nil {
 		err = c.nameTaken(name, "")
 	}
@@ -693,7 +694,7 @@ func (c *Coordinator) renameDiscipline(w http.ResponseWriter, r *http.Request) {
 	}
 	c.namesMu.Lock()
 	defer c.namesMu.Unlock()
-	name, err := CleanName(in.Name)
+	name, err := hall.CleanName(in.Name)
 	if err == nil {
 		err = c.nameTaken(name, slug)
 	}

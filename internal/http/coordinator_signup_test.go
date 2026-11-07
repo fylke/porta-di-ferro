@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	httpapi "github.com/fylke/porta-di-ferro/internal/http"
+	"github.com/fylke/porta-di-ferro/internal/hall"
 	"github.com/fylke/porta-di-ferro/internal/signup"
 )
 
@@ -38,10 +38,10 @@ func replyStaffing(t *testing.T, name, submission string, staff []string, entrie
 
 // threeDisciplines is an event of a named longsword, the sabre and the rapier, set up for
 // signup. It answers the longsword's slug.
-func threeDisciplines(t *testing.T) (*hall, string) {
+func threeDisciplines(t *testing.T) (*testHall, string) {
 	t.Helper()
 	h, first := twoDisciplines(t)
-	var ls httpapi.DisciplineSummary
+	var ls hall.DisciplineSummary
 	h.must("PATCH", "/api/disciplines/"+first, map[string]string{"name": "Open Steel Longsword"}, &ls)
 	h.must("POST", "/api/disciplines", map[string]string{"name": "Rapier"}, nil)
 	h.must("PUT", "/api/event/info", map[string]any{
@@ -77,7 +77,7 @@ func TestOneImportForTheWholeEvent(t *testing.T) {
 		reply(t, "Cilla", "sub-3", "rapier-and-dagger"),
 		reply(t, "Dan", "sub-4", "rapier"),
 	}
-	var preview httpapi.EventSignupPreview
+	var preview hall.EventSignupPreview
 	h.must("POST", "/api/event/signup/preview", map[string]any{"files": files}, &preview)
 	if preview.Adding != 4 {
 		t.Errorf("Ada once, Bo twice and Dan once is four entries, got %d", preview.Adding)
@@ -93,8 +93,8 @@ func TestOneImportForTheWholeEvent(t *testing.T) {
 	}
 
 	var done struct {
-		Added   int                        `json:"added"`
-		Preview httpapi.EventSignupPreview `json:"preview"`
+		Added   int                     `json:"added"`
+		Preview hall.EventSignupPreview `json:"preview"`
 	}
 	h.must("POST", "/api/event/signup/import", map[string]any{"files": files}, &done)
 	if done.Added != 4 || done.Preview.Rows[1].Verdict != signup.Already {
@@ -151,14 +151,14 @@ func TestADisciplinesOwnImportTakesOnlyItsOwn(t *testing.T) {
 // An event of one discipline signs up for that discipline, by name, on the old paths.
 func TestOneDisciplineSignsUpForItself(t *testing.T) {
 	h := openHall(t, t.TempDir())
-	var view httpapi.EventView
+	var view hall.EventView
 	h.must("GET", "/api/event", nil, &view)
 	var ready struct{ Missing []string }
 	h.must("GET", "/api/signup/ready", nil, &ready)
 	if !strings.Contains(strings.Join(ready.Missing, ","), "discipline with a name") {
 		t.Errorf("an unnamed discipline is nothing to sign up for, and the panel should say so: %v", ready.Missing)
 	}
-	var ls httpapi.DisciplineSummary
+	var ls hall.DisciplineSummary
 	h.must("PATCH", "/api/disciplines/"+view.Disciplines[0].Slug, map[string]string{"name": "Open Sabre"}, &ls)
 	h.must("PUT", "/api/event/info", map[string]any{"signup": map[string]any{"definitionId": "msl-open-2026", "name": "MSL Open"}}, nil)
 	var done struct {

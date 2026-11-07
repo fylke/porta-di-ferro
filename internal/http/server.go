@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/fylke/porta-di-ferro/internal/hall"
 	"github.com/fylke/porta-di-ferro/internal/match"
 	"github.com/fylke/porta-di-ferro/internal/store"
 	"github.com/fylke/porta-di-ferro/internal/tournament"
@@ -44,7 +45,7 @@ type Server struct {
 // the coordinator serves the bundle once for every discipline. self says which discipline
 // this is; a name left empty is read from its tournament.json, where renaming it from the
 // admin page keeps it (issue #80).
-func New(st *store.Store, assets fs.FS, self Instance) *Server {
+func New(st *store.Store, assets fs.FS, self hall.Instance) *Server {
 	return newServer(st, assets, self, nil)
 }
 
@@ -52,7 +53,7 @@ func New(st *store.Store, assets fs.FS, self Instance) *Server {
 // discipline in it, which the coordinator sweeps. Nil makes the server its own and starts
 // its own sweep. Given here rather than swapped in after, so no goroutine of this server
 // ever sees the registry change under it.
-func newServer(st *store.Store, assets fs.FS, self Instance, shared *presence) *Server {
+func newServer(st *store.Store, assets fs.FS, self hall.Instance, shared *presence) *Server {
 	self.Dir = st.Dir()
 	if self.Name == "" {
 		if t, err := st.Tournament(); err == nil {
@@ -155,7 +156,7 @@ func (s *Server) getState(w http.ResponseWriter, r *http.Request) {
 }
 
 // Snapshot is this discipline's whole derived picture, for the event coordinator.
-func (s *Server) Snapshot() (Snapshot, error) { return s.snapshot() }
+func (s *Server) Snapshot() (hall.Snapshot, error) { return s.snapshot() }
 
 // Subscribe follows this discipline's updates, for the event coordinator. The channel is
 // closed if the subscriber falls behind, as any stream's is; the caller subscribes again.

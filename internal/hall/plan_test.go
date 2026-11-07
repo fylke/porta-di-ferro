@@ -1,4 +1,4 @@
-package httpapi_test
+package hall_test
 
 import (
 	"errors"
@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	httpapi "github.com/fylke/porta-di-ferro/internal/http"
+	"github.com/fylke/porta-di-ferro/internal/hall"
 	"github.com/fylke/porta-di-ferro/internal/match"
 	"github.com/fylke/porta-di-ferro/internal/store"
 	"github.com/fylke/porta-di-ferro/internal/tournament"
@@ -22,12 +22,12 @@ type pool struct {
 }
 
 // discipline builds a snapshot by hand: what BuildSnapshot would hand the planner.
-func discipline(slug string, stamp string, pools []pool, bracket []store.Match, filled map[string][2]string, done map[string]bool) httpapi.MatsInput {
-	snap := httpapi.Snapshot{Tournament: store.Tournament{GeneratedAt: stamp, BracketAt: stamp + "-b"}}
+func discipline(slug string, stamp string, pools []pool, bracket []store.Match, filled map[string][2]string, done map[string]bool) hall.MatsInput {
+	snap := hall.Snapshot{Tournament: store.Tournament{GeneratedAt: stamp, BracketAt: stamp + "-b"}}
 	snap.Competitors = []store.Competitor{{ID: "a", Name: "Astrid"}, {ID: "b", Name: "Bo"}}
 	for _, p := range pools {
 		sp := store.Pool{Number: p.number, Mat: p.lane, Sequence: p.number}
-		pv := httpapi.PoolView{Number: p.number, Mat: p.lane, Sequence: p.number}
+		pv := hall.PoolView{Number: p.number, Mat: p.lane, Sequence: p.number}
 		for i := 0; i < p.matches; i++ {
 			m := store.Match{ID: fmt.Sprintf("p%dm%d", p.number, i+1), Pool: p.number, Order: i + 1, Mat: p.lane, Red: "a", Blue: "b"}
 			sp.Matches = append(sp.Matches, m)
@@ -35,14 +35,14 @@ func discipline(slug string, stamp string, pools []pool, bracket []store.Match, 
 			if i < len(p.status) {
 				status = map[byte]string{'p': "pending", 'r': "running", 'c': "complete"}[p.status[i]]
 			}
-			pv.Matches = append(pv.Matches, httpapi.MatchView{Match: m, Status: status, State: match.State{Ended: status == "complete"}})
+			pv.Matches = append(pv.Matches, hall.MatchView{Match: m, Status: status, State: match.State{Ended: status == "complete"}})
 		}
 		snap.Tournament.Pools = append(snap.Tournament.Pools, sp)
 		snap.Pools = append(snap.Pools, pv)
 	}
 	if len(bracket) > 0 {
 		snap.Tournament.Bracket = bracket
-		snap.Bracket = &httpapi.BracketView{}
+		snap.Bracket = &hall.BracketView{}
 		for _, m := range bracket {
 			if f, ok := filled[m.ID]; ok {
 				m.Red, m.Blue = f[0], f[1]
@@ -51,10 +51,10 @@ func discipline(slug string, stamp string, pools []pool, bracket []store.Match, 
 			if done[m.ID] {
 				status = "complete"
 			}
-			snap.Bracket.Matches = append(snap.Bracket.Matches, httpapi.MatchView{Match: m, Status: status})
+			snap.Bracket.Matches = append(snap.Bracket.Matches, hall.MatchView{Match: m, Status: status})
 		}
 	}
-	return httpapi.MatsInput{Slug: slug, Name: slug, Snapshot: snap}
+	return hall.MatsInput{Slug: slug, Name: slug, Snapshot: snap}
 }
 
 func eightBracket() []store.Match {
@@ -70,10 +70,10 @@ func eightBracket() []store.Match {
 	}
 }
 
-func items(in ...httpapi.MatsInput) []httpapi.WorkItem {
-	var out []httpapi.WorkItem
+func items(in ...hall.MatsInput) []hall.WorkItem {
+	var out []hall.WorkItem
 	for _, d := range in {
-		out = append(out, httpapi.ItemsOf(d.Slug, d.Snapshot.Tournament)...)
+		out = append(out, hall.ItemsOf(d.Slug, d.Snapshot.Tournament)...)
 	}
 	return out
 }
@@ -81,7 +81,7 @@ func items(in ...httpapi.MatsInput) []httpapi.WorkItem {
 func TestADisciplinesWorkItems(t *testing.T) {
 	ls := discipline("ls", "draw1", []pool{{1, 1, 3, ""}, {2, 2, 3, ""}, {3, 1, 3, ""}}, eightBracket(), nil, nil)
 	got := []string{}
-	for _, it := range httpapi.ItemsOf("ls", ls.Snapshot.Tournament) {
+	for _, it := range hall.ItemsOf("ls", ls.Snapshot.Tournament) {
 		got = append(got, fmt.Sprintf("%s@%d%v", it.Key, it.Lane, it.Matches))
 	}
 	want := []string{
@@ -99,8 +99,8 @@ func TestADisciplinesWorkItems(t *testing.T) {
 func TestADisciplineAloneKeepsItsMats(t *testing.T) {
 	ls := discipline("ls", "draw1", []pool{{1, 1, 3, ""}, {2, 2, 3, ""}, {3, 1, 3, ""}}, nil, nil, nil)
 	its := items(ls)
-	mats := httpapi.MatCount(store.Plan{}, []store.Tournament{{Mats: 2}})
-	placed, changed := httpapi.Place(its, store.Plan{}, mats)
+	mats := hall.MatCount(store.Plan{}, []store.Tournament{{Mats: 2}})
+	placed, changed := hall.Place(its, store.Plan{}, mats)
 	if !changed || mats != 2 {
 		t.Fatalf("a fresh plan should place everything, on the discipline's two mats (%d)", mats)
 	}
@@ -112,7 +112,7 @@ func TestADisciplineAloneKeepsItsMats(t *testing.T) {
 	if !reflect.DeepEqual(placed, want) {
 		t.Errorf("placements:\n got %v\nwant %v", placed, want)
 	}
-	again, changed := httpapi.Place(its, store.Plan{Items: placed}, mats)
+	again, changed := hall.Place(its, store.Plan{Items: placed}, mats)
 	if changed || !reflect.DeepEqual(again, placed) {
 		t.Error("placing what is already placed should change nothing")
 	}
@@ -124,19 +124,19 @@ func TestPlacementsSurviveUntilTheDrawChanges(t *testing.T) {
 		"ls/pool-1": {Mat: 2, Seq: 1, Stamp: "draw1"},
 		"ls/pool-2": {Mat: 2, Seq: 2, Stamp: "draw1"},
 	}}
-	placed, _ := httpapi.Place(items(ls), moved, 2)
+	placed, _ := hall.Place(items(ls), moved, 2)
 	if placed["ls/pool-1"].Mat != 2 {
 		t.Error("a pool the organizer moved should stay moved")
 	}
 
 	redrawn := discipline("ls", "draw2", []pool{{1, 1, 3, ""}, {2, 2, 3, ""}}, nil, nil, nil)
-	placed, changed := httpapi.Place(items(redrawn), moved, 2)
+	placed, changed := hall.Place(items(redrawn), moved, 2)
 	if !changed || placed["ls/pool-1"].Mat != 1 {
 		t.Errorf("a redraw is new pools, placed afresh: %+v", placed)
 	}
 
 	// A mat taken away: what was on it goes to the end of the mat its lane maps to.
-	placed, _ = httpapi.Place(items(ls), moved, 1)
+	placed, _ = hall.Place(items(ls), moved, 1)
 	if placed["ls/pool-1"].Mat != 1 || placed["ls/pool-2"].Mat != 1 {
 		t.Errorf("with one mat everything is on it: %+v", placed)
 	}
@@ -145,12 +145,12 @@ func TestPlacementsSurviveUntilTheDrawChanges(t *testing.T) {
 func TestTwoDisciplinesShareTheMats(t *testing.T) {
 	ls := discipline("ls", "d", []pool{{1, 1, 2, "cc"}, {2, 2, 2, "c"}}, nil, nil, nil)
 	sa := discipline("sa", "d", []pool{{1, 1, 2, ""}}, nil, nil, nil)
-	placed, _ := httpapi.Place(items(ls, sa), store.Plan{}, 2)
+	placed, _ := hall.Place(items(ls, sa), store.Plan{}, 2)
 	if p := placed["sa/pool-1"]; p.Mat != 1 || p.Seq != 2 {
 		t.Fatalf("Sabre's first pool should queue behind Longsword's on mat 1: %+v", p)
 	}
 	none := func(int) (string, string) { return "", "" }
-	view := httpapi.BuildMats([]httpapi.MatsInput{ls, sa}, placed, 2, none)
+	view := hall.BuildMats([]hall.MatsInput{ls, sa}, placed, 2, none)
 
 	m1 := view.Mats[0]
 	if m1.Current == nil || m1.Current.Discipline != "sa" || m1.Current.Match.ID != "p1m1" {
@@ -174,7 +174,7 @@ func TestTwoDisciplinesShareTheMats(t *testing.T) {
 		}
 		return "", ""
 	}
-	view = httpapi.BuildMats([]httpapi.MatsInput{ls, sa}, placed, 2, held)
+	view = hall.BuildMats([]hall.MatsInput{ls, sa}, placed, 2, held)
 	if c := view.Mats[0].Current; c == nil || c.Discipline != "ls" || c.Match.ID != "p1m2" {
 		t.Errorf("a held match stays on the mat, even into the next discipline's turn: %+v", c)
 	}
@@ -193,8 +193,8 @@ func TestTheBracketWaitsForItsFeeders(t *testing.T) {
 	done := map[string]bool{"e-qf1": true, "e-qf3": true}
 	ls := discipline("ls", "d", nil, eightBracket(), filled, done)
 	// The quarter-finals in this snapshot have competitors; the rest wait on results.
-	placed, _ := httpapi.Place(items(ls), store.Plan{}, 2)
-	view := httpapi.BuildMats([]httpapi.MatsInput{ls}, placed, 2, func(int) (string, string) { return "", "" })
+	placed, _ := hall.Place(items(ls), store.Plan{}, 2)
+	view := hall.BuildMats([]hall.MatsInput{ls}, placed, 2, func(int) (string, string) { return "", "" })
 	m1 := view.Mats[0]
 	if m1.Current != nil {
 		t.Errorf("mat 1 has fenced its quarter-finals and the semi waits on mat 2: %+v", m1.Current)
@@ -209,15 +209,15 @@ func TestTheBracketWaitsForItsFeeders(t *testing.T) {
 
 func TestMovingItems(t *testing.T) {
 	ls := discipline("ls", "d", []pool{{1, 1, 2, "r"}, {2, 1, 2, ""}, {3, 1, 2, ""}, {4, 2, 2, ""}}, nil, nil, nil)
-	placed, _ := httpapi.Place(items(ls), store.Plan{}, 2)
+	placed, _ := hall.Place(items(ls), store.Plan{}, 2)
 	none := func(int) (string, string) { return "", "" }
-	view := httpapi.BuildMats([]httpapi.MatsInput{ls}, placed, 2, none)
+	view := hall.BuildMats([]hall.MatsInput{ls}, placed, 2, none)
 
-	if _, _, err := httpapi.Move(view, placed, "ls/pool-1", 2, 0, 2); err == nil {
+	if _, _, err := hall.Move(view, placed, "ls/pool-1", 2, 0, 2); err == nil {
 		t.Error("a pool under way must not move")
 	}
 	// To the front of mat 1 means behind the running pool, never before it.
-	next, changed, err := httpapi.Move(view, placed, "ls/pool-3", 1, 0, 2)
+	next, changed, err := hall.Move(view, placed, "ls/pool-3", 1, 0, 2)
 	if err != nil || !changed {
 		t.Fatalf("moving pool 3 up: %v %v", changed, err)
 	}
@@ -225,24 +225,24 @@ func TestMovingItems(t *testing.T) {
 		t.Errorf("pool 3 should land right behind the running pool: %+v", next)
 	}
 	// A drop where it already is writes nothing.
-	if _, changed, _ := httpapi.Move(view, placed, "ls/pool-2", 1, 1, 2); changed {
+	if _, changed, _ := hall.Move(view, placed, "ls/pool-2", 1, 1, 2); changed {
 		t.Error("dropping a pool where it is should change nothing")
 	}
 	// Across mats, at a position.
-	next, _, _ = httpapi.Move(view, placed, "ls/pool-2", 2, 0, 2)
+	next, _, _ = hall.Move(view, placed, "ls/pool-2", 2, 0, 2)
 	if p := next["ls/pool-2"]; p.Mat != 2 || p.Seq != 1 || next["ls/pool-4"].Seq != 2 {
 		t.Errorf("pool 2 should be first on mat 2: %+v", next)
 	}
-	if _, _, err := httpapi.Move(view, placed, "ls/pool-2", 3, 0, 2); err == nil {
+	if _, _, err := hall.Move(view, placed, "ls/pool-2", 3, 0, 2); err == nil {
 		t.Error("there is no mat 3")
 	}
 
 	// The arrows: one step, and a step past the front is no move.
-	next, _, _ = httpapi.Step(view, placed, "ls/pool-3", true, 2)
+	next, _, _ = hall.Step(view, placed, "ls/pool-3", true, 2)
 	if next["ls/pool-3"].Seq >= next["ls/pool-2"].Seq {
 		t.Errorf("a step up should put pool 3 before pool 2: %+v", next)
 	}
-	if _, changed, _ := httpapi.Step(view, placed, "ls/pool-4", true, 2); changed {
+	if _, changed, _ := hall.Step(view, placed, "ls/pool-4", true, 2); changed {
 		t.Error("the first item on a mat cannot step further up")
 	}
 }
@@ -256,7 +256,7 @@ func TestASnapshotSpeaksTheEventsMats(t *testing.T) {
 		"ls/elim-1": {Mat: 2, Seq: 1}, "ls/final": {Mat: 4, Seq: 9},
 	}
 	snap := ls.Snapshot
-	httpapi.OnEventMats(&snap, "ls", placed, 4)
+	hall.OnEventMats(&snap, "ls", placed, 4)
 	if snap.Pools[0].Number != 2 || snap.Pools[0].Mat != 1 || snap.Pools[1].Mat != 3 {
 		t.Errorf("the pools should be on and ordered by the event's mats: %+v", snap.Pools)
 	}
@@ -283,7 +283,7 @@ func TestThePlannedDaySurvivesTheDraw(t *testing.T) {
 		"ls/pool-1": {Mat: 2, Seq: 1, Pinned: true, NotBefore: "10:00"},
 		"ls/pool-2": {Mat: 1, Seq: 1},
 	}}
-	placed, changed := httpapi.Place(items(ls), plan, 2)
+	placed, changed := hall.Place(items(ls), plan, 2)
 	if !changed {
 		t.Error("taking over a projected placement should be written down")
 	}
@@ -295,9 +295,9 @@ func TestThePlannedDaySurvivesTheDraw(t *testing.T) {
 // A card moved by hand is pinned, so a suggestion keeps it on that mat.
 func TestAMoveByHandPins(t *testing.T) {
 	ls := discipline("ls", "d", []pool{{1, 1, 2, ""}, {2, 1, 2, ""}}, nil, nil, nil)
-	placed, _ := httpapi.Place(items(ls), store.Plan{}, 2)
-	view := httpapi.BuildMats([]httpapi.MatsInput{ls}, placed, 2, func(int) (string, string) { return "", "" })
-	next, _, _ := httpapi.Move(view, placed, "ls/pool-2", 2, 0, 2)
+	placed, _ := hall.Place(items(ls), store.Plan{}, 2)
+	view := hall.BuildMats([]hall.MatsInput{ls}, placed, 2, func(int) (string, string) { return "", "" })
+	next, _, _ := hall.Move(view, placed, "ls/pool-2", 2, 0, 2)
 	if !next["ls/pool-2"].Pinned || next["ls/pool-1"].Pinned {
 		t.Errorf("only the moved item should be pinned: %+v", next)
 	}
@@ -309,7 +309,7 @@ func TestUndrawnWorkIsProjected(t *testing.T) {
 	tn := store.Defaults()
 	tn.Mats, tn.MinPoolSize, tn.MaxPoolSize = 2, 5, 7
 	got := []string{}
-	for _, it := range httpapi.ProjectedItems("sa", tn, 14) {
+	for _, it := range hall.ProjectedItems("sa", tn, 14) {
 		if !it.Projected || it.Stamp != "" {
 			t.Errorf("a projected item should say so and have no stamp: %+v", it)
 		}
@@ -319,17 +319,17 @@ func TestUndrawnWorkIsProjected(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("fourteen entrants should project two pools of seven and a bracket of eight:\n got %v\nwant %v", got, want)
 	}
-	if n := len(httpapi.ProjectedItems("sa", tn, 1)); n != 0 {
+	if n := len(hall.ProjectedItems("sa", tn, 1)); n != 0 {
 		t.Errorf("one entrant is nothing to plan, got %d items", n)
 	}
 
 	// Drawn pools leave only the bracket projected; a drawn bracket leaves nothing.
 	ls := discipline("ls", "d", []pool{{1, 1, 3, ""}}, nil, nil, nil)
-	if its := httpapi.ProjectedItems("ls", ls.Snapshot.Tournament, 2); len(its) != 1 || its[0].Key != "final" {
+	if its := hall.ProjectedItems("ls", ls.Snapshot.Tournament, 2); len(its) != 1 || its[0].Key != "final" {
 		t.Errorf("with the pools drawn only the bracket is still to come: %+v", its)
 	}
 	ls = discipline("ls", "d", []pool{{1, 1, 3, ""}}, eightBracket(), nil, nil)
-	if its := httpapi.ProjectedItems("ls", ls.Snapshot.Tournament, 8); len(its) != 0 {
+	if its := hall.ProjectedItems("ls", ls.Snapshot.Tournament, 8); len(its) != 0 {
 		t.Errorf("with everything drawn nothing is projected: %+v", its)
 	}
 }
@@ -344,9 +344,9 @@ func TestAMatDoesNotWaitOnProjectedWork(t *testing.T) {
 	sa.Snapshot.Pools, sa.Snapshot.Bracket = nil, nil
 	sa.Expected = 6
 	plan := store.Plan{Items: map[string]store.Placement{"sa/pool-1": {Mat: 1, Seq: 1}}}
-	all := append(items(ls), httpapi.PlanItems("sa", sa.Snapshot.Tournament, 6)...)
-	placed, _ := httpapi.Place(all, plan, 2)
-	view := httpapi.BuildMats([]httpapi.MatsInput{ls, sa}, placed, 2, func(int) (string, string) { return "", "" })
+	all := append(items(ls), hall.PlanItems("sa", sa.Snapshot.Tournament, 6)...)
+	placed, _ := hall.Place(all, plan, 2)
+	view := hall.BuildMats([]hall.MatsInput{ls, sa}, placed, 2, func(int) (string, string) { return "", "" })
 	if cur := view.Mats[0].Current; cur == nil || cur.Discipline != "ls" {
 		t.Errorf("mat 1 should be on the longsword's pool, not waiting for the sabre's draw: %+v", cur)
 	}
@@ -369,7 +369,7 @@ func TestAMatDoesNotWaitOnProjectedWork(t *testing.T) {
 func TestTheProjectionsOwnPlacementsGiveWay(t *testing.T) {
 	ls := discipline("ls", "drawn", []pool{{1, 1, 2, ""}, {2, 2, 2, ""}}, nil, nil, nil)
 	plan := store.Plan{Items: map[string]store.Placement{"ls/pool-2": {Mat: 1, Seq: 1}}}
-	placed, _ := httpapi.Place(items(ls), plan, 2)
+	placed, _ := hall.Place(items(ls), plan, 2)
 	if p := placed["ls/pool-2"]; p.Mat != 2 || p.Stamp != "drawn" {
 		t.Errorf("pool 2 should go to its drawn lane, mat 2: %+v", p)
 	}
@@ -379,16 +379,16 @@ func TestTheProjectionsOwnPlacementsGiveWay(t *testing.T) {
 // (#149): the eliminations follow the pools, the finals the eliminations.
 func TestOnlyPoolsMoveAndNeverBehindTheirBracket(t *testing.T) {
 	ls := discipline("ls", "d", []pool{{1, 1, 2, ""}, {2, 1, 2, ""}}, eightBracket(), nil, nil)
-	placed, _ := httpapi.Place(items(ls), store.Plan{}, 2)
-	view := httpapi.BuildMats([]httpapi.MatsInput{ls}, placed, 2, func(int) (string, string) { return "", "" })
+	placed, _ := hall.Place(items(ls), store.Plan{}, 2)
+	view := hall.BuildMats([]hall.MatsInput{ls}, placed, 2, func(int) (string, string) { return "", "" })
 
 	for _, id := range []string{"ls/elim-1", "ls/bronze", "ls/final"} {
-		var locked httpapi.ErrNotMovable
-		if _, _, err := httpapi.Move(view, placed, id, 2, 0, 2); !errors.As(err, &locked) {
+		var locked hall.ErrNotMovable
+		if _, _, err := hall.Move(view, placed, id, 2, 0, 2); !errors.As(err, &locked) {
 			t.Errorf("%s follows the pools and should not be moved by hand: %v", id, err)
 		}
 	}
-	next, _, err := httpapi.Move(view, placed, "ls/pool-1", 1, 99, 2)
+	next, _, err := hall.Move(view, placed, "ls/pool-1", 1, 99, 2)
 	if err != nil {
 		t.Fatal(err)
 	}

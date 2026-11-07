@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/fylke/porta-di-ferro/internal/hall"
 	"github.com/fylke/porta-di-ferro/internal/people"
 	"github.com/fylke/porta-di-ferro/internal/signup"
 	"github.com/fylke/porta-di-ferro/internal/staffing"
@@ -128,18 +129,18 @@ func (c *Coordinator) liftStaff() {
 // --- the staff, over HTTP ---------------------------------------------------------------
 
 // StaffingNow is the staff as they stand, checked against the plan as forecast.
-func (c *Coordinator) StaffingNow() (StaffingView, staffing.Input, store.Staff, error) {
+func (c *Coordinator) StaffingNow() (hall.StaffingView, staffing.Input, store.Staff, error) {
 	snaps := c.snapshots()
 	view := c.matsFrom(snaps)
 	h := c.timesFrom(snaps)
 	st, err := c.folder.Staff()
 	if err != nil {
-		return StaffingView{}, staffing.Input{}, st, err
+		return hall.StaffingView{}, staffing.Input{}, st, err
 	}
-	si := StaffInput(h.in, h.result, st, StillIn(h.inputs))
-	v := ViewStaffing(si, st, view)
+	si := hall.StaffInput(h.in, h.result, st, hall.StillIn(h.inputs))
+	v := hall.ViewStaffing(si, st, view)
 	if reg, err := c.folder.People(); err == nil {
-		v.Unsure = UnsureOf(st.Members, people.Duplicates(reg, c.entriesByPerson(reg)))
+		v.Unsure = hall.UnsureOf(st.Members, people.Duplicates(reg, c.entriesByPerson(reg)))
 	}
 	return v, si, st, nil
 }
@@ -213,7 +214,7 @@ func (c *Coordinator) putAssignment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, err := c.changeStaff(func(st *store.Staff) error {
-		next, err := SetAssignment(*st, in.Item, in.Role, in.Slot, in.Staff)
+		next, err := hall.SetAssignment(*st, in.Item, in.Role, in.Slot, in.Staff)
 		*st = next
 		return err
 	})
@@ -231,7 +232,7 @@ func (c *Coordinator) suggestStaff(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, SuggestStaff(si))
+	writeJSON(w, http.StatusOK, hall.SuggestStaff(si))
 }
 
 // applyStaff takes a suggestion: worked out again, and refused when it is no longer the
@@ -249,7 +250,7 @@ func (c *Coordinator) applyStaff(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
-	s := SuggestStaff(si)
+	s := hall.SuggestStaff(si)
 	if s.Signature != in.Signature {
 		writeJSON(w, http.StatusConflict, map[string]any{
 			"error":      "the staff or the plan changed since that suggestion; here is a new one",

@@ -5,32 +5,32 @@ import (
 	"testing"
 
 	"github.com/fylke/porta-di-ferro/internal/demo"
-	httpapi "github.com/fylke/porta-di-ferro/internal/http"
+	"github.com/fylke/porta-di-ferro/internal/hall"
 )
 
 // The demo is an event of two disciplines (docs/proposals/one-event-many-disciplines.md,
 // R11), answering every path the server's coordinator answers, the same way.
 
-func view(t *testing.T, e *demo.Event) httpapi.EventView {
+func view(t *testing.T, e *demo.Event) hall.EventView {
 	t.Helper()
 	res := e.Request("GET", "/api/event", nil)
 	if res.Status != 200 {
 		t.Fatalf("GET /api/event returned %d: %s", res.Status, res.Body)
 	}
-	var v httpapi.EventView
+	var v hall.EventView
 	if err := json.Unmarshal([]byte(res.Body), &v); err != nil {
 		t.Fatal(err)
 	}
 	return v
 }
 
-func snapIn(t *testing.T, e *demo.Event, slug string) httpapi.Snapshot {
+func snapIn(t *testing.T, e *demo.Event, slug string) hall.Snapshot {
 	t.Helper()
 	res := e.Request("GET", "/api/d/"+slug+"/state", nil)
 	if res.Status != 200 {
 		t.Fatalf("GET /api/d/%s/state returned %d: %s", slug, res.Status, res.Body)
 	}
-	var s httpapi.Snapshot
+	var s hall.Snapshot
 	if err := json.Unmarshal([]byte(res.Body), &s); err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +133,7 @@ func TestAnIdentifierCanBeChangedInTheDemo(t *testing.T) {
 	if s := snapIn(t, e, "foam"); len(s.Competitors) != 1 {
 		t.Errorf("the old identifier should still lead there: %+v", s.Instance)
 	}
-	var v httpapi.ForecastView
+	var v hall.ForecastView
 	if err := json.Unmarshal([]byte(e.Request("GET", "/api/forecast", nil).Body), &v); err != nil {
 		t.Fatal(err)
 	}
@@ -196,7 +196,7 @@ func TestTheDemoEventSavesAndLoads(t *testing.T) {
 func TestTheDemoRunsTheEventsMats(t *testing.T) {
 	e := demo.NewEvent()
 	res := e.Request("GET", "/api/mats", nil)
-	var v httpapi.MatsView
+	var v hall.MatsView
 	if err := json.Unmarshal([]byte(res.Body), &v); err != nil || res.Status != 200 {
 		t.Fatalf("GET /api/mats: %d %v", res.Status, err)
 	}
@@ -206,7 +206,7 @@ func TestTheDemoRunsTheEventsMats(t *testing.T) {
 	if c := v.Mats[0].Current; c == nil || c.Discipline != "open-steel-longsword" || c.Match.Status != "running" {
 		t.Errorf("mat 1 should be on the longsword's match under way: %+v", c)
 	}
-	var sabre httpapi.ItemView
+	var sabre hall.ItemView
 	for _, it := range v.Items {
 		if it.ID == "open-sabre/pool-1" {
 			sabre = it
@@ -276,7 +276,7 @@ func TestTheDemoDeletesItsEvent(t *testing.T) {
 	if after.Info.Welcome != "" || after.ID == "" || after.ID == before.ID {
 		t.Errorf("the new event should have nothing of the old one and an identity of its own: %q %q", after.Info.Welcome, after.ID)
 	}
-	var mats httpapi.MatsView
+	var mats hall.MatsView
 	_ = json.Unmarshal([]byte(e.Request("GET", "/api/mats", nil).Body), &mats)
 	if mats.Event != after.ID {
 		t.Errorf("the mats should be the new event's, got %q", mats.Event)

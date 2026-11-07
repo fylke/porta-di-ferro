@@ -5,14 +5,14 @@ import (
 	"testing"
 
 	"github.com/fylke/porta-di-ferro/internal/demo"
-	httpapi "github.com/fylke/porta-di-ferro/internal/http"
+	"github.com/fylke/porta-di-ferro/internal/hall"
 )
 
 // The demo's volunteers are already at work, and the rules hold: nobody on a mat while
 // they fence or while they work another (phase 5).
 func TestTheDemoIsStaffed(t *testing.T) {
 	e := demo.NewEvent()
-	var v httpapi.StaffingView
+	var v hall.StaffingView
 	res := e.Request("GET", "/api/staff", nil)
 	if err := json.Unmarshal([]byte(res.Body), &v); err != nil || res.Status != 200 {
 		t.Fatalf("GET /api/staff: %d %v", res.Status, err)
@@ -31,7 +31,7 @@ func TestTheDemoIsStaffed(t *testing.T) {
 		}
 	}
 	res = e.Request("GET", "/api/people/"+clara, nil)
-	var pv httpapi.PersonView
+	var pv hall.PersonView
 	_ = json.Unmarshal([]byte(res.Body), &pv)
 	if len(pv.Entries) != 2 || pv.Entries[0].Discipline != "open-steel-longsword" || pv.Entries[1].Discipline != "sword-and-buckler" {
 		t.Errorf("Clara fences the longsword and the sword and buckler, and is the same person as the volunteer: %+v", pv.Entries)
@@ -45,7 +45,7 @@ func TestTheDemoIsStaffed(t *testing.T) {
 		}
 	}
 
-	var sug httpapi.StaffSuggestion
+	var sug hall.StaffSuggestion
 	_ = json.Unmarshal([]byte(e.Request("POST", "/api/staff/suggest", nil).Body), &sug)
 	b, _ := json.Marshal(map[string]string{"signature": sug.Signature})
 	if res := e.Request("POST", "/api/staff/apply", b); res.Status != 200 {

@@ -3,15 +3,17 @@ package httpapi
 import (
 	"net/http"
 	"time"
+
+	"github.com/fylke/porta-di-ferro/internal/hall"
 )
 
 // Export is the whole tournament in one file: competitors, the draw, every result and the
 // final standings with the indices that produced them. Written from derived state at
 // export time, because derived state is never stored.
 type Export struct {
-	ExportedAt string   `json:"exportedAt"`
-	Ruleset    any      `json:"ruleset"`
-	Snapshot   Snapshot `json:"tournament"`
+	ExportedAt string        `json:"exportedAt"`
+	Ruleset    any           `json:"ruleset"`
+	Snapshot   hall.Snapshot `json:"tournament"`
 }
 
 func (s *Server) exportJSON(w http.ResponseWriter, r *http.Request) {

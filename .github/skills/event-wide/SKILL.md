@@ -12,7 +12,7 @@ Use this workflow when behavior belongs to the event as a whole rather than to o
 - Read the event/discipline boundary in [AGENTS.md](../../../AGENTS.md), [docs/architecture.md](../../../docs/architecture.md), and the relevant proposal or package docs before changing ownership or behavior.
 - Keep event data such as `event.json`, the plan, people, staff, screens, and shared device presence at the coordinator/event level. A discipline must not write event state except through its established event interface (`EventInfo`). Preserve each discipline's separate store and folder.
 - Nothing below the coordinator may assume it is the only discipline. Exercise behavior with multiple disciplines, including cases where identifiers such as match IDs repeat.
-- Reuse pure domain decisions and shared HTTP view/input functions. The demo is not a second implementation: `demo.Event` should mirror the coordinator's event API and call the same domain logic wherever available. When adding a coordinator event route, add its equivalent to `demo.Event` too.
+- Reuse pure domain decisions and the shared view and input functions in `internal/hall`. The demo is not a second implementation: `demo.Event` should mirror the coordinator's event API and call the same domain logic wherever available. When adding a coordinator event route, add its equivalent to `demo.Event` too.
 - Keep lock ownership and acquisition order consistent with nearby coordinator code. Do not hold an event registry lock while waiting for a discipline lock; check the local lock comments before changing cross-boundary calls.
 
 ## Domain Checks

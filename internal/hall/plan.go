@@ -1,4 +1,4 @@
-package httpapi
+package hall
 
 import (
 	"fmt"
@@ -22,6 +22,10 @@ import (
 // untouched. The plan says which mat runs each item and in what order. Everything here is
 // a pure function over a discipline's stored tournament or its snapshot, so the
 // coordinator and the browser demo run the same code.
+
+// MaxMats bounds the hall. Four mats per discipline is the draw's own limit; an event of
+// several shares more.
+const MaxMats = 8
 
 // The kinds of work item.
 const (

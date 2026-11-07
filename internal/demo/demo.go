@@ -9,7 +9,7 @@
 //
 // So this is the real thing with a different source underneath it. The tournament lives
 // in memory instead of in JSON files on the organizer's disk, and every derived answer
-// still comes from internal/tournament, internal/match and httpapi.BuildSnapshot -- the
+// still comes from internal/tournament, internal/match and hall.BuildSnapshot -- the
 // same code the Go server runs. Compiled to WebAssembly by cmd/demo-wasm, it answers the
 // same API calls the client already makes, so the Svelte application is not modified for
 // the demo and cannot drift from it.
@@ -29,7 +29,7 @@ import (
 	"strings"
 	"time"
 
-	httpapi "github.com/fylke/porta-di-ferro/internal/http"
+	"github.com/fylke/porta-di-ferro/internal/hall"
 	"github.com/fylke/porta-di-ferro/internal/match"
 	"github.com/fylke/porta-di-ferro/internal/people"
 	"github.com/fylke/porta-di-ferro/internal/qr"
@@ -148,7 +148,7 @@ func (d *Demo) Load(b []byte) error {
 	return nil
 }
 
-// --- httpapi.Source -----------------------------------------------------------------
+// --- hall.Source -----------------------------------------------------------------
 //
 // The four reads BuildSnapshot needs. *store.Store answers these off the disk; this
 // answers them out of memory, and neither knows about the other.
@@ -193,26 +193,26 @@ func (d *Demo) LastEventAt(id string) (time.Time, bool) {
 // inventing a path that does not exist.
 func (d *Demo) Dir() string { return "in this browser" }
 
-func (d *Demo) snapshot() (httpapi.Snapshot, error) {
+func (d *Demo) snapshot() (hall.Snapshot, error) {
 	snap, err := d.placedSnapshot()
 	if err == nil && d.event != nil {
 		// Which match each of the event's mats is on, when it is this discipline's: the
 		// hall's to say, built from the placed snapshots, as the coordinator does.
-		snap.Mats = httpapi.CurrentFrom(d.event.mats(), d.slug)
+		snap.Mats = hall.CurrentFrom(d.event.mats(), d.slug)
 		// When each match still to come is expected (phase 4).
 		_, r, _ := d.event.times()
-		httpapi.ApplyEtas(&snap, httpapi.EtasFor(r, d.slug))
+		hall.ApplyEtas(&snap, hall.EtasFor(r, d.slug))
 	}
 	return snap, err
 }
 
 // placedSnapshot is the snapshot on the event's mats, without Mats.
-func (d *Demo) placedSnapshot() (httpapi.Snapshot, error) {
+func (d *Demo) placedSnapshot() (hall.Snapshot, error) {
 	url := "/"
 	if d.slug != "" {
 		url = "/d/" + d.slug + "/"
 	}
-	snap, err := httpapi.BuildSnapshot(d, d.rules, httpapi.Instance{
+	snap, err := hall.BuildSnapshot(d, d.rules, hall.Instance{
 		Name: d.tournament.Discipline,
 		Slug: d.slug,
 		Dir:  d.Dir(),
@@ -224,7 +224,7 @@ func (d *Demo) placedSnapshot() (httpapi.Snapshot, error) {
 	})
 	if err == nil && d.event != nil {
 		placed, mats := d.event.placements()
-		httpapi.OnEventMats(&snap, d.slug, placed, mats)
+		hall.OnEventMats(&snap, d.slug, placed, mats)
 	}
 	return snap, err
 }
@@ -343,7 +343,7 @@ func (d *Demo) Request(method, path string, body []byte) Response {
 		}
 		return changed(map[string]bool{"ok": true})
 	case method == "DELETE" && len(parts) == 3 && parts[1] == "staff":
-		kept, found := httpapi.WithoutStaff(d.tournament.Staff, parts[2])
+		kept, found := hall.WithoutStaff(d.tournament.Staff, parts[2])
 		if !found {
 			return fail(404, fmt.Errorf("no staff member %s", parts[2]))
 		}
@@ -440,7 +440,7 @@ func (d *Demo) signupApp() Response {
 	if err != nil {
 		return fail(500, err)
 	}
-	baked, err := httpapi.BakeSignupApp(page, d.definition(true))
+	baked, err := hall.BakeSignupApp(page, d.definition(true))
 	if err != nil {
 		return fail(500, err)
 	}
@@ -490,7 +490,7 @@ func (d *Demo) checkSignups(files []signup.File) signup.Preview {
 func (d *Demo) importSignups(files []signup.File) (added, addedStaff int) {
 	preview := d.checkSignups(files)
 	before, staffBefore := len(d.competitors), len(d.tournament.Staff)
-	d.competitors = signup.Import(preview, httpapi.NextCompetitorID, d.competitors)
+	d.competitors = signup.Import(preview, hall.NextCompetitorID, d.competitors)
 	if d.event != nil {
 		emails := map[string]string{}
 		for _, row := range preview.Rows {
@@ -552,11 +552,11 @@ func (d *Demo) infoPDF(query string) Response {
 		}
 	}
 	var buf bytes.Buffer
-	var programme []httpapi.ProgrammeRow
+	var programme []hall.ProgrammeRow
 	if d.event != nil {
 		programme = d.event.View().Programme
 	}
-	if err := httpapi.BuildInfoPDF(snap, programme, landing, strings.Contains(query, "lang=sv")).Output(&buf); err != nil {
+	if err := hall.BuildInfoPDF(snap, programme, landing, strings.Contains(query, "lang=sv")).Output(&buf); err != nil {
 		return fail(500, err)
 	}
 	return Response{
@@ -575,7 +575,7 @@ func (d *Demo) exportPDF(swedish bool) Response {
 	// Base64 rather than text: the adapter turns it back into bytes for the Blob the
 	// browser prints from.
 	var buf bytes.Buffer
-	if err := httpapi.BuildPDF(snap, swedish).Output(&buf); err != nil {
+	if err := hall.BuildPDF(snap, swedish).Output(&buf); err != nil {
 		return fail(500, err)
 	}
 	return Response{
@@ -597,7 +597,7 @@ func (d *Demo) addCompetitor(body []byte) Response {
 		return fail(400, fmt.Errorf("a competitor needs a name"))
 	}
 	c := store.Competitor{
-		ID:   httpapi.NextCompetitorID(d.competitors),
+		ID:   hall.NextCompetitorID(d.competitors),
 		Name: strings.TrimSpace(in.Name),
 		Club: strings.TrimSpace(in.Club),
 	}
@@ -657,7 +657,7 @@ func (d *Demo) putEvent(body []byte) Response {
 	if err := json.Unmarshal(body, &in); err != nil {
 		return fail(400, err)
 	}
-	ev, err := httpapi.CleanEvent(in)
+	ev, err := hall.CleanEvent(in)
 	if err != nil {
 		return fail(400, err)
 	}

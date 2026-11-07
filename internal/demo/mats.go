@@ -7,12 +7,12 @@ import (
 	"strconv"
 	"strings"
 
-	httpapi "github.com/fylke/porta-di-ferro/internal/http"
+	"github.com/fylke/porta-di-ferro/internal/hall"
 	"github.com/fylke/porta-di-ferro/internal/store"
 )
 
 // The demo's mats (phase 2): the same plan, queues and moves the coordinator runs --
-// httpapi.Place, BuildMats, Move -- over the demo's in-memory disciplines, so the mat board,
+// hall.Place, BuildMats, Move -- over the demo's in-memory disciplines, so the mat board,
 // the score keeper and the screens in the demo cannot disagree with a real event.
 
 // keeper is a score keeper registered in the demo's one tab: which mat, which match.
@@ -24,14 +24,14 @@ type keeper struct {
 
 // placements is the plan, with any item just drawn placed and kept.
 func (e *Event) placements() (map[string]store.Placement, int) {
-	var items []httpapi.WorkItem
+	var items []hall.WorkItem
 	var tournaments []store.Tournament
 	for _, d := range e.disciplines {
 		tournaments = append(tournaments, d.tournament)
-		items = append(items, httpapi.PlanItems(d.slug, d.tournament, httpapi.Entrants(d.competitors, e.plan.Expected[d.slug]))...)
+		items = append(items, hall.PlanItems(d.slug, d.tournament, hall.Entrants(d.competitors, e.plan.Expected[d.slug]))...)
 	}
-	mats := httpapi.MatCount(e.plan, tournaments)
-	started := func(it httpapi.WorkItem) bool {
+	mats := hall.MatCount(e.plan, tournaments)
+	started := func(it hall.WorkItem) bool {
 		d := e.find(it.Discipline)
 		if d == nil {
 			return false
@@ -43,7 +43,7 @@ func (e *Event) placements() (map[string]store.Placement, int) {
 		}
 		return false
 	}
-	placed, changed := httpapi.PlaceIn(items, e.plan, mats, httpapi.OrderOf(e.plan, e.slugs(), started))
+	placed, changed := hall.PlaceIn(items, e.plan, mats, hall.OrderOf(e.plan, e.slugs(), started))
 	if changed {
 		e.plan.Items = placed
 	}
@@ -60,22 +60,22 @@ func (e *Event) held(mat int) (string, string) {
 }
 
 // mats is the hall, as GET /api/mats answers it.
-func (e *Event) mats() httpapi.MatsView {
+func (e *Event) mats() hall.MatsView {
 	placed, n := e.placements()
-	var inputs []httpapi.MatsInput
+	var inputs []hall.MatsInput
 	for _, d := range e.disciplines {
 		snap, err := d.placedSnapshot()
 		if err != nil {
 			continue
 		}
-		inputs = append(inputs, httpapi.MatsInput{Slug: d.slug, Name: d.tournament.Discipline, Snapshot: snap,
+		inputs = append(inputs, hall.MatsInput{Slug: d.slug, Name: d.tournament.Discipline, Snapshot: snap,
 			Expected: e.plan.Expected[d.slug]})
 	}
 	e.withSessions(inputs)
-	view := httpapi.BuildMats(inputs, placed, n, e.held)
+	view := hall.BuildMats(inputs, placed, n, e.held)
 	view.Upcoming = store.UpcomingOf(e.screens)
 	view.Event = e.id
-	httpapi.NameMats(&view, e.plan)
+	hall.NameMats(&view, e.plan)
 	return view
 }
 
@@ -89,10 +89,10 @@ func (e *Event) putMat(mat string, body []byte) Response {
 	if err := json.Unmarshal(body, &in); err != nil {
 		return fail(400, err)
 	}
-	if in, err = httpapi.CleanMat(in); err != nil {
+	if in, err = hall.CleanMat(in); err != nil {
 		return fail(400, err)
 	}
-	httpapi.SetMat(&e.plan, n, in)
+	hall.SetMat(&e.plan, n, in)
 	return changed(e.mats())
 }
 
@@ -109,8 +109,8 @@ func (e *Event) putScreens(body []byte) Response {
 }
 
 // withSessions gives every discipline its block of the day (#136).
-func (e *Event) withSessions(inputs []httpapi.MatsInput) {
-	sessions := httpapi.Sessions(e.plan, e.slugs())
+func (e *Event) withSessions(inputs []hall.MatsInput) {
+	sessions := hall.Sessions(e.plan, e.slugs())
 	for i := range inputs {
 		inputs[i].Session = sessions[inputs[i].Slug]
 		inputs[i].FinalsLast = e.plan.FinalsLast
@@ -128,12 +128,12 @@ func (e *Event) moveItem(id string, mat, index int, move string) error {
 	)
 	switch move {
 	case "up", "down":
-		next, changed, err = httpapi.Step(view, placed, id, move == "up", n)
+		next, changed, err = hall.Step(view, placed, id, move == "up", n)
 	default:
 		if index < 0 {
 			index = len(view.Items)
 		}
-		next, changed, err = httpapi.Move(view, placed, id, mat, index, n)
+		next, changed, err = hall.Move(view, placed, id, mat, index, n)
 	}
 	if err == nil && changed {
 		e.plan.Items = next
@@ -146,14 +146,14 @@ func (e *Event) patchItem(id string, body []byte) Response {
 		Mat   int    `json:"mat"`
 		Index *int   `json:"index"`
 		Move  string `json:"move"`
-		httpapi.ItemFlags
+		hall.ItemFlags
 	}
 	if err := json.Unmarshal(body, &in); err != nil {
 		return fail(400, err)
 	}
 	if in.Any() {
 		placed, _ := e.placements()
-		next, err := httpapi.SetItemFlags(placed, id, in.ItemFlags)
+		next, err := hall.SetItemFlags(placed, id, in.ItemFlags)
 		if err != nil {
 			return fail(400, err)
 		}
@@ -167,7 +167,7 @@ func (e *Event) patchItem(id string, body []byte) Response {
 		index = *in.Index
 	}
 	err := e.moveItem(id, in.Mat, index, in.Move)
-	var locked httpapi.ErrNotMovable
+	var locked hall.ErrNotMovable
 	switch {
 	case errors.As(err, &locked):
 		return fail(409, err)

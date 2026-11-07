@@ -7,43 +7,43 @@ import (
 	"time"
 
 	"github.com/fylke/porta-di-ferro/internal/forecast"
-	httpapi "github.com/fylke/porta-di-ferro/internal/http"
+	"github.com/fylke/porta-di-ferro/internal/hall"
 	"github.com/fylke/porta-di-ferro/internal/store"
 )
 
 // The demo's plan and forecast (phase 4): the coordinator's own functions --
-// httpapi.ForecastInput, forecast.Run, forecast.Suggest, ApplySuggestion -- over the demo's
+// hall.ForecastInput, forecast.Run, forecast.Suggest, ApplySuggestion -- over the demo's
 // in-memory event, so the board, the planning panel and every "about 10:40" in the demo say
 // what a real event would.
 
 // timings is the template in force: the event's, over what the visitor kept for new events
 // in this tab, over the built-in one.
 func (e *Event) timings() store.Timings {
-	return httpapi.TimingsOr(e.plan.Timings, httpapi.TimingsOr(e.defaults, httpapi.DefaultTimings))
+	return hall.TimingsOr(e.plan.Timings, hall.TimingsOr(e.defaults, hall.DefaultTimings))
 }
 
-func (e *Event) times() (forecast.Input, forecast.Result, []httpapi.MatsInput) {
+func (e *Event) times() (forecast.Input, forecast.Result, []hall.MatsInput) {
 	placed, _ := e.placements()
-	var inputs []httpapi.MatsInput
+	var inputs []hall.MatsInput
 	for _, d := range e.disciplines {
 		snap, err := d.placedSnapshot()
 		if err != nil {
 			continue
 		}
-		inputs = append(inputs, httpapi.MatsInput{Slug: d.slug, Name: d.tournament.Discipline, Snapshot: snap,
+		inputs = append(inputs, hall.MatsInput{Slug: d.slug, Name: d.tournament.Discipline, Snapshot: snap,
 			Expected: e.plan.Expected[d.slug]})
 	}
 	e.withSessions(inputs)
-	in := httpapi.ForecastInput(inputs, placed, e.plan, e.info, e.timings(), time.Now())
+	in := hall.ForecastInput(inputs, placed, e.plan, e.info, e.timings(), time.Now())
 	return in, forecast.Run(in), inputs
 }
 
-func (e *Event) forecastView() httpapi.ForecastView {
+func (e *Event) forecastView() hall.ForecastView {
 	in, r, inputs := e.times()
-	v := httpapi.ViewForecast(in, r, inputs, e.timings())
+	v := hall.ViewForecast(in, r, inputs, e.timings())
 	v.Expected = e.plan.Expected
-	v.Sessions, v.FinalsLast = httpapi.Sessions(e.plan, e.slugs()), e.plan.FinalsLast
-	httpapi.ViewPlan(&v, e.plan, e.info, inputs)
+	v.Sessions, v.FinalsLast = hall.Sessions(e.plan, e.slugs()), e.plan.FinalsLast
+	hall.ViewPlan(&v, e.plan, e.info, inputs)
 	return v
 }
 
@@ -51,7 +51,7 @@ func (e *Event) forecastView() httpapi.ForecastView {
 func (e *Event) applyPlanSuggestion() {
 	in, _, _ := e.times()
 	placed, mats := e.placements()
-	e.plan.Items = httpapi.ApplySuggestion(placed, forecast.Suggest(in, mats))
+	e.plan.Items = hall.ApplySuggestion(placed, forecast.Suggest(in, mats))
 }
 
 // startAtFirstMatch starts the planned day when the fixture's first match started, so a
@@ -81,7 +81,7 @@ func (e *Event) planRequest(method, bare string, body []byte) (Response, bool) {
 		if err := json.Unmarshal(body, &in); err != nil {
 			return fail(400, err), true
 		}
-		in, err := httpapi.CleanTimings(in)
+		in, err := hall.CleanTimings(in)
 		if err != nil {
 			return fail(400, err), true
 		}
@@ -124,7 +124,7 @@ func (e *Event) planRequest(method, bare string, body []byte) (Response, bool) {
 		return changed(e.forecastView()), true
 	case method == "GET" && bare == "/api/plan/report":
 		in, _, inputs := e.times()
-		return ok(httpapi.ViewReport(forecast.Measure(in), inputs)), true
+		return ok(hall.ViewReport(forecast.Measure(in), inputs)), true
 	case method == "PUT" && bare == "/api/plan/anomalies":
 		var in struct {
 			Key     string `json:"key"`
@@ -133,9 +133,9 @@ func (e *Event) planRequest(method, bare string, body []byte) (Response, bool) {
 		if err := json.Unmarshal(body, &in); err != nil || in.Key == "" {
 			return fail(400, fmt.Errorf("say which match")), true
 		}
-		e.plan.Anomalies = httpapi.SetAnomaly(e.plan.Anomalies, in.Key, in.Anomaly)
+		e.plan.Anomalies = hall.SetAnomaly(e.plan.Anomalies, in.Key, in.Anomaly)
 		fin, _, inputs := e.times()
-		return changed(httpapi.ViewReport(forecast.Measure(fin), inputs)), true
+		return changed(hall.ViewReport(forecast.Measure(fin), inputs)), true
 	case method == "PUT" && bare == "/api/plan/sessions":
 		var in map[string]int
 		if err := json.Unmarshal(body, &in); err != nil {
@@ -165,7 +165,7 @@ func (e *Event) planRequest(method, bare string, body []byte) (Response, bool) {
 		if err := json.Unmarshal(body, &in); err != nil {
 			return fail(400, err), true
 		}
-		in, err := httpapi.CleanBreaks(in)
+		in, err := hall.CleanBreaks(in)
 		if err != nil {
 			return fail(400, err), true
 		}
@@ -176,7 +176,7 @@ func (e *Event) planRequest(method, bare string, body []byte) (Response, bool) {
 		if err := json.Unmarshal(body, &in); err != nil {
 			return fail(400, err), true
 		}
-		if err := httpapi.SetPrep(&e.plan, in, e.slugs()); err != nil {
+		if err := hall.SetPrep(&e.plan, in, e.slugs()); err != nil {
 			return fail(400, err), true
 		}
 		return changed(e.forecastView()), true
@@ -185,14 +185,14 @@ func (e *Event) planRequest(method, bare string, body []byte) (Response, bool) {
 		if err := json.Unmarshal(body, &in); err != nil {
 			return fail(400, err), true
 		}
-		if err := httpapi.SetStarts(&e.plan, in, e.slugs()); err != nil {
+		if err := hall.SetStarts(&e.plan, in, e.slugs()); err != nil {
 			return fail(400, err), true
 		}
 		return changed(e.forecastView()), true
 	case method == "POST" && bare == "/api/plan/suggest":
 		in, _, _ := e.times()
 		_, mats := e.placements()
-		return ok(httpapi.ViewSuggestion(forecast.Suggest(in, mats))), true
+		return ok(hall.ViewSuggestion(forecast.Suggest(in, mats))), true
 	case method == "POST" && bare == "/api/plan/apply":
 		var want struct {
 			Signature string `json:"signature"`
@@ -203,14 +203,14 @@ func (e *Event) planRequest(method, bare string, body []byte) (Response, bool) {
 		in, _, _ := e.times()
 		placed, mats := e.placements()
 		s := forecast.Suggest(in, mats)
-		if httpapi.SignatureOf(s) != want.Signature {
+		if hall.SignatureOf(s) != want.Signature {
 			b, _ := json.Marshal(map[string]any{
 				"error":      "the plan has changed since that suggestion; here is a new one",
-				"suggestion": httpapi.ViewSuggestion(s),
+				"suggestion": hall.ViewSuggestion(s),
 			})
 			return Response{Status: 409, ContentType: "application/json; charset=utf-8", Body: string(b)}, true
 		}
-		e.plan.Items = httpapi.ApplySuggestion(placed, s)
+		e.plan.Items = hall.ApplySuggestion(placed, s)
 		return changed(e.forecastView()), true
 	}
 	return Response{}, false

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	httpapi "github.com/fylke/porta-di-ferro/internal/http"
+	"github.com/fylke/porta-di-ferro/internal/hall"
 )
 
 // The plan's times (phase 4), over HTTP: the forecast, the template, pins and holds,
@@ -21,20 +21,20 @@ func clockOf(s string) string {
 	return s[11:16]
 }
 
-func (h *hall) forecast() httpapi.ForecastView {
+func (h *testHall) forecast() hall.ForecastView {
 	h.t.Helper()
-	var v httpapi.ForecastView
+	var v hall.ForecastView
 	h.must("GET", "/api/forecast", nil, &v)
 	return v
 }
 
-func timesOf(v httpapi.ForecastView, id string) httpapi.ItemTimes {
+func timesOf(v hall.ForecastView, id string) hall.ItemTimes {
 	for _, it := range v.Items {
 		if it.ID == id {
 			return it
 		}
 	}
-	return httpapi.ItemTimes{}
+	return hall.ItemTimes{}
 }
 
 func TestForecastUsesTypicalPoolAndEliminationTimings(t *testing.T) {
@@ -42,7 +42,7 @@ func TestForecastUsesTypicalPoolAndEliminationTimings(t *testing.T) {
 		t.Run(fmt.Sprint(mats), func(t *testing.T) {
 			h := openHall(t, t.TempDir())
 			h.c.Clock = func() time.Time { return time.Date(2026, 11, 14, 8, 0, 0, 0, time.Local) }
-			var event httpapi.EventView
+			var event hall.EventView
 			h.must("GET", "/api/event", nil, &event)
 			slug := event.Disciplines[0].Slug
 			h.draw("/api/d/"+slug, 8, mats)
@@ -80,7 +80,7 @@ func TestTheDayIsForecast(t *testing.T) {
 	h := openHall(t, dir)
 	now := time.Date(2026, 11, 14, 8, 0, 0, 0, time.Local)
 	h.c.Clock = func() time.Time { return now }
-	var ev httpapi.EventView
+	var ev hall.EventView
 	h.must("GET", "/api/event", nil, &ev)
 	ls := ev.Disciplines[0].Slug
 
@@ -118,7 +118,7 @@ func TestTheDayIsForecast(t *testing.T) {
 	}
 
 	// Every match still to come says when it is expected.
-	var s httpapi.Snapshot
+	var s hall.Snapshot
 	h.must("GET", "/api/d/"+ls+"/state", nil, &s)
 	if eta := s.Pools[0].Matches[1].Eta; clockOf(eta) == "" {
 		t.Errorf("a pending match should have an expected time: %+v", s.Pools[0].Matches[1])
@@ -151,7 +151,7 @@ func TestTheDayIsForecast(t *testing.T) {
 	if v := h.forecast(); !v.Live {
 		t.Error("with a match fenced the day is live")
 	}
-	var rep httpapi.ReportView
+	var rep hall.ReportView
 	h.must("GET", "/api/plan/report", nil, &rep)
 	if len(rep.Matches) != 1 || rep.Match != 420 || rep.Matches[0].Red == "" {
 		t.Fatalf("the report should have the seven-minute match, with its fencers: %+v", rep)
@@ -203,7 +203,7 @@ func TestSuggestAndApply(t *testing.T) {
 	h.must("PUT", "/api/plan/expected", map[string]int{"open-sabre": 24}, nil)
 
 	before := h.mats()
-	var s httpapi.SuggestionView
+	var s hall.SuggestionView
 	h.must("POST", "/api/plan/suggest", nil, &s)
 	if len(s.Moves) == 0 || s.Signature == "" || s.End == "" {
 		t.Fatalf("pools planned onto one discipline's lanes should be spread over three mats: %+v", s)
@@ -223,7 +223,7 @@ func TestSuggestAndApply(t *testing.T) {
 	if it := itemOf(h.mats(), m.ID); it.Mat != m.ToMat {
 		t.Errorf("an applied plan for work not drawn yet must stick: %+v", it)
 	}
-	var again httpapi.SuggestionView
+	var again hall.SuggestionView
 	h.must("POST", "/api/plan/suggest", nil, &again)
 	if len(again.Moves) != 0 {
 		t.Errorf("suggesting again straight after applying should move nothing: %+v", again.Moves)
@@ -234,12 +234,12 @@ func TestSuggestAndApply(t *testing.T) {
 func TestMatsHaveNamesAndAwayTimes(t *testing.T) {
 	h := openHall(t, filepath.Join(t.TempDir(), "event"))
 	h.c.Clock = func() time.Time { return time.Date(2026, 11, 14, 8, 0, 0, 0, time.Local) }
-	var ev httpapi.EventView
+	var ev hall.EventView
 	h.must("GET", "/api/event", nil, &ev)
 	ls := ev.Disciplines[0].Slug
 	h.must("PUT", "/api/plan/timings", map[string]any{"start": "09:00"}, nil)
 	h.draw("/api/d/"+ls, 8, 2)
-	var v httpapi.MatsView
+	var v hall.MatsView
 	h.must("PUT", "/api/mats/1", map[string]any{"name": "Main hall", "away": []map[string]string{{"from": "09:00", "to": "10:30"}}}, &v)
 	if v.Mats[0].Name != "Main hall" || len(v.Mats[0].Away) != 1 || v.Mats[1].Name != "" {
 		t.Errorf("mat 1 should be named and away until half past ten: %+v", v.Mats[:2])
@@ -262,7 +262,7 @@ func TestMatsHaveNamesAndAwayTimes(t *testing.T) {
 func TestTheProgrammeIsGeneratedFromThePlan(t *testing.T) {
 	h := openHall(t, filepath.Join(t.TempDir(), "event"))
 	h.c.Clock = func() time.Time { return time.Date(2026, 11, 14, 8, 0, 0, 0, time.Local) }
-	var ev httpapi.EventView
+	var ev hall.EventView
 	h.must("GET", "/api/event", nil, &ev)
 	ls := ev.Disciplines[0].Slug
 	h.must("PUT", "/api/plan/timings", map[string]any{"match": 300, "changeover": 60, "start": "09:00"}, nil)
@@ -281,7 +281,7 @@ func TestTheProgrammeIsGeneratedFromThePlan(t *testing.T) {
 	}
 	// The briefing ending half an hour before the first pool, the gear check a quarter of
 	// an hour before it.
-	at := map[string]httpapi.ProgrammeRow{}
+	at := map[string]hall.ProgrammeRow{}
 	for _, r := range v.Programme {
 		at[r.Stage] = r
 	}
@@ -308,7 +308,7 @@ func TestTheProgrammeIsGeneratedFromThePlan(t *testing.T) {
 	if len(v.Breaks) != 1 || v.Breaks[0].Label != "Lunch" || v.Starts[ls] != "09:15" || v.Prep[ls].GearCheck != 1800 {
 		t.Errorf("the plan's breaks, starts and prep should come back, a nameless break as lunch: %+v %+v %+v", v.Breaks, v.Starts, v.Prep)
 	}
-	at = map[string]httpapi.ProgrammeRow{}
+	at = map[string]hall.ProgrammeRow{}
 	for _, r := range v.Programme {
 		at[r.Stage] = r
 	}

@@ -6,14 +6,14 @@ import (
 	"fmt"
 	"strings"
 
-	httpapi "github.com/fylke/porta-di-ferro/internal/http"
+	"github.com/fylke/porta-di-ferro/internal/hall"
 	"github.com/fylke/porta-di-ferro/internal/signup"
 	"github.com/fylke/porta-di-ferro/internal/staffing"
 	"github.com/fylke/porta-di-ferro/internal/store"
 )
 
 // The demo's staff (phase 5): staff.json in memory, with the coordinator's own decisions --
-// staffing.Assign and Check, httpapi.StaffInput, ViewStaffing, SuggestStaff, DutiesOf.
+// staffing.Assign and Check, hall.StaffInput, ViewStaffing, SuggestStaff, DutiesOf.
 
 // demoStaff are the volunteers the visitor finds: enough referees for the morning's three
 // mats, short of assistants -- a real club open's usual problem -- and Clara, who fences
@@ -57,10 +57,10 @@ func (e *Event) seedStaff() {
 	}
 }
 
-func (e *Event) staffing() (httpapi.StaffingView, httpapi.StaffSuggestion) {
+func (e *Event) staffing() (hall.StaffingView, hall.StaffSuggestion) {
 	in, r, inputs := e.times()
-	si := httpapi.StaffInput(in, r, e.staff, httpapi.StillIn(inputs))
-	return httpapi.ViewStaffing(si, e.staff, e.mats()), httpapi.SuggestStaff(si)
+	si := hall.StaffInput(in, r, e.staff, hall.StillIn(inputs))
+	return hall.ViewStaffing(si, e.staff, e.mats()), hall.SuggestStaff(si)
 }
 
 func (e *Event) staffView() Response {
@@ -149,7 +149,7 @@ func (e *Event) staffRequest(method, bare string, parts []string, body []byte) (
 		if err := json.Unmarshal(body, &in); err != nil {
 			return fail(400, err), true
 		}
-		next, err := httpapi.SetAssignment(e.staff, in.Item, in.Role, in.Slot, in.Staff)
+		next, err := hall.SetAssignment(e.staff, in.Item, in.Role, in.Slot, in.Staff)
 		if err != nil {
 			return fail(400, err), true
 		}
@@ -226,9 +226,9 @@ func changedView(r Response) Response {
 }
 
 // withDuties adds a person's work as staff to their page.
-func (e *Event) withDuties(v httpapi.PersonView) httpapi.PersonView {
+func (e *Event) withDuties(v hall.PersonView) hall.PersonView {
 	sv, _ := e.staffing()
-	v.Duties, v.Physician = httpapi.DutiesOf(v.ID, e.staff, sv)
+	v.Duties, v.Physician = hall.DutiesOf(v.ID, e.staff, sv)
 	if len(v.Entries) == 0 {
 		for _, m := range e.staff.Members {
 			if m.Person == v.ID {

@@ -364,7 +364,7 @@ designing for that now would be paying for a requirement nobody has.
 type Discipline interface {
     Slug() string                       // "longsword", stable, used in URLs and folders
     Handler() http.Handler              // today's routes, mounted under /api/d/{slug}/
-    Snapshot() (httpapi.Snapshot, error)
+    Snapshot() (hall.Snapshot, error)
     Subscribe() (<-chan httpapi.Update, func())
     WorkItems() []WorkItem              // what it needs mat time for, with estimates
     Entries() []Entry                   // its competitors, with the person they point at

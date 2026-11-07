@@ -5,19 +5,19 @@ import (
 	"testing"
 
 	"github.com/fylke/porta-di-ferro/internal/demo"
-	httpapi "github.com/fylke/porta-di-ferro/internal/http"
+	"github.com/fylke/porta-di-ferro/internal/hall"
 	"github.com/fylke/porta-di-ferro/internal/signup"
 )
 
 // The demo's people answer as the coordinator's do (phase 3).
 
-func peopleOf(t *testing.T, e *demo.Event) httpapi.PeopleView {
+func peopleOf(t *testing.T, e *demo.Event) hall.PeopleView {
 	t.Helper()
 	res := e.Request("GET", "/api/people", nil)
 	if res.Status != 200 {
 		t.Fatalf("GET /api/people returned %d: %s", res.Status, res.Body)
 	}
-	var v httpapi.PeopleView
+	var v hall.PeopleView
 	if err := json.Unmarshal([]byte(res.Body), &v); err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +58,7 @@ func TestTheDemoKnowsItsPeople(t *testing.T) {
 		t.Errorf("after the merge Sabre's Bo should be the longsword's: %q", got)
 	}
 	res = e.Request("GET", "/api/people/"+bo2, nil)
-	var one httpapi.PersonView
+	var one hall.PersonView
 	_ = json.Unmarshal([]byte(res.Body), &one)
 	if one.ID != bo1 || len(one.Entries) != 2 {
 		t.Errorf("the old link should find Bo, with both entries: %+v", one)
@@ -104,7 +104,7 @@ func TestTheDemoImportsForTheWholeEvent(t *testing.T) {
 	}
 	body, _ := json.Marshal(map[string]any{"files": []map[string]string{{"source": "a.json", "body": `{"format":"porta.signup.response","version":2,` +
 		`"definitionId":"stangebroslaget-2026","submissionId":"x1","participant":{"name":"New Person","email":"new@example.org"},"entries":["open-sabre"]}`}}})
-	var preview httpapi.EventSignupPreview
+	var preview hall.EventSignupPreview
 	res = e.Request("POST", "/api/event/signup/preview", body)
 	if err := json.Unmarshal([]byte(res.Body), &preview); err != nil || preview.Adding != 1 || len(preview.Rows[0].Into) != 1 {
 		t.Errorf("a response for the sabre should go into the sabre: %v %s", err, res.Body)

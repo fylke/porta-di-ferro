@@ -134,6 +134,7 @@ internal/event/     the event folder: event.json, people.json, a folder per disc
 internal/people/    who is the same person across disciplines
 internal/forecast/  the plan re-timed from the match logs, and suggested plans
 internal/staffing/  the event's staff, and who works which mat when
+internal/hall/      what the server and the demo share: snapshots, the plan's views, the printed sheets
 internal/http/      the coordinator, each discipline's routes, SSE, the embedded bundle
 internal/watchdog/  restarts the server if it dies
 web/                Svelte 5 + Vite

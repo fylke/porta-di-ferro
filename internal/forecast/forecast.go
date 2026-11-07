@@ -19,7 +19,7 @@ import (
 	"time"
 )
 
-// The kinds of item, as httpapi names them.
+// The kinds of item, as hall names them.
 const (
 	KindPool         = "pool"
 	KindEliminations = "eliminations"

@@ -10,7 +10,7 @@ import (
 )
 
 // pushAs sends events stamped the way a score keeper client stamps them.
-func (h *hall) pushAs(path string, events any, client string, epoch int) int {
+func (h *testHall) pushAs(path string, events any, client string, epoch int) int {
 	h.t.Helper()
 	b, _ := json.Marshal(events)
 	req, _ := http.NewRequest("POST", h.url+path, bytes.NewReader(b))

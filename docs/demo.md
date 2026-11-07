@@ -48,7 +48,7 @@ questions about. Three ways to compute them without a Go server:
   shared-vector harness holding it to the Go. It would drift, and a demo that quietly
   disagrees with a real event is worse than no demo.
 - **Compile the Go.** No second implementation at all. `internal/tournament`,
-  `internal/match` and `httpapi.BuildSnapshot` are the same code in both places, so the
+  `internal/match` and `hall.BuildSnapshot` are the same code in both places, so the
   demo cannot say something a real event would not.
 
 The third costs about 1.6 MB gzipped on the demo page, and nothing at all on the real
@@ -85,7 +85,7 @@ as one written by an older demo (`eventSaveFormat` in `internal/demo`), is dropp
 way.
 
 The event editor's call, `PUT /api/event`, was missing from the demo's router and is
-answered now, through the same `httpapi.CleanEvent` the server uses.
+answered now, through the same `hall.CleanEvent` the server uses.
 
 ### One concession
 

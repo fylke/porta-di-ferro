@@ -1,4 +1,4 @@
-package httpapi
+package hall
 
 import (
 	"encoding/json"
@@ -29,7 +29,7 @@ func TestTheSignupAppCarriesTheEvent(t *testing.T) {
 		{Label: "Open Steel Longsword", Kind: "discipline", At: "09:30"},
 	}}, "", []signup.TournamentInfo{{ID: "open-steel-longsword", Label: "Open steel Longsword"}})
 
-	baked, err := bakeDefinition(page, def)
+	baked, err := BakeSignupApp(page, def)
 	if err != nil {
 		t.Fatalf("baking: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestBakingCannotEscapeTheScriptElement(t *testing.T) {
 	def := signup.BuildDefinition(store.Event{
 		Signup: store.Signup{DefinitionID: "x", Name: `</script><script>alert(1)</script>`},
 	}, "", []signup.TournamentInfo{{ID: "longsword", Label: "Longsword"}})
-	baked, err := bakeDefinition(page, def)
+	baked, err := BakeSignupApp(page, def)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,15 +97,15 @@ func TestBakingCannotEscapeTheScriptElement(t *testing.T) {
 // The file names an organizer ends up with should say which event they are for.
 func TestDownloadNames(t *testing.T) {
 	def := signup.BuildDefinition(store.Event{Signup: store.Signup{DefinitionID: "MSL Open 2026"}}, "", nil)
-	if got := signupAppFilename(def); got != "signup-msl-open-2026.html" {
+	if got := SignupAppFilename(def); got != "signup-msl-open-2026.html" {
 		t.Errorf("app file is %q", got)
 	}
-	if got := definitionFilename(def); got != "signup-msl-open-2026.json" {
+	if got := DefinitionFilename(def); got != "signup-msl-open-2026.json" {
 		t.Errorf("definition file is %q", got)
 	}
 	// An event with nothing filled in still downloads to something openable.
 	bare := signup.BuildDefinition(store.Event{}, "", nil)
-	if got := signupAppFilename(bare); got != "signup-event.html" {
+	if got := SignupAppFilename(bare); got != "signup-event.html" {
 		t.Errorf("unconfigured app file is %q", got)
 	}
 }

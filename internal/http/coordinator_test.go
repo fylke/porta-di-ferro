@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/fylke/porta-di-ferro/internal/event"
+	"github.com/fylke/porta-di-ferro/internal/hall"
 	httpapi "github.com/fylke/porta-di-ferro/internal/http"
 )
 
@@ -21,7 +22,7 @@ import (
 // (docs/proposals/one-event-many-disciplines.md). Driven over real HTTP, because the
 // routing is most of what it does.
 
-type hall struct {
+type testHall struct {
 	t    *testing.T
 	url  string
 	dir  string
@@ -29,7 +30,7 @@ type hall struct {
 	stop func()
 }
 
-func openHall(t *testing.T, dir string) *hall {
+func openHall(t *testing.T, dir string) *testHall {
 	t.Helper()
 	f, err := event.Open(dir)
 	if err != nil {
@@ -46,7 +47,7 @@ func openHall(t *testing.T, dir string) *hall {
 }
 
 // openEmptyHall is a first start: an event with no disciplines (#149).
-func openEmptyHall(t *testing.T, dir string) *hall {
+func openEmptyHall(t *testing.T, dir string) *testHall {
 	t.Helper()
 	f, err := event.Open(dir)
 	if err != nil {
@@ -55,20 +56,20 @@ func openEmptyHall(t *testing.T, dir string) *hall {
 	return serveHall(t, dir, f)
 }
 
-func serveHall(t *testing.T, dir string, f *event.Folder) *hall {
+func serveHall(t *testing.T, dir string, f *event.Folder) *testHall {
 	t.Helper()
 	c, err := httpapi.NewCoordinator(f, nil)
 	if err != nil {
 		t.Fatalf("starting the coordinator: %v", err)
 	}
 	srv := httptest.NewServer(c.Handler())
-	h := &hall{t: t, url: srv.URL, dir: dir, c: c, stop: func() { srv.Close(); c.Close() }}
+	h := &testHall{t: t, url: srv.URL, dir: dir, c: c, stop: func() { srv.Close(); c.Close() }}
 	t.Cleanup(h.stop)
 	return h
 }
 
 // do sends a request and decodes the answer into out, returning the status.
-func (h *hall) do(method, path string, body, out any) int {
+func (h *testHall) do(method, path string, body, out any) int {
 	h.t.Helper()
 	var r io.Reader
 	if body != nil {
@@ -87,7 +88,7 @@ func (h *hall) do(method, path string, body, out any) int {
 	return res.StatusCode
 }
 
-func (h *hall) must(method, path string, body, out any) {
+func (h *testHall) must(method, path string, body, out any) {
 	h.t.Helper()
 	if code := h.do(method, path, body, out); code >= 300 {
 		h.t.Fatalf("%s %s returned %d", method, path, code)
@@ -105,14 +106,14 @@ type snap struct {
 			} `json:"signup"`
 		} `json:"event"`
 	} `json:"tournament"`
-	Instance httpapi.Instance `json:"instance"`
+	Instance hall.Instance `json:"instance"`
 }
 
 // A first start has no disciplines (#149): the welcome and the plan come before any. The
 // unprefixed paths say there is nothing to answer as, and adding one makes it the one.
 func TestAFirstStartHasNoDisciplines(t *testing.T) {
 	h := openEmptyHall(t, t.TempDir())
-	var view httpapi.EventView
+	var view hall.EventView
 	h.must("GET", "/api/event", nil, &view)
 	if len(view.Disciplines) != 0 {
 		t.Fatalf("a new event should have no disciplines, got %+v", view.Disciplines)
@@ -139,7 +140,7 @@ func TestAFirstStartHasNoDisciplines(t *testing.T) {
 func TestOneDisciplineAnswersAsItAlwaysDid(t *testing.T) {
 	h := openHall(t, t.TempDir())
 
-	var view httpapi.EventView
+	var view hall.EventView
 	h.must("GET", "/api/event", nil, &view)
 	if len(view.Disciplines) != 1 {
 		t.Fatalf("a new event should have one discipline, got %+v", view.Disciplines)
@@ -167,7 +168,7 @@ func TestOneDisciplineAnswersAsItAlwaysDid(t *testing.T) {
 func TestASecondDisciplineSharesTheAddress(t *testing.T) {
 	h := openHall(t, t.TempDir())
 
-	var sabre httpapi.DisciplineSummary
+	var sabre hall.DisciplineSummary
 	if code := h.do("POST", "/api/disciplines", map[string]string{"name": "Open Sabre"}, &sabre); code != 201 {
 		t.Fatalf("adding a discipline returned %d", code)
 	}
@@ -198,10 +199,10 @@ func TestASecondDisciplineSharesTheAddress(t *testing.T) {
 
 	// The first discipline was made before it had a name. Naming it gives it an address
 	// from the name, and the old one still answers.
-	var first httpapi.EventView
+	var first hall.EventView
 	h.must("GET", "/api/event", nil, &first)
 	old := first.Disciplines[0].Slug
-	var named httpapi.DisciplineSummary
+	var named hall.DisciplineSummary
 	h.must("PATCH", "/api/disciplines/"+old, map[string]string{"name": "Open steel Longsword"}, &named)
 	if named.Slug != "open-steel-longsword" || named.URL != "/d/open-steel-longsword/" {
 		t.Errorf("naming an unnamed discipline should give it an address from the name: %+v", named)
@@ -210,7 +211,7 @@ func TestASecondDisciplineSharesTheAddress(t *testing.T) {
 		t.Errorf("the address it had before it was named should still answer, got %d", code)
 	}
 
-	var renamed httpapi.DisciplineSummary
+	var renamed hall.DisciplineSummary
 	h.must("PATCH", "/api/disciplines/open-sabre", map[string]string{"name": "Sabre, open"}, &renamed)
 	if renamed.Name != "Sabre, open" || renamed.Slug != "open-sabre" {
 		t.Errorf("renaming changes the name and never the address: %+v", renamed)
@@ -227,7 +228,7 @@ func TestASecondDisciplineSharesTheAddress(t *testing.T) {
 // discipline's pages read the same copy (proposal §7).
 func TestTheDayIsTypedOnce(t *testing.T) {
 	h := openHall(t, t.TempDir())
-	var first httpapi.EventView
+	var first hall.EventView
 	h.must("GET", "/api/event", nil, &first)
 	one := first.Disciplines[0].Slug
 	h.must("POST", "/api/disciplines", map[string]string{"name": "Open Sabre"}, nil)
@@ -252,7 +253,7 @@ func TestTheDayIsTypedOnce(t *testing.T) {
 	if other.Tournament.Event.Welcome != "Changed from Sabre" {
 		t.Errorf("the other discipline should share the day: %+v", other.Tournament.Event)
 	}
-	var view httpapi.EventView
+	var view hall.EventView
 	h.must("GET", "/api/event", nil, &view)
 	if view.Name != "MSL Open" {
 		t.Errorf("the event should be named from its signup settings: %q %+v", view.Name, view.Info.Signup)
@@ -284,12 +285,12 @@ func TestABrokenDisciplineIsContained(t *testing.T) {
 	}
 	h := openHall(t, dir)
 
-	var view httpapi.EventView
+	var view hall.EventView
 	h.must("GET", "/api/event", nil, &view)
 	if len(view.Disciplines) != 2 {
 		t.Fatalf("both disciplines should be listed, got %+v", view.Disciplines)
 	}
-	var bad httpapi.DisciplineSummary
+	var bad hall.DisciplineSummary
 	for _, d := range view.Disciplines {
 		if d.Slug == "broken" {
 			bad = d
@@ -308,7 +309,7 @@ func TestABrokenDisciplineIsContained(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(broken, "competitors.json"), []byte(`[]`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	var back httpapi.DisciplineSummary
+	var back hall.DisciplineSummary
 	h.must("POST", "/api/disciplines/broken/reload", nil, &back)
 	if back.Error != "" {
 		t.Errorf("after the fix the discipline should load, got %q", back.Error)
@@ -334,7 +335,7 @@ func TestRetiringADisciplineKeepsItsFolder(t *testing.T) {
 		t.Errorf("back to one discipline, the unprefixed paths should answer again, got %d", code)
 	}
 
-	var view httpapi.EventView
+	var view hall.EventView
 	h.must("GET", "/api/event", nil, &view)
 	if code := h.do("DELETE", "/api/disciplines/"+view.Disciplines[0].Slug, nil, nil); code != 200 {
 		t.Errorf("the last discipline can be retired too (#149), got %d", code)
@@ -369,8 +370,8 @@ func TestTheEventStreamHearsEveryDiscipline(t *testing.T) {
 		select {
 		case f := <-frames:
 			var u struct {
-				Kind string            `json:"kind"`
-				Data httpapi.EventView `json:"data"`
+				Kind string         `json:"kind"`
+				Data hall.EventView `json:"data"`
 			}
 			if json.Unmarshal([]byte(f), &u) != nil || u.Kind != "event" {
 				continue
@@ -415,7 +416,7 @@ func TestADisciplineIsSetUpWhenItsSetupIsFinished(t *testing.T) {
 	h := openEmptyHall(t, t.TempDir())
 	h.must("POST", "/api/disciplines", map[string]string{"name": "Open Sabre"}, nil)
 	setUp := func() bool {
-		var view httpapi.EventView
+		var view hall.EventView
 		h.must("GET", "/api/event", nil, &view)
 		return view.Disciplines[0].SetUp
 	}
@@ -454,7 +455,7 @@ func TestAnIdentifierCanBeChanged(t *testing.T) {
 	if code := h.do("PUT", "/api/disciplines/open-longsword/identifier", map[string]string{"identifier": "admin"}, nil); code != 400 {
 		t.Errorf("an identifier that reads as something else should be refused, got %d", code)
 	}
-	var sum httpapi.DisciplineSummary
+	var sum hall.DisciplineSummary
 	h.must("PUT", "/api/disciplines/open-longsword/identifier", map[string]string{"identifier": "LS Open"}, &sum)
 	if sum.Slug != "ls-open" || sum.Name != "Open Longsword" {
 		t.Fatalf("the identifier should be cleaned and the name kept: %+v", sum)
@@ -479,7 +480,7 @@ func TestAnIdentifierCanBeChanged(t *testing.T) {
 	}
 
 	// A response to a file sent out before the change.
-	var preview httpapi.EventSignupPreview
+	var preview hall.EventSignupPreview
 	h.must("POST", "/api/event/signup/preview", map[string]any{"files": []map[string]string{reply(t, "Ana", "sub-1", "open-longsword")}}, &preview)
 	if preview.Adding != 1 || len(preview.Rows) != 1 || len(preview.Rows[0].Into) != 1 || preview.Rows[0].Into[0].Discipline != "ls-open" {
 		t.Errorf("a response naming the old identifier should go to the discipline: %+v", preview)
@@ -508,7 +509,7 @@ func TestTwoAddsOfOneNameMakeOneDiscipline(t *testing.T) {
 			made++
 		}
 	}
-	var view httpapi.EventView
+	var view hall.EventView
 	h.must("GET", "/api/event", nil, &view)
 	if made != 1 || len(view.Disciplines) != 1 {
 		t.Errorf("eight adds of one name should make one discipline, made %d: %+v", made, view.Disciplines)
