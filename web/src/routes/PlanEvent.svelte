@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { api } from '../api';
   import { hall } from '../lib/event.svelte';
+  import { tour } from '../lib/tour.svelte';
   import { navigate, query } from '../router.svelte';
   import { t } from '../lib/i18n.svelte';
   import EventEditor from './EventEditor.svelte';
@@ -23,7 +24,7 @@
    */
   const steps = [
     { title: () => t('The event'), hint: () => t('What it is called, where and when, and what the info sheet says to everyone in the hall.') },
-    { title: () => t('Disciplines'), hint: () => t('What is fenced. Set up each one: the mats it uses and the size of its pools.') },
+    { title: () => t('Disciplines'), hint: () => t('What is fenced. Set up each one: the size of its pools and how many you expect.') },
     { title: () => t('Planning the day'), hint: () => t('How long things take, the mats, the breaks, and in what order the day runs. The programme is written from this.') },
   ];
 
@@ -40,7 +41,8 @@
     return !!(s?.definitionId?.trim() && s?.name?.trim() && s?.venue?.trim() && s?.date?.trim());
   });
   const asked = $derived(Math.min(steps.length, Math.max(1, Number(query().get('step')) || 1)));
-  const step = $derived(view && !named ? 1 : asked);
+  // The tour walks every step, on an event with nothing in it yet (#153).
+  const step = $derived(view && !named && !tour.active ? 1 : asked);
   let editor = $state<{ commit: () => Promise<boolean> } | undefined>();
 
   async function go(n: number) {
