@@ -40,19 +40,14 @@ type Server struct {
 	writeMu sync.Mutex
 }
 
-// New builds the server for one discipline. assets is the embedded web bundle; a nil
-// value serves the API alone, which is what the Go tests and the event coordinator use --
-// the coordinator serves the bundle once for every discipline. self says which discipline
-// this is; a name left empty is read from its tournament.json, where renaming it from the
-// admin page keeps it (issue #80).
-func New(st *store.Store, assets fs.FS, self hall.Instance) *Server {
-	return newServer(st, assets, self, nil)
-}
-
-// newServer is New with the registry of devices given: the event's, shared by every
-// discipline in it, which the coordinator sweeps. Nil makes the server its own and starts
-// its own sweep. Given here rather than swapped in after, so no goroutine of this server
-// ever sees the registry change under it.
+// newServer builds the server for one discipline. assets is the embedded web bundle; a nil
+// value serves the API alone, which is what the event coordinator uses -- it serves the
+// bundle once for every discipline. self says which discipline this is; a name left empty
+// is read from its tournament.json, where renaming it from the admin page keeps it (issue
+// #80). shared is the registry of devices: the event's, shared by every discipline in it,
+// which the coordinator sweeps. Nil makes the server its own and starts its own sweep.
+// Given here rather than swapped in after, so no goroutine of this server ever sees the
+// registry change under it.
 func newServer(st *store.Store, assets fs.FS, self hall.Instance, shared *presence) *Server {
 	self.Dir = st.Dir()
 	if self.Name == "" {

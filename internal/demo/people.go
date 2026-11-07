@@ -182,7 +182,7 @@ func (e *Event) peopleRequest(method, bare string, parts []string, body []byte) 
 	case method == "GET" && bare == "/api/event/signup/app.html":
 		return e.signupApp(), true
 	case method == "GET" && bare == "/api/event/signup/form.pdf":
-		return signupPDF(e.definition(true)), true
+		return signupPDF(), true
 	case method == "POST" && bare == "/api/event/signup/preview":
 		return e.signupImport(body, false), true
 	case method == "POST" && bare == "/api/event/signup/import":

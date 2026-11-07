@@ -157,21 +157,6 @@ func identifiers(in []string, seen map[string]bool) []string {
 	return out
 }
 
-// ParseDefinition reads a definition, for the participant app's sake and for a test.
-func ParseDefinition(body []byte) (Definition, error) {
-	var def Definition
-	if err := json.Unmarshal(body, &def); err != nil {
-		return Definition{}, fmt.Errorf("not readable as JSON")
-	}
-	if def.Format != DefinitionFormat {
-		return Definition{}, fmt.Errorf("not a signup definition: it says it is %q", def.Format)
-	}
-	if def.Version != Version {
-		return Definition{}, fmt.Errorf("a definition in version %d of the format; this reads %d", def.Version, Version)
-	}
-	return def, nil
-}
-
 // Ready reports what still has to be filled in before a definition can go out, so the
 // organizer is told on the page rather than by a participant who cannot use the file.
 func Ready(def Definition) []string {

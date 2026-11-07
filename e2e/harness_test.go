@@ -170,12 +170,6 @@ func (s *server) disciplineDir(t *testing.T) string {
 	return snap.Dir
 }
 
-func portOf(s *server) int {
-	var port int
-	fmt.Sscanf(s.base, "http://127.0.0.1:%d", &port)
-	return port
-}
-
 func (s *server) mustDo(t *testing.T, method, path string, body, out any) {
 	t.Helper()
 	if code := s.do(t, method, path, body, out); code < 200 || code > 299 {

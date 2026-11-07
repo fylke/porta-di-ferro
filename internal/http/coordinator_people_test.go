@@ -187,7 +187,7 @@ func TestARemovedEntrysPersonIsDroppedOnOpening(t *testing.T) {
 	kept := h.personOf(ls, "Astrid")
 	h.stop()
 
-	h = openHall(t, dir)
+	openHall(t, dir)
 	b, _ := os.ReadFile(filepath.Join(dir, "people.json"))
 	if strings.Contains(string(b), gone) || !strings.Contains(string(b), kept) {
 		t.Errorf("people.json should keep Astrid and drop the typo's person %s:\n%s", gone, b)
