@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	httpapi "github.com/fylke/porta-di-ferro/internal/http"
+	"github.com/fylke/porta-di-ferro/internal/hall"
 )
 
 // The event's people (proposal §8, phase 3): every entry is somebody, the same somebody
@@ -21,14 +21,14 @@ type entries struct {
 	} `json:"competitors"`
 }
 
-func (h *hall) people() httpapi.PeopleView {
+func (h *testHall) people() hall.PeopleView {
 	h.t.Helper()
-	var v httpapi.PeopleView
+	var v hall.PeopleView
 	h.must("GET", "/api/people", nil, &v)
 	return v
 }
 
-func (h *hall) personOf(slug, name string) string {
+func (h *testHall) personOf(slug, name string) string {
 	h.t.Helper()
 	var s entries
 	h.must("GET", "/api/d/"+slug+"/state", nil, &s)
@@ -41,10 +41,10 @@ func (h *hall) personOf(slug, name string) string {
 	return ""
 }
 
-func twoDisciplines(t *testing.T) (*hall, string) {
+func twoDisciplines(t *testing.T) (*testHall, string) {
 	t.Helper()
 	h := openHall(t, t.TempDir())
-	var view httpapi.EventView
+	var view hall.EventView
 	h.must("GET", "/api/event", nil, &view)
 	ls := view.Disciplines[0].Slug
 	h.must("POST", "/api/disciplines", map[string]string{"name": "Open Sabre"}, nil)
@@ -75,13 +75,13 @@ func TestEveryEntryIsSomebody(t *testing.T) {
 		t.Errorf("the two Astrids should be offered as one: %+v", v.Duplicates)
 	}
 
-	var one httpapi.PersonView
+	var one hall.PersonView
 	h.must("GET", "/api/people/"+astrid, nil, &one)
 	if len(one.Entries) != 2 || one.Entries[0].Discipline != ls || one.Entries[1].DisciplineName != "Open Sabre" {
 		t.Errorf("Astrid's page should have both her entries: %+v", one.Entries)
 	}
 
-	var view httpapi.EventView
+	var view hall.EventView
 	h.must("GET", "/api/event", nil, &view)
 	if e := view.Disciplines[0].Entrants; len(e) != 1 || e[0].Person != astrid {
 		t.Errorf("the landing page's entrants should say who each is: %+v", e)
@@ -99,7 +99,7 @@ func TestTheOrganizerMergesAndUndoes(t *testing.T) {
 	h.must("POST", "/api/d/open-sabre/competitors", map[string]string{"name": "Karl Johan"}, nil)
 	a, b := h.personOf(ls, "Karl-Johan"), h.personOf("open-sabre", "Karl Johan")
 
-	var after httpapi.PeopleView
+	var after hall.PeopleView
 	h.must("POST", "/api/people/"+b+"/merge", map[string]string{"into": a}, &after)
 	if got := h.personOf("open-sabre", "Karl Johan"); got != a {
 		t.Errorf("the merged person's entries should now be the other's: %q", got)
@@ -110,7 +110,7 @@ func TestTheOrganizerMergesAndUndoes(t *testing.T) {
 	if len(after.People[0].MergedFrom) != 1 || after.People[0].MergedFrom[0].ID != b {
 		t.Errorf("the merge should be listed for undoing: %+v", after.People[0])
 	}
-	var viaOld httpapi.PersonView
+	var viaOld hall.PersonView
 	h.must("GET", "/api/people/"+b, nil, &viaOld)
 	if viaOld.ID != a {
 		t.Errorf("a link to the merged person should find whom they became, got %q", viaOld.ID)
@@ -174,7 +174,7 @@ func TestEntriesFromBeforePeopleAreLinked(t *testing.T) {
 func TestARemovedEntrysPersonIsDroppedOnOpening(t *testing.T) {
 	dir := t.TempDir()
 	h := openHall(t, dir)
-	var ev httpapi.EventView
+	var ev hall.EventView
 	h.must("GET", "/api/event", nil, &ev)
 	ls := ev.Disciplines[0].Slug
 	var typo struct {
@@ -187,7 +187,7 @@ func TestARemovedEntrysPersonIsDroppedOnOpening(t *testing.T) {
 	kept := h.personOf(ls, "Astrid")
 	h.stop()
 
-	h = openHall(t, dir)
+	openHall(t, dir)
 	b, _ := os.ReadFile(filepath.Join(dir, "people.json"))
 	if strings.Contains(string(b), gone) || !strings.Contains(string(b), kept) {
 		t.Errorf("people.json should keep Astrid and drop the typo's person %s:\n%s", gone, b)

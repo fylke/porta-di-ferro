@@ -1,6 +1,7 @@
 package forecast
 
 import (
+	"slices"
 	"sort"
 	"time"
 )
@@ -45,87 +46,127 @@ func Suggest(in Input, mats int) Suggestion {
 	if in.Timings.Match <= 0 {
 		in.Timings.Match = Defaults.Match
 	}
-	pace := Paces(in)
-	scales := eliminationScales(in)
-	live := false
-	for _, it := range in.Items {
-		for _, m := range it.Matches {
-			live = live || m.begun()
-		}
+	s := newSuggester(in, mats)
+	fixed, free := s.split()
+	s.keep(fixed)
+	s.byPriority(free)
+	for len(free) > 0 {
+		pick := s.nextReady(free)
+		it := free[pick]
+		free = append(free[:pick], free[pick+1:]...)
+		s.place(it)
 	}
+	return s.suggestion(before.End)
+}
 
-	var fixed, free []Item
-	for _, it := range in.Items {
-		started := false
-		for _, m := range it.Matches {
-			started = started || m.begun()
-		}
-		if started {
+// busySpan is when a person is fencing, and on which mat.
+type busySpan struct {
+	start, end time.Time
+	mat        int
+}
+
+// suggester is a suggested plan as it is built: what each mat has so far, and when it is
+// free.
+type suggester struct {
+	in     Input
+	mats   int
+	pace   map[int]Pace
+	scales map[string]float64
+	live   bool
+	deps   func(Item) (wait, pause []string)
+	order  map[int][]string
+	cursor map[int]time.Time
+	ends   map[string]time.Time
+	// busy is when each person is fencing, so nothing is suggested that puts them in two
+	// places at once (#136).
+	busy map[string][]busySpan
+}
+
+func newSuggester(in Input, mats int) *suggester {
+	return &suggester{
+		in: in, mats: mats,
+		pace:   Paces(in),
+		scales: eliminationScales(in),
+		live:   anyBegun(in.Items),
+		deps:   dependencies(in.Items),
+		order:  map[int][]string{},
+		cursor: map[int]time.Time{},
+		ends:   map[string]time.Time{},
+		busy:   map[string][]busySpan{},
+	}
+}
+
+// split parts what has begun, which stays, from what is free to be placed.
+func (s *suggester) split() (fixed, free []Item) {
+	for _, it := range s.in.Items {
+		if it.Begun() {
 			fixed = append(fixed, it)
 		} else {
 			free = append(free, it)
 		}
 	}
+	return fixed, free
+}
 
-	// What is under way stays: it is timed as the forecast times it, and each mat is free
-	// once its last fixed item ends.
-	fin := in
+// keep leaves what is under way where it is: timed as the forecast times it, with each mat
+// free once its last fixed item ends.
+func (s *suggester) keep(fixed []Item) {
+	fin := s.in
 	fin.Items = fixed
-	done, _ := simulate(fin, pace, live)
-	order := map[int][]string{}
-	cursor := map[int]time.Time{}
+	done, _ := simulate(fin, s.pace, s.live)
 	sort.SliceStable(fixed, func(i, j int) bool {
 		if fixed[i].Mat != fixed[j].Mat {
 			return fixed[i].Mat < fixed[j].Mat
 		}
 		return fixed[i].Seq < fixed[j].Seq
 	})
-	ends := map[string]time.Time{}
-	// When each person is busy fencing, so nothing is suggested that puts them in two
-	// places at once (#136).
-	type busySpan struct {
-		start, end time.Time
-		mat        int
-	}
-	busy := map[string][]busySpan{}
 	for _, it := range fixed {
-		order[it.Mat] = append(order[it.Mat], it.ID)
-		s := done.items[it.ID]
-		ends[it.ID] = s.end
-		if s.end.After(cursor[it.Mat]) {
-			cursor[it.Mat] = s.end
+		s.order[it.Mat] = append(s.order[it.Mat], it.ID)
+		sp := done.items[it.ID]
+		s.ends[it.ID] = sp.end
+		if sp.end.After(s.cursor[it.Mat]) {
+			s.cursor[it.Mat] = sp.end
 		}
-		for _, p := range it.People {
-			busy[p] = append(busy[p], busySpan{s.start, s.end, it.Mat})
-		}
+		s.markBusy(it, sp.start, sp.end, it.Mat)
 	}
+}
 
-	deps := dependencies(in.Items)
+func (s *suggester) markBusy(it Item, start, end time.Time, mat int) {
+	for _, p := range it.People {
+		s.busy[p] = append(s.busy[p], busySpan{start, end, mat})
+	}
+}
+
+// stageRank is an item's place in the order things are placed: pools, then eliminations,
+// then bronze matches and finals, then whatever is held to the end.
+func stageRank(it Item) int {
+	switch {
+	case it.Held:
+		return 3
+	case it.Kind == KindPool:
+		return 0
+	case it.Kind == KindEliminations:
+		return 1
+	}
+	return 2
+}
+
+// byPriority sorts the free items into the order they are placed in. The order never depends
+// on where the plan has things now, so suggesting again right after applying a suggestion
+// proposes nothing: ties go to the mat an item is on.
+func (s *suggester) byPriority(free []Item) {
 	remaining := map[string]int{}
 	for _, it := range free {
 		remaining[it.Discipline] += len(it.Matches)
 	}
-	rank := func(it Item) int {
-		switch {
-		case it.Held:
-			return 3
-		case it.Kind == KindPool:
-			return 0
-		case it.Kind == KindEliminations:
-			return 1
-		}
-		return 2
-	}
-	// The order never depends on where the plan has things now, so suggesting again right
-	// after applying a suggestion proposes nothing: ties go to the mat an item is on.
 	index := map[string]int{}
-	for i, it := range in.Items {
+	for i, it := range s.in.Items {
 		index[it.ID] = i
 	}
 	sort.SliceStable(free, func(i, j int) bool {
 		a, b := free[i], free[j]
-		if rank(a) != rank(b) {
-			return rank(a) < rank(b)
+		if stageRank(a) != stageRank(b) {
+			return stageRank(a) < stageRank(b)
 		}
 		// The finals held to the end run the later blocks' first, so the first
 		// discipline's final closes the day (#136).
@@ -140,183 +181,198 @@ func Suggest(in Input, mats int) Suggestion {
 		}
 		return index[a.ID] < index[b.ID]
 	})
+}
 
-	// timeOn is when an item would run on a mat, and -- when somebody in it is fencing
-	// elsewhere at that time -- the mat of the clash: waiting for a fencer is not
-	// something a queue can promise, so such a place is a last resort.
-	timeOn := func(mat int, it Item) (time.Time, time.Time, int) {
-		p := pace[mat]
-		if p.Match <= 0 {
-			p = pace[0]
-		}
-		p = calibratedPace(it, in.Timings, p, scales)
-		ready := in.Timings.Start
-		if c := cursor[mat]; c.After(ready) {
-			ready = c.Add(p.Changeover)
-		}
-		wait, pause := deps(it)
-		var latest, pools time.Time
-		for _, id := range wait {
-			if e := ends[id]; e.After(latest) {
-				latest = e
-			}
-		}
-		for _, id := range pause {
-			if e := ends[id]; e.After(pools) {
-				pools = e
-			}
-		}
-		if !pools.IsZero() {
-			pools = pools.Add(in.Timings.BeforeElims)
-		}
-		if pools.After(latest) {
-			latest = pools
-		}
-		if latest.After(ready) {
-			ready = latest
-		}
-		if it.NotBefore.After(ready) {
-			ready = it.NotBefore
-		}
-		if live && in.Now.After(ready) {
-			ready = in.Now
-		}
-		lay := func(ready time.Time) (time.Time, time.Time) {
-			start, at := time.Time{}, ready
-			for i := range it.Matches {
-				s := at
-				if i > 0 {
-					s = s.Add(p.Changeover)
-				}
-				s = afterBreaks(s, in.breaksOn(mat))
-				if start.IsZero() {
-					start = s
-				}
-				at = s.Add(p.Match)
-			}
-			if start.IsZero() {
-				start = ready
-			}
-			return start, at
-		}
-		// Later, until nobody in it is fencing somewhere else at the time.
-		clashMat := 0
-		for tries := 0; ; tries++ {
-			start, end := lay(ready)
-			var clash time.Time
-			for _, person := range it.People {
-				for _, b := range busy[person] {
-					if b.start.Before(end) && start.Before(b.end) && b.end.After(clash) {
-						clash, clashMat = b.end, b.mat
-					}
-				}
-			}
-			if clash.IsZero() || tries > 50 {
-				return start, end, clashMat
-			}
-			ready = clash.Add(p.Changeover)
+// nextReady is the first free item whose dependencies are placed. When there is none, what
+// it waits for is nowhere on the plan: the first is timed anyway.
+func (s *suggester) nextReady(free []Item) int {
+	for i, it := range free {
+		wait, pause := s.deps(it)
+		if s.allPlaced(wait) && s.allPlaced(pause) {
+			return i
 		}
 	}
+	return 0
+}
 
-	placedAt := map[string]time.Time{}
-	for len(free) > 0 {
-		pick := -1
-		for i, it := range free {
-			wait, pause := deps(it)
-			ids := append(append([]string{}, wait...), pause...)
-			ready := true
-			for _, id := range ids {
-				if _, ok := ends[id]; !ok {
-					ready = false
-				}
-			}
-			if ready {
-				pick = i
-				break
-			}
-		}
-		if pick < 0 {
-			pick = 0 // what it waits for is nowhere on the plan; time it anyway
-		}
-		it := free[pick]
-		free = append(free[:pick], free[pick+1:]...)
-
-		candidates := []int{}
-		switch {
-		case it.Pinned && it.Mat >= 1 && it.Mat <= mats:
-			candidates = append(candidates, it.Mat)
-		case it.Held:
-			// The finals are held for mat 1, one after another (#136).
-			candidates = append(candidates, 1)
-		default:
-			for m := 1; m <= mats; m++ {
-				candidates = append(candidates, m)
-			}
-		}
-		best, bestStart, bestEnd := 0, time.Time{}, time.Time{}
-		clashes := map[int]int{}
-		for _, m := range candidates {
-			s, e, clash := timeOn(m, it)
-			if clash != 0 {
-				clashes[m] = clash
-				continue
-			}
-			// Soonest wins; on a tie the mat it is on already, so nothing moves for nothing.
-			if best == 0 || s.Before(bestStart) || (s.Equal(bestStart) && m == it.Mat && best != it.Mat) {
-				best, bestStart, bestEnd = m, s, e
-			}
-		}
-		if best == 0 {
-			// Every mat would have to wait for one of its fencers: queue it behind the
-			// clash, on that mat, where it cannot start before they are free.
-			for _, m := range candidates {
-				if c := clashes[m]; c != 0 {
-					best = c
-					break
-				}
-			}
-			if best == 0 {
-				best = candidates[0]
-			}
-			bestStart, bestEnd, _ = timeOn(best, it)
-		}
-		order[best] = append(order[best], it.ID)
-		ends[it.ID] = bestEnd
-		cursor[best] = bestEnd
-		placedAt[it.ID] = bestStart
-		for _, p := range it.People {
-			busy[p] = append(busy[p], busySpan{bestStart, bestEnd, best})
+func (s *suggester) allPlaced(ids []string) bool {
+	for _, id := range ids {
+		if _, ok := s.ends[id]; !ok {
+			return false
 		}
 	}
+	return true
+}
 
-	proposed := in
-	proposed.Items = append([]Item{}, in.Items...)
-	for index := range proposed.Items {
-		for mat, ids := range order {
-			for seq, id := range ids {
-				if id == proposed.Items[index].ID {
-					proposed.Items[index].Mat, proposed.Items[index].Seq = mat, seq+1
-				}
+// paceFor is how fast an item would go on a mat.
+func (s *suggester) paceFor(mat int, it Item) Pace {
+	p := s.pace[mat]
+	if p.Match <= 0 {
+		p = s.pace[0]
+	}
+	return calibratedPace(it, s.in.Timings, p, s.scales)
+}
+
+// timeOn is when an item would run on a mat, and -- when somebody in it is fencing
+// elsewhere at that time -- the mat of the clash: waiting for a fencer is not something a
+// queue can promise, so such a place is a last resort.
+func (s *suggester) timeOn(mat int, it Item) (time.Time, time.Time, int) {
+	p := s.paceFor(mat, it)
+	ready := s.readyOn(mat, it, p)
+	// Later, until nobody in it is fencing somewhere else at the time.
+	clashMat := 0
+	for tries := 0; ; tries++ {
+		start, end := s.lay(mat, it, p, ready)
+		clash, on := s.clashWith(it, start, end)
+		if !clash.IsZero() {
+			clashMat = on
+		}
+		if clash.IsZero() || tries > 50 {
+			return start, end, clashMat
+		}
+		ready = clash.Add(p.Changeover)
+	}
+}
+
+// readyOn is when an item could begin on a mat, before asking whether its fencers are free.
+func (s *suggester) readyOn(mat int, it Item, p Pace) time.Time {
+	ready := s.in.Timings.Start
+	if c := s.cursor[mat]; c.After(ready) {
+		ready = c.Add(p.Changeover)
+	}
+	wait, pause := s.deps(it)
+	if latest := waitsUntil(wait, pause, s.in.Timings.BeforeElims, func(id string) time.Time { return s.ends[id] }); latest.After(ready) {
+		ready = latest
+	}
+	if it.NotBefore.After(ready) {
+		ready = it.NotBefore
+	}
+	if s.live && s.in.Now.After(ready) {
+		ready = s.in.Now
+	}
+	return ready
+}
+
+// lay runs an item's matches one after another from a time, around the mat's breaks.
+func (s *suggester) lay(mat int, it Item, p Pace, ready time.Time) (time.Time, time.Time) {
+	start, at := time.Time{}, ready
+	for i := range it.Matches {
+		t := at
+		if i > 0 {
+			t = t.Add(p.Changeover)
+		}
+		t = afterBreaks(t, s.in.breaksOn(mat))
+		if start.IsZero() {
+			start = t
+		}
+		at = t.Add(p.Match)
+	}
+	if start.IsZero() {
+		start = ready
+	}
+	return start, at
+}
+
+// clashWith is when the last of an item's fencers who is elsewhere between two times is free,
+// and on which mat they are; zero and 0 when all of them are free.
+func (s *suggester) clashWith(it Item, start, end time.Time) (time.Time, int) {
+	var clash time.Time
+	mat := 0
+	for _, person := range it.People {
+		for _, b := range s.busy[person] {
+			if b.start.Before(end) && start.Before(b.end) && b.end.After(clash) {
+				clash, mat = b.end, b.mat
 			}
+		}
+	}
+	return clash, mat
+}
+
+// candidates are the mats an item may go on.
+func (s *suggester) candidates(it Item) []int {
+	switch {
+	case it.Pinned && it.Mat >= 1 && it.Mat <= s.mats:
+		return []int{it.Mat}
+	case it.Held:
+		// The finals are held for mat 1, one after another (#136).
+		return []int{1}
+	}
+	out := make([]int, 0, s.mats)
+	for m := 1; m <= s.mats; m++ {
+		out = append(out, m)
+	}
+	return out
+}
+
+// place puts an item on the mat where it can start soonest.
+func (s *suggester) place(it Item) {
+	candidates := s.candidates(it)
+	best, bestStart, bestEnd := 0, time.Time{}, time.Time{}
+	clashes := map[int]int{}
+	for _, m := range candidates {
+		start, end, clash := s.timeOn(m, it)
+		if clash != 0 {
+			clashes[m] = clash
+			continue
+		}
+		// Soonest wins; on a tie the mat it is on already, so nothing moves for nothing.
+		if best == 0 || start.Before(bestStart) || (start.Equal(bestStart) && m == it.Mat && best != it.Mat) {
+			best, bestStart, bestEnd = m, start, end
+		}
+	}
+	if best == 0 {
+		best = lastResort(candidates, clashes)
+		bestStart, bestEnd, _ = s.timeOn(best, it)
+	}
+	s.order[best] = append(s.order[best], it.ID)
+	s.ends[it.ID] = bestEnd
+	s.cursor[best] = bestEnd
+	s.markBusy(it, bestStart, bestEnd, best)
+}
+
+// lastResort is where an item goes when every mat would have to wait for one of its fencers:
+// behind the clash, on that mat, where it cannot start before they are free -- when it may
+// go there. A pinned item or a held final waits on its own mat instead.
+func lastResort(candidates []int, clashes map[int]int) int {
+	for _, m := range candidates {
+		if c := clashes[m]; c != 0 && slices.Contains(candidates, c) {
+			return c
+		}
+	}
+	return candidates[0]
+}
+
+// suggestion is the plan built, timed again by the forecast itself, and what moves to make it.
+func (s *suggester) suggestion(before time.Time) Suggestion {
+	type place struct{ mat, seq int }
+	placed := map[string]place{}
+	for mat, ids := range s.order {
+		for i, id := range ids {
+			placed[id] = place{mat, i + 1}
+		}
+	}
+	proposed := s.in
+	proposed.Items = append([]Item{}, s.in.Items...)
+	for i := range proposed.Items {
+		if p, ok := placed[proposed.Items[i].ID]; ok {
+			proposed.Items[i].Mat, proposed.Items[i].Seq = p.mat, p.seq
 		}
 	}
 	result := Run(proposed)
-	for _, span := range result.Items {
-		placedAt[span.ID] = span.Start
+	startOf := map[string]time.Time{}
+	for _, sp := range result.Items {
+		startOf[sp.ID] = sp.Start
 	}
-	out := Suggestion{Order: order, Before: before.End, End: result.End}
-	for _, it := range in.Items {
-		for mat, ids := range order {
-			for i, id := range ids {
-				if id != it.ID {
-					continue
-				}
-				// Position in the queue, from 1, against where the plan has it now.
-				if mat != it.Mat || i+1 != position(in.Items, it) {
-					out.Moves = append(out.Moves, Move{ID: it.ID, FromMat: it.Mat, FromSeq: position(in.Items, it),
-						ToMat: mat, ToSeq: i + 1, Start: placedAt[it.ID]})
-				}
-			}
+	out := Suggestion{Order: s.order, Before: before, End: result.End}
+	for _, it := range s.in.Items {
+		p, ok := placed[it.ID]
+		if !ok {
+			continue
+		}
+		// Position in the queue, from 1, against where the plan has it now.
+		if now := position(s.in.Items, it); p.mat != it.Mat || p.seq != now {
+			out.Moves = append(out.Moves, Move{ID: it.ID, FromMat: it.Mat, FromSeq: now,
+				ToMat: p.mat, ToSeq: p.seq, Start: startOf[it.ID]})
 		}
 	}
 	sort.Slice(out.Moves, func(i, j int) bool { return out.Moves[i].Start.Before(out.Moves[j].Start) })

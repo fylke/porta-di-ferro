@@ -6,6 +6,7 @@
   import TourExample from './TourExample.svelte';
   import { stageLabel } from '../lib/stage';
   import { t } from '../lib/i18n.svelte';
+  import { errorText } from '../lib/errors';
 
   /**
    * The event's disciplines: add one, set it up, rename it, delete it (#4, #102, #149).
@@ -73,7 +74,7 @@
       onchange?.();
       return true;
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      error = errorText(e);
       return false;
     } finally {
       busy = false;

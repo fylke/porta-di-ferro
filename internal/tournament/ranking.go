@@ -90,8 +90,15 @@ func Rank(r match.Ruleset, pool store.Pool, competitors map[string]store.Competi
 		}
 	}
 
+	// In the pool's order, not the map's: when head-to-head goes round in a circle the sort
+	// cannot settle it, and the table has to come out the same at every look.
 	out := make([]Standing, 0, len(rows))
-	for _, s := range rows {
+	for _, id := range pool.Competitors {
+		s, ok := rows[id]
+		if !ok {
+			continue
+		}
+		delete(rows, id)
 		if s.Completed > 0 {
 			d := float64(s.Completed)
 			s.MatchPointIndex = float64(s.MatchPoints) / d

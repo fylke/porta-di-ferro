@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/fylke/porta-di-ferro/internal/event"
+	"github.com/fylke/porta-di-ferro/internal/hall"
 	"github.com/fylke/porta-di-ferro/internal/store"
 )
 
@@ -22,14 +23,10 @@ import (
 // to a Sabre pool, and a claim on a match anywhere asks the one registry whether the
 // device holding it is still alive.
 
-// maxMats bounds the hall. Four mats per discipline is the draw's own limit; an event of
-// several shares more.
-const maxMats = 8
-
 // snapped is one discipline's snapshot, or why there is none.
 type snapped struct {
 	w    *worker
-	snap Snapshot
+	snap hall.Snapshot
 	err  error
 }
 
@@ -59,7 +56,7 @@ func (c *Coordinator) Placements() (map[string]store.Placement, int) {
 
 func (c *Coordinator) placementsLocked() (map[string]store.Placement, int) {
 	file, _ := c.folder.Read()
-	var items []WorkItem
+	var items []hall.WorkItem
 	var tournaments []store.Tournament
 	var failed, slugs []string
 	stores := map[string]*store.Store{}
@@ -81,7 +78,7 @@ func (c *Coordinator) placementsLocked() (map[string]store.Placement, int) {
 		}
 		tournaments = append(tournaments, t)
 		stores[w.slug] = w.srv.store
-		items = append(items, PlanItems(w.slug, t, Entrants(comps, file.Plan.Expected[w.slug]))...)
+		items = append(items, hall.PlanItems(w.slug, t, hall.Entrants(comps, file.Plan.Expected[w.slug]))...)
 	}
 	c.projected = map[string]bool{}
 	for _, it := range items {
@@ -90,7 +87,7 @@ func (c *Coordinator) placementsLocked() (map[string]store.Placement, int) {
 		}
 	}
 	// Under way is any match of the item with a log: nothing goes in front of it.
-	started := func(it WorkItem) bool {
+	started := func(it hall.WorkItem) bool {
 		st := stores[it.Discipline]
 		if st == nil {
 			return false
@@ -102,7 +99,7 @@ func (c *Coordinator) placementsLocked() (map[string]store.Placement, int) {
 		}
 		return false
 	}
-	mats := MatCount(file.Plan, tournaments)
+	mats := hall.MatCount(file.Plan, tournaments)
 	// A discipline that cannot be read keeps its placements for when it can be again,
 	// rather than losing every move the organizer made to it: they are set aside from the
 	// placing and put back as they were.
@@ -119,7 +116,7 @@ func (c *Coordinator) placementsLocked() (map[string]store.Placement, int) {
 			active.Items[id] = p
 		}
 	}
-	placed, changed := PlaceIn(items, active, mats, OrderOf(file.Plan, slugs, started))
+	placed, changed := hall.Place(items, active, mats, hall.OrderOf(file.Plan, slugs, started))
 	for id, p := range kept {
 		placed[id] = p
 	}
@@ -132,9 +129,9 @@ func (c *Coordinator) placementsLocked() (map[string]store.Placement, int) {
 // savePlacementsLocked writes the placements down, as much of them as is kept (#129), and
 // only when that differs from what is there. The caller holds planMu.
 func (c *Coordinator) savePlacementsLocked(placed map[string]store.Placement) error {
-	next := Persisted(placed, c.projected)
+	next := hall.Persisted(placed, c.projected)
 	file, _ := c.folder.Read()
-	if maps.Equal(next, Persisted(file.Plan.Items, c.projected)) && len(next) == len(file.Plan.Items) {
+	if maps.Equal(next, hall.Persisted(file.Plan.Items, c.projected)) && len(next) == len(file.Plan.Items) {
 		return nil
 	}
 	_, err := c.folder.Update(func(f *event.File) error {
@@ -145,8 +142,8 @@ func (c *Coordinator) savePlacementsLocked(placed map[string]store.Placement) er
 }
 
 // withSessions gives every discipline its block of the day (#136).
-func (c *Coordinator) withSessions(inputs []MatsInput, plan store.Plan) {
-	sessions := Sessions(plan, c.slugs())
+func (c *Coordinator) withSessions(inputs []hall.MatsInput, plan store.Plan) {
+	sessions := hall.Sessions(plan, c.slugs())
 	for i := range inputs {
 		inputs[i].Session = sessions[inputs[i].Slug]
 		inputs[i].FinalsLast = plan.FinalsLast
@@ -162,27 +159,27 @@ func (c *Coordinator) held(mat int) (string, string) {
 }
 
 // matsFrom lays every readable discipline's items on the mats.
-func (c *Coordinator) matsFrom(snaps []snapped) MatsView {
+func (c *Coordinator) matsFrom(snaps []snapped) hall.MatsView {
 	file, _ := c.folder.Read()
-	var inputs []MatsInput
+	var inputs []hall.MatsInput
 	for _, s := range snaps {
 		if s.err != nil {
 			continue
 		}
-		inputs = append(inputs, MatsInput{Slug: s.w.slug, Name: s.snap.Instance.Name, Snapshot: s.snap,
+		inputs = append(inputs, hall.MatsInput{Slug: s.w.slug, Name: s.snap.Instance.Name, Snapshot: s.snap,
 			Expected: file.Plan.Expected[s.w.slug]})
 	}
 	c.withSessions(inputs, file.Plan)
 	placed, mats := c.Placements()
-	view := BuildMats(inputs, placed, mats, c.held)
+	view := hall.BuildMats(inputs, placed, mats, c.held)
 	view.Upcoming = store.UpcomingOf(file.Screens)
 	view.Event = file.ID
-	NameMats(&view, file.Plan)
+	hall.NameMats(&view, file.Plan)
 	return view
 }
 
 // MatsNow is the hall's mats as they stand.
-func (c *Coordinator) MatsNow() MatsView { return c.matsFrom(c.snapshots()) }
+func (c *Coordinator) MatsNow() hall.MatsView { return c.matsFrom(c.snapshots()) }
 
 // MoveItem moves a work item on the event's mats: to a mat at an index (-1 for the end),
 // or one step "up" or "down" its own mat. A change republishes every discipline, whose
@@ -191,20 +188,7 @@ func (c *Coordinator) MoveItem(id string, mat, index int, move string) error {
 	view := c.MatsNow()
 	c.planMu.Lock()
 	placed, mats := c.placementsLocked()
-	var (
-		next    map[string]store.Placement
-		changed bool
-		err     error
-	)
-	switch move {
-	case "up", "down":
-		next, changed, err = Step(view, placed, id, move == "up", mats)
-	default:
-		if index < 0 {
-			index = len(view.Items)
-		}
-		next, changed, err = Move(view, placed, id, mat, index, mats)
-	}
+	next, changed, err := hall.MoveOrStep(view, placed, id, mat, index, move, mats)
 	if err == nil && changed {
 		err = c.savePlacementsLocked(next)
 	}
@@ -229,24 +213,6 @@ func (c *Coordinator) republish() {
 	c.poke()
 }
 
-// SummaryMats is what each mat is running, for the discipline whose match it is.
-func SummaryMats(view MatsView, slug string) []MatSummary {
-	out := []MatSummary{}
-	for _, m := range view.Mats {
-		cur := m.Current
-		if cur == nil || cur.Discipline != slug {
-			continue
-		}
-		out = append(out, MatSummary{
-			Mat: m.Mat, Match: cur.Match.ID, Status: cur.Match.Status, Pool: cur.Match.Pool,
-			Round: cur.Match.Round, Red: cur.Red, Blue: cur.Blue,
-			RedColour: cur.Match.Options.Red, BlueColour: cur.Match.Options.Blue,
-			RedScore: cur.Match.State.Red.Score, BlueScore: cur.Match.State.Blue.Score,
-		})
-	}
-	return out
-}
-
 // --- the mats and the plan, over HTTP ---------------------------------------------------
 
 func (c *Coordinator) getMats(w http.ResponseWriter, r *http.Request) {
@@ -263,8 +229,8 @@ func (c *Coordinator) putMats(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	if in.Count < 1 || in.Count > maxMats {
-		writeErr(w, http.StatusBadRequest, fmt.Errorf("a hall has between 1 and %d mats", maxMats))
+	if in.Count < 1 || in.Count > hall.MaxMats {
+		writeErr(w, http.StatusBadRequest, fmt.Errorf("a hall has between 1 and %d mats", hall.MaxMats))
 		return
 	}
 	for _, it := range c.MatsNow().Items {
@@ -294,7 +260,7 @@ func (c *Coordinator) patchItem(w http.ResponseWriter, r *http.Request) {
 		Mat   int    `json:"mat"`
 		Index *int   `json:"index"`
 		Move  string `json:"move"`
-		ItemFlags
+		hall.ItemFlags
 	}
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		writeErr(w, http.StatusBadRequest, err)
@@ -320,7 +286,7 @@ func (c *Coordinator) patchItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err := c.MoveItem(r.PathValue("id"), in.Mat, index, in.Move)
-	var locked ErrNotMovable
+	var locked hall.ErrNotMovable
 	switch {
 	case errors.As(err, &locked):
 		writeErr(w, http.StatusConflict, err)
@@ -344,12 +310,12 @@ func (c *Coordinator) putMat(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	in, err = CleanMat(in)
+	in, err = hall.CleanMat(in)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	if err := c.changePlan(func(p *store.Plan) error { SetMat(p, n, in); return nil }); err != nil {
+	if err := c.changePlan(func(p *store.Plan) error { hall.SetMat(p, n, in); return nil }); err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}

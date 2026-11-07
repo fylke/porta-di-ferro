@@ -5,6 +5,7 @@
   import FoldButton from './FoldButton.svelte';
   import { Folds } from '../lib/folds.svelte';
   import { t } from '../lib/i18n.svelte';
+  import { errorText } from '../lib/errors';
 
   /**
    * The organizer's screen for a running tournament: matches, status, live standings --
@@ -31,7 +32,7 @@
       await run();
       onchange();
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      error = errorText(e);
     }
   }
 </script>

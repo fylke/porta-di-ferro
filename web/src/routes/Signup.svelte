@@ -16,10 +16,11 @@
   import { t } from "../lib/i18n.svelte";
   import { hall } from "../lib/event.svelte";
   import { apiBase } from "../lib/paths";
-  import { signupSubmissionId } from "../lib/signup-id";
+  import { signupResponse } from "../lib/signup-response";
   import { discipline } from "../router.svelte";
   import ConfirmDialog from "./ConfirmDialog.svelte";
   import SaveButton from "./SaveButton.svelte";
+  import { errorText } from '../lib/errors';
 
   const demo = import.meta.env.VITE_DEMO === "true";
 
@@ -151,7 +152,7 @@
       await refreshReady();
       onchange();
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      error = errorText(e);
     }
   }
   // A discipline's identifier (#153). Before the day it just changes; on the day, somebody
@@ -181,7 +182,7 @@
       onchange();
     } catch (e) {
       input.value = slug;
-      error = e instanceof Error ? e.message : String(e);
+      error = errorText(e);
     }
   }
   async function setStart(slug: string, at: string) {
@@ -190,7 +191,7 @@
       starts = { ...((await api.setStarts({ [slug]: at })).starts ?? {}) };
       await refreshReady();
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      error = errorText(e);
     }
   }
 
@@ -217,7 +218,7 @@
       await refreshReady();
       onchange();
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      error = errorText(e);
     } finally {
       saving = false;
     }
@@ -258,7 +259,7 @@
         } catch (e) {
           failed.push({
             source,
-            message: e instanceof Error ? e.message : String(e),
+            message: errorText(e),
           });
         }
       } else {
@@ -293,22 +294,17 @@
     }
 
     error = "";
-    const email = manualEmail.trim().toLowerCase();
-    const response = {
-      format: "porta.signup.response",
-      version: 2,
-      definitionId: definitionId.trim(),
-      submissionId: signupSubmissionId(definitionId, email),
-      participant: {
-        name: manualName.trim(),
-        club: manualClub.trim(),
-        email,
-      },
+    const response = signupResponse({
+      definitionId,
+      name: manualName.trim(),
+      club: manualClub.trim(),
+      email: manualEmail,
       entries,
-      ...(staffTournaments.length > 0 && manualRoles.length > 0
-        ? { staff: { tournaments: staffTournaments, roles: [...manualRoles] } }
-        : {}),
-    };
+      staff:
+        staffTournaments.length > 0 && manualRoles.length > 0
+          ? { tournaments: staffTournaments, roles: [...manualRoles] }
+          : undefined,
+    });
     const added = [...files, { source: source || t("Manual response"), body: JSON.stringify(response) }];
     files = added;
     manualName = "";
@@ -330,7 +326,7 @@
           ? await api.previewEventSignups(files)
           : await api.previewSignups(files);
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      error = errorText(e);
     } finally {
       busy = false;
     }
@@ -349,7 +345,7 @@
       if ("error" in res && res.error) error = res.error;
       onchange();
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      error = errorText(e);
     } finally {
       busy = false;
     }
@@ -361,7 +357,7 @@
       await api.removeStaff(id);
       onchange();
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      error = errorText(e);
     }
   }
 

@@ -1,0 +1,382 @@
+package hall
+
+import (
+	"regexp"
+	"time"
+
+	"github.com/fylke/porta-di-ferro/internal/match"
+	"github.com/fylke/porta-di-ferro/internal/store"
+	"github.com/fylke/porta-di-ferro/internal/tournament"
+)
+
+// MatchView is one match with its derived state. Nothing here is stored: it is replayed
+// from the log every time it is asked for (design decision 5).
+type MatchView struct {
+	store.Match
+	State  match.State `json:"state"`
+	Status string      `json:"status"`
+	// SinceMS is how long ago this server saw the last event in the match, and is set
+	// only while the clock is running.
+	//
+	// A display has no writer of its own, so its clock has to be placed rather than
+	// started: State.ElapsedMS is the time at the last event, which may have been a
+	// minute ago. Adding this to it, and then counting on from the moment the snapshot
+	// arrived, is what makes a scoreboard opened mid-match agree with the mat instead of
+	// restarting the clock from whenever the page happened to load.
+	//
+	// A duration rather than a timestamp, so a display whose own clock is wrong -- and a
+	// spare screen's clock usually is -- never has to agree with the server about what
+	// time it is.
+	SinceMS int64 `json:"sinceMs,omitempty"`
+	// Options is how the match is presented -- colours and display sides -- read from
+	// the log by match.OptionsOf. Always present, defaults filled in.
+	Options match.Options `json:"options"`
+	// StartedAt and EndedAt are when the match's first exchange or timer event and its
+	// end were logged, for the forecast's measured pace (phase 4). Empty until then.
+	StartedAt string `json:"startedAt,omitempty"`
+	EndedAt   string `json:"endedAt,omitempty"`
+	// Eta is when the forecast expects the match to start, for a match still to come in
+	// an event with a plan (phase 4).
+	Eta string `json:"eta,omitempty"`
+}
+
+// times is when a match started and ended, by its log. The colours and sides a score
+// keeper sets before the first exchange are not the start of the fencing.
+func times(events []match.Event, ended bool) (string, string) {
+	started := ""
+	for _, e := range events {
+		if e.Type != match.TypeOptions {
+			started = e.At
+			break
+		}
+	}
+	if !ended || len(events) == 0 {
+		return started, ""
+	}
+	return started, events[len(events)-1].At
+}
+
+// PoolView is a pool with its matches and its live standings.
+type PoolView struct {
+	Number int `json:"number"`
+	Mat    int `json:"mat"`
+	// Sequence is the pool's place in its mat's queue; Overridden says the organizer put
+	// it somewhere other than where the default mapping would, so the screens can show
+	// that it was deliberate.
+	Sequence    int                   `json:"sequence"`
+	Overridden  bool                  `json:"overridden"`
+	Competitors []string              `json:"competitors"`
+	Matches     []MatchView           `json:"matches"`
+	Standings   []tournament.Standing `json:"standings"`
+	Complete    bool                  `json:"complete"`
+}
+
+// BracketView is the eliminations with every slot that can be filled filled, the
+// tournament's podium so far, and the overall ranking the seeds came from.
+type BracketView struct {
+	Matches  []MatchView       `json:"matches"`
+	Podium   tournament.Podium `json:"podium"`
+	Complete bool              `json:"complete"`
+}
+
+// Snapshot is everything an organizer view or a display needs in one response. Clients
+// take this on load and then follow the SSE stream; a display that loses the server shows
+// stale data rather than breaking.
+type Snapshot struct {
+	Competitors []store.Competitor `json:"competitors"`
+	Tournament  store.Tournament   `json:"tournament"`
+	Pools       []PoolView         `json:"pools"`
+	// Overall is everyone ranked across the pools by the pool chain -- the seeding for
+	// the eliminations, and meaningful once PoolsComplete.
+	Overall       []tournament.Standing `json:"overall"`
+	PoolsComplete bool                  `json:"poolsComplete"`
+	// ElimMats is how many mats the eliminations will be drawn across as things stand,
+	// and ElimMatsSuggested is what the rule picks when the organizer has not said --
+	// the fewest that costs the bracket no extra pass (issue #94). The organizer view
+	// shows both, so an override reads as a departure from a suggestion rather than as
+	// a number out of nowhere.
+	ElimMats          int `json:"elimMats"`
+	ElimMatsSuggested int `json:"elimMatsSuggested"`
+	// Bracket is the eliminations, once drawn.
+	Bracket *BracketView  `json:"bracket,omitempty"`
+	Ruleset match.Ruleset `json:"ruleset"`
+	// Mats maps a mat number to the match it is currently running, or the next one due.
+	Mats map[int]string `json:"mats"`
+	Dir  string         `json:"dir"`
+	// Instance is which run of the application this is, so every page can say which
+	// discipline it belongs to when there is more than one.
+	Instance Instance `json:"instance"`
+	// EventMats is how many physical mats the event has, when the discipline is part of
+	// one: every Mat in this snapshot is then one of those, placed by the event's plan
+	// (OnEventMats). Zero for a discipline on its own, whose mats are Tournament.Mats.
+	EventMats int `json:"eventMats,omitempty"`
+}
+
+// Source is the stored state a snapshot is built from. *store.Store is one, and the
+// browser demo's in-memory tournament is the other: the demo has no filesystem and no
+// server, so the only way it can show the same standings and the same bracket as a real
+// event is to run this same code over a different source (docs/demo.md).
+type Source interface {
+	Competitors() ([]store.Competitor, error)
+	Tournament() (store.Tournament, error)
+	Events(id string, after int) ([]match.Event, error)
+	LastEventAt(id string) (time.Time, bool)
+	Dir() string
+}
+
+// backToBack is the generator's report of a pool that cannot avoid somebody fencing two
+// matches in a row (tournament/schedule.go), which names the two by identifier.
+var backToBack = regexp.MustCompile(`^(pool \d+: )(\S+) or (\S+)( fences two matches in a row)$`)
+
+// namedViolations puts names where the draw's warnings have identifiers: "c8 or c6"
+// means nothing to an organizer. The stored warning keeps the identifiers, so a
+// competitor renamed after the draw shows under the new name, and a file written before
+// this reads the same way. Only that one warning is rewritten -- the club warnings name
+// clubs, and a club could be called anything.
+func namedViolations(violations []string, byID map[string]store.Competitor) []string {
+	if len(violations) == 0 {
+		return violations
+	}
+	name := func(id string) string {
+		if c, ok := byID[id]; ok && c.Name != "" {
+			return c.Name
+		}
+		return id
+	}
+	out := make([]string, len(violations))
+	for i, v := range violations {
+		if m := backToBack.FindStringSubmatch(v); m != nil {
+			v = m[1] + name(m[2]) + " or " + name(m[3]) + m[4]
+		}
+		out[i] = v
+	}
+	return out
+}
+
+// BuildSnapshot assembles the whole derived picture from stored state. It is deliberately
+// recomputed rather than cached: a tournament is at most a few hundred matches, and a cache
+// is a second source of truth.
+//
+// Pools come out in run order -- by mat, then by the organizer's queue -- rather than by
+// number. Every consumer that filters pools by mat then has the mat's running order for
+// free, which is what keeps the score keeper, the displays and the roster agreeing on
+// which pool a mat picks up next.
+//
+// scorekeeperOn names the match a live score keeper is holding on a mat, or "" -- a
+// server reads that from the presence registry, and the demo has nobody connected.
+func BuildSnapshot(src Source, rules match.Ruleset, self Instance,
+	scorekeeperOn func(mat int) string) (Snapshot, error) {
+
+	competitors, err := src.Competitors()
+	if err != nil {
+		return Snapshot{}, err
+	}
+	t, err := src.Tournament()
+	if err != nil {
+		return Snapshot{}, err
+	}
+
+	byID := make(map[string]store.Competitor, len(competitors))
+	for _, c := range competitors {
+		byID[c.ID] = c
+	}
+
+	t.Violations = namedViolations(t.Violations, byID)
+	snap := Snapshot{
+		Competitors: competitors,
+		Tournament:  t,
+		Ruleset:     rules,
+		Pools:       make([]PoolView, 0, len(t.Pools)),
+		Mats:        map[int]string{},
+		Dir:         src.Dir(),
+		Instance:    self,
+	}
+
+	b := snapshotBuilder{src: src, rules: rules, t: t, byID: byID, states: map[string]match.State{}}
+	if snap.Pools, err = b.pools(); err != nil {
+		return Snapshot{}, err
+	}
+	snap.Overall = tournament.Overall(rules, t, byID, b.states)
+	snap.PoolsComplete = tournament.PoolsComplete(t, byID, b.states)
+
+	// Sized from the field as it stands, so the organizer sees the answer for the cut
+	// they are actually going to make rather than for a full eight.
+	if size := tournament.BracketSize(len(snap.Overall)); size > 0 {
+		snap.ElimMats = tournament.EliminationMatsFor(t, size)
+		snap.ElimMatsSuggested = tournament.EliminationMats(t.Mats, size)
+	}
+
+	if snap.Bracket, err = b.bracket(); err != nil {
+		return Snapshot{}, err
+	}
+	for mat := 1; mat <= t.Mats; mat++ {
+		snap.Mats[mat] = snap.runningOn(mat, scorekeeperOn(mat))
+	}
+	return snap, nil
+}
+
+// snapshotBuilder replays every match, pools and bracket alike, once, and shares the states.
+type snapshotBuilder struct {
+	src    Source
+	rules  match.Ruleset
+	t      store.Tournament
+	byID   map[string]store.Competitor
+	states map[string]match.State
+}
+
+func (b snapshotBuilder) view(m store.Match) (MatchView, error) {
+	events, err := b.src.Events(m.ID, 0)
+	if err != nil {
+		return MatchView{}, err
+	}
+	st := match.Replay(b.rules, events)
+	b.states[m.ID] = st
+	status := "pending"
+	switch {
+	case st.Ended:
+		status = "complete"
+	case len(events) > 0:
+		status = "running"
+	}
+	v := MatchView{Match: m, State: st, Status: status, Options: match.OptionsOf(events)}
+	v.StartedAt, v.EndedAt = times(events, st.Ended)
+	if st.Running {
+		if at, ok := b.src.LastEventAt(m.ID); ok {
+			if since := time.Since(at).Milliseconds(); since > 0 {
+				v.SinceMS = since
+			}
+		}
+	}
+	return v, nil
+}
+
+func (b snapshotBuilder) pools() ([]PoolView, error) {
+	out := make([]PoolView, 0, len(b.t.Pools))
+	for _, p := range tournament.RunOrder(b.t) {
+		states := map[string]match.State{}
+		views := make([]MatchView, 0, len(p.Matches))
+		complete := true
+		for _, m := range p.Matches {
+			v, err := b.view(m)
+			if err != nil {
+				return nil, err
+			}
+			states[m.ID] = v.State
+			if !v.State.Ended {
+				complete = false
+			}
+			views = append(views, v)
+		}
+		out = append(out, PoolView{
+			Number:      p.Number,
+			Mat:         p.Mat,
+			Sequence:    p.Sequence,
+			Overridden:  tournament.Overridden(b.t, p.Number),
+			Competitors: p.Competitors,
+			Matches:     views,
+			Standings:   tournament.Rank(b.rules, p, b.byID, states, b.t.Seed),
+			Complete:    complete,
+		})
+	}
+	return out, nil
+}
+
+// bracket is the eliminations: later rounds filled from the results that feed them, then
+// replayed like any other match. Nil until they are drawn.
+func (b snapshotBuilder) bracket() (*BracketView, error) {
+	if len(b.t.Bracket) == 0 {
+		return nil, nil
+	}
+	bv := &BracketView{Complete: true}
+	for _, m := range tournament.Fill(b.t.Bracket, b.states) {
+		v, err := b.view(m)
+		if err != nil {
+			return nil, err
+		}
+		if !v.State.Ended {
+			bv.Complete = false
+		}
+		bv.Matches = append(bv.Matches, v)
+	}
+	// Fill again now that the bracket's own states are known, so a semi-final
+	// decided a moment ago already shows the finalists.
+	filled := tournament.Fill(b.t.Bracket, b.states)
+	for i := range bv.Matches {
+		bv.Matches[i].Match = filled[i]
+	}
+	bv.Podium = tournament.Result(filled, b.states)
+	return bv, nil
+}
+
+// runningOn is the match a mat is on. A mat runs its pools in queue order, which is the
+// order snap.Pools is already in: when one finishes, that mat picks up its next -- and after
+// the pools, the bracket matches assigned to it, once both their competitors are known. A
+// slot that is not filled yet is not a match a mat can run. But a live score keeper
+// registered on the mat knows better: it holds a finished match on screen until Next match
+// is pressed, and the displays should show that result for exactly as long. So the score
+// keeper's own match wins whenever there is one -- a bracket match included, once it can be
+// run.
+func (s Snapshot) runningOn(mat int, held string) string {
+	if held != "" && s.canRun(held) {
+		return held
+	}
+	for _, p := range s.Pools {
+		if p.Mat != mat {
+			continue
+		}
+		for _, m := range p.Matches {
+			if m.Status != "complete" {
+				return m.ID
+			}
+		}
+	}
+	if s.Bracket != nil {
+		for _, m := range s.Bracket.Matches {
+			if m.Mat == mat && m.Status != "complete" && m.Red != "" && m.Blue != "" {
+				return m.ID
+			}
+		}
+	}
+	return ""
+}
+
+// canRun says a match is one a mat can run: any pool's, or a bracket match with both
+// competitors known.
+func (s Snapshot) canRun(id string) bool {
+	for _, p := range s.Pools {
+		for _, m := range p.Matches {
+			if m.ID == id {
+				return true
+			}
+		}
+	}
+	if s.Bracket != nil {
+		for _, m := range s.Bracket.Matches {
+			if m.ID == id && m.Red != "" && m.Blue != "" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// eachMatch calls f on every match in the snapshot: the pools' and then the bracket's.
+func (s *Snapshot) eachMatch(f func(*MatchView)) {
+	for i := range s.Pools {
+		for j := range s.Pools[i].Matches {
+			f(&s.Pools[i].Matches[j])
+		}
+	}
+	if s.Bracket != nil {
+		for i := range s.Bracket.Matches {
+			f(&s.Bracket.Matches[i])
+		}
+	}
+}
+
+// matchesByID is every match in the snapshot, by id.
+func (s *Snapshot) matchesByID() map[string]MatchView {
+	out := map[string]MatchView{}
+	s.eachMatch(func(m *MatchView) { out[m.ID] = *m })
+	return out
+}

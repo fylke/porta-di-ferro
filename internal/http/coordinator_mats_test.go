@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fylke/porta-di-ferro/internal/hall"
 	httpapi "github.com/fylke/porta-di-ferro/internal/http"
 )
 
@@ -20,7 +21,7 @@ import (
 
 // draw enters n competitors in a discipline (its API prefix) and draws its pools on the
 // given number of its own mats.
-func (h *hall) draw(prefix string, n, mats int) {
+func (h *testHall) draw(prefix string, n, mats int) {
 	h.t.Helper()
 	for i := 0; i < n; i++ {
 		h.must("POST", prefix+"/competitors", map[string]string{"name": fmt.Sprintf("Fencer %d", i), "club": fmt.Sprintf("Club %d", i%3)}, nil)
@@ -29,25 +30,25 @@ func (h *hall) draw(prefix string, n, mats int) {
 	h.must("POST", prefix+"/tournament/pools", nil, nil)
 }
 
-func (h *hall) mats() httpapi.MatsView {
+func (h *testHall) mats() hall.MatsView {
 	h.t.Helper()
-	var v httpapi.MatsView
+	var v hall.MatsView
 	h.must("GET", "/api/mats", nil, &v)
 	return v
 }
 
-func itemOf(v httpapi.MatsView, id string) httpapi.ItemView {
+func itemOf(v hall.MatsView, id string) hall.ItemView {
 	for _, it := range v.Items {
 		if it.ID == id {
 			return it
 		}
 	}
-	return httpapi.ItemView{}
+	return hall.ItemView{}
 }
 
 func TestTheMatsAreTheEvents(t *testing.T) {
 	h := openHall(t, t.TempDir())
-	var ev httpapi.EventView
+	var ev hall.EventView
 	h.must("GET", "/api/event", nil, &ev)
 	ls := ev.Disciplines[0].Slug
 	h.draw("/api/d/"+ls, 12, 2)
@@ -88,7 +89,7 @@ func TestTheMatsAreTheEvents(t *testing.T) {
 		t.Errorf("Sabre's pool should be first on mat 2: %+v", it)
 	}
 	// Every page of the discipline names the mat its pool is on now.
-	var s httpapi.Snapshot
+	var s hall.Snapshot
 	h.must("GET", "/api/d/open-sabre/state", nil, &s)
 	if s.Pools[0].Number != 1 || s.Pools[0].Mat != 2 || s.EventMats != 2 {
 		t.Errorf("Sabre's snapshot should say its pool 1 runs on mat 2 of 2: %+v", s.Pools[0])
@@ -113,7 +114,7 @@ func TestTheMatsAreTheEvents(t *testing.T) {
 // What a mat is running cannot be moved, and nothing jumps in front of it.
 func TestARunningItemStays(t *testing.T) {
 	h := openHall(t, t.TempDir())
-	var ev httpapi.EventView
+	var ev hall.EventView
 	h.must("GET", "/api/event", nil, &ev)
 	ls := ev.Disciplines[0].Slug
 	h.draw("/api/d/"+ls, 8, 1)
@@ -136,7 +137,7 @@ func TestARunningItemStays(t *testing.T) {
 // it holds, and leaving lets go of its claim in whichever discipline that was.
 func TestAScoreKeeperBelongsToTheMat(t *testing.T) {
 	h := openHall(t, t.TempDir())
-	var ev httpapi.EventView
+	var ev hall.EventView
 	h.must("GET", "/api/event", nil, &ev)
 	ls := ev.Disciplines[0].Slug
 	h.draw("/api/d/"+ls, 8, 1)
@@ -176,7 +177,7 @@ func TestAScoreKeeperBelongsToTheMat(t *testing.T) {
 // The score keepers and the screens follow the mats on one stream.
 func TestTheMatsStreamFollowsEveryDiscipline(t *testing.T) {
 	h := openHall(t, t.TempDir())
-	var ev httpapi.EventView
+	var ev hall.EventView
 	h.must("GET", "/api/event", nil, &ev)
 	ls := ev.Disciplines[0].Slug
 	h.draw("/api/d/"+ls, 8, 1)
@@ -206,8 +207,8 @@ func TestTheMatsStreamFollowsEveryDiscipline(t *testing.T) {
 		select {
 		case f := <-frames:
 			var u struct {
-				Kind string           `json:"kind"`
-				Data httpapi.MatsView `json:"data"`
+				Kind string        `json:"kind"`
+				Data hall.MatsView `json:"data"`
 			}
 			if json.Unmarshal([]byte(f), &u) != nil || u.Kind != "mats" {
 				continue
@@ -228,7 +229,7 @@ func TestTheScreensShowWhatComesNext(t *testing.T) {
 	if v := h.mats(); v.Upcoming != "bottom" {
 		t.Errorf("the next match along the bottom is the default, got %q", v.Upcoming)
 	}
-	var v httpapi.MatsView
+	var v hall.MatsView
 	h.must("PUT", "/api/screens", map[string]string{"upcoming": "list"}, &v)
 	if v.Upcoming != "list" || h.mats().Upcoming != "list" {
 		t.Errorf("the choice should stick: %q", v.Upcoming)
@@ -242,7 +243,7 @@ func TestTheScreensShowWhatComesNext(t *testing.T) {
 // organizer puts them in one block, when the second's pools run beside the first's.
 func TestBlocksOfTheDay(t *testing.T) {
 	h := openHall(t, t.TempDir())
-	var ev httpapi.EventView
+	var ev hall.EventView
 	h.must("GET", "/api/event", nil, &ev)
 	ls := ev.Disciplines[0].Slug
 	h.draw("/api/d/"+ls, 12, 2)
@@ -262,7 +263,7 @@ func TestBlocksOfTheDay(t *testing.T) {
 	}
 
 	// Finals at the end, on mat 1.
-	var f httpapi.ForecastView
+	var f hall.ForecastView
 	h.must("PUT", "/api/plan/finals", map[string]bool{"last": true}, &f)
 	if !f.FinalsLast || f.Sessions["open-sabre"] != 1 || f.Sessions[ls] != 1 {
 		t.Errorf("the forecast should say what is in force: %+v %v", f.FinalsLast, f.Sessions)
@@ -277,7 +278,7 @@ func TestBlocksOfTheDay(t *testing.T) {
 // is written down.
 func TestProjectedItemsAreNotWrittenDown(t *testing.T) {
 	h := openHall(t, t.TempDir())
-	var ev httpapi.EventView
+	var ev hall.EventView
 	h.must("GET", "/api/event", nil, &ev)
 	h.draw("/api/d/"+ev.Disciplines[0].Slug, 8, 2)
 	h.must("POST", "/api/disciplines", map[string]string{"name": "Open Sabre"}, nil)

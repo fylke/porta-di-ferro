@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/fylke/porta-di-ferro/internal/hall"
 	"github.com/fylke/porta-di-ferro/internal/match"
 	"github.com/fylke/porta-di-ferro/internal/store"
 	"github.com/fylke/porta-di-ferro/internal/tournament"
@@ -185,7 +186,7 @@ func (s *Server) patchPool(w http.ResponseWriter, r *http.Request) {
 		}
 		if err := s.movePoolOnEventMats(number, in.Mat, in.Move); err != nil {
 			code := http.StatusBadRequest
-			if _, locked := err.(ErrNotMovable); locked {
+			if _, locked := err.(hall.ErrNotMovable); locked {
 				code = http.StatusConflict
 			}
 			writeErr(w, code, err)

@@ -2,6 +2,7 @@
   import { api, type PeopleView, type PersonView } from '../api';
   import { hall } from '../lib/event.svelte';
   import { t } from '../lib/i18n.svelte';
+  import { errorText } from '../lib/errors';
 
   /**
    * The event's people (phase 3), for the organizer: everybody entered anywhere, and the
@@ -31,7 +32,7 @@
       people = await api.people();
       error = '';
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      error = errorText(e);
     }
   }
 
@@ -71,7 +72,7 @@
     try {
       people = await f();
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      error = errorText(e);
     } finally {
       busy = false;
     }

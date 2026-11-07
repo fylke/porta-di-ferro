@@ -9,7 +9,7 @@
 //
 // So this is the real thing with a different source underneath it. The tournament lives
 // in memory instead of in JSON files on the organizer's disk, and every derived answer
-// still comes from internal/tournament, internal/match and httpapi.BuildSnapshot -- the
+// still comes from internal/tournament, internal/match and hall.BuildSnapshot -- the
 // same code the Go server runs. Compiled to WebAssembly by cmd/demo-wasm, it answers the
 // same API calls the client already makes, so the Svelte application is not modified for
 // the demo and cannot drift from it.
@@ -29,7 +29,7 @@ import (
 	"strings"
 	"time"
 
-	httpapi "github.com/fylke/porta-di-ferro/internal/http"
+	"github.com/fylke/porta-di-ferro/internal/hall"
 	"github.com/fylke/porta-di-ferro/internal/match"
 	"github.com/fylke/porta-di-ferro/internal/people"
 	"github.com/fylke/porta-di-ferro/internal/qr"
@@ -38,6 +38,7 @@ import (
 	"github.com/fylke/porta-di-ferro/internal/store"
 	"github.com/fylke/porta-di-ferro/internal/tournament"
 	"github.com/fylke/porta-di-ferro/web"
+	"github.com/go-pdf/fpdf"
 )
 
 // Demo is one visitor's tournament: the whole of it, in memory.
@@ -148,7 +149,7 @@ func (d *Demo) Load(b []byte) error {
 	return nil
 }
 
-// --- httpapi.Source -----------------------------------------------------------------
+// --- hall.Source -----------------------------------------------------------------
 //
 // The four reads BuildSnapshot needs. *store.Store answers these off the disk; this
 // answers them out of memory, and neither knows about the other.
@@ -193,26 +194,26 @@ func (d *Demo) LastEventAt(id string) (time.Time, bool) {
 // inventing a path that does not exist.
 func (d *Demo) Dir() string { return "in this browser" }
 
-func (d *Demo) snapshot() (httpapi.Snapshot, error) {
+func (d *Demo) snapshot() (hall.Snapshot, error) {
 	snap, err := d.placedSnapshot()
 	if err == nil && d.event != nil {
 		// Which match each of the event's mats is on, when it is this discipline's: the
 		// hall's to say, built from the placed snapshots, as the coordinator does.
-		snap.Mats = httpapi.CurrentFrom(d.event.mats(), d.slug)
+		snap.Mats = hall.CurrentFrom(d.event.mats(), d.slug)
 		// When each match still to come is expected (phase 4).
 		_, r, _ := d.event.times()
-		httpapi.ApplyEtas(&snap, httpapi.EtasFor(r, d.slug))
+		hall.ApplyEtas(&snap, hall.EtasFor(r, d.slug))
 	}
 	return snap, err
 }
 
 // placedSnapshot is the snapshot on the event's mats, without Mats.
-func (d *Demo) placedSnapshot() (httpapi.Snapshot, error) {
+func (d *Demo) placedSnapshot() (hall.Snapshot, error) {
 	url := "/"
 	if d.slug != "" {
 		url = "/d/" + d.slug + "/"
 	}
-	snap, err := httpapi.BuildSnapshot(d, d.rules, httpapi.Instance{
+	snap, err := hall.BuildSnapshot(d, d.rules, hall.Instance{
 		Name: d.tournament.Discipline,
 		Slug: d.slug,
 		Dir:  d.Dir(),
@@ -224,7 +225,7 @@ func (d *Demo) placedSnapshot() (httpapi.Snapshot, error) {
 	})
 	if err == nil && d.event != nil {
 		placed, mats := d.event.placements()
-		httpapi.OnEventMats(&snap, d.slug, placed, mats)
+		hall.OnEventMats(&snap, d.slug, placed, mats)
 	}
 	return snap, err
 }
@@ -271,136 +272,151 @@ func fail(status int, err error) Response {
 // says so with a status code rather than pretending it worked.
 func (d *Demo) Request(method, path string, body []byte) Response {
 	path = strings.TrimSuffix(path, "/")
-	query := ""
-	if i := strings.IndexByte(path, '?'); i >= 0 {
-		path, query = path[:i], path[i+1:]
+	if res, found := dispatch(d.routes(), newCall(method, path, body)); found {
+		return res
 	}
-	parts := strings.Split(strings.TrimPrefix(path, "/"), "/")
+	return fail(404, fmt.Errorf("the demo does not answer %s %s", method, path))
+}
 
-	switch {
-	case method == "GET" && path == "/api/state":
-		snap, err := d.snapshot()
-		if err != nil {
-			return fail(500, err)
-		}
-		return ok(snap)
+// routes are a discipline's paths, as httpapi.Server.Handler registers them.
+func (d *Demo) routes() []route {
+	answer := func(f func() Response) func(call) Response { return func(call) Response { return f() } }
+	return []route{
+		on("GET /api/state", answer(d.state)),
+		on("GET /api/export.json", answer(d.state)),
+		on("GET /api/export.pdf", func(c call) Response { return d.exportPDF(swedish(c)) }),
+		// There is no LAN in a browser tab. An empty list is what the organizer view shows
+		// when a PC is on no network, which is the truth here.
+		on("GET /api/addresses", answer(noAddresses)),
+		on("GET /api/info.pdf", func(c call) Response { return d.infoPDF(c.query) }),
+		on("GET /api/qr.png", func(c call) Response { return qrImage(c.query) }),
 
-	case method == "GET" && path == "/api/export.json":
-		snap, err := d.snapshot()
-		if err != nil {
-			return fail(500, err)
-		}
-		return ok(snap)
+		// Offline signup (issue #91). The demo can do all of it: the files never touch a
+		// network in the real thing either, so there is nothing here it has to pretend about.
+		on("GET /api/signup/ready", answer(d.signupReady)),
+		on("GET /api/signup/definition.json", func(call) Response { return ok(d.definition(true)) }),
+		on("GET /api/signup/app.html", answer(d.signupApp)),
+		on("GET /api/signup/form.pdf", answer(signupPDF)),
+		on("POST /api/signup/preview", func(c call) Response { return d.signupImport(c.body, false) }),
+		on("POST /api/signup/import", func(c call) Response { return d.signupImport(c.body, true) }),
 
-	case method == "GET" && path == "/api/export.pdf":
-		return d.exportPDF(strings.Contains(query, "lang=sv"))
+		on("GET /api/presence", answer(nobodyPresent)),
+		// A demo has no other devices to hand a mat to, but the client registers itself on
+		// load and would show an error if these failed.
+		on("/api/clients", answer(okay)),
+		on("/api/clients/{rest...}", answer(okay)),
+		on("/api/quarantine/{id}", answer(okay)),
 
-	case method == "GET" && path == "/api/addresses":
-		// There is no LAN in a browser tab. An empty list is what the organizer view
-		// shows when a PC is on no network, which is the truth here.
-		return ok([]any{})
+		on("POST /api/competitors", func(c call) Response { return d.addCompetitor(c.body) }),
+		on("PATCH /api/competitors/{id}", func(c call) Response { return d.patchCompetitor(c.param("id"), c.body) }),
+		on("DELETE /api/competitors/{id}", func(c call) Response { return d.deleteCompetitor(c.param("id")) }),
+		on("DELETE /api/staff/{id}", func(c call) Response { return d.deleteStaff(c.param("id")) }),
 
-	case method == "GET" && path == "/api/info.pdf":
-		return d.infoPDF(query)
+		on("PUT /api/event", func(c call) Response { return d.putEvent(c.body) }),
+		on("PUT /api/tournament", func(c call) Response { return d.putTournament(c.body) }),
+		on("POST /api/tournament/pools", answer(d.generatePools)),
+		on("PATCH /api/tournament/pools/{number}", func(c call) Response { return d.patchPool(c.param("number"), c.body) }),
+		on("POST /api/tournament/bracket", answer(d.drawBracket)),
 
-	case method == "GET" && path == "/api/qr.png":
-		return qrImage(query)
-
-	// Offline signup (issue #91). The demo can do all of it: the files never touch a
-	// network in the real thing either, so there is nothing here it has to pretend about.
-	case method == "GET" && path == "/api/signup/ready":
-		return d.signupReady()
-	case method == "GET" && path == "/api/signup/definition.json":
-		return ok(d.definition(true))
-	case method == "GET" && path == "/api/signup/app.html":
-		return d.signupApp()
-	case method == "GET" && path == "/api/signup/form.pdf":
-		return signupPDF(d.definition(true))
-	case method == "POST" && path == "/api/signup/preview":
-		return d.signupImport(body, false)
-	case method == "POST" && path == "/api/signup/import":
-		return d.signupImport(body, true)
-
-	case method == "GET" && path == "/api/presence":
-		return ok(map[string]any{"clients": []any{}, "quarantined": []any{}})
-
-	// A demo has no other devices to hand a mat to, but the client registers itself on
-	// load and would show an error if these failed.
-	case len(parts) >= 2 && parts[1] == "clients":
-		return ok(map[string]bool{"ok": true})
-	case len(parts) == 3 && parts[1] == "quarantine":
-		return ok(map[string]bool{"ok": true})
-
-	case method == "POST" && path == "/api/competitors":
-		return d.addCompetitor(body)
-	case method == "PATCH" && len(parts) == 3 && parts[1] == "competitors":
-		return d.patchCompetitor(parts[2], body)
-	case method == "DELETE" && len(parts) == 3 && parts[1] == "competitors":
-		return d.deleteCompetitor(parts[2])
-	case method == "DELETE" && len(parts) == 3 && parts[1] == "staff" && d.event != nil:
-		if !d.event.removeStaffFrom(d.slug, parts[2]) {
-			return fail(404, fmt.Errorf("no staff member %s", parts[2]))
-		}
-		return changed(map[string]bool{"ok": true})
-	case method == "DELETE" && len(parts) == 3 && parts[1] == "staff":
-		kept, found := httpapi.WithoutStaff(d.tournament.Staff, parts[2])
-		if !found {
-			return fail(404, fmt.Errorf("no staff member %s", parts[2]))
-		}
-		d.tournament.Staff = kept
-		return changed(map[string]bool{"ok": true})
-
-	case method == "PUT" && path == "/api/event":
-		return d.putEvent(body)
-	case method == "PUT" && path == "/api/tournament":
-		return d.putTournament(body)
-	case method == "POST" && path == "/api/tournament/pools":
-		return d.generatePools()
-	case method == "PATCH" && len(parts) == 4 && parts[2] == "pools":
-		return d.patchPool(parts[3], body)
-	case method == "POST" && path == "/api/tournament/bracket":
-		return d.drawBracket()
-
-	case len(parts) == 4 && parts[1] == "matches" && parts[3] == "events":
-		switch method {
-		case "GET":
-			return d.getEvents(parts[2], query)
-		case "POST":
-			return d.postEvents(parts[2], body)
-		case "PUT":
-			return d.replaceEvents(parts[2], body)
-		}
-	case method == "GET" && len(parts) == 4 && parts[1] == "matches" && parts[3] == "backups":
+		on("GET /api/matches/{id}/events", func(c call) Response { return d.getEvents(c.param("id"), c.query) }),
+		on("POST /api/matches/{id}/events", func(c call) Response { return d.postEvents(c.param("id"), c.body) }),
+		on("PUT /api/matches/{id}/events", func(c call) Response { return d.replaceEvents(c.param("id"), c.body) }),
 		// The demo keeps no backups: there is no disk to keep them on, and nothing here
 		// outlives the browser.
-		return ok([]string{})
-	case len(parts) == 4 && parts[1] == "matches" && parts[3] == "claim":
+		on("GET /api/matches/{id}/backups", func(call) Response { return ok([]string{}) }),
 		// One browser is one device: nobody else can hold a match.
-		if method == "GET" {
-			return ok(map[string]any{"client": "", "epoch": 0})
-		}
-		return ok(map[string]bool{"ok": true})
+		on("GET /api/matches/{id}/claim", func(call) Response { return ok(map[string]any{"client": "", "epoch": 0}) }),
+		on("/api/matches/{id}/claim", answer(okay)),
 
-	// Demo-only. Not part of the application's API, and the adapter is the only caller.
-	case method == "POST" && path == "/api/demo/reset":
-		d.Reset()
-		return changed(map[string]bool{"ok": true})
-	case method == "POST" && path == "/api/demo/play":
-		return d.playOut()
-	case method == "GET" && path == "/api/demo/save":
-		b, err := d.Save()
-		if err != nil {
-			return fail(500, err)
-		}
-		return Response{Status: 200, ContentType: "application/json; charset=utf-8", Body: string(b)}
-	case method == "POST" && path == "/api/demo/load":
-		if err := d.Load(body); err != nil {
-			return fail(400, err)
-		}
-		return ok(map[string]bool{"ok": true})
+		// Demo-only. Not part of the application's API, and the adapter is the only caller.
+		on("POST /api/demo/reset", func(call) Response {
+			d.Reset()
+			return changed(map[string]bool{"ok": true})
+		}),
+		on("POST /api/demo/play", answer(d.playOut)),
+		on("GET /api/demo/save", answer(func() Response { return saveResponse(d.Save()) })),
+		on("POST /api/demo/load", func(c call) Response { return loadResponse(d.Load(c.body)) }),
 	}
+}
 
-	return fail(404, fmt.Errorf("the demo does not answer %s %s", method, path))
+func (d *Demo) state() Response {
+	snap, err := d.snapshot()
+	if err != nil {
+		return fail(500, err)
+	}
+	return ok(snap)
+}
+
+func (d *Demo) deleteStaff(id string) Response {
+	if d.event != nil {
+		if !d.event.removeStaffFrom(d.slug, id) {
+			return fail(404, fmt.Errorf("no staff member %s", id))
+		}
+		return changed(map[string]bool{"ok": true})
+	}
+	kept, found := hall.WithoutStaff(d.tournament.Staff, id)
+	if !found {
+		return fail(404, fmt.Errorf("no staff member %s", id))
+	}
+	d.tournament.Staff = kept
+	return changed(map[string]bool{"ok": true})
+}
+
+// The answers the demo gives where a real event has devices and a network.
+
+func okay() Response          { return ok(map[string]bool{"ok": true}) }
+func noAddresses() Response   { return ok([]any{}) }
+func nobodyPresent() Response { return ok(map[string]any{"clients": []any{}, "quarantined": []any{}}) }
+
+func swedish(c call) bool { return strings.Contains(c.query, "lang=sv") }
+
+func saveResponse(b []byte, err error) Response {
+	if err != nil {
+		return fail(500, err)
+	}
+	return Response{Status: 200, ContentType: "application/json; charset=utf-8", Body: string(b)}
+}
+
+func loadResponse(err error) Response {
+	if err != nil {
+		return fail(400, err)
+	}
+	return ok(map[string]bool{"ok": true})
+}
+
+// conflict is a 409 with something to say beside the error: the disciplines there are, or a
+// fresh suggestion.
+func conflict(v map[string]any) Response {
+	b, _ := json.Marshal(v)
+	return Response{Status: 409, ContentType: "application/json; charset=utf-8", Body: string(b)}
+}
+
+// pdf is a document, base64 rather than text: the adapter turns it back into bytes for the
+// Blob the browser prints from.
+func pdf(doc *fpdf.Fpdf) Response {
+	var buf bytes.Buffer
+	if err := doc.Output(&buf); err != nil {
+		return fail(500, err)
+	}
+	return Response{
+		Status:      200,
+		ContentType: "application/pdf",
+		Body:        base64.StdEncoding.EncodeToString(buf.Bytes()),
+		Base64:      true,
+	}
+}
+
+// queryURL is the url= parameter of a query, unescaped, or "".
+func queryURL(query string) string {
+	target := ""
+	for _, kv := range strings.Split(query, "&") {
+		if after, found := strings.CutPrefix(kv, "url="); found {
+			if decoded, err := url.QueryUnescape(after); err == nil {
+				target = decoded
+			}
+		}
+	}
+	return target
 }
 
 // --- offline signup --------------------------------------------------------------------
@@ -440,14 +456,14 @@ func (d *Demo) signupApp() Response {
 	if err != nil {
 		return fail(500, err)
 	}
-	baked, err := httpapi.BakeSignupApp(page, d.definition(true))
+	baked, err := hall.BakeSignupApp(page, d.definition(true))
 	if err != nil {
 		return fail(500, err)
 	}
 	return Response{Status: 200, ContentType: "text/html; charset=utf-8", Body: string(baked)}
 }
 
-func signupPDF(def signup.Definition) Response {
+func signupPDF() Response {
 	return fail(400, fmt.Errorf("PDF signup forms are not available in the browser demo; use the installed server"))
 }
 
@@ -490,7 +506,7 @@ func (d *Demo) checkSignups(files []signup.File) signup.Preview {
 func (d *Demo) importSignups(files []signup.File) (added, addedStaff int) {
 	preview := d.checkSignups(files)
 	before, staffBefore := len(d.competitors), len(d.tournament.Staff)
-	d.competitors = signup.Import(preview, httpapi.NextCompetitorID, d.competitors)
+	d.competitors = signup.Import(preview, hall.NextCompetitorID, d.competitors)
 	if d.event != nil {
 		emails := map[string]string{}
 		for _, row := range preview.Rows {
@@ -513,14 +529,7 @@ func (d *Demo) importSignups(files []signup.File) (added, addedStaff int) {
 // an <img>, so without it here the demo's info sheet shows two broken images, which is
 // the first thing a visitor to the demo would see of a page that is mostly two codes.
 func qrImage(query string) Response {
-	target := ""
-	for _, kv := range strings.Split(query, "&") {
-		if after, found := strings.CutPrefix(kv, "url="); found {
-			if decoded, err := url.QueryUnescape(after); err == nil {
-				target = decoded
-			}
-		}
-	}
+	target := queryURL(query)
 	if target == "" {
 		return fail(400, fmt.Errorf("a code needs something to encode"))
 	}
@@ -543,28 +552,11 @@ func (d *Demo) infoPDF(query string) Response {
 	if err != nil {
 		return fail(500, err)
 	}
-	landing := ""
-	for _, kv := range strings.Split(query, "&") {
-		if after, found := strings.CutPrefix(kv, "url="); found {
-			if decoded, err := url.QueryUnescape(after); err == nil {
-				landing = decoded
-			}
-		}
-	}
-	var buf bytes.Buffer
-	var programme []httpapi.ProgrammeRow
+	var programme []hall.ProgrammeRow
 	if d.event != nil {
 		programme = d.event.View().Programme
 	}
-	if err := httpapi.BuildInfoPDF(snap, programme, landing, strings.Contains(query, "lang=sv")).Output(&buf); err != nil {
-		return fail(500, err)
-	}
-	return Response{
-		Status:      200,
-		ContentType: "application/pdf",
-		Body:        base64.StdEncoding.EncodeToString(buf.Bytes()),
-		Base64:      true,
-	}
+	return pdf(hall.BuildInfoPDF(snap, programme, queryURL(query), strings.Contains(query, "lang=sv")))
 }
 
 func (d *Demo) exportPDF(swedish bool) Response {
@@ -572,18 +564,7 @@ func (d *Demo) exportPDF(swedish bool) Response {
 	if err != nil {
 		return fail(500, err)
 	}
-	// Base64 rather than text: the adapter turns it back into bytes for the Blob the
-	// browser prints from.
-	var buf bytes.Buffer
-	if err := httpapi.BuildPDF(snap, swedish).Output(&buf); err != nil {
-		return fail(500, err)
-	}
-	return Response{
-		Status:      200,
-		ContentType: "application/pdf",
-		Body:        base64.StdEncoding.EncodeToString(buf.Bytes()),
-		Base64:      true,
-	}
+	return pdf(hall.BuildPDF(snap, swedish))
 }
 
 // --- competitors --------------------------------------------------------------------
@@ -597,7 +578,7 @@ func (d *Demo) addCompetitor(body []byte) Response {
 		return fail(400, fmt.Errorf("a competitor needs a name"))
 	}
 	c := store.Competitor{
-		ID:   httpapi.NextCompetitorID(d.competitors),
+		ID:   hall.NextCompetitorID(d.competitors),
 		Name: strings.TrimSpace(in.Name),
 		Club: strings.TrimSpace(in.Club),
 	}
@@ -657,7 +638,7 @@ func (d *Demo) putEvent(body []byte) Response {
 	if err := json.Unmarshal(body, &in); err != nil {
 		return fail(400, err)
 	}
-	ev, err := httpapi.CleanEvent(in)
+	ev, err := hall.CleanEvent(in)
 	if err != nil {
 		return fail(400, err)
 	}

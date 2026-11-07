@@ -4,6 +4,7 @@
   import { navigate } from '../router.svelte';
   import { t } from '../lib/i18n.svelte';
   import ConfirmDialog from './ConfirmDialog.svelte';
+  import { errorText } from '../lib/errors';
 
   /**
    * Deleting the event (#141), for the next one: every discipline, entry, result and the
@@ -30,7 +31,7 @@
       // starts again (lib/forget.ts), as every tablet and screen in the hall does.
       await hall.refresh();
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      error = errorText(e);
     } finally {
       busy = false;
     }

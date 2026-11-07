@@ -15,7 +15,6 @@ package watchdog
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -135,9 +134,4 @@ func exitCode(err error) int {
 		return exit.ExitCode()
 	}
 	return 1
-}
-
-// Describe is the one-line account of a policy, for the startup banner.
-func (p Policy) Describe() string {
-	return fmt.Sprintf("restarts the server if it stops unexpectedly (up to %d times a %s)", p.MaxRestarts, p.Window)
 }

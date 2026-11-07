@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/fylke/porta-di-ferro/internal/event"
+	"github.com/fylke/porta-di-ferro/internal/hall"
 	httpapi "github.com/fylke/porta-di-ferro/internal/http"
 	"github.com/fylke/porta-di-ferro/internal/lan"
 	"github.com/fylke/porta-di-ferro/internal/watchdog"
@@ -111,7 +112,7 @@ func main() {
 	fmt.Println("\nStopped. Your event is saved in", *dir)
 }
 
-func banner(addrs []lan.Address, dir string, port int, view httpapi.EventView) {
+func banner(addrs []lan.Address, dir string, port int, view hall.EventView) {
 	fmt.Println()
 	if view.Name != "" {
 		fmt.Println("  Porta di Ferro", version, "--", view.Name)

@@ -1,8 +1,9 @@
-package httpapi
+package hall
 
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/fylke/porta-di-ferro/internal/forecast"
 	"github.com/fylke/porta-di-ferro/internal/staffing"
@@ -53,12 +54,8 @@ func StaffInput(in forecast.Input, r forecast.Result, st store.Staff, competing 
 	out := staffing.Input{Members: st.Members, Crew: st.Crew, Assignments: st.Assignments, Competing: competing}
 	for _, it := range in.Items {
 		s := spans[it.ID]
-		started := false
-		for _, m := range it.Matches {
-			started = started || m.Done || !m.Started.IsZero()
-		}
 		out.Items = append(out.Items, staffing.Item{ID: it.ID, Discipline: it.Discipline, Mat: s.Mat,
-			Start: s.Start, End: s.End, Started: started, People: it.People, Held: it.Held})
+			Start: s.Start, End: s.End, Started: it.Begun(), People: it.People, Held: it.Held})
 	}
 	return out
 }
@@ -268,4 +265,87 @@ func DutiesOf(person string, st store.Staff, view StaffingView) ([]Duty, bool) {
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Start < out[j].Start })
 	return out, physician
+}
+
+// NewMember is somebody added to the staff by hand, checked, with an id of their own.
+func NewMember(in store.StaffMember) (store.StaffMember, error) {
+	m, err := staffing.Clean(in)
+	if err != nil {
+		return m, err
+	}
+	m.ID, m.Signup = staffing.NewID(), ""
+	return m, nil
+}
+
+// SetCrew writes how many of each role a mat needs.
+func SetCrew(st *store.Staff, in map[string]int) error {
+	crew := staffing.CrewOf(st.Crew)
+	for role, n := range in {
+		if _, ok := crew[role]; !ok || n < 0 || n > 6 {
+			return fmt.Errorf("a mat needs between 0 and 6 of %q", role)
+		}
+		crew[role] = n
+	}
+	st.Crew = crew
+	return nil
+}
+
+// MemberPatch is what the staff panel changes about a member: what is left out stays.
+type MemberPatch struct {
+	Name        *string   `json:"name"`
+	Club        *string   `json:"club"`
+	Roles       *[]string `json:"roles"`
+	Disciplines *[]string `json:"disciplines"`
+}
+
+// ErrNoMember is a member the staff does not have.
+type ErrNoMember string
+
+func (e ErrNoMember) Error() string { return fmt.Sprintf("no staff member %s", string(e)) }
+
+// PatchMember changes a member's name, club, roles or disciplines.
+func PatchMember(st *store.Staff, id string, patch MemberPatch) error {
+	for i, m := range st.Members {
+		if m.ID != id {
+			continue
+		}
+		if patch.Name != nil {
+			m.Name = *patch.Name
+		}
+		if patch.Club != nil {
+			m.Club = *patch.Club
+		}
+		if patch.Roles != nil {
+			m.Roles = *patch.Roles
+		}
+		if patch.Disciplines != nil {
+			m.Disciplines = *patch.Disciplines
+		}
+		clean, err := staffing.Clean(m)
+		if err != nil {
+			return err
+		}
+		st.Members[i] = clean
+		return nil
+	}
+	return ErrNoMember(id)
+}
+
+// RemoveFromDiscipline is a discipline's Remove: the member off that discipline, and off its
+// work. False when they did not work it.
+func RemoveFromDiscipline(st store.Staff, slug, id string, slugs []string) (store.Staff, bool) {
+	members, changed := staffing.RemoveFrom(st.Members, slug, id, slugs)
+	if !changed {
+		return st, false
+	}
+	st.Members = members
+	var kept []store.Assignment
+	for _, a := range st.Assignments {
+		if a.Staff == id && strings.HasPrefix(a.Item, slug+"/") {
+			continue
+		}
+		kept = append(kept, a)
+	}
+	st.Assignments = kept
+	return st, true
 }

@@ -30,7 +30,7 @@ the other end of `fetch` and `EventSource`.
 
 | Piece | What it does |
 | --- | --- |
-| `internal/demo` | The event in memory — `Event` over two `Demo` disciplines — and a router answering the same API paths. Ordinary portable Go, tested by `go test ./...`. |
+| `internal/demo` | The event in memory — `Event` over two `Demo` disciplines — and a router answering the same API paths, as tables laid out like the server's mux (`internal/demo/router.go`). Ordinary portable Go, tested by `go test ./...`. |
 | `cmd/demo-wasm` | Forty lines of `syscall/js` glue. The only part with a `js && wasm` build tag. |
 | `web/src/demo/adapter.ts` | Replaces `window.fetch` and `window.EventSource` before the app mounts. |
 | `web/src/demo/DemoBanner.svelte` | The strip that says what this is, with Play the rest and Start over. |
@@ -48,7 +48,7 @@ questions about. Three ways to compute them without a Go server:
   shared-vector harness holding it to the Go. It would drift, and a demo that quietly
   disagrees with a real event is worse than no demo.
 - **Compile the Go.** No second implementation at all. `internal/tournament`,
-  `internal/match` and `httpapi.BuildSnapshot` are the same code in both places, so the
+  `internal/match` and `hall.BuildSnapshot` are the same code in both places, so the
   demo cannot say something a real event would not.
 
 The third costs about 1.6 MB gzipped on the demo page, and nothing at all on the real
@@ -85,7 +85,7 @@ as one written by an older demo (`eventSaveFormat` in `internal/demo`), is dropp
 way.
 
 The event editor's call, `PUT /api/event`, was missing from the demo's router and is
-answered now, through the same `httpapi.CleanEvent` the server uses.
+answered now, through the same `hall.CleanEvent` the server uses.
 
 ### One concession
 

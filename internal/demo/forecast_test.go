@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/fylke/porta-di-ferro/internal/demo"
-	httpapi "github.com/fylke/porta-di-ferro/internal/http"
+	"github.com/fylke/porta-di-ferro/internal/hall"
 )
 
 func TestDemoUsesTypicalPoolAndEliminationTimings(t *testing.T) {
@@ -27,7 +27,7 @@ func TestDemoUsesTypicalPoolAndEliminationTimings(t *testing.T) {
 		}
 	}
 	response := e.Request("GET", "/api/forecast", nil)
-	var view httpapi.ForecastView
+	var view hall.ForecastView
 	if err := json.Unmarshal([]byte(response.Body), &view); err != nil || response.Status != 200 {
 		t.Fatalf("forecast: %d %v", response.Status, err)
 	}
@@ -55,7 +55,7 @@ func TestDemoUsesTypicalPoolAndEliminationTimings(t *testing.T) {
 func TestTheDemoForecastsItsDay(t *testing.T) {
 	e := demo.NewEvent()
 	res := e.Request("GET", "/api/forecast", nil)
-	var v httpapi.ForecastView
+	var v hall.ForecastView
 	if err := json.Unmarshal([]byte(res.Body), &v); err != nil || res.Status != 200 {
 		t.Fatalf("GET /api/forecast: %d %v %s", res.Status, err, res.Body)
 	}
@@ -82,7 +82,7 @@ func TestTheDemoForecastsItsDay(t *testing.T) {
 	}
 
 	res = e.Request("POST", "/api/plan/suggest", nil)
-	var sug httpapi.SuggestionView
+	var sug hall.SuggestionView
 	if err := json.Unmarshal([]byte(res.Body), &sug); err != nil || res.Status != 200 || sug.Signature == "" {
 		t.Fatalf("POST /api/plan/suggest: %d %s", res.Status, res.Body)
 	}
@@ -90,7 +90,7 @@ func TestTheDemoForecastsItsDay(t *testing.T) {
 	if res := e.Request("POST", "/api/plan/apply", b); res.Status != 200 {
 		t.Errorf("applying the suggestion: %d %s", res.Status, res.Body)
 	}
-	var rep httpapi.ReportView
+	var rep hall.ReportView
 	_ = json.Unmarshal([]byte(e.Request("GET", "/api/plan/report", nil).Body), &rep)
 	if rep.Samples == 0 || len(rep.Matches) == 0 {
 		t.Errorf("the measured day should have the fixture's matches: %+v", rep)
@@ -101,7 +101,7 @@ func TestTheDemoForecastsItsDay(t *testing.T) {
 // side by side, then every final on mat 1 -- and nobody due in two places at once.
 func TestTheDemoDayRunsInBlocks(t *testing.T) {
 	e := demo.NewEvent()
-	var v httpapi.ForecastView
+	var v hall.ForecastView
 	_ = json.Unmarshal([]byte(e.Request("GET", "/api/forecast", nil).Body), &v)
 	for _, w := range v.Warnings {
 		if w.Kind == "overlap" {
@@ -123,7 +123,7 @@ func TestTheDemoDayRunsInBlocks(t *testing.T) {
 			t.Errorf("%s should wait for the longsword to finish: starts %s, longsword ends %s", it.ID, it.Start, longsword)
 		}
 	}
-	var mats httpapi.MatsView
+	var mats hall.MatsView
 	_ = json.Unmarshal([]byte(e.Request("GET", "/api/mats", nil).Body), &mats)
 	var finals []string
 	for _, it := range mats.Items {
@@ -147,9 +147,9 @@ func isFinal(id string) bool {
 // (#131): a mat that fenced fewer matches was slower, not late to start.
 func TestTheDemoMatsStartTogether(t *testing.T) {
 	e := demo.NewEvent()
-	var v httpapi.ForecastView
+	var v hall.ForecastView
 	_ = json.Unmarshal([]byte(e.Request("GET", "/api/forecast", nil).Body), &v)
-	first := map[int]httpapi.ItemTimes{}
+	first := map[int]hall.ItemTimes{}
 	for _, it := range v.Items {
 		if !strings.HasPrefix(it.ID, "open-steel-longsword/pool-") {
 			continue

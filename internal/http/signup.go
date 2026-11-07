@@ -1,11 +1,11 @@
 package httpapi
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
 
+	"github.com/fylke/porta-di-ferro/internal/hall"
 	"github.com/fylke/porta-di-ferro/internal/signup"
 	"github.com/fylke/porta-di-ferro/internal/store"
 	"github.com/fylke/porta-di-ferro/web"
@@ -58,27 +58,37 @@ func (s *Server) definition(withTimes bool) (signup.Definition, error) {
 }
 
 func (s *Server) signupDefinition(w http.ResponseWriter, r *http.Request) {
-	def, err := s.definition(true)
+	serveSignupFile(w, r, s.definition, writeDefinition)
+}
+
+// serveSignupFile answers with one of the signup files, made from the definition with its
+// planned times.
+func serveSignupFile(w http.ResponseWriter, r *http.Request, definition func(withTimes bool) (signup.Definition, error),
+	write func(http.ResponseWriter, *http.Request, signup.Definition)) {
+	def, err := definition(true)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
+	write(w, r, def)
+}
+
+func writeDefinition(w http.ResponseWriter, r *http.Request, def signup.Definition) {
 	if r.URL.Query().Get("download") != "" {
 		w.Header().Set("Content-Disposition",
-			fmt.Sprintf(`attachment; filename=%q`, definitionFilename(def)))
+			fmt.Sprintf(`attachment; filename=%q`, hall.DefinitionFilename(def)))
 	}
 	writeJSON(w, http.StatusOK, def)
+}
+
+func writeReady(w http.ResponseWriter, r *http.Request, def signup.Definition) {
+	writeJSON(w, http.StatusOK, hall.SignupReadyView(def))
 }
 
 // signupReady tells the admin screen what is still missing, so the organizer finds out
 // before the file goes out rather than from a participant who cannot use it.
 func (s *Server) signupReady(w http.ResponseWriter, r *http.Request) {
-	def, err := s.definition(true)
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, SignupReadyView(def))
+	serveSignupFile(w, r, s.definition, writeReady)
 }
 
 // signupApp serves the participant's app with this event written into it, so what the
@@ -88,18 +98,16 @@ func (s *Server) signupReady(w http.ResponseWriter, r *http.Request) {
 // attachment beats two every time, and "open both of these, the second one from inside
 // the first" is an instruction people get wrong.
 func (s *Server) signupApp(w http.ResponseWriter, r *http.Request) {
-	def, err := s.definition(true)
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err)
-		return
-	}
+	serveSignupFile(w, r, s.definition, writeSignupApp)
+}
 
+func writeSignupApp(w http.ResponseWriter, r *http.Request, def signup.Definition) {
 	page, err := web.SignupApp()
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
-	baked, err := bakeDefinition(page, def)
+	baked, err := hall.BakeSignupApp(page, def)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
@@ -109,21 +117,16 @@ func (s *Server) signupApp(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	if r.URL.Query().Get("download") != "" {
 		w.Header().Set("Content-Disposition",
-			fmt.Sprintf(`attachment; filename=%q`, signupAppFilename(def)))
+			fmt.Sprintf(`attachment; filename=%q`, hall.SignupAppFilename(def)))
 	}
 	w.Write(baked)
 }
 
 func (s *Server) signupPDF(w http.ResponseWriter, r *http.Request) {
-	def, err := s.definition(true)
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err)
-		return
-	}
-	writeSignupPDF(w, def)
+	serveSignupFile(w, r, s.definition, writeSignupPDF)
 }
 
-func writeSignupPDF(w http.ResponseWriter, def signup.Definition) {
+func writeSignupPDF(w http.ResponseWriter, r *http.Request, def signup.Definition) {
 	body, err := signup.BuildPDF(def)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
@@ -131,52 +134,8 @@ func writeSignupPDF(w http.ResponseWriter, def signup.Definition) {
 	}
 	w.Header().Set("Content-Type", "application/pdf")
 	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename=%q`, "signup-"+eventSlug(def)+".pdf"))
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename=%q`, "signup-"+hall.EventSlug(def)+".pdf"))
 	w.Write(body)
-}
-
-// definitionMarker is the line in the app that carries the event. Kept as an exact
-// string so a change to the app that loses it fails a test rather than silently shipping
-// a file that asks every participant for a definition they were never sent.
-const definitionMarker = `<script id="definition" type="application/json">null</script>`
-
-// BakeSignupApp writes an event into a copy of the participant app, which is what makes
-// the download one file instead of two.
-func BakeSignupApp(page []byte, def signup.Definition) ([]byte, error) {
-	return bakeDefinition(page, def)
-}
-
-func bakeDefinition(page []byte, def signup.Definition) ([]byte, error) {
-	if !bytes.Contains(page, []byte(definitionMarker)) {
-		return nil, fmt.Errorf("the signup app has no definition slot to fill")
-	}
-	body, err := json.Marshal(def)
-	if err != nil {
-		return nil, err
-	}
-	// The JSON lands inside a <script> element, so the one sequence that could end that
-	// element early has to go. Escaping the slash keeps it valid JSON and keeps "</script>"
-	// from ever appearing in the text.
-	body = bytes.ReplaceAll(body, []byte("</"), []byte(`<\/`))
-	replacement := `<script id="definition" type="application/json">` + string(body) + `</script>`
-	return bytes.Replace(page, []byte(definitionMarker), []byte(replacement), 1), nil
-}
-
-func definitionFilename(def signup.Definition) string {
-	return "signup-" + eventSlug(def) + ".json"
-}
-
-func signupAppFilename(def signup.Definition) string {
-	return "signup-" + eventSlug(def) + ".html"
-}
-
-func eventSlug(def signup.Definition) string {
-	for _, candidate := range []string{def.DefinitionID, def.Event.Name} {
-		if slug := signup.Slug(candidate); slug != "" {
-			return slug
-		}
-	}
-	return "event"
 }
 
 // --- the import -----------------------------------------------------------------------
@@ -298,7 +257,7 @@ func (s *Server) importSignups(files []signup.File) (imported, error) {
 	if err != nil {
 		return imported{}, err
 	}
-	updated := signup.Import(preview, NextCompetitorID, competitors)
+	updated := signup.Import(preview, hall.NextCompetitorID, competitors)
 	// Each new entry is a person of the event's: the same one in every discipline the
 	// response entered, by its submission id, and the same one as any other response with
 	// the same email (phase 3, #142).
@@ -370,7 +329,7 @@ func (s *Server) deleteStaff(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
-	kept, found := WithoutStaff(t.Staff, id)
+	kept, found := hall.WithoutStaff(t.Staff, id)
 	if !found {
 		writeErr(w, http.StatusNotFound, fmt.Errorf("no staff member %s", id))
 		return
@@ -382,18 +341,4 @@ func (s *Server) deleteStaff(w http.ResponseWriter, r *http.Request) {
 	}
 	s.publishState()
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
-}
-
-// WithoutStaff is the staff list less one person, and whether they were in it.
-func WithoutStaff(staff []store.StaffMember, id string) ([]store.StaffMember, bool) {
-	out := make([]store.StaffMember, 0, len(staff))
-	found := false
-	for _, m := range staff {
-		if m.ID == id {
-			found = true
-			continue
-		}
-		out = append(out, m)
-	}
-	return out, found
 }

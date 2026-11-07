@@ -7,6 +7,7 @@
   import { Folds } from '../lib/folds.svelte';
   import { t } from '../lib/i18n.svelte';
   import { fitRows, type Layout } from '../lib/fit';
+  import { errorText } from '../lib/errors';
 
   /**
    * Registration and status. Name and club only -- picture, phone number and club crest
@@ -92,7 +93,7 @@
       // The club usually repeats down a queue of people signing in together, so it stays.
       onchange();
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      error = errorText(e);
     }
   }
 
@@ -102,7 +103,7 @@
       await api.updateCompetitor(c.id, { withdrawn });
       onchange();
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      error = errorText(e);
     }
   }
 
@@ -112,7 +113,7 @@
       await api.removeCompetitor(c.id);
       onchange();
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      error = errorText(e);
     }
   }
 </script>

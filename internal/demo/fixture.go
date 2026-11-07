@@ -437,7 +437,7 @@ func playMatch(rules match.Ruleset, id string, seed int64, decisive bool) []matc
 		})
 
 		st := match.Replay(rules, events)
-		reason := match.ReasonNone
+		var reason match.Reason
 		switch st.Pending {
 		case match.PendingPointCap:
 			reason = match.ReasonPointCap

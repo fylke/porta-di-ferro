@@ -1,17 +1,19 @@
 <script lang="ts" module>
   /** Moves not applied yet, kept while the board is off screen -- a tab away, say. */
-  let kept: { id: string; mat: number; index: number }[] = [];
+  let kept: import('../lib/board').DraftMove[] = [];
 </script>
 
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api, ApiError, type ForecastView, type ItemView, type StaffingView, type SuggestionView, type Warning } from '../api';
-  import { roleLabel } from '../lib/items';
+  import { itemLabel, roleLabel } from '../lib/items';
+  import { breakBands, canMove, cardLayout, dayAxis, drafted, lanesOf, placeOf as placeOn, type DraftMove } from '../lib/board';
   import { MatsLive } from '../lib/mats.svelte';
   import { clockOf, minutesBetween } from '../lib/clock-of-day';
   import { roundLabel } from './lib-display.svelte';
   import { t } from '../lib/i18n.svelte';
   import DayTimeline from './DayTimeline.svelte';
+  import { errorText } from '../lib/errors';
 
   /**
    * The mat board (docs/proposals/one-event-many-disciplines.md §10, phase 2; #101): the
@@ -50,6 +52,9 @@
     onshort?: () => void;
   } = $props();
 
+  // A hall's mats, as many as the server takes (hall.MaxMats).
+  const MAX_MATS = 8;
+
   const live = new MatsLive();
   onMount(() => {
     void live.start();
@@ -60,57 +65,18 @@
   const mats = $derived(view?.mats ?? []);
 
   // The draft: moves made on the board and not sent yet, in the order they were made.
-  let draft = $state<{ id: string; mat: number; index: number }[]>(kept);
+  let draft = $state<DraftMove[]>(kept);
   $effect(() => {
     kept = draft;
   });
 
-  /**
-   * Only a pool is moved by hand (#149): the eliminations follow the pools, and the bronze
-   * match and the final follow the eliminations. Nor is one under way or finished.
-   */
-  function canMove(it: ItemView): boolean {
-    return it.movable && it.kind === 'pool';
-  }
-
   /** The board as the server has it, then with the draft's moves made on it. */
-  const byMat = $derived.by(() => {
-    const out = new Map<number, ItemView[]>();
-    for (const m of mats) out.set(m.mat, []);
-    for (const it of view?.items ?? []) out.get(it.mat)?.push(it);
-    for (const list of out.values()) list.sort((a, b) => a.position - b.position);
-    for (const mv of draft) {
-      const target = out.get(mv.mat);
-      let it: ItemView | undefined;
-      for (const list of out.values()) {
-        const i = list.findIndex((o) => o.id === mv.id);
-        if (i >= 0) [it] = list.splice(i, 1);
-      }
-      if (!it) continue;
-      if (!canMove(it) || !target) {
-        // It started since, or its mat is gone: it stays where the server has it.
-        out.get(it.mat)?.splice(it.position - 1, 0, it);
-        continue;
-      }
-      // Never in front of what a mat has under way or finished, and never behind its own
-      // discipline's eliminations or finals, which wait for it (#149).
-      let floor = 0;
-      while (floor < target.length && !target[floor].movable) floor++;
-      let ceiling = target.findIndex((o) => o.discipline === it.discipline && o.kind !== 'pool');
-      if (ceiling < 0) ceiling = target.length;
-      target.splice(Math.min(Math.max(ceiling, floor), Math.max(floor, mv.index)), 0, it);
-    }
-    return out;
-  });
+  const byMat = $derived(drafted(mats, view?.items ?? [], draft));
   const moved = $derived(new Set(draft.map((m) => m.id)));
 
   /** Where a card is on the board as drafted: its mat and its place among the others. */
   function placeOf(id: string): { mat: number; index: number } | null {
-    for (const [mat, list] of byMat) {
-      const i = list.findIndex((o) => o.id === id);
-      if (i >= 0) return { mat, index: i };
-    }
-    return null;
+    return placeOn(byMat, id);
   }
 
   /** Adds a move to the draft, unless it leaves the card where it is. */
@@ -133,7 +99,7 @@
       }
       draft = [];
     } catch (e) {
-      const why = e instanceof Error ? e.message : String(e);
+      const why = errorText(e);
       error = done > 0 ? t('{done} of {n} moves applied, then: {why}', { done, n: moves.length, why }) : why;
       draft = moves.slice(done);
     } finally {
@@ -197,106 +163,20 @@
 
   // --- the day down the board ---------------------------------------------------------
 
-  // How tall a minute is: enough for the shortest pool's card to hold its text, within
-  // reason. A day of long pools stays on a screen or two; a day of short ones stays legible.
-  const SHORTEST_POOL_PX = 92;
-  const MIN_SCALE = 1.5;
-  const MAX_SCALE = 3.5;
-  const CARD_GAP = 4;
+  /** The day's hours from the whole hour before the first item, with a mark every half hour. */
+  const axis = $derived(dayAxis(forecast?.items ?? [], (id) => itemById.get(id)?.kind));
+
   // Below this a card's time would not hold its usual four lines.
   const COMPACT_PX = 72;
-
-  /** The day's hours from the whole hour before the first item, with a mark every half hour. */
-  const axis = $derived.by(() => {
-    let from = Infinity;
-    let to = -Infinity;
-    let first = '';
-    let shortest = Infinity;
-    for (const x of forecast?.items ?? []) {
-      const s = Date.parse(x.start);
-      const e = Date.parse(x.end);
-      if (Number.isNaN(s) || Number.isNaN(e)) continue;
-      if (s < from) {
-        from = s;
-        first = x.start;
-      }
-      to = Math.max(to, e);
-      if (itemById.get(x.id)?.kind === 'pool' && e > s) shortest = Math.min(shortest, (e - s) / 60000);
-    }
-    if (!Number.isFinite(from) || to <= from) return null;
-    const hour = Number(first.slice(11, 13));
-    const start = from - (Number(first.slice(14, 16)) * 60 + Number(first.slice(17, 19) || 0)) * 1000;
-    const scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, SHORTEST_POOL_PX / shortest));
-    const minutes = Math.ceil((to - start) / 1800000) * 30;
-    const ticks: { y: number; label: string; hour: boolean }[] = [];
-    for (let m = 0; m <= minutes; m += 30) {
-      const whole = m % 60 === 0;
-      ticks.push({ y: m * scale, label: whole ? String((hour + m / 60) % 24).padStart(2, '0') : '–', hour: whole });
-    }
-    return { start, hour, scale, minutes, ticks };
-  });
 
   // Each card's height as drawn: more than its time when its text needs more.
   let drawn = $state<Record<string, number>>({});
 
   /** Where every card goes on its mat, and how tall the board has to be. */
-  const layout = $derived.by(() => {
-    const cards = new Map<string, { top: number; height: number }>();
-    const ends = new Map<number, number>();
-    let height = 0;
-    if (!axis) return { cards, ends, height };
-    height = axis.minutes * axis.scale;
-    const inDraft = new Set<number>();
-    for (const mv of draft) {
-      inDraft.add(mv.mat);
-      const it = itemById.get(mv.id);
-      if (it) inDraft.add(it.mat);
-    }
-    const y = (ms: number) => ((ms - axis.start) / 60000) * axis.scale;
-    for (const [mat, list] of byMat) {
-      const span = (it: ItemView) => {
-        const x = times.get(it.id);
-        return { s: Date.parse(x?.start ?? ''), e: Date.parse(x?.end ?? '') };
-      };
-      // A mat with moves in the draft runs its movable cards one after another.
-      let cursor = Infinity;
-      if (inDraft.has(mat)) {
-        for (const it of list) {
-          const { s } = span(it);
-          if (it.movable && !Number.isNaN(s)) cursor = Math.min(cursor, s);
-        }
-      }
-      let edge = 0;
-      for (const it of list) {
-        const { s, e } = span(it);
-        const timed = !Number.isNaN(s) && !Number.isNaN(e);
-        let at = timed ? s : axis.start;
-        if (timed && inDraft.has(mat) && it.movable) {
-          at = cursor;
-          cursor = at + (e - s);
-        } else if (timed) {
-          cursor = Math.max(cursor === Infinity ? 0 : cursor, e);
-        }
-        const top = Math.max(y(at), edge);
-        const tall = timed ? ((e - s) / 60000) * axis.scale : 0;
-        cards.set(it.id, { top, height: tall });
-        edge = top + Math.max(tall, drawn[it.id] ?? 0) + CARD_GAP;
-      }
-      ends.set(mat, edge);
-      height = Math.max(height, edge);
-    }
-    return { cards, ends, height };
-  });
+  const layout = $derived(cardLayout(byMat, axis, times, drawn, draft, itemById));
 
   /** The hall's breaks, as a band across every mat. */
-  const rests = $derived.by(() => {
-    if (!axis) return [];
-    const at = (clock: string) => {
-      const [h, m] = clock.split(':').map(Number);
-      return (h * 60 + m - axis.hour * 60) * axis.scale;
-    };
-    return (forecast?.breaks ?? []).map((b) => ({ label: b.label === 'Lunch' ? t('Lunch') : (b.label ?? ''), top: at(b.from), height: at(b.to) - at(b.from) }));
-  });
+  const rests = $derived(breakBands(forecast?.breaks ?? [], axis, t('Lunch')));
   const nowAt = $derived(axis && forecast?.live ? ((Date.now() - axis.start) / 60000) * axis.scale : -1);
 
   /** "10:40–11:25". */
@@ -342,7 +222,7 @@
       suggestion = await api.suggest();
       suggestNote = '';
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      error = errorText(e);
     } finally {
       busy = false;
     }
@@ -360,7 +240,7 @@
         suggestion = (e.body as { suggestion?: SuggestionView }).suggestion ?? null;
         suggestNote = t('The plan changed since; this is a new suggestion.');
       } else {
-        error = e instanceof Error ? e.message : String(e);
+        error = errorText(e);
       }
     } finally {
       busy = false;
@@ -391,7 +271,7 @@
       await fn();
       await live.refresh();
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      error = errorText(e);
     } finally {
       busy = false;
     }
@@ -412,18 +292,7 @@
 
   /** "Pool 3", "Eliminations 2", "Bronze match", "Final". */
   function label(it: ItemView): string {
-    switch (it.kind) {
-      case 'pool':
-        return t('Pool {n}', { n: it.number ?? '' });
-      case 'eliminations': {
-        const lanes = (view?.items ?? []).filter((o) => o.discipline === it.discipline && o.kind === 'eliminations').length;
-        return lanes > 1 ? t('Eliminations {n}', { n: it.number ?? '' }) : t('Eliminations');
-      }
-      case 'bronze':
-        return t('Bronze match');
-      case 'final':
-        return t('Final');
-    }
+    return itemLabel(it.kind, it.number, lanesOf(view?.items ?? [], it.discipline));
   }
 
   function statusLabel(it: ItemView): string {
@@ -579,7 +448,7 @@
       <span class="count">
         <button aria-label={t('One mat fewer')} disabled={busy || mats.length <= 1} onclick={() => setCount(mats.length - 1)}>&minus;</button>
         <span>{t('{n} mats in the hall', { n: mats.length })}</span>
-        <button aria-label={t('One mat more')} disabled={busy || mats.length >= 8} onclick={() => setCount(mats.length + 1)}>+</button>
+        <button aria-label={t('One mat more')} disabled={busy || mats.length >= MAX_MATS} onclick={() => setCount(mats.length + 1)}>+</button>
       </span>
     {/if}
   </div>

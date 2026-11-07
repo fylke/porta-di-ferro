@@ -4,6 +4,7 @@
   import { hall } from '../lib/event.svelte';
   import { MatsLive } from '../lib/mats.svelte';
   import { t } from '../lib/i18n.svelte';
+  import { errorText } from '../lib/errors';
 
   /**
    * Who is connected: the screens and what each shows, the score keepers and which mat
@@ -91,7 +92,7 @@
     try {
       await fn();
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      error = errorText(e);
     }
   }
 

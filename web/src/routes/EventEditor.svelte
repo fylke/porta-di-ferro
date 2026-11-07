@@ -3,6 +3,7 @@
   import type { EventInfo } from '../api';
   import { t } from '../lib/i18n.svelte';
   import SaveButton from './SaveButton.svelte';
+  import { errorText } from '../lib/errors';
 
   /**
    * The event, the first step of planning it (#149): what it is called, where and when, and
@@ -87,7 +88,7 @@
       onchange();
       return true;
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      error = errorText(e);
       return false;
     } finally {
       saving = false;

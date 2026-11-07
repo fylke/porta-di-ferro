@@ -6,6 +6,7 @@
   import FoldButton from './FoldButton.svelte';
   import { Folds } from '../lib/folds.svelte';
   import { t } from '../lib/i18n.svelte';
+  import { errorText } from '../lib/errors';
 
   /**
    * The cut and the bracket (design §7 item 3). Drawn once every pool match is in, from
@@ -47,7 +48,7 @@
       );
       onchange();
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      error = errorText(e);
     }
   }
 
@@ -64,7 +65,7 @@
       await api.drawBracket();
       onchange();
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      error = errorText(e);
     } finally {
       busy = false;
     }

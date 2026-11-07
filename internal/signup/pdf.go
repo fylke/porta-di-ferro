@@ -4,7 +4,6 @@ package signup
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -12,7 +11,6 @@ import (
 
 	pdfapi "github.com/pdfcpu/pdfcpu/pkg/api"
 	pdffont "github.com/pdfcpu/pdfcpu/pkg/font"
-	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/form"
 	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
 	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/primitives"
 )
@@ -198,51 +196,4 @@ func nonempty(values ...string) []string {
 		}
 	}
 	return out
-}
-
-func parsePDF(body []byte) (res Response, err error) {
-	defer func() {
-		if recover() != nil {
-			res, err = Response{}, fmt.Errorf("not readable as a PDF signup form")
-		}
-	}()
-	if len(body) > MaxPDFResponse {
-		return Response{}, fmt.Errorf("the PDF exceeds the 2 MB signup limit")
-	}
-	fields, err := pdfapi.FormFields(bytes.NewReader(body), pdfConfig())
-	if err != nil {
-		return Response{}, fmt.Errorf("cannot read PDF form fields; return the saved fillable form, not a scan, annotation or printed copy")
-	}
-	values := map[string]string{}
-	res.Format, res.Version = ResponseFormat, Version
-	res.Staff = &StaffOffer{}
-	for _, field := range fields {
-		if _, exists := values[field.Name]; exists {
-			return Response{}, fmt.Errorf("duplicate PDF field %q", field.Name)
-		}
-		values[field.Name] = field.V
-		if field.Typ != form.FTCheckBox || field.V != "Yes" {
-			continue
-		}
-		switch {
-		case strings.HasPrefix(field.Name, "entry-"):
-			res.Entries = append(res.Entries, strings.TrimPrefix(field.Name, "entry-"))
-		case strings.HasPrefix(field.Name, "staff-"):
-			res.Staff.Tournaments = append(res.Staff.Tournaments, strings.TrimPrefix(field.Name, "staff-"))
-		case strings.HasPrefix(field.Name, "role-"):
-			res.Staff.Roles = append(res.Staff.Roles, strings.TrimPrefix(field.Name, "role-"))
-		}
-	}
-	if values["porta-format"] != ResponseFormat+"/"+strconv.Itoa(Version) || values["porta-event"] == "" {
-		return Response{}, fmt.Errorf("not a supported Porta signup PDF; ask the organizer for a new form")
-	}
-	res.DefinitionID = values["porta-event"]
-	res.Participant = Participant{Name: values["name"], Club: values["club"], Email: values["email"]}
-	identity := strings.TrimSpace(res.DefinitionID) + "\x00" + strings.ToLower(strings.TrimSpace(res.Participant.Email))
-	res.SubmissionID = fmt.Sprintf("pdf-%x", sha256.Sum256([]byte(identity)))
-	encoded, err := json.Marshal(res)
-	if err != nil {
-		return Response{}, err
-	}
-	return ParseResponse(encoded)
 }

@@ -13,6 +13,7 @@ import (
 
 	"github.com/fylke/porta-di-ferro/internal/event"
 	"github.com/fylke/porta-di-ferro/internal/forecast"
+	"github.com/fylke/porta-di-ferro/internal/hall"
 	"github.com/fylke/porta-di-ferro/internal/store"
 )
 
@@ -42,12 +43,12 @@ func (c *Coordinator) defaults() store.Timings {
 	if b, err := os.ReadFile(c.DefaultTimingsFile()); err == nil {
 		_ = json.Unmarshal(b, &t)
 	}
-	return TimingsOr(t, DefaultTimings)
+	return hall.TimingsOr(t, hall.DefaultTimings)
 }
 
 // hallTimes is the forecast, from snapshots already taken and the mats built from them.
 type hallTimes struct {
-	inputs  []MatsInput
+	inputs  []hall.MatsInput
 	in      forecast.Input
 	result  forecast.Result
 	timings store.Timings
@@ -55,18 +56,18 @@ type hallTimes struct {
 
 func (c *Coordinator) timesFrom(snaps []snapped) hallTimes {
 	file, _ := c.folder.Read()
-	var inputs []MatsInput
+	var inputs []hall.MatsInput
 	for _, s := range snaps {
 		if s.err != nil {
 			continue
 		}
-		inputs = append(inputs, MatsInput{Slug: s.w.slug, Name: s.snap.Instance.Name, Snapshot: s.snap,
+		inputs = append(inputs, hall.MatsInput{Slug: s.w.slug, Name: s.snap.Instance.Name, Snapshot: s.snap,
 			Expected: file.Plan.Expected[s.w.slug]})
 	}
 	c.withSessions(inputs, file.Plan)
 	placed, _ := c.Placements()
-	timings := TimingsOr(file.Plan.Timings, c.defaults())
-	in := ForecastInput(inputs, placed, file.Plan, file.Event, timings, c.now())
+	timings := hall.TimingsOr(file.Plan.Timings, c.defaults())
+	in := hall.ForecastInput(inputs, placed, file.Plan, file.Event, timings, c.now())
 	return hallTimes{inputs: inputs, in: in, result: forecast.Run(in), timings: timings}
 }
 
@@ -74,7 +75,7 @@ func (c *Coordinator) timesFrom(snaps []snapped) hallTimes {
 // it is this discipline's, and when each of its matches still to come is expected.
 func (c *Coordinator) Hall(slug string) (map[int]string, map[string]string) {
 	view, result := c.hallNow()
-	return CurrentFrom(view, slug), EtasFor(result, slug)
+	return hall.CurrentFrom(view, slug), hall.EtasFor(result, slug)
 }
 
 // hallCache is the hall worked out once per change (#124). A republish asks every
@@ -84,7 +85,7 @@ type hallCache struct {
 	mu     sync.Mutex
 	key    string
 	at     time.Time
-	view   MatsView
+	view   hall.MatsView
 	result forecast.Result
 }
 
@@ -104,7 +105,7 @@ func (c *Coordinator) hallKey() string {
 			fmt.Fprintf(&b, "|%s:%d", w.slug, w.srv.store.Revision())
 		}
 	}
-	for mat := 1; mat <= maxMats; mat++ {
+	for mat := 1; mat <= hall.MaxMats; mat++ {
 		if d, m := c.held(mat); m != "" {
 			fmt.Fprintf(&b, "|%d=%s/%s", mat, d, m)
 		}
@@ -113,7 +114,7 @@ func (c *Coordinator) hallKey() string {
 }
 
 // hallNow is the hall's mats and forecast, from the cache while it is current.
-func (c *Coordinator) hallNow() (MatsView, forecast.Result) {
+func (c *Coordinator) hallNow() (hall.MatsView, forecast.Result) {
 	c.hall.mu.Lock()
 	defer c.hall.mu.Unlock()
 	key, now := c.hallKey(), time.Now()
@@ -128,13 +129,13 @@ func (c *Coordinator) hallNow() (MatsView, forecast.Result) {
 }
 
 // ForecastNow is the forecast as the board reads it.
-func (c *Coordinator) ForecastNow() ForecastView {
+func (c *Coordinator) ForecastNow() hall.ForecastView {
 	h := c.timesFrom(c.snapshots())
-	v := ViewForecast(h.in, h.result, h.inputs, h.timings)
+	v := hall.ViewForecast(h.in, h.result, h.inputs, h.timings)
 	file, _ := c.folder.Read()
 	v.Expected = file.Plan.Expected
-	v.Sessions, v.FinalsLast = Sessions(file.Plan, c.slugs()), file.Plan.FinalsLast
-	ViewPlan(&v, file.Plan, file.Event, h.inputs)
+	v.Sessions, v.FinalsLast = hall.Sessions(file.Plan, c.slugs()), file.Plan.FinalsLast
+	hall.ViewPlan(&v, file.Plan, file.Event, h.inputs)
 	return v
 }
 
@@ -160,7 +161,7 @@ func (c *Coordinator) putTimings(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	in, err := CleanTimings(in)
+	in, err := hall.CleanTimings(in)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
@@ -182,10 +183,7 @@ func (c *Coordinator) learnTimings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err := c.changePlan(func(p *store.Plan) error {
-		p.Timings.Match = int(rep.Match / time.Second)
-		if rep.Changeover > 0 {
-			p.Timings.Changeover = int(rep.Changeover / time.Second)
-		}
+		hall.LearnTimings(&p.Timings, rep)
 		return nil
 	})
 	if err != nil {
@@ -214,22 +212,8 @@ func (c *Coordinator) putSessions(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	known := map[string]bool{}
-	for _, s := range c.slugs() {
-		known[s] = true
-	}
-	err := c.changePlan(func(p *store.Plan) error {
-		if p.Sessions == nil {
-			p.Sessions = map[string]int{}
-		}
-		for slug, n := range in {
-			if !known[slug] || n < 1 || n > 20 {
-				return errors.New("a block is a discipline of this event and a number from 1 to 20")
-			}
-			p.Sessions[slug] = n
-		}
-		return nil
-	})
+	slugs := c.slugs()
+	err := c.changePlan(func(p *store.Plan) error { return hall.SetSessions(p, in, slugs) })
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
@@ -260,22 +244,7 @@ func (c *Coordinator) putExpected(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	err := c.changePlan(func(p *store.Plan) error {
-		if p.Expected == nil {
-			p.Expected = map[string]int{}
-		}
-		for slug, n := range in {
-			if n < 0 || n > 200 {
-				return errors.New("expect between 0 and 200")
-			}
-			if n == 0 {
-				delete(p.Expected, slug)
-			} else {
-				p.Expected[slug] = n
-			}
-		}
-		return nil
-	})
+	err := c.changePlan(func(p *store.Plan) error { return hall.SetExpected(p, in) })
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
@@ -285,7 +254,7 @@ func (c *Coordinator) putExpected(w http.ResponseWriter, r *http.Request) {
 
 func (c *Coordinator) getReport(w http.ResponseWriter, r *http.Request) {
 	h := c.timesFrom(c.snapshots())
-	writeJSON(w, http.StatusOK, ViewReport(forecast.Measure(h.in), h.inputs))
+	writeJSON(w, http.StatusOK, hall.ViewReport(forecast.Measure(h.in), h.inputs))
 }
 
 // putAnomaly marks a match's times as not to be learned from, or takes the mark off.
@@ -299,7 +268,7 @@ func (c *Coordinator) putAnomaly(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err := c.changePlan(func(p *store.Plan) error {
-		p.Anomalies = SetAnomaly(p.Anomalies, in.Key, in.Anomaly)
+		p.Anomalies = hall.SetAnomaly(p.Anomalies, in.Key, in.Anomaly)
 		return nil
 	})
 	if err != nil {
@@ -309,66 +278,11 @@ func (c *Coordinator) putAnomaly(w http.ResponseWriter, r *http.Request) {
 	c.getReport(w, r)
 }
 
-// SetAnomaly marks or unmarks one match in the plan's list.
-func SetAnomaly(list []string, key string, on bool) []string {
-	out := []string{}
-	for _, k := range list {
-		if k != key {
-			out = append(out, k)
-		}
-	}
-	if on {
-		out = append(out, key)
-	}
-	return out
-}
-
-// ItemFlags are what the card menu sets on a work item: a pin, a time to hold it to, and
-// for a bronze match whether it may run at the same time as the final (#149).
-type ItemFlags struct {
-	Pinned    *bool   `json:"pinned"`
-	NotBefore *string `json:"notBefore"`
-	WithFinal *bool   `json:"withFinal"`
-}
-
-// Any says the request sets a flag.
-func (f ItemFlags) Any() bool { return f.Pinned != nil || f.NotBefore != nil || f.WithFinal != nil }
-
-// SetItemFlags pins or unpins a work item, holds it to a time, or lets a bronze match run
-// with its final, in the placements.
-func SetItemFlags(placed map[string]store.Placement, id string, f ItemFlags) (map[string]store.Placement, error) {
-	p, ok := placed[id]
-	if !ok {
-		return placed, errors.New("no work item " + id)
-	}
-	if f.NotBefore != nil {
-		if _, ok := ParseClock(time.Now(), *f.NotBefore); *f.NotBefore != "" && !ok {
-			return placed, errors.New("write the time as 16:30")
-		}
-		p.NotBefore = *f.NotBefore
-	}
-	if f.Pinned != nil {
-		p.Pinned = *f.Pinned
-	}
-	if f.WithFinal != nil {
-		if !strings.HasSuffix(id, "/"+ItemBronze) {
-			return placed, errors.New("only a bronze match can run with the final")
-		}
-		p.WithFinal = *f.WithFinal
-	}
-	next := make(map[string]store.Placement, len(placed))
-	for k, v := range placed {
-		next[k] = v
-	}
-	next[id] = p
-	return next, nil
-}
-
 // flagItem is the card menu's pin, unpin and hold-until.
-func (c *Coordinator) flagItem(id string, f ItemFlags) error {
+func (c *Coordinator) flagItem(id string, f hall.ItemFlags) error {
 	c.planMu.Lock()
 	placed, _ := c.placementsLocked()
-	next, err := SetItemFlags(placed, id, f)
+	next, err := hall.SetItemFlags(placed, id, f)
 	if err == nil {
 		err = c.savePlacementsLocked(next)
 	}
@@ -389,7 +303,7 @@ func (c *Coordinator) suggestion() (forecast.Suggestion, map[string]store.Placem
 // suggest is a suggested plan. It writes nothing, like the signup preview.
 func (c *Coordinator) suggest(w http.ResponseWriter, r *http.Request) {
 	s, _ := c.suggestion()
-	writeJSON(w, http.StatusOK, ViewSuggestion(s))
+	writeJSON(w, http.StatusOK, hall.ViewSuggestion(s))
 }
 
 // applySuggestion takes a suggestion: worked out again here rather than trusting what was
@@ -403,16 +317,16 @@ func (c *Coordinator) applySuggestion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s, _ := c.suggestion()
-	if SignatureOf(s) != in.Signature {
+	if hall.SignatureOf(s) != in.Signature {
 		writeJSON(w, http.StatusConflict, map[string]any{
 			"error":      "the plan has changed since that suggestion; here is a new one",
-			"suggestion": ViewSuggestion(s),
+			"suggestion": hall.ViewSuggestion(s),
 		})
 		return
 	}
 	c.planMu.Lock()
 	placed, _ := c.placementsLocked()
-	err := c.savePlacementsLocked(ApplySuggestion(placed, s))
+	err := c.savePlacementsLocked(hall.ApplySuggestion(placed, s))
 	c.planMu.Unlock()
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
@@ -429,7 +343,7 @@ func (c *Coordinator) putBreaks(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	in, err := CleanBreaks(in)
+	in, err := hall.CleanBreaks(in)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
@@ -449,7 +363,7 @@ func (c *Coordinator) putPrep(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	slugs := c.slugs()
-	if err := c.changePlan(func(p *store.Plan) error { return SetPrep(p, in, slugs) }); err != nil {
+	if err := c.changePlan(func(p *store.Plan) error { return hall.SetPrep(p, in, slugs) }); err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
@@ -464,7 +378,7 @@ func (c *Coordinator) putStarts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	slugs := c.slugs()
-	if err := c.changePlan(func(p *store.Plan) error { return SetStarts(p, in, slugs) }); err != nil {
+	if err := c.changePlan(func(p *store.Plan) error { return hall.SetStarts(p, in, slugs) }); err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}

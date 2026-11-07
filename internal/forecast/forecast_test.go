@@ -538,3 +538,47 @@ func TestALaterStartShiftsWhatFollowsOnlyOnOverlap(t *testing.T) {
 		t.Errorf("pool 2 should follow pool 1 once they would overlap: %s after %s", hm(s.Start), hm(p1.End))
 	}
 }
+
+// Matches on two mats logged at the same instant keep their order from one reading of the
+// report to the next.
+func TestTheReportsOrderHoldsForMatchesStartedTogether(t *testing.T) {
+	at := time.Date(2026, 5, 2, 10, 0, 0, 0, time.UTC)
+	var items []forecast.Item
+	for mat := 1; mat <= 6; mat++ {
+		items = append(items, forecast.Item{ID: fmt.Sprintf("d/pool-%d", mat), Mat: mat, Matches: []forecast.Match{
+			{Key: fmt.Sprintf("d/p%dm1", mat), Started: at, Ended: at.Add(4 * time.Minute)},
+		}})
+	}
+	for try := 0; try < 50; try++ {
+		rep := forecast.Measure(forecast.Input{Items: items})
+		for i, m := range rep.Matches {
+			if want := fmt.Sprintf("d/p%dm1", i+1); m.Key != want {
+				t.Fatalf("try %d: row %d is %s, want %s", try, i, m.Key, want)
+			}
+		}
+	}
+}
+
+// A pinned item keeps its mat even when one of its fencers is busy on another: it waits
+// there for them rather than following them to theirs.
+func TestAPinnedItemWaitsOnItsOwnMatForAFencer(t *testing.T) {
+	lsPool, saPool := item("ls/pool-1", "ls", "pool", 1, 1, 3), item("sa/pool-1", "sa", "pool", 2, 1, 3)
+	lsPool.People, saPool.People = []string{"astrid"}, []string{"astrid"}
+	saPool.Pinned = true
+	in := forecast.Input{Timings: tpl, Items: []forecast.Item{lsPool, saPool}}
+	s := forecast.Suggest(in, 2)
+	if got := s.Order[2]; len(got) != 1 || got[0] != "sa/pool-1" {
+		t.Fatalf("the pinned sabre pool stays on mat 2: %v", s.Order)
+	}
+	// Held finals go on mat 1 whoever is fencing elsewhere.
+	final := item("sa/final", "sa", "final", 2, 2, 1)
+	final.Held, final.People = true, []string{"astrid"}
+	busy := item("ls/pool-2", "ls", "pool", 2, 1, 3)
+	busy.People = []string{"astrid"}
+	busy.Matches[0].Started = at("09:00")
+	in = forecast.Input{Timings: tpl, Now: at("09:02"), Items: []forecast.Item{busy, final}}
+	s = forecast.Suggest(in, 2)
+	if got := s.Order[1]; len(got) != 1 || got[0] != "sa/final" {
+		t.Errorf("the held final stays on mat 1: %v", s.Order)
+	}
+}

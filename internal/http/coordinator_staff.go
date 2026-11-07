@@ -3,10 +3,9 @@ package httpapi
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
-	"strings"
 
+	"github.com/fylke/porta-di-ferro/internal/hall"
 	"github.com/fylke/porta-di-ferro/internal/people"
 	"github.com/fylke/porta-di-ferro/internal/signup"
 	"github.com/fylke/porta-di-ferro/internal/staffing"
@@ -61,19 +60,10 @@ func (c *Coordinator) RemoveStaff(slug, id string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	members, changed := staffing.RemoveFrom(st.Members, slug, id, c.slugs())
+	st, changed := hall.RemoveFromDiscipline(st, slug, id, c.slugs())
 	if !changed {
 		return false, nil
 	}
-	st.Members = members
-	var kept []store.Assignment
-	for _, a := range st.Assignments {
-		if a.Staff == id && strings.HasPrefix(a.Item, slug+"/") {
-			continue
-		}
-		kept = append(kept, a)
-	}
-	st.Assignments = kept
 	if err := c.folder.SaveStaff(st); err != nil {
 		return false, err
 	}
@@ -128,18 +118,18 @@ func (c *Coordinator) liftStaff() {
 // --- the staff, over HTTP ---------------------------------------------------------------
 
 // StaffingNow is the staff as they stand, checked against the plan as forecast.
-func (c *Coordinator) StaffingNow() (StaffingView, staffing.Input, store.Staff, error) {
+func (c *Coordinator) StaffingNow() (hall.StaffingView, staffing.Input, store.Staff, error) {
 	snaps := c.snapshots()
 	view := c.matsFrom(snaps)
 	h := c.timesFrom(snaps)
 	st, err := c.folder.Staff()
 	if err != nil {
-		return StaffingView{}, staffing.Input{}, st, err
+		return hall.StaffingView{}, staffing.Input{}, st, err
 	}
-	si := StaffInput(h.in, h.result, st, StillIn(h.inputs))
-	v := ViewStaffing(si, st, view)
+	si := hall.StaffInput(h.in, h.result, st, hall.StillIn(h.inputs))
+	v := hall.ViewStaffing(si, st, view)
 	if reg, err := c.folder.People(); err == nil {
-		v.Unsure = UnsureOf(st.Members, people.Duplicates(reg, c.entriesByPerson(reg)))
+		v.Unsure = hall.UnsureOf(st.Members, people.Duplicates(reg, c.entriesByPerson(reg)))
 	}
 	return v, si, st, nil
 }
@@ -182,17 +172,7 @@ func (c *Coordinator) putCrew(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	_, err := c.changeStaff(func(st *store.Staff) error {
-		crew := staffing.CrewOf(st.Crew)
-		for role, n := range in {
-			if _, ok := crew[role]; !ok || n < 0 || n > 6 {
-				return fmt.Errorf("a mat needs between 0 and 6 of %q", role)
-			}
-			crew[role] = n
-		}
-		st.Crew = crew
-		return nil
-	})
+	_, err := c.changeStaff(func(st *store.Staff) error { return hall.SetCrew(st, in) })
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
@@ -213,7 +193,7 @@ func (c *Coordinator) putAssignment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, err := c.changeStaff(func(st *store.Staff) error {
-		next, err := SetAssignment(*st, in.Item, in.Role, in.Slot, in.Staff)
+		next, err := hall.SetAssignment(*st, in.Item, in.Role, in.Slot, in.Staff)
 		*st = next
 		return err
 	})
@@ -231,7 +211,7 @@ func (c *Coordinator) suggestStaff(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, SuggestStaff(si))
+	writeJSON(w, http.StatusOK, hall.SuggestStaff(si))
 }
 
 // applyStaff takes a suggestion: worked out again, and refused when it is no longer the
@@ -249,7 +229,7 @@ func (c *Coordinator) applyStaff(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
-	s := SuggestStaff(si)
+	s := hall.SuggestStaff(si)
 	if s.Signature != in.Signature {
 		writeJSON(w, http.StatusConflict, map[string]any{
 			"error":      "the staff or the plan changed since that suggestion; here is a new one",
@@ -280,12 +260,11 @@ func (c *Coordinator) addStaff(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	m, err := staffing.Clean(in.StaffMember)
+	m, err := hall.NewMember(in.StaffMember)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	m.ID, m.Signup = staffing.NewID(), ""
 	if m.Person, err = c.PersonFor(m.Name, m.Club, "", "", in.Want); err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
@@ -303,43 +282,13 @@ func (c *Coordinator) addStaff(w http.ResponseWriter, r *http.Request) {
 // patchStaff changes a member's name, club, roles or disciplines.
 func (c *Coordinator) patchStaff(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	var in struct {
-		Name        *string   `json:"name"`
-		Club        *string   `json:"club"`
-		Roles       *[]string `json:"roles"`
-		Disciplines *[]string `json:"disciplines"`
-	}
+	var in hall.MemberPatch
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	_, err := c.changeStaff(func(st *store.Staff) error {
-		for i, m := range st.Members {
-			if m.ID != id {
-				continue
-			}
-			if in.Name != nil {
-				m.Name = *in.Name
-			}
-			if in.Club != nil {
-				m.Club = *in.Club
-			}
-			if in.Roles != nil {
-				m.Roles = *in.Roles
-			}
-			if in.Disciplines != nil {
-				m.Disciplines = *in.Disciplines
-			}
-			clean, err := staffing.Clean(m)
-			if err != nil {
-				return err
-			}
-			st.Members[i] = clean
-			return nil
-		}
-		return errNoMember(id)
-	})
-	var missing errNoMember
+	_, err := c.changeStaff(func(st *store.Staff) error { return hall.PatchMember(st, id, in) })
+	var missing hall.ErrNoMember
 	switch {
 	case errors.As(err, &missing):
 		writeErr(w, http.StatusNotFound, err)
@@ -350,21 +299,17 @@ func (c *Coordinator) patchStaff(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-type errNoMember string
-
-func (e errNoMember) Error() string { return fmt.Sprintf("no staff member %s", string(e)) }
-
 func (c *Coordinator) deleteMember(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	_, err := c.changeStaff(func(st *store.Staff) error {
 		next, found := staffing.Without(*st, id)
 		if !found {
-			return errNoMember(id)
+			return hall.ErrNoMember(id)
 		}
 		*st = next
 		return nil
 	})
-	var missing errNoMember
+	var missing hall.ErrNoMember
 	switch {
 	case errors.As(err, &missing):
 		writeErr(w, http.StatusNotFound, err)

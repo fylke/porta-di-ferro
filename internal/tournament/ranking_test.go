@@ -105,3 +105,33 @@ func TestHeadToHeadBreaksAnOtherwiseExactTie(t *testing.T) {
 		t.Errorf("a beat b head to head and should rank first, got %s", got[0].Competitor)
 	}
 }
+
+// Three fencers level on every index, each beating the next: head-to-head goes round in a
+// circle and settles nothing. The table must still come out the same every time it is
+// worked out, or the standings on the screens change between two looks.
+func TestACircleOfWinsRanksTheSameEveryTime(t *testing.T) {
+	ids := []string{"a", "b", "c"}
+	p := pool(ids, m("m1", "a", "b"), m("m2", "b", "c"), m("m3", "c", "a"))
+	states := map[string]match.State{
+		"m1": decided(2, 1, match.ReasonTime, false),
+		"m2": decided(2, 1, match.ReasonTime, false),
+		"m3": decided(2, 1, match.ReasonTime, false),
+	}
+	first := tournament.Rank(match.MSL(), p, people(ids...), states, 7)
+	for try := 0; try < 100; try++ {
+		again := tournament.Rank(match.MSL(), p, people(ids...), states, 7)
+		for i := range first {
+			if again[i].Competitor != first[i].Competitor {
+				t.Fatalf("try %d: %v, then %v", try, order(first), order(again))
+			}
+		}
+	}
+}
+
+func order(s []tournament.Standing) []string {
+	var out []string
+	for _, x := range s {
+		out = append(out, x.Competitor)
+	}
+	return out
+}

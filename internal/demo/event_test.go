@@ -5,32 +5,32 @@ import (
 	"testing"
 
 	"github.com/fylke/porta-di-ferro/internal/demo"
-	httpapi "github.com/fylke/porta-di-ferro/internal/http"
+	"github.com/fylke/porta-di-ferro/internal/hall"
 )
 
 // The demo is an event of two disciplines (docs/proposals/one-event-many-disciplines.md,
 // R11), answering every path the server's coordinator answers, the same way.
 
-func view(t *testing.T, e *demo.Event) httpapi.EventView {
+func view(t *testing.T, e *demo.Event) hall.EventView {
 	t.Helper()
 	res := e.Request("GET", "/api/event", nil)
 	if res.Status != 200 {
 		t.Fatalf("GET /api/event returned %d: %s", res.Status, res.Body)
 	}
-	var v httpapi.EventView
+	var v hall.EventView
 	if err := json.Unmarshal([]byte(res.Body), &v); err != nil {
 		t.Fatal(err)
 	}
 	return v
 }
 
-func snapIn(t *testing.T, e *demo.Event, slug string) httpapi.Snapshot {
+func snapIn(t *testing.T, e *demo.Event, slug string) hall.Snapshot {
 	t.Helper()
 	res := e.Request("GET", "/api/d/"+slug+"/state", nil)
 	if res.Status != 200 {
 		t.Fatalf("GET /api/d/%s/state returned %d: %s", slug, res.Status, res.Body)
 	}
-	var s httpapi.Snapshot
+	var s hall.Snapshot
 	if err := json.Unmarshal([]byte(res.Body), &s); err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +133,7 @@ func TestAnIdentifierCanBeChangedInTheDemo(t *testing.T) {
 	if s := snapIn(t, e, "foam"); len(s.Competitors) != 1 {
 		t.Errorf("the old identifier should still lead there: %+v", s.Instance)
 	}
-	var v httpapi.ForecastView
+	var v hall.ForecastView
 	if err := json.Unmarshal([]byte(e.Request("GET", "/api/forecast", nil).Body), &v); err != nil {
 		t.Fatal(err)
 	}
@@ -196,7 +196,7 @@ func TestTheDemoEventSavesAndLoads(t *testing.T) {
 func TestTheDemoRunsTheEventsMats(t *testing.T) {
 	e := demo.NewEvent()
 	res := e.Request("GET", "/api/mats", nil)
-	var v httpapi.MatsView
+	var v hall.MatsView
 	if err := json.Unmarshal([]byte(res.Body), &v); err != nil || res.Status != 200 {
 		t.Fatalf("GET /api/mats: %d %v", res.Status, err)
 	}
@@ -206,7 +206,7 @@ func TestTheDemoRunsTheEventsMats(t *testing.T) {
 	if c := v.Mats[0].Current; c == nil || c.Discipline != "open-steel-longsword" || c.Match.Status != "running" {
 		t.Errorf("mat 1 should be on the longsword's match under way: %+v", c)
 	}
-	var sabre httpapi.ItemView
+	var sabre hall.ItemView
 	for _, it := range v.Items {
 		if it.ID == "open-sabre/pool-1" {
 			sabre = it
@@ -276,7 +276,7 @@ func TestTheDemoDeletesItsEvent(t *testing.T) {
 	if after.Info.Welcome != "" || after.ID == "" || after.ID == before.ID {
 		t.Errorf("the new event should have nothing of the old one and an identity of its own: %q %q", after.Info.Welcome, after.ID)
 	}
-	var mats httpapi.MatsView
+	var mats hall.MatsView
 	_ = json.Unmarshal([]byte(e.Request("GET", "/api/mats", nil).Body), &mats)
 	if mats.Event != after.ID {
 		t.Errorf("the mats should be the new event's, got %q", mats.Event)
@@ -287,5 +287,51 @@ func TestTheDemoDeletesItsEvent(t *testing.T) {
 	e.Request("POST", "/api/demo/reset", nil)
 	if v := view(t, e); len(v.Disciplines) != 3 || v.ID != before.ID {
 		t.Errorf("Start over should bring the visitor's event back, got %d disciplines and %q", len(v.Disciplines), v.ID)
+	}
+}
+
+// Two score keepers on one mat: the mat shows the match of the one heard from last, as the
+// server's registry has it, and not whichever the map happens to give first.
+func TestTheLastScoreKeeperHeardHoldsTheMat(t *testing.T) {
+	e := demo.NewEvent()
+	var mats hall.MatsView
+	if err := json.Unmarshal([]byte(e.Request("GET", "/api/mats", nil).Body), &mats); err != nil {
+		t.Fatal(err)
+	}
+	queue := mats.Mats[0].Queue
+	if len(queue) < 2 {
+		t.Fatalf("mat 1 needs two matches for this test, has %d", len(queue))
+	}
+	register := func(id string, s hall.Slot) {
+		e.Request("POST", "/api/clients/"+id, []byte(`{"role":"scorekeeper","mat":1,"match":"`+s.Match.ID+`","discipline":"`+s.Discipline+`"}`))
+	}
+	register("old", queue[0])
+	register("new", queue[1])
+	for try := 0; try < 30; try++ {
+		if err := json.Unmarshal([]byte(e.Request("GET", "/api/mats", nil).Body), &mats); err != nil {
+			t.Fatal(err)
+		}
+		if cur := mats.Mats[0].Current; cur == nil || cur.Match.ID != queue[1].Match.ID {
+			t.Fatalf("try %d: mat 1 is on %+v, want %s, the match of the tablet heard from last", try, cur, queue[1].Match.ID)
+		}
+	}
+}
+
+// An identifier a discipline used to have leads to it until the event is reset; after
+// that, the discipline the visitor first found under it is there again (#153).
+func TestAnOldIdentifierGivesWayToTheDisciplineItNamed(t *testing.T) {
+	e := demo.NewEvent()
+	if res := e.Request("PUT", "/api/disciplines/open-sabre/identifier", []byte(`{"identifier":"sabre"}`)); res.Status != 200 {
+		t.Fatalf("changing the identifier returned %d: %s", res.Status, res.Body)
+	}
+	if res := e.Request("GET", "/api/d/open-sabre/state", nil); res.Status != 200 {
+		t.Fatalf("the old identifier still leads to the discipline, got %d", res.Status)
+	}
+	e.Request("POST", "/api/demo/reset", nil)
+	if res := e.Request("GET", "/api/d/open-sabre/state", nil); res.Status != 200 {
+		t.Fatalf("after a reset the sabre is open-sabre again, got %d: %s", res.Status, res.Body)
+	}
+	if res := e.Request("GET", "/api/d/sabre/state", nil); res.Status != 404 {
+		t.Errorf("after a reset nothing is called sabre, got %d", res.Status)
 	}
 }

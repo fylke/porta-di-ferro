@@ -8,6 +8,7 @@
   import PersonEntry from './PersonEntry.svelte';
   import { clockOf } from '../lib/clock-of-day';
   import { itemLabel, roleLabel } from '../lib/items';
+  import { errorText } from '../lib/errors';
 
   /**
    * One person's day (issue #98, and across the event since phase 3): every discipline
@@ -49,7 +50,7 @@
       }
     } catch (e) {
       if (e && typeof e === 'object' && 'status' in e && e.status === 404) missing = true;
-      else error = e instanceof Error ? e.message : String(e);
+      else error = errorText(e);
     }
   }
 

@@ -96,7 +96,8 @@ func TestReplayIsDeterministic(t *testing.T) {
 	rules := match.MSL()
 	rapid.Check(t, func(t *rapid.T) {
 		events := genLog(t)
-		if match.Replay(rules, events) != match.Replay(rules, events) {
+		first, second := match.Replay(rules, events), match.Replay(rules, events)
+		if first != second {
 			t.Fatal("replaying the same log twice produced different state")
 		}
 	})

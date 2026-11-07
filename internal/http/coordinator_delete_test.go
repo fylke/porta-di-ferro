@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	httpapi "github.com/fylke/porta-di-ferro/internal/http"
+	"github.com/fylke/porta-di-ferro/internal/hall"
 )
 
 // Deleting the event (#141) puts it aside and starts a new one in its place: no
@@ -16,9 +16,9 @@ func TestDeletingTheEventStartsANewOne(t *testing.T) {
 	h.must("PUT", "/api/event/info", map[string]any{"welcome": "Hi", "signup": map[string]string{"name": "Autumn Open"}}, nil)
 	h.must("POST", "/api/disciplines", map[string]string{"name": "Open Sabre"}, nil)
 	h.must("POST", "/api/d/open-sabre/competitors", map[string]string{"name": "Astrid", "club": "Gbg"}, nil)
-	var before httpapi.EventView
+	var before hall.EventView
 	h.must("GET", "/api/event", nil, &before)
-	var mats httpapi.MatsView
+	var mats hall.MatsView
 	h.must("GET", "/api/mats", nil, &mats)
 	if before.ID == "" || mats.Event != before.ID {
 		t.Fatalf("the event and its mats should carry the event's identity: %q and %q", before.ID, mats.Event)
@@ -27,7 +27,7 @@ func TestDeletingTheEventStartsANewOne(t *testing.T) {
 	var out struct{ Deleted string }
 	h.must("DELETE", "/api/event", nil, &out)
 
-	var after httpapi.EventView
+	var after hall.EventView
 	h.must("GET", "/api/event", nil, &after)
 	if len(after.Disciplines) != 0 {
 		t.Errorf("the new event should have no disciplines: %+v", after.Disciplines)
@@ -76,12 +76,12 @@ func TestDeletingTheEventStartsANewOne(t *testing.T) {
 func TestTheEventKeepsItsIdentity(t *testing.T) {
 	dir := t.TempDir()
 	h := openHall(t, dir)
-	var first httpapi.EventView
+	var first hall.EventView
 	h.must("GET", "/api/event", nil, &first)
 	h.stop()
 
 	again := openHall(t, dir)
-	var second httpapi.EventView
+	var second hall.EventView
 	again.must("GET", "/api/event", nil, &second)
 	if first.ID == "" || second.ID != first.ID {
 		t.Errorf("a restart should keep the event's identity, got %q then %q", first.ID, second.ID)

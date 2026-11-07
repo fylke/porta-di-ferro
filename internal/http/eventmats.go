@@ -3,6 +3,7 @@ package httpapi
 import (
 	"fmt"
 
+	"github.com/fylke/porta-di-ferro/internal/hall"
 	"github.com/fylke/porta-di-ferro/internal/store"
 )
 
@@ -37,8 +38,8 @@ func (s *Server) ReleaseClaims(client string) {
 // without Mats -- which match each mat is on, which only the whole hall can say. The
 // coordinator builds the hall from these, so it never asks a discipline for what the
 // discipline would have to ask the hall for.
-func (s *Server) PlacedSnapshot() (Snapshot, error) {
-	snap, err := BuildSnapshot(source{s.store, s}, s.rules, s.self(), func(mat int) string {
+func (s *Server) PlacedSnapshot() (hall.Snapshot, error) {
+	snap, err := hall.BuildSnapshot(source{s.store, s}, s.rules, s.self(), func(mat int) string {
 		if sk := s.presence.scorekeeperOn(mat); sk != nil {
 			return sk.Match
 		}
@@ -46,7 +47,7 @@ func (s *Server) PlacedSnapshot() (Snapshot, error) {
 	})
 	if err == nil && s.mats != nil {
 		placed, mats := s.mats.Placements()
-		OnEventMats(&snap, s.self().Slug, placed, mats)
+		hall.OnEventMats(&snap, s.self().Slug, placed, mats)
 	}
 	return snap, err
 }

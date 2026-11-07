@@ -3,6 +3,7 @@ import { mount } from 'svelte';
 import App from './App.svelte';
 import { lang } from './lib/i18n.svelte';
 import { navigate } from './router.svelte';
+import { errorText } from './lib/errors';
 
 document.documentElement.lang = lang.current;
 
@@ -25,7 +26,7 @@ async function boot() {
       document.getElementById('app')!.innerHTML =
         `<main style="max-width:34rem;margin:4rem auto;padding:0 1.5rem;line-height:1.6">
            <h1>The demo did not load</h1>
-           <p>${e instanceof Error ? e.message : String(e)}</p>
+           <p>${errorText(e)}</p>
            <p><a href="https://github.com/fylke/porta-di-ferro">The project on GitHub</a></p>
          </main>`;
       return;
