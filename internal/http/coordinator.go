@@ -3,6 +3,7 @@ package httpapi
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"log"
@@ -401,6 +402,7 @@ func (c *Coordinator) Handler() http.Handler {
 	})
 	mux.HandleFunc("POST /api/disciplines", c.addDiscipline)
 	mux.HandleFunc("PATCH /api/disciplines/{d}", c.renameDiscipline)
+	mux.HandleFunc("PUT /api/disciplines/{d}/identifier", c.setIdentifier)
 	mux.HandleFunc("DELETE /api/disciplines/{d}", c.retireDiscipline)
 	mux.HandleFunc("POST /api/disciplines/{d}/reload", c.reloadDiscipline)
 
@@ -700,7 +702,7 @@ func (c *Coordinator) renameDiscipline(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if event.Placeholder(slug) && wk.srv.Self().Name == "" {
-		wk, err = c.reslug(wk, name)
+		wk, err = c.moveWorker(wk, func() (string, error) { return c.folder.Reslug(wk.slug, name) })
 		if err != nil {
 			writeErr(w, http.StatusInternalServerError, err)
 			return
@@ -714,12 +716,60 @@ func (c *Coordinator) renameDiscipline(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, c.summarize(wk))
 }
 
-// reslug gives a discipline that was made before it had a name -- the first one of a
-// fresh event -- an address from the name it is given, so the hall's pages and QR codes
-// say /d/open-sabre/ rather than /d/discipline/. The old address stays an alias for it.
-func (c *Coordinator) reslug(old *worker, name string) (*worker, error) {
+// setIdentifier gives a discipline the identifier the organizer chose (#153): its address,
+// and how the signup files name it. The old one stays an alias, so nothing that learned it
+// is lost; the page warns on the day, because a person reading the old one off a printout
+// no longer sees it on any screen.
+func (c *Coordinator) setIdentifier(w http.ResponseWriter, r *http.Request) {
+	slug := r.PathValue("d")
+	var in struct {
+		Identifier string `json:"identifier"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	c.namesMu.Lock()
+	defer c.namesMu.Unlock()
+	c.mu.Lock()
+	wk := c.workers[slug]
+	c.mu.Unlock()
+	if wk == nil {
+		writeErr(w, http.StatusNotFound, fmt.Errorf("this event has no discipline %q", slug))
+		return
+	}
+	if wk.srv == nil {
+		writeErr(w, http.StatusConflict, fmt.Errorf("%s cannot be changed until its files can be read: %w", slug, wk.err))
+		return
+	}
+	want, err := event.Identifier(in.Identifier)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	if want != slug {
+		wk, err = c.moveWorker(wk, func() (string, error) { return want, c.folder.MoveTo(slug, want) })
+		if errors.Is(err, event.ErrSlugTaken) {
+			writeErr(w, http.StatusBadRequest, err)
+			return
+		}
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err)
+			return
+		}
+		c.poke()
+	}
+	writeJSON(w, http.StatusOK, c.summarize(wk))
+}
+
+// moveWorker reloads a discipline at a new slug. It is closed while its folder moves, so
+// nothing holds a file open under the rename, and if the move fails it comes back as it
+// was. Used for a discipline made before it had a name -- the first one of a fresh event,
+// whose address comes from the name it is given, so the hall's pages and QR codes say
+// /d/open-sabre/ rather than /d/discipline/ -- and for an identifier the organizer chose.
+func (c *Coordinator) moveWorker(old *worker, move func() (string, error)) (*worker, error) {
 	old.close()
-	slug, err := c.folder.Reslug(old.slug, name)
+	slug, err := move()
 	if err != nil {
 		// Back as it was: the folder did not move.
 		again := c.load(old.slug)

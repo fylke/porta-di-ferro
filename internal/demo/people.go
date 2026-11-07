@@ -104,7 +104,9 @@ func (e *Event) definition(withTimes bool) signup.Definition {
 			ID: d.slug, Label: d.tournament.Discipline, Capacity: d.tournament.Capacity, StartsAt: starts[d.slug],
 		})
 	}
-	return signup.BuildDefinition(e.info, name, entries)
+	def := signup.BuildDefinition(e.info, name, entries)
+	def.Moved = e.moved
+	return def
 }
 
 func (e *Event) shares() []httpapi.SignupShare {

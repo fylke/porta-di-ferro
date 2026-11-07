@@ -2,6 +2,8 @@
   import { onMount } from 'svelte';
   import { api, type DisciplineSummary } from '../api';
   import { hall } from '../lib/event.svelte';
+  import { tour } from '../lib/tour.svelte';
+  import TourExample from './TourExample.svelte';
   import { stageLabel } from '../lib/stage';
   import { t } from '../lib/i18n.svelte';
 
@@ -178,6 +180,8 @@
       </li>
     {/each}
   </ul>
+
+  {#if tour.active && disciplines.length === 0}<TourExample kind="disciplines" />{/if}
 
   <!-- Shared by the rename field and the add field: the same four names either way. -->
   <datalist id="discipline-names">

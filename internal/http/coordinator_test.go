@@ -434,6 +434,68 @@ func TestADisciplineIsSetUpWhenItsSetupIsFinished(t *testing.T) {
 
 // Two adds of one name at the same moment are one discipline (#149's Playwright run found
 // two "Open Steel Longsword"s): the check that a name is free and the add are one step.
+// A discipline's identifier can be changed (#153): its address and everything the event
+// keeps about it go along, the old address still leads there, and a signup file sent out
+// under the old one still imports.
+func TestAnIdentifierCanBeChanged(t *testing.T) {
+	h := openEmptyHall(t, filepath.Join(t.TempDir(), "event"))
+	h.must("PUT", "/api/event/info", map[string]any{"signup": map[string]string{"definitionId": "msl-open-2026", "name": "Open", "venue": "Hall", "date": "2026-11-14"}}, nil)
+	h.must("POST", "/api/disciplines", map[string]string{"name": "Sabre"}, nil)
+	h.must("POST", "/api/disciplines", map[string]string{"name": "Open Longsword"}, nil)
+	old := "/api/d/open-longsword"
+	h.draw(old, 8, 1)
+	h.must("PUT", "/api/plan/prep", map[string]any{"open-longsword": map[string]int{"gearCheck": 1200}}, nil)
+	h.must("PUT", "/api/plan/starts", map[string]string{"open-longsword": "10:00"}, nil)
+	h.must("POST", "/api/staff", map[string]any{"name": "Dag", "roles": []string{"head-ref"}, "disciplines": []string{"open-longsword"}}, nil)
+
+	if code := h.do("PUT", "/api/disciplines/open-longsword/identifier", map[string]string{"identifier": "sabre"}, nil); code != 400 {
+		t.Errorf("another discipline's identifier should be refused, got %d", code)
+	}
+	if code := h.do("PUT", "/api/disciplines/open-longsword/identifier", map[string]string{"identifier": "admin"}, nil); code != 400 {
+		t.Errorf("an identifier that reads as something else should be refused, got %d", code)
+	}
+	var sum httpapi.DisciplineSummary
+	h.must("PUT", "/api/disciplines/open-longsword/identifier", map[string]string{"identifier": "LS Open"}, &sum)
+	if sum.Slug != "ls-open" || sum.Name != "Open Longsword" {
+		t.Fatalf("the identifier should be cleaned and the name kept: %+v", sum)
+	}
+
+	var a, b snap
+	h.must("GET", "/api/d/ls-open/state", nil, &a)
+	h.must("GET", old+"/state", nil, &b)
+	if len(a.Competitors) != 8 || len(b.Competitors) != 8 || a.Instance.Slug != "ls-open" {
+		t.Errorf("the old address should still lead to it: %+v %+v", a.Instance, b.Instance)
+	}
+	v := h.forecast()
+	if v.Prep["ls-open"].GearCheck != 1200 || v.Starts["ls-open"] != "10:00" {
+		t.Errorf("the plan's settings should move with it: %+v %+v", v.Prep, v.Starts)
+	}
+	if timesOf(v, "ls-open/pool-1").ID == "" {
+		t.Errorf("its work should move with it: %+v", v.Items)
+	}
+	staff := h.staff()
+	if len(staff.Members) != 1 || staff.Members[0].Disciplines[0] != "ls-open" {
+		t.Errorf("who works it should move with it: %+v", staff.Members)
+	}
+
+	// A response to a file sent out before the change.
+	var preview httpapi.EventSignupPreview
+	h.must("POST", "/api/event/signup/preview", map[string]any{"files": []map[string]string{reply(t, "Ana", "sub-1", "open-longsword")}}, &preview)
+	if preview.Adding != 1 || len(preview.Rows) != 1 || len(preview.Rows[0].Into) != 1 || preview.Rows[0].Into[0].Discipline != "ls-open" {
+		t.Errorf("a response naming the old identifier should go to the discipline: %+v", preview)
+	}
+
+	// Sabre cannot take the old one, which still leads here; the discipline itself can.
+	if code := h.do("PUT", "/api/disciplines/sabre/identifier", map[string]string{"identifier": "open-longsword"}, nil); code != 400 {
+		t.Errorf("an identifier still leading to another discipline should be refused, got %d", code)
+	}
+	h.must("PUT", "/api/disciplines/ls-open/identifier", map[string]string{"identifier": "open-longsword"}, &sum)
+	h.must("GET", old+"/state", nil, &a)
+	if sum.Slug != "open-longsword" || a.Instance.Slug != "open-longsword" {
+		t.Errorf("it should be able to go back to an identifier it had: %+v %+v", sum, a.Instance)
+	}
+}
+
 func TestTwoAddsOfOneNameMakeOneDiscipline(t *testing.T) {
 	h := openEmptyHall(t, t.TempDir())
 	codes := make(chan int, 8)

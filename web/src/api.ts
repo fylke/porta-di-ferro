@@ -253,6 +253,23 @@ export interface ForecastView {
   starts?: Record<string, string>;
   /** What a day usually has and this plan does not. Pointed out, never required. */
   gaps: { kind: 'lunch' | 'gear-check' | 'briefing'; discipline?: string; name?: string }[];
+  /** Each discipline's mats and what its numbers recommend, by slug (#153). */
+  mats?: Record<string, MatsAdvice>;
+  /** What that comes to for the hall: its busiest block, side by side. */
+  matsRecommended?: number;
+}
+
+/** How many mats a discipline's pools use, and how many its numbers recommend. */
+export interface MatsAdvice {
+  mats: number;
+  /** Absent until there is a number to go on. */
+  recommended?: number;
+  /** What it expects or, without that, the ceiling on its entries. */
+  for?: number;
+  minPoolSize: number;
+  maxPoolSize: number;
+  /** How many pools are drawn. */
+  pools?: number;
 }
 
 /** A time the whole hall stops, "12:00" to "13:00". */
@@ -787,6 +804,9 @@ export const api = {
   addDiscipline: (name: string) => req<DisciplineSummary>('POST', '/api/disciplines', { name }),
   renameDiscipline: (slug: string, name: string) =>
     req<DisciplineSummary>('PATCH', `/api/disciplines/${slug}`, { name }),
+  /** A discipline's identifier: its address, and its name in the signup files (#153). */
+  setIdentifier: (slug: string, identifier: string) =>
+    req<DisciplineSummary>('PUT', `/api/disciplines/${slug}/identifier`, { identifier }),
   /** Takes a discipline out of the event. Its folder is kept, under retired/. */
   retireDiscipline: (slug: string) => req<{ retired: string }>('DELETE', `/api/disciplines/${slug}`),
   /** Reads a discipline's files again, after a hand edit that stopped it loading was fixed. */

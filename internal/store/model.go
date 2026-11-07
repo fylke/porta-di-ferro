@@ -12,6 +12,8 @@
 // Derived state -- scores, standings, rankings -- is never stored here, only computed.
 package store
 
+import "strings"
+
 // Competitor is a person entered in the tournament. Name and club only: picture, phone
 // number and club crest are Milestone 3 (design §9, issue #1).
 type Competitor struct {
@@ -285,11 +287,61 @@ type Plan struct {
 	Breaks []Break `json:"breaks,omitempty"`
 	// Prep is what comes before each discipline's first pool, by slug (#149): its gear
 	// check and its staff briefing. Not timed against the mats -- the fencers and the staff
-	// are busy, not the mats -- only put in the programme, ending as the first pool starts.
+	// are busy, not the mats -- only put in the programme, before the first pool starts. A
+	// discipline with no entry has the default; one set to nothing has none (#153).
 	Prep map[string]Prep `json:"prep,omitempty"`
 	// Starts is when each discipline starts at the earliest, "HH:MM", by slug (#149). No
 	// work of the discipline is planned before it.
 	Starts map[string]string `json:"starts,omitempty"`
+}
+
+// MoveKey is "old/rest" as "slug/rest"; any other key is left as it is.
+func MoveKey(key, old, slug string) string {
+	if rest, ok := strings.CutPrefix(key, old+"/"); ok {
+		return slug + "/" + rest
+	}
+	return key
+}
+
+// moveEntry is a slug-keyed setting moved to a new slug.
+func moveEntry[V any](m map[string]V, old, slug string) {
+	if v, ok := m[old]; ok {
+		delete(m, old)
+		m[slug] = v
+	}
+}
+
+// MoveDiscipline carries what the staff keep about a discipline to a new slug: who works
+// its items, and the members who work it.
+func (s *Staff) MoveDiscipline(old, slug string) {
+	for i := range s.Assignments {
+		s.Assignments[i].Item = MoveKey(s.Assignments[i].Item, old, slug)
+	}
+	for i, m := range s.Members {
+		for j, d := range m.Disciplines {
+			if d == old {
+				s.Members[i].Disciplines[j] = slug
+			}
+		}
+	}
+}
+
+// MoveDiscipline carries everything the plan keeps about a discipline to a new slug.
+func (p *Plan) MoveDiscipline(old, slug string) {
+	if p.Items != nil {
+		items := make(map[string]Placement, len(p.Items))
+		for k, v := range p.Items {
+			items[MoveKey(k, old, slug)] = v
+		}
+		p.Items = items
+	}
+	for i, k := range p.Anomalies {
+		p.Anomalies[i] = MoveKey(k, old, slug)
+	}
+	moveEntry(p.Expected, old, slug)
+	moveEntry(p.Sessions, old, slug)
+	moveEntry(p.Prep, old, slug)
+	moveEntry(p.Starts, old, slug)
 }
 
 // Break is a time the whole hall stops, as times of day, with what it is for.

@@ -13,7 +13,12 @@
    * The devices are the event's (phase 2): a score keeper sits at a physical mat and a
    * screen shows one, whatever discipline is on it, so this panel follows the event's
    * stream and the hall's mats rather than any one discipline's.
+   *
+   * A screen connects by opening an address (#153): usually it is a TV on a laptop, so the
+   * addresses are here to read off and type in, one for each thing a screen can show.
    */
+  let { address }: { address: string } = $props();
+
   const mats = new MatsLive();
   onMount(() => {
     void mats.start();
@@ -49,6 +54,16 @@
     ...(disciplines.length > 1
       ? disciplines.map((d) => ({ value: `d/${d.slug}/roster`, label: t('Match roster: {name}', { name: d.name || d.slug }) }))
       : [{ value: 'roster', label: t('Match roster') }]),
+  ]);
+
+  // The address of each thing a screen can show.
+  const addresses = $derived([
+    { label: t('Every mat'), path: '/display/mats' },
+    ...matNumbers.map((m) => ({ label: t('Mat {n} scoreboard', { n: m }), path: `/display/mat/${m}` })),
+    ...(disciplines.length > 1
+      ? disciplines.map((d) => ({ label: t('Match roster: {name}', { name: d.name || d.slug }), path: `/d/${d.slug}/display/roster` }))
+      : [{ label: t('Match roster'), path: '/display/roster' }]),
+    { label: t('Whatever you choose below'), path: '/display' },
   ]);
 
   function label(target: string): string {
@@ -100,6 +115,13 @@
   {#if error}<p class="err">{error}</p>{/if}
 
   <h3>{t('Screens')}</h3>
+  <p class="dim">{t('A screen is usually a TV on a laptop. Open one of these addresses in the laptop’s browser and make it full screen with F11.')}</p>
+  <dl class="addresses">
+    {#each addresses as a (a.path)}
+      <dt>{a.label}</dt>
+      <dd><a class="mono" href={a.path} target="_blank" rel="noreferrer">{address}{a.path}</a></dd>
+    {/each}
+  </dl>
   <!-- One choice for every mat screen in the hall (#110). -->
   <label class="upcoming">
     {t('Mat screens show what comes next')}
@@ -107,14 +129,14 @@
       value={mats.view?.upcoming ?? 'bottom'}
       onchange={(e) => void run(() => api.setScreens({ upcoming: e.currentTarget.value as 'bottom' | 'list' | 'none' }))}
     >
-      <option value="bottom">{t('the next match, along the bottom')}</option>
-      <option value="list">{t('the next few matches, down the right')}</option>
-      <option value="none">{t('nothing')}</option>
+      <option value="bottom">{t('only next, along the bottom')}</option>
+      <option value="list">{t('next few, on the right')}</option>
+      <option value="none">{t('not at all')}</option>
     </select>
   </label>
   {#if displays.length === 0}
     <p class="dim">
-      {t('None yet. Open')} <span class="mono">/display</span> {t('on a screen and it appears here, waiting to be told what to show.')}
+      {t('A screen on')} <span class="mono">{address}/display</span> {t('appears here, waiting to be told what to show. None has yet.')}
     </p>
   {:else}
     <ul>
@@ -236,6 +258,20 @@
   }
   .err {
     color: var(--amber-bright);
+  }
+  .addresses {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.25rem 1rem;
+    margin: 0 0 0.9rem;
+    font-size: 0.92rem;
+  }
+  .addresses dt {
+    color: var(--ink-dim);
+  }
+  .addresses dd {
+    margin: 0;
+    overflow-wrap: anywhere;
   }
   .upcoming {
     display: flex;

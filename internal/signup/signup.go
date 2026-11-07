@@ -49,6 +49,9 @@ type Definition struct {
 	// not fencing in (issue #5). Published rather than built into the app, so the list
 	// can change without every copy of the app already sent out going stale.
 	StaffRoles []StaffRole `json:"staffRoles"`
+	// Moved are identifiers disciplines used to have, pointing at the ones they have now
+	// (#153). Not published: it is for reading the responses to files already sent.
+	Moved map[string]string `json:"-"`
 }
 
 // StaffRole is one job on the floor.
@@ -283,6 +286,21 @@ type File struct {
 	Body []byte `json:"body"`
 }
 
+// follow reads a response's disciplines under the identifiers they have now.
+func (r *Response) follow(moved map[string]string) {
+	now := func(ids []string) {
+		for i, id := range ids {
+			if to, ok := moved[id]; ok {
+				ids[i] = to
+			}
+		}
+	}
+	now(r.Entries)
+	if r.Staff != nil {
+		now(r.Staff.Tournaments)
+	}
+}
+
 // Check works out what an import would do, without doing any of it.
 //
 // It is the whole of the decision-making: the handler that confirms an import runs this
@@ -344,6 +362,7 @@ func Check(def Definition, mine string, files []File, existing []store.Competito
 			continue
 		}
 
+		res.follow(def.Moved)
 		row.Name, row.Club, row.Email = res.Participant.Name, res.Participant.Club, res.Participant.Email
 		row.SubmissionID, row.Entries = res.SubmissionID, res.Entries
 		if res.Staff != nil {

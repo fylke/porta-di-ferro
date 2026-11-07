@@ -74,6 +74,65 @@ func TestNeverWhileFencingOrOnAnotherMat(t *testing.T) {
 	}
 }
 
+// #153: somebody competing in another discipline is not free in the holes in their own
+// schedule, from its first item until they are out of it. In their own discipline they may
+// still referee a pool they are not in.
+func TestNeverWhileCompetingInAnotherDiscipline(t *testing.T) {
+	items := []staffing.Item{
+		item("ls/pool-1", "ls", 1, 0, 60, "p1"),
+		// Ann has a hole here, between her pool and the eliminations.
+		item("sabre/pool-1", "sabre", 2, 60, 120),
+		item("ls/pool-2", "ls", 1, 60, 120),
+		item("ls/elim-1", "ls", 1, 150, 200),
+		// And after the eliminations, the sabre is hers again unless she is in the final.
+		item("sabre/elim-1", "sabre", 2, 210, 240),
+		{ID: "ls/final", Discipline: "ls", Mat: 1, Start: at(300), End: at(310), Held: true},
+	}
+	members := []store.StaffMember{member("ann", "p1", "head-ref"), member("bo", "p2", "head-ref"), member("cy", "p3", "head-ref")}
+	in := staffing.Input{Crew: heads, Members: members, Items: items, Competing: map[string][]string{"ls": {"p1"}}}
+
+	r := staffing.Assign(in)
+	if got := who(r, "sabre/pool-1", "head-ref"); len(got) != 1 || got[0] == "ann" {
+		t.Errorf("Ann is competing in the longsword, so the sabre pool should go to somebody else: %v", got)
+	}
+	in.Members = members[:1]
+	r = staffing.Assign(in)
+	if got := who(r, "ls/pool-2", "head-ref"); len(got) != 1 || got[0] != "ann" {
+		t.Errorf("Ann may referee a longsword pool she is not in: %v", got)
+	}
+	if got := who(r, "sabre/pool-1", "head-ref"); len(got) != 0 {
+		t.Errorf("Ann alone should leave the sabre pool short, not fill it: %v", got)
+	}
+	if got := who(r, "sabre/elim-1", "head-ref"); len(got) != 1 {
+		t.Errorf("a final held to the end of the day should not keep every entrant busy until then: %v", got)
+	}
+
+	// Named in the held final, she is still competing until it is over.
+	items[5].People = []string{"p1"}
+	r = staffing.Assign(in)
+	if got := who(r, "sabre/elim-1", "head-ref"); len(got) != 0 {
+		t.Errorf("a finalist is competing until the final: %v", got)
+	}
+
+	// Out of the discipline, she is free. The longsword's second pool is at the same time,
+	// and would take her first.
+	items[5].People = nil
+	in.Items = append(append([]staffing.Item{}, items[:2]...), items[3:]...)
+	in.Competing = nil
+	r = staffing.Assign(in)
+	if got := who(r, "sabre/pool-1", "head-ref"); len(got) != 1 {
+		t.Errorf("once out of the longsword Ann may work the sabre: %v", got)
+	}
+
+	// Put there by hand it stands, and is reported.
+	in.Competing = map[string][]string{"ls": {"p1"}}
+	in.Assignments = []store.Assignment{{Item: "sabre/pool-1", Role: "head-ref", Slot: 1, Staff: "ann", Pinned: true}}
+	r = staffing.Assign(in)
+	if len(r.Warnings) != 1 || r.Warnings[0].Kind != "fencing" {
+		t.Errorf("a choice by hand should stand and be reported: %+v", r.Warnings)
+	}
+}
+
 func TestOnlyOfferedRolesAndDisciplines(t *testing.T) {
 	sabreOnly := member("cia", "p3", "head-ref")
 	sabreOnly.Disciplines = []string{"sa"}

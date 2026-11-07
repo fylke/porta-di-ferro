@@ -33,7 +33,7 @@
   <p class="noprint">
     <button onclick={() => window.print()} disabled={!base || mats.length === 0}>{t('Print')}</button>
     {#if base}
-      {t('One code per mat, for the score keepers. Print them on the network the tablets will join: the codes carry its address.')}
+      {t('One code per mat, for the score keepers. Print them on the network the devices will join: the codes carry its address.')}
     {:else}
       {t('This PC is not on a network another device could reach, so there is no address to put in the codes. Join it to the venue wifi and reload this page.')}
     {/if}
@@ -50,7 +50,7 @@
           {#if m.name}<p class="name">{m.name}</p>{/if}
           <img src={qrSrc(url)} alt={t('QR code for {url}', { url })} />
           <p class="url">{url}</p>
-          <p class="how">{t('Scan with the tablet’s camera to score this mat.')}</p>
+          <p class="how">{t('Scan with the device’s camera to score this mat.')}</p>
         </article>
       {/each}
     </div>

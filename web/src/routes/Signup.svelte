@@ -14,9 +14,11 @@
     type StaffMember,
   } from "../api";
   import { t } from "../lib/i18n.svelte";
+  import { hall } from "../lib/event.svelte";
   import { apiBase } from "../lib/paths";
   import { signupSubmissionId } from "../lib/signup-id";
   import { discipline } from "../router.svelte";
+  import ConfirmDialog from "./ConfirmDialog.svelte";
   import SaveButton from "./SaveButton.svelte";
 
   const demo = import.meta.env.VITE_DEMO === "true";
@@ -149,6 +151,36 @@
       await refreshReady();
       onchange();
     } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+    }
+  }
+  // A discipline's identifier (#153). Before the day it just changes; on the day, somebody
+  // may be reading the old one off a printout, so it asks first.
+  let moving = $state<{ slug: string; to: string; input: HTMLInputElement } | null>(null);
+  const onTheDay = $derived.by(() => {
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    return date === today || (hall.view?.disciplines ?? []).some((d) => d.matchesDone > 0);
+  });
+  function changeIdentifier(slug: string, input: HTMLInputElement) {
+    const to = input.value.trim();
+    if (!to || to === slug) {
+      input.value = slug;
+    } else if (onTheDay) {
+      moving = { slug, to, input };
+    } else {
+      void moveIdentifier(slug, to, input);
+    }
+  }
+  async function moveIdentifier(slug: string, to: string, input: HTMLInputElement) {
+    moving = null;
+    error = "";
+    try {
+      input.value = (await api.setIdentifier(slug, to)).slug;
+      await refreshReady();
+      onchange();
+    } catch (e) {
+      input.value = slug;
       error = e instanceof Error ? e.message : String(e);
     }
   }
@@ -456,11 +488,11 @@
               <input
                 class="mono"
                 value={d.id}
-                readonly
                 aria-label={t("Identifier of {name}", { name: d.label })}
                 title={t(
-                  "The discipline’s address, and its name in the signup files. It does not change.",
+                  "The discipline’s address, and its name in the signup files. The old one goes on working if you change it.",
                 )}
+                onchange={(e) => changeIdentifier(d.id, e.currentTarget)}
               />
               <input
                 value={d.label}
@@ -819,6 +851,23 @@
       </ul>
     </div>
   {/if}
+
+  {#if moving}
+    {@const m = moving}
+    <ConfirmDialog
+      headline={t("Change the identifier on the day?")}
+      detail={t(
+        "The old address keeps working, and signup files already sent still count. But anything printed still says {old}, and a score keeper showing a finished result moves on to the next match.",
+        { old: m.slug },
+      )}
+      confirmLabel={t("Change it to {to}", { to: m.to })}
+      onConfirm={() => void moveIdentifier(m.slug, m.to, m.input)}
+      onCancel={() => {
+        m.input.value = m.slug;
+        moving = null;
+      }}
+    />
+  {/if}
 </section>
 
 <style>
@@ -979,10 +1028,6 @@
     min-width: 0;
     padding: 0.35rem 0.5rem;
     font-size: 0.9rem;
-  }
-  .drow input[readonly] {
-    color: var(--ink-dim);
-    background: transparent;
   }
   .drow.head {
     font-size: 0.72rem;

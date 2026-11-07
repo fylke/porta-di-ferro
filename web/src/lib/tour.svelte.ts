@@ -5,7 +5,8 @@
  *
  * Held in this module rather than in storage: it lives as long as the tab, the pages it
  * visits are reached by navigate(), and a reload simply ends it. Nothing here touches the
- * event; the tour shows the pages as they are.
+ * event; the tour shows the pages as they are, and a panel that would be empty shows an
+ * example while the tour is on it (TourExample).
  */
 import { navigate } from '../router.svelte';
 import { t } from './i18n.svelte';
@@ -36,13 +37,13 @@ export const steps: TourStep[] = [
     path: '/plan?step=2',
     target: 'plan-disciplines',
     title: () => t('Disciplines'),
-    text: () => t('Add each discipline you fence. Set up opens its own short setup in a new tab: the mats it uses and the size of its pools.'),
+    text: () => t('Add each discipline you fence. Set up opens its own short setup in a new tab: the size of its pools and how many you expect.'),
   },
   {
     path: '/plan?step=3',
     target: 'plan-timings',
     title: () => t('Planning the day'),
-    text: () => t('How long a match takes, when the day starts, the mats and the breaks. The programme is written from these, so nobody types it by hand.'),
+    text: () => t('How long a match takes, when the day starts, the mats and the breaks, and for each discipline how many it expects. The programme is written from these, so nobody types it by hand.'),
   },
   {
     path: '/plan?step=3',
@@ -60,7 +61,7 @@ export const steps: TourStep[] = [
     path: '/admin?view=before',
     target: 'staff',
     title: () => t('Staff'),
-    text: () => t('Who works the mats. A suggestion fills every pool’s crew, never with somebody who is fencing at the time.'),
+    text: () => t('Who works the mats. A suggestion fills every pool’s crew, never with somebody competing in another discipline at the time.'),
   },
   {
     path: '/admin?view=day',
@@ -72,7 +73,7 @@ export const steps: TourStep[] = [
     path: '/admin?view=day',
     target: 'join',
     title: () => t('Score keepers and screens'),
-    text: () => t('A score keeper’s tablet scans this code and picks its mat. Screens in the hall show each mat, the roster and the results.'),
+    text: () => t('A score keeper’s device scans this code and picks its mat. Screens in the hall show each mat, the roster and the results.'),
   },
   {
     path: '/admin',

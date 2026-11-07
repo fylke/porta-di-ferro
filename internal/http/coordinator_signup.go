@@ -80,7 +80,11 @@ func (c *Coordinator) SignupDefinition(withTimes bool) (signup.Definition, error
 			ID: w.slug, Label: w.srv.Self().Name, Capacity: t.Capacity, StartsAt: starts[w.slug],
 		})
 	}
-	return signup.BuildDefinition(ev, name, entries), nil
+	def := signup.BuildDefinition(ev, name, entries)
+	if file, err := c.folder.Read(); err == nil {
+		def.Moved = file.Aliases
+	}
+	return def, nil
 }
 
 // FirstStarts is when each discipline is planned to start, "09:00", by slug. Shared with

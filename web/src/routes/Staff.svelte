@@ -154,7 +154,7 @@
     const role = roleLabel(w.role).toLocaleLowerCase();
     switch (w.kind) {
       case 'fencing':
-        return t('{name} is {role} on {item} while fencing in {other}.', { name: who, role, item: itemName(w.item), other: itemName(w.other ?? '') });
+        return t('{name} is {role} on {item} while competing in {other}.', { name: who, role, item: itemName(w.item), other: itemName(w.other ?? '') });
       case 'double':
         return t('{name} is {role} on {item} while working {other}.', { name: who, role, item: itemName(w.item), other: itemName(w.other ?? '') });
       case 'role':
@@ -217,7 +217,7 @@
     {#if view}<span class="count">{t('{n} on the staff', { n: view.members.length })}</span>{/if}
   </h2>
   <p class="dim">
-    {t('Who works the mats. Staff come in with the signup files or are added here. A suggestion fills every slot, never with somebody fencing at the time or on another mat, and keeps people in one role on one mat for as long as it can.')}
+    {t('Who works the mats. Staff come in with the signup files or are added here. A suggestion fills every slot, never with somebody competing in another discipline or on another mat at the time, and keeps people in one role on one mat for as long as it can.')}
   </p>
   {#if error}<p class="err" role="alert">{error}</p>{/if}
 

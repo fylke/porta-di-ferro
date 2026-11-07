@@ -109,8 +109,12 @@ func TestTheDayIsForecast(t *testing.T) {
 	if !overrun {
 		t.Errorf("eight fencers' pools and a bracket do not fit in an hour; the board should say so: %+v", v.Warnings)
 	}
-	if len(v.Programme) < 2 || v.Programme[0].Stage != "pools" {
-		t.Errorf("the derived programme should list the pools, then what follows: %+v", v.Programme)
+	var stages []string
+	for _, r := range v.Programme {
+		stages = append(stages, r.Stage)
+	}
+	if strings.Join(stages, " ") != "briefing gear-check pools eliminations final" {
+		t.Errorf("the derived programme should list what comes before the pools, the pools, then what follows: %+v", v.Programme)
 	}
 
 	// Every match still to come says when it is expected.
@@ -252,7 +256,7 @@ func TestMatsHaveNamesAndAwayTimes(t *testing.T) {
 }
 
 // The programme is generated from the plan (#149): each discipline's gear check and staff
-// briefing end as its first pool starts, the hall's breaks stop the mats and are listed,
+// briefing come before its first pool (#153), the hall's breaks stop the mats and are listed,
 // a discipline starts no earlier than it is told to -- and what a day usually has and this
 // one lacks is pointed out.
 func TestTheProgrammeIsGeneratedFromThePlan(t *testing.T) {
@@ -269,8 +273,29 @@ func TestTheProgrammeIsGeneratedFromThePlan(t *testing.T) {
 	for _, g := range v.Gaps {
 		gaps[g.Kind] = true
 	}
-	if !gaps["lunch"] || !gaps["gear-check"] || !gaps["briefing"] {
-		t.Errorf("a day with no lunch, gear check or briefing should say so: %+v", v.Gaps)
+	if !gaps["lunch"] || gaps["gear-check"] || gaps["briefing"] {
+		t.Errorf("a day starts with a gear check and a briefing, and no lunch to point out: %+v", v.Gaps)
+	}
+	if p := v.Prep[ls]; p.GearCheck != 900 || p.Briefing != 900 {
+		t.Errorf("a quarter of an hour each should be filled in (#153): %+v", p)
+	}
+	// The briefing ending half an hour before the first pool, the gear check a quarter of
+	// an hour before it.
+	at := map[string]httpapi.ProgrammeRow{}
+	for _, r := range v.Programme {
+		at[r.Stage] = r
+	}
+	if b, g := at["briefing"], at["gear-check"]; clockOf(b.Start) != "08:15" || clockOf(b.End) != "08:30" || clockOf(g.Start) != "08:30" || clockOf(g.End) != "08:45" {
+		t.Errorf("the default briefing and gear check should follow one another before the first pool: %+v %+v", b, g)
+	}
+	h.must("PUT", "/api/plan/prep", map[string]any{ls: map[string]int{}}, nil)
+	v = h.forecast()
+	gaps = map[string]bool{}
+	for _, g := range v.Gaps {
+		gaps[g.Kind] = true
+	}
+	if !gaps["gear-check"] || !gaps["briefing"] {
+		t.Errorf("taken out, they should be pointed out: %+v", v.Gaps)
 	}
 
 	h.must("PUT", "/api/plan/prep", map[string]any{ls: map[string]int{"gearCheck": 1800, "briefing": 900}}, nil)
@@ -283,18 +308,21 @@ func TestTheProgrammeIsGeneratedFromThePlan(t *testing.T) {
 	if len(v.Breaks) != 1 || v.Breaks[0].Label != "Lunch" || v.Starts[ls] != "09:15" || v.Prep[ls].GearCheck != 1800 {
 		t.Errorf("the plan's breaks, starts and prep should come back, a nameless break as lunch: %+v %+v %+v", v.Breaks, v.Starts, v.Prep)
 	}
-	at := map[string]httpapi.ProgrammeRow{}
+	at = map[string]httpapi.ProgrammeRow{}
 	for _, r := range v.Programme {
 		at[r.Stage] = r
 	}
 	if p := at["pools"]; clockOf(p.Start) != "09:15" {
 		t.Errorf("the pools should wait for the discipline's start: %+v", p)
 	}
-	if g := at["gear-check"]; clockOf(g.Start) != "08:45" || g.End != at["pools"].Start {
-		t.Errorf("the gear check should be the half hour before the first pool: %+v", g)
+	if g := at["gear-check"]; clockOf(g.Start) != "08:30" || clockOf(g.End) != "09:00" {
+		t.Errorf("the half hour's gear check should end a quarter of an hour before the first pool: %+v", g)
 	}
-	if b := at["briefing"]; clockOf(b.Start) != "09:00" {
-		t.Errorf("the briefing should be the quarter hour before the first pool: %+v", b)
+	if b := at["briefing"]; clockOf(b.Start) != "08:15" || clockOf(b.End) != "08:30" {
+		t.Errorf("the briefing should go ahead of the longer gear check, not on top of it: %+v", b)
+	}
+	if m := v.Mats[ls]; m.Recommended != 2 || m.For != 8 || v.MatsRecommended != 2 {
+		t.Errorf("eight in pools of up to seven are two pools, so two mats (#153): %+v, %d", m, v.MatsRecommended)
 	}
 	if b := at["break"]; b.Name != "Lunch" || clockOf(b.Start) != "09:30" || clockOf(b.End) != "10:00" {
 		t.Errorf("the break should be in the programme: %+v", b)
