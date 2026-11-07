@@ -136,7 +136,7 @@ func (c *Coordinator) StaffingNow() (StaffingView, staffing.Input, store.Staff, 
 	if err != nil {
 		return StaffingView{}, staffing.Input{}, st, err
 	}
-	si := StaffInput(h.in, h.result, st)
+	si := StaffInput(h.in, h.result, st, StillIn(h.inputs))
 	v := ViewStaffing(si, st, view)
 	if reg, err := c.folder.People(); err == nil {
 		v.Unsure = UnsureOf(st.Members, people.Duplicates(reg, c.entriesByPerson(reg)))

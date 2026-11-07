@@ -2,6 +2,7 @@ package staffing
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -14,6 +15,11 @@ import (
 //
 //   - Never someone who is fencing at the time, in any discipline: their person's items
 //     come from the plan, and an item they fence in overlapping this one rules them out.
+//   - Never someone competing in another discipline at the time, even in a hole in their
+//     own schedule (#153): between their pool and the eliminations they may be on the
+//     strip at any moment, and they came to fence. Competing runs from the discipline's
+//     first item until they are out of it. In their own discipline, a fencer between
+//     matches may still referee a pool they are not in.
 //   - Never someone working another mat at the time.
 //   - Only roles they offered, in disciplines they will work.
 //
@@ -37,6 +43,9 @@ type Item struct {
 	Started bool
 	// People are the persons fencing in it.
 	People []string
+	// Held says it is a final held to the end of the day, which only those named in it
+	// are still competing for.
+	Held bool
 }
 
 // Input is everything an assignment needs.
@@ -45,6 +54,9 @@ type Input struct {
 	Members     []store.StaffMember
 	Crew        map[string]int
 	Assignments []store.Assignment
+	// Competing is who is still in each discipline, by slug, whether or not the draw has
+	// put them in an item yet.
+	Competing map[string][]string
 }
 
 // Short is a slot nobody can fill.
@@ -82,6 +94,48 @@ type span struct {
 
 func overlaps(a0, a1, b0, b1 time.Time) bool { return a0.Before(b1) && b0.Before(a1) }
 
+// contest is a stretch of the day a person is competing in a discipline.
+type contest struct {
+	discipline string
+	// item is the discipline's first, for a warning to name.
+	item       string
+	start, end time.Time
+}
+
+// contests is when each person is competing, from the items in the order they run: from a
+// discipline's first item to its last, leaving out finals held to the end of the day unless
+// the person is named in one.
+func contests(items []Item, competing map[string][]string) map[string][]contest {
+	out := map[string][]contest{}
+	for disc, people := range competing {
+		var whole contest
+		for _, it := range items {
+			if it.Discipline != disc || it.Start.IsZero() {
+				continue
+			}
+			if whole.item == "" {
+				whole = contest{discipline: disc, item: it.ID, start: it.Start, end: it.End}
+			}
+			if !it.Held && it.End.After(whole.end) {
+				whole.end = it.End
+			}
+		}
+		if whole.item == "" {
+			continue
+		}
+		for _, p := range people {
+			c := whole
+			for _, it := range items {
+				if it.Discipline == disc && it.End.After(c.end) && slices.Contains(it.People, p) {
+					c.end = it.End
+				}
+			}
+			out[p] = append(out[p], c)
+		}
+	}
+	return out
+}
+
 // Assign staffs every item.
 func Assign(in Input) Result { return run(in, true) }
 
@@ -118,6 +172,8 @@ func run(in Input, fill bool) Result {
 		}
 	}
 
+	competing := contests(items, in.Competing)
+
 	// What stays: by hand, or on an item already under way.
 	key := func(item, role string, slot int) string { return fmt.Sprintf("%s|%s|%d", item, role, slot) }
 	kept := map[string]store.Assignment{}
@@ -140,6 +196,11 @@ func run(in Input, fill bool) Result {
 		for _, f := range fencing[m.Person] {
 			if m.Person != "" && overlaps(f.start, f.end, it.Start, it.End) {
 				return "fencing", f.item
+			}
+		}
+		for _, c := range competing[m.Person] {
+			if m.Person != "" && c.discipline != it.Discipline && overlaps(c.start, c.end, it.Start, it.End) {
+				return "fencing", c.item
 			}
 		}
 		for _, w := range working[member] {

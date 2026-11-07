@@ -58,8 +58,8 @@ func (e *Event) seedStaff() {
 }
 
 func (e *Event) staffing() (httpapi.StaffingView, httpapi.StaffSuggestion) {
-	in, r, _ := e.times()
-	si := httpapi.StaffInput(in, r, e.staff)
+	in, r, inputs := e.times()
+	si := httpapi.StaffInput(in, r, e.staff, httpapi.StillIn(inputs))
 	return httpapi.ViewStaffing(si, e.staff, e.mats()), httpapi.SuggestStaff(si)
 }
 

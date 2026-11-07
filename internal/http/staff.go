@@ -13,14 +13,44 @@ import (
 // it. staffing decides; this builds its input from the forecast -- each item timed, and
 // who fences in it -- and turns its answer into what the pages read. Shared with the demo.
 
+// StillIn is who is still competing in each discipline, by slug: every entry until the
+// bracket is drawn, since any of them may go through, and after that whoever has a match
+// to come.
+func StillIn(inputs []MatsInput) map[string][]string {
+	out := map[string][]string{}
+	for _, d := range inputs {
+		person := func(c store.Competitor) string {
+			if c.Person != "" {
+				return c.Person
+			}
+			return d.Slug + "/" + c.ID
+		}
+		drawn := d.Snapshot.Bracket != nil && len(d.Snapshot.Bracket.Matches) > 0
+		left := map[string]bool{}
+		if drawn {
+			for _, m := range d.Snapshot.Bracket.Matches {
+				if m.Status != "complete" {
+					left[m.Red], left[m.Blue] = true, true
+				}
+			}
+		}
+		for _, c := range d.Snapshot.Competitors {
+			if !c.Withdrawn && (!drawn || left[c.ID]) {
+				out[d.Slug] = append(out[d.Slug], person(c))
+			}
+		}
+	}
+	return out
+}
+
 // StaffInput is what an assignment needs: every item the forecast times, with the people
-// fencing in it, and the staff.
-func StaffInput(in forecast.Input, r forecast.Result, st store.Staff) staffing.Input {
+// fencing in it, who is still competing where, and the staff.
+func StaffInput(in forecast.Input, r forecast.Result, st store.Staff, competing map[string][]string) staffing.Input {
 	spans := map[string]forecast.Span{}
 	for _, s := range r.Items {
 		spans[s.ID] = s
 	}
-	out := staffing.Input{Members: st.Members, Crew: st.Crew, Assignments: st.Assignments}
+	out := staffing.Input{Members: st.Members, Crew: st.Crew, Assignments: st.Assignments, Competing: competing}
 	for _, it := range in.Items {
 		s := spans[it.ID]
 		started := false
@@ -28,7 +58,7 @@ func StaffInput(in forecast.Input, r forecast.Result, st store.Staff) staffing.I
 			started = started || m.Done || !m.Started.IsZero()
 		}
 		out.Items = append(out.Items, staffing.Item{ID: it.ID, Discipline: it.Discipline, Mat: s.Mat,
-			Start: s.Start, End: s.End, Started: started, People: it.People})
+			Start: s.Start, End: s.End, Started: started, People: it.People, Held: it.Held})
 	}
 	return out
 }
