@@ -2,7 +2,6 @@
   import { onMount, tick } from 'svelte';
   import { hall } from '../lib/event.svelte';
   import { navigate, query } from '../router.svelte';
-  import { MatsLive } from '../lib/mats.svelte';
   import { LanAddress, describeNetwork } from '../lib/lan.svelte';
   import { hallURL, qrSrc } from '../lib/qr';
   import Disciplines from './Disciplines.svelte';
@@ -29,17 +28,13 @@
    * join panels, the hall's address and the score keepers', are on both.
    */
   const lan = new LanAddress();
-  // The hall's mats, for a link to each one's display (#140).
-  const mats = new MatsLive();
   const demo = import.meta.env.VITE_DEMO === 'true';
 
   onMount(() => {
     void hall.refresh();
     hall.follow();
     lan.start();
-    void mats.start();
     return () => {
-      mats.stop();
       lan.stop();
       hall.unfollow();
     };
@@ -64,6 +59,8 @@
   const landingURL = $derived(clientURL ? `${clientURL}/` : '');
   // The score keepers' page, for the code a tablet scans (#138).
   const scoreURL = $derived(hallURL(clientURL) ? `${hallURL(clientURL)}/score` : '');
+  // What a screen opens: this PC's own address until there is one another device can reach.
+  const screensURL = $derived(hallURL(clientURL) || window.location.origin);
 </script>
 
 <main class="admin">
@@ -134,16 +131,13 @@
       <div>
         <h2>{t('Score keepers')}</h2>
         <p class="url">{scoreURL || '/score'}</p>
-        <p class="hint">{t('Every score keeper’s tablet scans this, picks its mat once and follows it through every discipline.')}</p>
+        <p class="hint">{t('Every score keeper’s device scans this, picks its mat once and follows it through every discipline.')}</p>
         <p class="links">
           <a href="/score">{t('Score keeper')}</a>
-          <a href="/print/mats" target="_blank" rel="noreferrer">{t('Print a code for each mat')}</a>
-          <a class="quiet" href="/display/mats" target="_blank" rel="noreferrer">{t('Displays')}</a>
-        </p>
-        <p class="links">
-          {#each mats.view?.mats ?? [] as m (m.mat)}
-            <a href="/display/mat/{m.mat}">{t('Display mat {n}', { n: m.mat })}</a>
-          {/each}
+          <!-- Something to do before the doors open (#153). -->
+          {#if dashboard === 'before'}
+            <a href="/print/mats" target="_blank" rel="noreferrer">{t('Print a code for each mat')}</a>
+          {/if}
         </p>
       </div>
       {#if scoreURL}
@@ -163,7 +157,7 @@
     {#if dashboard === 'day'}
       <div data-tour="matboard"><MatBoard canSetCount onshort={() => void toStaff()} /></div>
 
-      <Screens />
+      <Screens address={screensURL} />
     {:else}
       <!-- One signup for the whole event, and the people it and the desks make (phase 3). -->
       <div data-tour="signup"><Signup scope="event" info={view.info} onchange={() => void hall.refresh()} /></div>
@@ -301,9 +295,6 @@
     margin: 0;
     font-size: 0.9rem;
     overflow-wrap: anywhere;
-  }
-  .quiet {
-    color: var(--ink-dim);
   }
   .qr {
     width: clamp(9rem, 22vw, 13rem);
