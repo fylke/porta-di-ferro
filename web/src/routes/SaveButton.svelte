@@ -10,6 +10,7 @@
     dirty,
     busy = false,
     label = '',
+    done = '',
     type = 'button',
     onclick,
   }: {
@@ -18,6 +19,8 @@
     busy?: boolean;
     /** What it says while there is something to save; Save if blank. */
     label?: string;
+    /** What it says once it has; Saved if blank. */
+    done?: string;
     type?: 'button' | 'submit';
     onclick?: () => void;
   } = $props();
@@ -33,7 +36,7 @@
 </script>
 
 <button {type} class:saved disabled={busy || !dirty} {onclick}>
-  {#if saved}{t('Saved')} &check;{:else}{label || t('Save')}{/if}
+  {#if saved}{done || t('Saved')} &check;{:else}{label || t('Save')}{/if}
 </button>
 
 <style>

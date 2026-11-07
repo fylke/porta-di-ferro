@@ -1,6 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { api, type Snapshot } from '../api';
+  import { api, type MatsAdvice, type Snapshot } from '../api';
+  import { discipline } from '../router.svelte';
   import { t } from '../lib/i18n.svelte';
 
   /**
@@ -20,6 +21,19 @@
   let capacity = $state<number | null>(untrack(() => snapshot.tournament.capacity || null));
   let error = $state('');
   let busy = $state(false);
+
+  // What the numbers recommend (#153), again whenever somebody enters.
+  let advice = $state<MatsAdvice | undefined>();
+  const entered = $derived(snapshot.competitors.length);
+  $effect(() => {
+    void entered;
+    void api
+      .forecast()
+      .then((f) => (advice = f.mats?.[discipline()]))
+      .catch(() => {
+        // The choice is still there without the recommendation.
+      });
+  });
 
   const drawn = $derived(snapshot.pools.length > 0);
   const scored = $derived(snapshot.pools.some((p) => p.matches.some((m) => m.status !== 'pending')));
@@ -79,6 +93,10 @@
     </label>
   </div>
 
+  {#if advice?.recommended}
+    <p class="advice">{t('{n} recommended for {count} competitors: one mat for each pool, up to four.', { n: advice.recommended, count: advice.for ?? 0 })}</p>
+  {/if}
+
   <button class="draw" disabled={busy} onclick={draw}>
     {drawn ? t('Draw the pools again') : t('Draw the pools')}
   </button>
@@ -110,6 +128,11 @@
   h2 {
     margin: 0 0 0.9rem;
     font-size: 1.15rem;
+  }
+  .advice {
+    margin: -0.3rem 0 0.9rem;
+    font-size: 0.85rem;
+    color: var(--ink-dim);
   }
   /* Three across where there is room, and as many as fit where there is not: on a phone
      the pool-size fields were half off the screen. */

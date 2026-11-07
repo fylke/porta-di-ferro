@@ -1,20 +1,22 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { api, type Break, type ForecastView, type ReportView, type Timings } from '../api';
+  import { api, apiIn, type Break, type ForecastView, type ReportView, type Timings } from '../api';
   import { hall } from '../lib/event.svelte';
+  import { tour } from '../lib/tour.svelte';
   import { clockOf, mmss } from '../lib/clock-of-day';
   import { t } from '../lib/i18n.svelte';
   import Programme from './Programme.svelte';
   import SaveButton from './SaveButton.svelte';
+  import TourExample from './TourExample.svelte';
 
   /**
    * Planning the day (phase 4, #64, #6, #149). How long things take, when the day starts
    * and the venue closes, the mats, the hall's breaks, and for each discipline how many it
-   * expects, its block of the day, and its gear check and staff briefing. The programme is
-   * generated from all of it and shown at the end, with what a day usually has and this
-   * one lacks pointed out. Once fencing has started, the measured day: every match as the
-   * logs time it, the ones not to learn from marked, and the averages written back into the
-   * timings, for today or for the next event.
+   * expects, how many mats its pools use, its block of the day, and its gear check and staff
+   * briefing. The programme is generated from all of it and shown at the end, with what a
+   * day usually has and this one lacks pointed out. Once fencing has started, the measured
+   * day: every match as the logs time it, the ones not to learn from marked, and the
+   * averages written back into the timings, for today or for the next event.
    */
   let forecast = $state<ForecastView | null>(null);
   let report = $state<ReportView | null>(null);
@@ -103,6 +105,8 @@
   });
 
   const disciplines = $derived((hall.view?.disciplines ?? []).filter((d) => !d.error));
+  // The tour, on an event with nothing in it yet: what these panels look like with something.
+  const example = $derived(tour.active && disciplines.length === 0);
 
   async function run(f: () => Promise<unknown>, done = '') {
     error = '';
@@ -148,6 +152,27 @@
       forecast = await api.setBreaks(breaks);
       breaks = (forecast.breaks ?? []).map((b) => ({ ...b }));
       breaksDirty = false;
+    });
+  }
+
+  /** The lunch break, for the box that says whether the day has one (#153). */
+  function isLunch(b: Break): boolean {
+    const label = (b.label ?? '').trim().toLocaleLowerCase();
+    return label === '' || label === 'lunch' || label === t('Lunch').toLocaleLowerCase();
+  }
+  const hasLunch = $derived(breaks.some(isLunch));
+  function setLunch(on: boolean) {
+    breaks = on ? [...breaks, { label: '', from: '12:00', to: '12:45' }] : breaks.filter((b) => !isLunch(b));
+    saveBreaks();
+  }
+
+  /** How many mats a discipline's pools use: decided here, once its numbers are known (#153). */
+  function setDisciplineMats(slug: string, mats: number) {
+    const now = forecast?.mats?.[slug];
+    if (!now) return;
+    void run(async () => {
+      await apiIn(slug).saveTournament(mats, now.minPoolSize, now.maxPoolSize);
+      forecast = await api.forecast();
     });
   }
 
@@ -198,14 +223,14 @@
 <section>
   <h2>{t('Planning the day')}</h2>
   <p class="dim">
-    {t('How long things take, and when the day starts and ends. The mat board times every card from these until the day has a pace of its own, and says whether it all fits.')}
+    {t('How long things take, and when the day starts and ends. All times are in minutes. The mat board times every card from these until the day has a pace of its own, and says whether it all fits.')}
   </p>
 
-  <form class="fields" data-tour="plan-timings" onsubmit={saveTimings} oninput={() => (timingsDirty = true)}>
+  <div data-tour="plan-timings">
+  <form class="fields" onsubmit={saveTimings} oninput={() => (timingsDirty = true)}>
     <label>
-      {t('One match takes, in minutes')}
+      <span class="tip" title={t('From the time that the competitors step on the mat, and until they step off it.')}>{t('One match takes')}</span>
       <input type="number" min="1" max="60" step="0.5" bind:value={match} />
-      <span class="hint">{t('On the mat, from the pair stepping on to the result: longer than the fencing time the rules give.')}</span>
     </label>
     <label>
       {t('Between matches')}
@@ -223,8 +248,8 @@
       {t('The venue closes')}
       <input type="time" bind:value={close} />
     </label>
-    <div class="actions">
-      <SaveButton type="submit" dirty={timingsDirty} {busy} />
+    <div class="apply">
+      <SaveButton type="submit" dirty={timingsDirty} {busy} label={t('Apply')} done={t('Applied')} />
     </div>
   </form>
 
@@ -234,6 +259,9 @@
     <button class="secondary" aria-label={t('One mat fewer')} disabled={busy || matEdits.length <= 1} onclick={() => setMatCount(matEdits.length - 1)}>&minus;</button>
     <span class="strong">{matEdits.length === 1 ? t('1 mat') : t('{n} mats', { n: matEdits.length })}</span>
     <button class="secondary" aria-label={t('One mat more')} disabled={busy || matEdits.length >= 8} onclick={() => setMatCount(matEdits.length + 1)}>+</button>
+    {#if forecast?.matsRecommended}
+      <span class="hint">{t('Recommended for what the disciplines expect: {n}', { n: forecast.matsRecommended })}</span>
+    {/if}
   </div>
   <ul class="mats">
     {#each matEdits as m, i (m.mat)}
@@ -270,17 +298,23 @@
       </li>
     {/each}
   </ul>
+  {#if example && breaks.length === 0}<TourExample kind="breaks" />{/if}
   <div class="actions">
-    <button class="secondary" onclick={addBreak}>{breaks.length === 0 ? t('Add a lunch break') : t('Add a break')}</button>
-    {#if breaksDirty || breaks.length > 0}<SaveButton dirty={breaksDirty} {busy} onclick={saveBreaks} />{/if}
+    <button class="secondary" onclick={addBreak}>{t('Add a break')}</button>
+    {#if breaksDirty || breaks.length > 0}<SaveButton dirty={breaksDirty} {busy} label={t('Apply')} done={t('Applied')} onclick={saveBreaks} />{/if}
   </div>
+
+  {#if example}
+    <h3>{t('Each discipline')}</h3>
+    <TourExample kind="each" />
+  {/if}
 
   {#if disciplines.length > 0}
     <!-- Each discipline: how many it expects, its block of the day, and what comes before
          its first pool (#64, #136, #149). -->
     <h3>{t('Each discipline')}</h3>
     <p class="dim small">
-      {t('Until that many are entered and the pools drawn, the day is planned for the number expected. The gear check and the staff briefing end as the discipline’s first pool starts.')}
+      {t('Until that many are entered and the pools drawn, the day is planned for the number expected. By default the staff briefing ends 30 minutes before a discipline starts, and the gear check 15 minutes before. Mats are recommended at one for each pool, up to four.')}
       {#if disciplines.length > 1}{t('Disciplines in the same block run side by side; a block starts once every discipline of the blocks before it is done.')}{/if}
     </p>
     <div class="scroller">
@@ -289,9 +323,10 @@
           <tr>
             <th>{t('Discipline')}</th>
             <th>{t('Expected')}</th>
+            <th>{t('Mats')}</th>
             {#if disciplines.length > 1}<th>{t('Block')}</th>{/if}
-            <th>{t('Gear check, min')}</th>
-            <th>{t('Staff briefing, min')}</th>
+            <th>{t('Gear check')}</th>
+            <th>{t('Staff briefing')}</th>
           </tr>
         </thead>
         <tbody>
@@ -314,6 +349,25 @@
                     saveExpected(d.slug, n);
                   }}
                 />
+              </td>
+              <td class="nowrap">
+                {#if forecast?.mats?.[d.slug]}
+                  {@const advice = forecast.mats[d.slug]}
+                  <select
+                    aria-label={t('Mats of {name}', { name: d.name })}
+                    value={advice.mats}
+                    disabled={busy || (advice.pools ?? 0) > 0}
+                    title={(advice.pools ?? 0) > 0 ? t('Its pools are drawn: change this on its admin page, and draw again.') : ''}
+                    onchange={(e) => setDisciplineMats(d.slug, Number(e.currentTarget.value))}
+                  >
+                    {#each [1, 2, 3, 4] as n (n)}<option value={n}>{n}</option>{/each}
+                  </select>
+                  {#if advice.recommended}
+                    <span class="dim-inline" class:differs={advice.recommended !== advice.mats}>
+                      {t('{n} recommended', { n: advice.recommended })}
+                    </span>
+                  {/if}
+                {/if}
               </td>
               {#if disciplines.length > 1}
                 <td>
@@ -354,21 +408,29 @@
         </tbody>
       </table>
     </div>
-    {#if disciplines.length > 1}
+    <div class="checks">
+      {#if disciplines.length > 1}
+        <label class="check">
+          <input type="checkbox" checked={forecast?.finalsLast ?? false} disabled={busy} onchange={(e) => setFinalsLast(e.currentTarget.checked)} />
+          {t('Run the finals separately, at the end of the day')}
+        </label>
+      {/if}
+      <!-- A day pointed out as having no lunch has to be able to get one, here (#153). -->
       <label class="check">
-        <input type="checkbox" checked={forecast?.finalsLast ?? false} disabled={busy} onchange={(e) => setFinalsLast(e.currentTarget.checked)} />
-        {t('Run the finals separately, at the end of the day')}
+        <input type="checkbox" checked={hasLunch} disabled={busy} onchange={(e) => setLunch(e.currentTarget.checked)} />
+        {t('Break for lunch')}
       </label>
-    {/if}
+    </div>
   {/if}
+  </div>
 
   {#if error}<p class="err">{error}</p>{/if}
-  {#if note}<p class="note">{note}</p>{/if}
 
   {#if forecast}
     <!-- The programme, generated from all of the above (#149). -->
     <div class="programme" data-tour="plan-programme">
       <h3>{t('The programme')}</h3>
+      {#if example}<TourExample kind="programme" />{/if}
       {#if forecast.end}
         <p class="summary">
           {forecast.live ? t('Forecast to end at {time}', { time: clockOf(forecast.end) }) : t('Estimated to end at {time}', { time: clockOf(forecast.end) })}
@@ -377,7 +439,9 @@
       {#each forecast.gaps ?? [] as g, i (i)}
         <p class="warn">{gapText(g)}</p>
       {/each}
-      <Programme rows={forecast.programme} empty={t('Nothing to plan yet: add a discipline, and say how many it expects.')} />
+      {#if !example}
+        <Programme rows={forecast.programme} empty={t('Nothing to plan yet: add a discipline, and say how many it expects.')} />
+      {/if}
     </div>
     {#if forecast.live}
       <ul class="pace">
@@ -406,8 +470,11 @@
       </p>
       <div class="actions">
         <button disabled={busy || report.samples === 0} onclick={learn}>{t('Use these as the timings')}</button>
-        <button class="secondary" disabled={busy} onclick={keep}>{t('Start new events from these timings')}</button>
+        <!-- Only here (#153): what is worth carrying to the next event is what a day measured,
+             not numbers somebody has just typed. -->
+        <button class="secondary" disabled={busy} onclick={keep}>{t('Remember for new events')}</button>
       </div>
+      {#if note}<p class="note">{note}</p>{/if}
       <div class="scroller">
         <table>
           <thead>
@@ -445,12 +512,6 @@
         </table>
       </div>
     </details>
-  {:else if forecast?.live === false}
-    <!-- What it does, said on it (#149): the next event starts from these numbers. -->
-    <div class="keep">
-      <button class="secondary" disabled={busy} onclick={keep}>{t('Start new events from these timings')}</button>
-      <span class="hint">{t('The match, changeover and pause times above become where the next event you plan starts from.')}</span>
-    </div>
   {/if}
 </section>
 
@@ -500,7 +561,7 @@
   }
   .fields {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
     gap: 0.6rem;
     align-items: end;
   }
@@ -509,9 +570,26 @@
     gap: 0.3rem;
     font-size: 0.85rem;
     color: var(--ink-dim);
-    align-self: start;
+  }
+  /* Says more when pointed at (#153). */
+  .tip {
+    width: fit-content;
+    cursor: help;
+    text-decoration: underline dotted;
+    text-underline-offset: 0.2em;
+  }
+  .apply :global(button) {
+    width: 100%;
+  }
+  .differs {
+    color: var(--amber-bright);
+  }
+  .nowrap {
+    white-space: nowrap;
   }
   .fields input {
+    box-sizing: border-box;
+    height: 2.3rem;
     padding: 0.4rem 0.5rem;
     min-width: 0;
   }
@@ -519,7 +597,8 @@
     font-weight: 700;
   }
   .count {
-    display: inline-flex;
+    display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 0.6rem;
     margin-bottom: 0.5rem;
@@ -577,11 +656,16 @@
     width: 5rem;
     padding: 0.3rem 0.4rem;
   }
+  .checks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1.5rem;
+    margin-top: 0.7rem;
+  }
   label.check {
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
-    margin-top: 0.7rem;
     font-size: 0.9rem;
   }
   .programme {
@@ -608,13 +692,6 @@
     align-items: center;
     gap: 0.5rem;
     margin: 0.5rem 0;
-  }
-  .keep {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.4rem 0.8rem;
-    margin-top: 1rem;
   }
   .err {
     color: var(--amber-bright);

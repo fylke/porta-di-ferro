@@ -20,6 +20,7 @@
   let done = $state(false);
 
   let mats = $state(2);
+  let firstTime = $state(false);
   let minPoolSize = $state(4);
   let maxPoolSize = $state(7);
   let expected = $state<number | null>(null);
@@ -38,6 +39,7 @@
         capacity = snap.tournament.capacity || null;
         expected = forecast.expected?.[slug] || null;
         done = !!snap.tournament.setUp;
+        firstTime = !done && snap.pools.length === 0;
       } catch (e) {
         error = e instanceof Error ? e.message : String(e);
       }
@@ -55,6 +57,16 @@
     try {
       await api.saveTournament(mats, minPoolSize, maxPoolSize, undefined, Math.max(0, Math.round(capacity ?? 0)), true);
       await api.setExpected({ [slug]: Math.max(0, Math.round(expected ?? 0)) });
+      // The mats are decided when the day is planned (#153); until then, what its numbers
+      // recommend, rather than a default that has nothing to do with them.
+      if (firstTime) {
+        const advice = (await api.forecast()).mats?.[slug];
+        if (advice?.recommended && advice.recommended !== mats) {
+          mats = advice.recommended;
+          await api.saveTournament(mats, minPoolSize, maxPoolSize);
+        }
+        firstTime = false;
+      }
       done = true;
     } catch (err) {
       error = err instanceof Error ? err.message : String(err);
@@ -82,16 +94,6 @@
       </p>
 
       <fieldset>
-        <legend>{t('Mats')}</legend>
-        <label>
-          {t('How many mats its pools use')}
-          <select bind:value={mats} onchange={() => (done = false)}>
-            {#each [1, 2, 3, 4] as n (n)}<option value={n}>{n}</option>{/each}
-          </select>
-        </label>
-      </fieldset>
-
-      <fieldset>
         <legend>{t('Pools')}</legend>
         <label>
           {t('Smallest pool')}
@@ -113,7 +115,7 @@
           {t('Places (optional)')}
           <input type="number" min="0" bind:value={capacity} oninput={() => (done = false)} placeholder={t('no limit')} />
         </label>
-        <p class="hint">{t('The day is planned for the number you expect until that many are entered and the pools drawn.')}</p>
+        <p class="hint">{t('The day is planned for the number you expect until that many are entered and the pools drawn. How many mats to use comes later, when you plan the day, with a recommendation from these numbers.')}</p>
       </fieldset>
 
       {#if !valid}<p class="err">{t('A pool has between 2 and 7, and the smallest no bigger than the largest.')}</p>{/if}
@@ -188,8 +190,7 @@
     font-size: 0.85rem;
     color: var(--ink-dim);
   }
-  input,
-  select {
+  input {
     min-width: 0;
     padding: 0.4rem 0.5rem;
   }
