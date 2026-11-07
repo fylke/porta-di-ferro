@@ -30,7 +30,7 @@ the other end of `fetch` and `EventSource`.
 
 | Piece | What it does |
 | --- | --- |
-| `internal/demo` | The event in memory — `Event` over two `Demo` disciplines — and a router answering the same API paths. Ordinary portable Go, tested by `go test ./...`. |
+| `internal/demo` | The event in memory — `Event` over two `Demo` disciplines — and a router answering the same API paths, as tables laid out like the server's mux (`internal/demo/router.go`). Ordinary portable Go, tested by `go test ./...`. |
 | `cmd/demo-wasm` | Forty lines of `syscall/js` glue. The only part with a `js && wasm` build tag. |
 | `web/src/demo/adapter.ts` | Replaces `window.fetch` and `window.EventSource` before the app mounts. |
 | `web/src/demo/DemoBanner.svelte` | The strip that says what this is, with Play the rest and Start over. |
