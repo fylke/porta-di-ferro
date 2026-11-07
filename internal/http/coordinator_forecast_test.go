@@ -109,8 +109,12 @@ func TestTheDayIsForecast(t *testing.T) {
 	if !overrun {
 		t.Errorf("eight fencers' pools and a bracket do not fit in an hour; the board should say so: %+v", v.Warnings)
 	}
-	if len(v.Programme) < 2 || v.Programme[0].Stage != "pools" {
-		t.Errorf("the derived programme should list the pools, then what follows: %+v", v.Programme)
+	var stages []string
+	for _, r := range v.Programme {
+		stages = append(stages, r.Stage)
+	}
+	if strings.Join(stages, " ") != "briefing gear-check pools eliminations final" {
+		t.Errorf("the derived programme should list what comes before the pools, the pools, then what follows: %+v", v.Programme)
 	}
 
 	// Every match still to come says when it is expected.
