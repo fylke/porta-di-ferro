@@ -58,11 +58,22 @@ func (s *Server) definition(withTimes bool) (signup.Definition, error) {
 }
 
 func (s *Server) signupDefinition(w http.ResponseWriter, r *http.Request) {
-	def, err := s.definition(true)
+	serveSignupFile(w, r, s.definition, writeDefinition)
+}
+
+// serveSignupFile answers with one of the signup files, made from the definition with its
+// planned times.
+func serveSignupFile(w http.ResponseWriter, r *http.Request, definition func(withTimes bool) (signup.Definition, error),
+	write func(http.ResponseWriter, *http.Request, signup.Definition)) {
+	def, err := definition(true)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
+	write(w, r, def)
+}
+
+func writeDefinition(w http.ResponseWriter, r *http.Request, def signup.Definition) {
 	if r.URL.Query().Get("download") != "" {
 		w.Header().Set("Content-Disposition",
 			fmt.Sprintf(`attachment; filename=%q`, hall.DefinitionFilename(def)))
@@ -70,15 +81,14 @@ func (s *Server) signupDefinition(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, def)
 }
 
+func writeReady(w http.ResponseWriter, r *http.Request, def signup.Definition) {
+	writeJSON(w, http.StatusOK, hall.SignupReadyView(def))
+}
+
 // signupReady tells the admin screen what is still missing, so the organizer finds out
 // before the file goes out rather than from a participant who cannot use it.
 func (s *Server) signupReady(w http.ResponseWriter, r *http.Request) {
-	def, err := s.definition(true)
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, hall.SignupReadyView(def))
+	serveSignupFile(w, r, s.definition, writeReady)
 }
 
 // signupApp serves the participant's app with this event written into it, so what the
@@ -88,12 +98,10 @@ func (s *Server) signupReady(w http.ResponseWriter, r *http.Request) {
 // attachment beats two every time, and "open both of these, the second one from inside
 // the first" is an instruction people get wrong.
 func (s *Server) signupApp(w http.ResponseWriter, r *http.Request) {
-	def, err := s.definition(true)
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err)
-		return
-	}
+	serveSignupFile(w, r, s.definition, writeSignupApp)
+}
 
+func writeSignupApp(w http.ResponseWriter, r *http.Request, def signup.Definition) {
 	page, err := web.SignupApp()
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
@@ -115,15 +123,10 @@ func (s *Server) signupApp(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) signupPDF(w http.ResponseWriter, r *http.Request) {
-	def, err := s.definition(true)
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err)
-		return
-	}
-	writeSignupPDF(w, def)
+	serveSignupFile(w, r, s.definition, writeSignupPDF)
 }
 
-func writeSignupPDF(w http.ResponseWriter, def signup.Definition) {
+func writeSignupPDF(w http.ResponseWriter, r *http.Request, def signup.Definition) {
 	body, err := signup.BuildPDF(def)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)

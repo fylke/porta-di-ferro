@@ -1,13 +1,11 @@
 package httpapi
 
 import (
-	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/fylke/porta-di-ferro/internal/hall"
 	"github.com/fylke/porta-di-ferro/internal/signup"
-	"github.com/fylke/porta-di-ferro/web"
 )
 
 // Signup for the whole event (proposal §8, phase 3): one file out, one folder back, and
@@ -72,57 +70,19 @@ func (c *Coordinator) shares() ([]hall.SignupShare, []*worker) {
 }
 
 func (c *Coordinator) signupReady(w http.ResponseWriter, r *http.Request) {
-	def, err := c.SignupDefinition(true)
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, hall.SignupReadyView(def))
+	serveSignupFile(w, r, c.SignupDefinition, writeReady)
 }
 
 func (c *Coordinator) signupDefinition(w http.ResponseWriter, r *http.Request) {
-	def, err := c.SignupDefinition(true)
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err)
-		return
-	}
-	if r.URL.Query().Get("download") != "" {
-		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename=%q`, hall.DefinitionFilename(def)))
-	}
-	writeJSON(w, http.StatusOK, def)
+	serveSignupFile(w, r, c.SignupDefinition, writeDefinition)
 }
 
 func (c *Coordinator) signupApp(w http.ResponseWriter, r *http.Request) {
-	def, err := c.SignupDefinition(true)
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err)
-		return
-	}
-	page, err := web.SignupApp()
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err)
-		return
-	}
-	baked, err := hall.BakeSignupApp(page, def)
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err)
-		return
-	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-cache")
-	if r.URL.Query().Get("download") != "" {
-		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename=%q`, hall.SignupAppFilename(def)))
-	}
-	w.Write(baked)
+	serveSignupFile(w, r, c.SignupDefinition, writeSignupApp)
 }
 
 func (c *Coordinator) signupPDF(w http.ResponseWriter, r *http.Request) {
-	def, err := c.SignupDefinition(true)
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err)
-		return
-	}
-	writeSignupPDF(w, def)
+	serveSignupFile(w, r, c.SignupDefinition, writeSignupPDF)
 }
 
 // PreviewSignups is what importing these files would do, across the event.
