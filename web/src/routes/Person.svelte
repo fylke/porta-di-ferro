@@ -157,7 +157,7 @@
 
 <style>
   main {
-    max-width: 44rem;
+    max-width: 66rem;
     margin: 0 auto;
     padding: 1rem 1rem 3rem;
   }
