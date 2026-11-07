@@ -23,6 +23,20 @@ type Limits struct {
 // assignment below is the same rule at either size.
 func DefaultLimits() Limits { return Limits{MaxMats: 4, MaxPools: 8, MaxPool: 7} }
 
+// RecommendedMats is how many mats a discipline of this many entries should ask for (#153):
+// one for each pool it would draw at its largest pool size, so the pools run side by side,
+// up to as many as a discipline can use. 0 with nothing to go on.
+func RecommendedMats(entrants, maxPool int, lim Limits) int {
+	if entrants <= 0 {
+		return 0
+	}
+	if maxPool < 1 {
+		maxPool = lim.MaxPool
+	}
+	pools := (entrants + maxPool - 1) / maxPool
+	return min(pools, lim.MaxMats)
+}
+
 // Generate draws the pools for a tournament: sizes honouring the configured minimum and
 // maximum with uneven sizes accepted, clubs spread across the pools as evenly as those
 // sizes allow, a running order that minimises consecutive matches on a best-effort basis,

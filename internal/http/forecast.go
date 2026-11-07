@@ -9,6 +9,7 @@ import (
 
 	"github.com/fylke/porta-di-ferro/internal/forecast"
 	"github.com/fylke/porta-di-ferro/internal/store"
+	"github.com/fylke/porta-di-ferro/internal/tournament"
 )
 
 // The forecast, as the event's pages see it (proposal §10, phase 4). internal/forecast
@@ -121,6 +122,26 @@ func CleanBreaks(in []store.Break) ([]store.Break, error) {
 	return out, nil
 }
 
+// DefaultPrep is a discipline's gear check and staff briefing until the organizer says
+// otherwise (#153): a quarter of an hour each, one after the other.
+var DefaultPrep = store.Prep{GearCheck: 15 * 60, Briefing: 15 * 60}
+
+// Before a discipline's first pool, the gear check ends this long ahead of it and the
+// staff briefing this long (#153): the two are not held at once, and the first pool does
+// not start the moment the last fencer has been checked.
+const (
+	gearCheckEndsBefore = 15 * time.Minute
+	briefingEndsBefore  = 30 * time.Minute
+)
+
+// PrepOf is a discipline's gear check and staff briefing: the plan's, or the default.
+func PrepOf(plan store.Plan, slug string) store.Prep {
+	if p, ok := plan.Prep[slug]; ok {
+		return p
+	}
+	return DefaultPrep
+}
+
 // CleanPrep checks a discipline's gear check and staff briefing: up to four hours each.
 func CleanPrep(p store.Prep) (store.Prep, error) {
 	if p.GearCheck < 0 || p.GearCheck > 4*3600 || p.Briefing < 0 || p.Briefing > 4*3600 {
@@ -227,11 +248,12 @@ func ForecastInput(inputs []MatsInput, placed map[string]store.Placement, plan s
 			out.Breaks = append(out.Breaks, forecast.Break{From: from, To: to, Label: b.Label})
 		}
 	}
-	for slug, p := range plan.Prep {
+	for _, in := range inputs {
 		if out.Prep == nil {
 			out.Prep = map[string]forecast.Prep{}
 		}
-		out.Prep[slug] = forecast.Prep{GearCheck: time.Duration(p.GearCheck) * time.Second, Briefing: time.Duration(p.Briefing) * time.Second}
+		p := PrepOf(plan, in.Slug)
+		out.Prep[in.Slug] = forecast.Prep{GearCheck: time.Duration(p.GearCheck) * time.Second, Briefing: time.Duration(p.Briefing) * time.Second}
 	}
 	for _, it := range items {
 		notBefore := clock(it.place.NotBefore)
@@ -421,6 +443,49 @@ type ForecastView struct {
 	// Gaps are what the plan looks to be missing: a lunch break, a discipline's gear
 	// check or staff briefing. Pointed out, never required.
 	Gaps []PlanGap `json:"gaps"`
+	// Mats is each discipline's mats and what its numbers recommend, by slug, and
+	// MatsRecommended what that comes to for the hall (#153).
+	Mats            map[string]MatsAdvice `json:"mats,omitempty"`
+	MatsRecommended int                   `json:"matsRecommended,omitempty"`
+}
+
+// MatsAdvice is how many mats a discipline's pools use and how many its numbers recommend.
+// Recommended is 0 until there is a number to go on; For is that number.
+type MatsAdvice struct {
+	Mats        int `json:"mats"`
+	Recommended int `json:"recommended,omitempty"`
+	For         int `json:"for,omitempty"`
+	MinPoolSize int `json:"minPoolSize"`
+	MaxPoolSize int `json:"maxPoolSize"`
+	Pools       int `json:"pools,omitempty"`
+}
+
+// adviseMats is what a discipline's numbers recommend: what it expects or, without that,
+// the ceiling on its entries, and never fewer than have entered. The hall needs what the
+// busiest block of the day needs, its disciplines running side by side.
+func adviseMats(v *ForecastView, plan store.Plan, inputs []MatsInput) {
+	v.Mats = map[string]MatsAdvice{}
+	slugs := make([]string, 0, len(inputs))
+	for _, d := range inputs {
+		slugs = append(slugs, d.Slug)
+	}
+	sessions := Sessions(plan, slugs)
+	need := map[int]int{}
+	for _, d := range inputs {
+		t := d.Snapshot.Tournament
+		n := d.Expected
+		if n == 0 {
+			n = t.Capacity
+		}
+		n = max(n, Entrants(d.Snapshot.Competitors, 0))
+		rec := tournament.RecommendedMats(n, t.MaxPoolSize, tournament.DefaultLimits())
+		v.Mats[d.Slug] = MatsAdvice{Mats: t.Mats, Recommended: rec, For: n,
+			MinPoolSize: t.MinPoolSize, MaxPoolSize: t.MaxPoolSize, Pools: len(d.Snapshot.Pools)}
+		need[sessions[d.Slug]] += rec
+	}
+	for _, n := range need {
+		v.MatsRecommended = max(v.MatsRecommended, n)
+	}
 }
 
 // PlanGap is something a day usually has and this plan does not. Kind is "lunch",
@@ -438,7 +503,12 @@ func ViewPlan(v *ForecastView, plan store.Plan, ev store.Event, inputs []MatsInp
 	if v.Breaks == nil {
 		v.Breaks = []store.Break{}
 	}
-	v.Prep, v.Starts = plan.Prep, plan.Starts
+	v.Starts = plan.Starts
+	v.Prep = map[string]store.Prep{}
+	for _, d := range inputs {
+		v.Prep[d.Slug] = PrepOf(plan, d.Slug)
+	}
+	adviseMats(v, plan, inputs)
 	v.Gaps = []PlanGap{}
 	planned := map[string]bool{}
 	for _, r := range v.Programme {
@@ -451,10 +521,10 @@ func ViewPlan(v *ForecastView, plan store.Plan, ev store.Event, inputs []MatsInp
 		if !planned[d.Slug] {
 			continue
 		}
-		if plan.Prep[d.Slug].GearCheck == 0 {
+		if v.Prep[d.Slug].GearCheck == 0 {
 			v.Gaps = append(v.Gaps, PlanGap{Kind: "gear-check", Discipline: d.Slug, Name: d.Name})
 		}
-		if plan.Prep[d.Slug].Briefing == 0 {
+		if v.Prep[d.Slug].Briefing == 0 {
 			v.Gaps = append(v.Gaps, PlanGap{Kind: "briefing", Discipline: d.Slug, Name: d.Name})
 		}
 	}
@@ -567,7 +637,7 @@ func programme(in forecast.Input, r forecast.Result, inputs []MatsInput) []Progr
 		}
 	}
 	for _, d := range inputs {
-		// The gear check and the staff briefing end as the first pool starts (#149).
+		// The gear check and then the staff briefing, ahead of the first pool (#153).
 		first := rows[key{d.Slug, "pools"}]
 		if first == nil {
 			first = rows[key{d.Slug, "eliminations"}]
@@ -580,13 +650,21 @@ func programme(in forecast.Input, r forecast.Result, inputs []MatsInput) []Progr
 			continue
 		}
 		p := in.Prep[d.Slug]
+		gearEnds := at.Add(-gearCheckEndsBefore)
+		gearStarts := gearEnds.Add(-p.GearCheck)
+		// A longer gear check moves the briefing ahead of it, rather than on top of it.
+		briefingEnds := at.Add(-briefingEndsBefore)
+		if p.GearCheck > 0 && gearStarts.Before(briefingEnds) {
+			briefingEnds = gearStarts
+		}
 		for _, prep := range []struct {
 			stage string
 			took  time.Duration
-		}{{"gear-check", p.GearCheck}, {"briefing", p.Briefing}} {
+			ends  time.Time
+		}{{"gear-check", p.GearCheck, gearEnds}, {"briefing", p.Briefing, briefingEnds}} {
 			if prep.took > 0 {
 				out = append(out, ProgrammeRow{Discipline: d.Slug, Name: d.Name, Stage: prep.stage,
-					Start: stamp(at.Add(-prep.took)), End: first.Start, Mats: []int{}, Done: begun[d.Slug]})
+					Start: stamp(prep.ends.Add(-prep.took)), End: stamp(prep.ends), Mats: []int{}, Done: begun[d.Slug]})
 			}
 		}
 	}
