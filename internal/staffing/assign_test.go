@@ -230,3 +230,25 @@ func TestTheStaffNeededIsTheBusiestMoment(t *testing.T) {
 		t.Errorf("nothing planned needs nobody, got %d", got)
 	}
 }
+
+// Somebody competing in two other disciplines at the time is warned about the same one at
+// every look at the staff panel.
+func TestAWarningNamesTheSameContestEveryTime(t *testing.T) {
+	in := staffing.Input{
+		Items: []staffing.Item{
+			item("a/pool-1", "a", 1, 0, 60),
+			item("b/pool-1", "b", 2, 0, 60),
+			item("c/pool-1", "c", 3, 0, 60),
+		},
+		Members:     []store.StaffMember{member("m1", "p1", "head-ref")},
+		Crew:        heads,
+		Assignments: []store.Assignment{{Item: "c/pool-1", Role: "head-ref", Slot: 1, Staff: "m1", Pinned: true}},
+		Competing:   map[string][]string{"a": {"p1"}, "b": {"p1"}},
+	}
+	for try := 0; try < 50; try++ {
+		r := staffing.Check(in)
+		if len(r.Warnings) != 1 || r.Warnings[0].Other != "a/pool-1" {
+			t.Fatalf("try %d: warnings %+v, want one naming a/pool-1", try, r.Warnings)
+		}
+	}
+}

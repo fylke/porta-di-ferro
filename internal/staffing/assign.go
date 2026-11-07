@@ -107,7 +107,14 @@ type contest struct {
 // the person is named in one.
 func contests(items []Item, competing map[string][]string) map[string][]contest {
 	out := map[string][]contest{}
-	for disc, people := range competing {
+	// In the order of the slugs: which contest a warning names should not change between looks.
+	disciplines := make([]string, 0, len(competing))
+	for disc := range competing {
+		disciplines = append(disciplines, disc)
+	}
+	sort.Strings(disciplines)
+	for _, disc := range disciplines {
+		people := competing[disc]
 		var whole contest
 		for _, it := range items {
 			if it.Discipline != disc || it.Start.IsZero() {

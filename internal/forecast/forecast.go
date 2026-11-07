@@ -430,7 +430,13 @@ func Measure(in Input) Report {
 		}
 		out.Matches = append(out.Matches, ms...)
 	}
-	sort.Slice(out.Matches, func(i, j int) bool { return out.Matches[i].Started.Before(out.Matches[j].Started) })
+	// Matches logged at the same instant keep one order, whichever way the mats were walked.
+	sort.Slice(out.Matches, func(i, j int) bool {
+		if !out.Matches[i].Started.Equal(out.Matches[j].Started) {
+			return out.Matches[i].Started.Before(out.Matches[j].Started)
+		}
+		return out.Matches[i].Key < out.Matches[j].Key
+	})
 	if out.Samples > 0 {
 		out.Match = (sumMatch / time.Duration(out.Samples)).Round(time.Second)
 	}

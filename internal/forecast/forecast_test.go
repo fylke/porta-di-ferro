@@ -538,3 +538,23 @@ func TestALaterStartShiftsWhatFollowsOnlyOnOverlap(t *testing.T) {
 		t.Errorf("pool 2 should follow pool 1 once they would overlap: %s after %s", hm(s.Start), hm(p1.End))
 	}
 }
+
+// Matches on two mats logged at the same instant keep their order from one reading of the
+// report to the next.
+func TestTheReportsOrderHoldsForMatchesStartedTogether(t *testing.T) {
+	at := time.Date(2026, 5, 2, 10, 0, 0, 0, time.UTC)
+	var items []forecast.Item
+	for mat := 1; mat <= 6; mat++ {
+		items = append(items, forecast.Item{ID: fmt.Sprintf("d/pool-%d", mat), Mat: mat, Matches: []forecast.Match{
+			{Key: fmt.Sprintf("d/p%dm1", mat), Started: at, Ended: at.Add(4 * time.Minute)},
+		}})
+	}
+	for try := 0; try < 50; try++ {
+		rep := forecast.Measure(forecast.Input{Items: items})
+		for i, m := range rep.Matches {
+			if want := fmt.Sprintf("d/p%dm1", i+1); m.Key != want {
+				t.Fatalf("try %d: row %d is %s, want %s", try, i, m.Key, want)
+			}
+		}
+	}
+}
