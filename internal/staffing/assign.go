@@ -151,8 +151,75 @@ func Assign(in Input) Result { return run(in, true) }
 func Check(in Input) Result { return run(in, false) }
 
 func run(in Input, fill bool) Result {
-	crew := CrewOf(in.Crew)
-	items := append([]Item{}, in.Items...)
+	a := newAssigner(in, fill)
+	for _, it := range a.items {
+		if it.Start.IsZero() || !it.End.After(it.Start) {
+			continue
+		}
+		a.staff(it)
+	}
+	return a.out
+}
+
+// assigner is an assignment as it is made, item by item in the order they run.
+type assigner struct {
+	fill bool
+	crew map[string]int
+	// items are in the order they run, and ids the members in the order they are considered.
+	items     []Item
+	members   map[string]store.StaffMember
+	ids       []string
+	fencing   map[string][]span
+	competing map[string][]contest
+	// kept is what stays: by hand, or on an item already under way.
+	kept map[string]store.Assignment
+	// working is what each member has been given so far, and minutes how long it comes to.
+	working map[string][]span
+	minutes map[string]time.Duration
+	out     Result
+}
+
+func newAssigner(in Input, fill bool) *assigner {
+	a := &assigner{
+		fill:    fill,
+		crew:    CrewOf(in.Crew),
+		items:   inRunningOrder(in.Items),
+		members: map[string]store.StaffMember{},
+		fencing: map[string][]span{},
+		kept:    map[string]store.Assignment{},
+		working: map[string][]span{},
+		minutes: map[string]time.Duration{},
+	}
+	byID := map[string]Item{}
+	for _, it := range a.items {
+		byID[it.ID] = it
+		for _, p := range it.People {
+			a.fencing[p] = append(a.fencing[p], span{item: it.ID, mat: it.Mat, start: it.Start, end: it.End})
+		}
+	}
+	for _, m := range in.Members {
+		a.members[m.ID] = m
+	}
+	a.competing = contests(a.items, in.Competing)
+	for _, as := range in.Assignments {
+		it, ok := byID[as.Item]
+		if _, known := a.members[as.Staff]; !ok || !known {
+			continue
+		}
+		if as.Pinned || it.Started || !fill {
+			a.kept[slotKey(as.Item, as.Role, as.Slot)] = as
+		}
+	}
+	a.ids = make([]string, 0, len(a.members))
+	for id := range a.members {
+		a.ids = append(a.ids, id)
+	}
+	sort.Strings(a.ids)
+	return a
+}
+
+func inRunningOrder(in []Item) []Item {
+	items := append([]Item{}, in...)
 	sort.SliceStable(items, func(i, j int) bool {
 		if !items[i].Start.Equal(items[j].Start) {
 			return items[i].Start.Before(items[j].Start)
@@ -162,181 +229,162 @@ func run(in Input, fill bool) Result {
 		}
 		return items[i].ID < items[j].ID
 	})
-	byID := map[string]Item{}
-	for _, it := range items {
-		byID[it.ID] = it
-	}
-	members := map[string]store.StaffMember{}
-	for _, m := range in.Members {
-		members[m.ID] = m
-	}
+	return items
+}
 
-	// When each person is fencing.
-	fencing := map[string][]span{}
-	for _, it := range items {
-		for _, p := range it.People {
-			fencing[p] = append(fencing[p], span{item: it.ID, mat: it.Mat, start: it.Start, end: it.End})
+func slotKey(item, role string, slot int) string { return fmt.Sprintf("%s|%s|%d", item, role, slot) }
+
+// staff gives one item its crew: the organizer's choices first, so nobody else takes their
+// time, and then whoever is best for each slot left.
+func (a *assigner) staff(it Item) {
+	for _, role := range MatRoles {
+		for slot := 1; slot <= a.crew[role]; slot++ {
+			if kept, ok := a.kept[slotKey(it.ID, role, slot)]; ok {
+				a.keep(kept, it, role)
+			}
 		}
 	}
+	for _, role := range MatRoles {
+		for slot := 1; slot <= a.crew[role]; slot++ {
+			if _, ok := a.kept[slotKey(it.ID, role, slot)]; !ok {
+				a.fillSlot(it, role, slot)
+			}
+		}
+	}
+}
 
-	competing := contests(items, in.Competing)
+// keep takes an assignment that stays, and reports every rule it breaks.
+func (a *assigner) keep(kept store.Assignment, it Item, role string) {
+	m := a.members[kept.Staff]
+	if kind, other := a.busyWith(kept.Staff, it); kind != "" {
+		a.out.Warnings = append(a.out.Warnings, Warning{Kind: kind, Item: it.ID, Role: role, Staff: kept.Staff, Other: other})
+	}
+	if !Has(m, role) {
+		a.out.Warnings = append(a.out.Warnings, Warning{Kind: "role", Item: it.ID, Role: role, Staff: kept.Staff})
+	}
+	if !Works(m, it.Discipline) {
+		a.out.Warnings = append(a.out.Warnings, Warning{Kind: "discipline", Item: it.ID, Role: role, Staff: kept.Staff})
+	}
+	a.take(kept, it)
+}
 
-	// What stays: by hand, or on an item already under way.
-	key := func(item, role string, slot int) string { return fmt.Sprintf("%s|%s|%d", item, role, slot) }
-	kept := map[string]store.Assignment{}
-	for _, a := range in.Assignments {
-		it, ok := byID[a.Item]
-		if _, known := members[a.Staff]; !ok || !known {
+// fillSlot gives an empty slot to whoever is best for it, or reports that nobody can.
+func (a *assigner) fillSlot(it Item, role string, slot int) {
+	best := ""
+	if a.fill {
+		best = a.bestFor(it, role)
+	}
+	if best == "" {
+		a.out.Short = append(a.out.Short, Short{Item: it.ID, Role: role, Slot: slot})
+		return
+	}
+	a.take(store.Assignment{Item: it.ID, Role: role, Slot: slot, Staff: best}, it)
+}
+
+// bestFor is the member who may take this role on this item and scores highest, or "".
+func (a *assigner) bestFor(it Item, role string) string {
+	best, bestScore := "", 0.0
+	for _, id := range a.ids {
+		m := a.members[id]
+		if !Has(m, role) || !Works(m, it.Discipline) || a.inItem(id, it) {
 			continue
 		}
-		if a.Pinned || it.Started || !fill {
-			kept[key(a.Item, a.Role, a.Slot)] = a
-		}
-	}
-
-	working := map[string][]span{}
-	minutes := map[string]time.Duration{}
-	var out Result
-
-	busyWith := func(member string, it Item) (string, string) {
-		m := members[member]
-		for _, f := range fencing[m.Person] {
-			if m.Person != "" && overlaps(f.start, f.end, it.Start, it.End) {
-				return "fencing", f.item
-			}
-		}
-		for _, c := range competing[m.Person] {
-			if m.Person != "" && c.discipline != it.Discipline && overlaps(c.start, c.end, it.Start, it.End) {
-				return "fencing", c.item
-			}
-		}
-		for _, w := range working[member] {
-			if w.item != it.ID && overlaps(w.start, w.end, it.Start, it.End) {
-				return "double", w.item
-			}
-		}
-		return "", ""
-	}
-	inItem := func(member string, it Item) bool {
-		for _, w := range working[member] {
-			if w.item == it.ID {
-				return true
-			}
-		}
-		return false
-	}
-	take := func(a store.Assignment, it Item) {
-		out.Assignments = append(out.Assignments, a)
-		working[a.Staff] = append(working[a.Staff], span{item: it.ID, mat: it.Mat, role: a.Role, start: it.Start, end: it.End})
-		minutes[a.Staff] += it.End.Sub(it.Start)
-	}
-	last := func(member string, before time.Time) (span, bool) {
-		var best span
-		found := false
-		for _, w := range working[member] {
-			if !w.end.After(before) && (!found || w.end.After(best.end)) {
-				best, found = w, true
-			}
-		}
-		return best, found
-	}
-
-	// stint is how long a member has worked without a real pause, up to a start.
-	stint := func(member string, before time.Time) time.Duration {
-		var spans []span
-		for _, w := range working[member] {
-			if !w.end.After(before) {
-				spans = append(spans, w)
-			}
-		}
-		sort.Slice(spans, func(i, j int) bool { return spans[i].end.After(spans[j].end) })
-		total, edge := time.Duration(0), before
-		for _, w := range spans {
-			if edge.Sub(w.end) > Pause {
-				break
-			}
-			total += w.end.Sub(w.start)
-			edge = w.start
-		}
-		return total
-	}
-
-	ids := make([]string, 0, len(members))
-	for id := range members {
-		ids = append(ids, id)
-	}
-	sort.Strings(ids)
-
-	for _, it := range items {
-		if it.Start.IsZero() || !it.End.After(it.Start) {
+		if kind, _ := a.busyWith(id, it); kind != "" {
 			continue
 		}
-		// The organizer's choices for this item first, so nobody else takes their time.
-		for _, role := range MatRoles {
-			for slot := 1; slot <= crew[role]; slot++ {
-				a, ok := kept[key(it.ID, role, slot)]
-				if !ok {
-					continue
-				}
-				m := members[a.Staff]
-				if kind, other := busyWith(a.Staff, it); kind != "" {
-					out.Warnings = append(out.Warnings, Warning{Kind: kind, Item: it.ID, Role: role, Staff: a.Staff, Other: other})
-				}
-				if !Has(m, role) {
-					out.Warnings = append(out.Warnings, Warning{Kind: "role", Item: it.ID, Role: role, Staff: a.Staff})
-				}
-				if !Works(m, it.Discipline) {
-					out.Warnings = append(out.Warnings, Warning{Kind: "discipline", Item: it.ID, Role: role, Staff: a.Staff})
-				}
-				take(a, it)
-			}
-		}
-		for _, role := range MatRoles {
-			for slot := 1; slot <= crew[role]; slot++ {
-				if _, ok := kept[key(it.ID, role, slot)]; ok {
-					continue
-				}
-				if !fill {
-					out.Short = append(out.Short, Short{Item: it.ID, Role: role, Slot: slot})
-					continue
-				}
-				best, bestScore := "", 0.0
-				for _, id := range ids {
-					m := members[id]
-					if !Has(m, role) || !Works(m, it.Discipline) || inItem(id, it) {
-						continue
-					}
-					if kind, _ := busyWith(id, it); kind != "" {
-						continue
-					}
-					score := -minutes[id].Minutes() / 10
-					// A long stint wants a break: past the limit, anybody else first.
-					if stint(id, it.Start)+it.End.Sub(it.Start) > LongestStint {
-						score -= 150
-					}
-					if prev, ok := last(id, it.Start); ok {
-						switch {
-						case prev.mat == it.Mat && prev.role == role:
-							score += 100
-						case prev.role == role:
-							score += 40
-						case prev.mat == it.Mat:
-							score += 20
-						}
-					}
-					if best == "" || score > bestScore {
-						best, bestScore = id, score
-					}
-				}
-				if best == "" {
-					out.Short = append(out.Short, Short{Item: it.ID, Role: role, Slot: slot})
-					continue
-				}
-				take(store.Assignment{Item: it.ID, Role: role, Slot: slot, Staff: best}, it)
-			}
+		if score := a.score(id, it, role); best == "" || score > bestScore {
+			best, bestScore = id, score
 		}
 	}
-	return out
+	return best
+}
+
+// score is how well a member suits a slot: little hopping about, the day shared, and a
+// break after a long stint.
+func (a *assigner) score(id string, it Item, role string) float64 {
+	score := -a.minutes[id].Minutes() / 10
+	// A long stint wants a break: past the limit, anybody else first.
+	if a.stint(id, it.Start)+it.End.Sub(it.Start) > LongestStint {
+		score -= 150
+	}
+	if prev, ok := a.last(id, it.Start); ok {
+		switch {
+		case prev.mat == it.Mat && prev.role == role:
+			score += 100
+		case prev.role == role:
+			score += 40
+		case prev.mat == it.Mat:
+			score += 20
+		}
+	}
+	return score
+}
+
+func (a *assigner) busyWith(member string, it Item) (string, string) {
+	m := a.members[member]
+	for _, f := range a.fencing[m.Person] {
+		if m.Person != "" && overlaps(f.start, f.end, it.Start, it.End) {
+			return "fencing", f.item
+		}
+	}
+	for _, c := range a.competing[m.Person] {
+		if m.Person != "" && c.discipline != it.Discipline && overlaps(c.start, c.end, it.Start, it.End) {
+			return "fencing", c.item
+		}
+	}
+	for _, w := range a.working[member] {
+		if w.item != it.ID && overlaps(w.start, w.end, it.Start, it.End) {
+			return "double", w.item
+		}
+	}
+	return "", ""
+}
+
+func (a *assigner) inItem(member string, it Item) bool {
+	for _, w := range a.working[member] {
+		if w.item == it.ID {
+			return true
+		}
+	}
+	return false
+}
+
+func (a *assigner) take(as store.Assignment, it Item) {
+	a.out.Assignments = append(a.out.Assignments, as)
+	a.working[as.Staff] = append(a.working[as.Staff], span{item: it.ID, mat: it.Mat, role: as.Role, start: it.Start, end: it.End})
+	a.minutes[as.Staff] += it.End.Sub(it.Start)
+}
+
+// last is the member's last work ending by a time.
+func (a *assigner) last(member string, before time.Time) (span, bool) {
+	var best span
+	found := false
+	for _, w := range a.working[member] {
+		if !w.end.After(before) && (!found || w.end.After(best.end)) {
+			best, found = w, true
+		}
+	}
+	return best, found
+}
+
+// stint is how long a member has worked without a real pause, up to a start.
+func (a *assigner) stint(member string, before time.Time) time.Duration {
+	var spans []span
+	for _, w := range a.working[member] {
+		if !w.end.After(before) {
+			spans = append(spans, w)
+		}
+	}
+	sort.Slice(spans, func(i, j int) bool { return spans[i].end.After(spans[j].end) })
+	total, edge := time.Duration(0), before
+	for _, w := range spans {
+		if edge.Sub(w.end) > Pause {
+			break
+		}
+		total += w.end.Sub(w.start)
+		edge = w.start
+	}
+	return total
 }
 
 // LongestStint is how long somebody should work without a break before somebody else is
