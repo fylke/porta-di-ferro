@@ -183,10 +183,7 @@ func (c *Coordinator) learnTimings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err := c.changePlan(func(p *store.Plan) error {
-		p.Timings.Match = int(rep.Match / time.Second)
-		if rep.Changeover > 0 {
-			p.Timings.Changeover = int(rep.Changeover / time.Second)
-		}
+		hall.LearnTimings(&p.Timings, rep)
 		return nil
 	})
 	if err != nil {
@@ -215,22 +212,8 @@ func (c *Coordinator) putSessions(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	known := map[string]bool{}
-	for _, s := range c.slugs() {
-		known[s] = true
-	}
-	err := c.changePlan(func(p *store.Plan) error {
-		if p.Sessions == nil {
-			p.Sessions = map[string]int{}
-		}
-		for slug, n := range in {
-			if !known[slug] || n < 1 || n > 20 {
-				return errors.New("a block is a discipline of this event and a number from 1 to 20")
-			}
-			p.Sessions[slug] = n
-		}
-		return nil
-	})
+	slugs := c.slugs()
+	err := c.changePlan(func(p *store.Plan) error { return hall.SetSessions(p, in, slugs) })
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
@@ -261,22 +244,7 @@ func (c *Coordinator) putExpected(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	err := c.changePlan(func(p *store.Plan) error {
-		if p.Expected == nil {
-			p.Expected = map[string]int{}
-		}
-		for slug, n := range in {
-			if n < 0 || n > 200 {
-				return errors.New("expect between 0 and 200")
-			}
-			if n == 0 {
-				delete(p.Expected, slug)
-			} else {
-				p.Expected[slug] = n
-			}
-		}
-		return nil
-	})
+	err := c.changePlan(func(p *store.Plan) error { return hall.SetExpected(p, in) })
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return

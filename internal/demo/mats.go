@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/fylke/porta-di-ferro/internal/hall"
 	"github.com/fylke/porta-di-ferro/internal/store"
@@ -133,20 +132,7 @@ func (e *Event) withSessions(inputs []hall.MatsInput) {
 func (e *Event) moveItem(id string, mat, index int, move string) error {
 	view := e.mats()
 	placed, n := e.placements()
-	var (
-		next    map[string]store.Placement
-		changed bool
-		err     error
-	)
-	switch move {
-	case "up", "down":
-		next, changed, err = hall.Step(view, placed, id, move == "up", n)
-	default:
-		if index < 0 {
-			index = len(view.Items)
-		}
-		next, changed, err = hall.Move(view, placed, id, mat, index, n)
-	}
+	next, changed, err := hall.MoveOrStep(view, placed, id, mat, index, move, n)
 	if err == nil && changed {
 		e.plan.Items = next
 	}
@@ -198,8 +184,8 @@ func (e *Event) putMats(body []byte) Response {
 	if err := json.Unmarshal(body, &in); err != nil {
 		return fail(400, err)
 	}
-	if in.Count < 1 || in.Count > 8 {
-		return fail(400, fmt.Errorf("a hall has between 1 and 8 mats"))
+	if in.Count < 1 || in.Count > hall.MaxMats {
+		return fail(400, fmt.Errorf("a hall has between 1 and %d mats", hall.MaxMats))
 	}
 	for _, it := range e.mats().Items {
 		if it.Mat > in.Count && it.Status == "running" {
@@ -243,9 +229,4 @@ func (e *Event) register(id string, body []byte) Response {
 func (e *Event) releaseClient(id string) Response {
 	delete(e.keepers, id)
 	return changed(map[string]bool{"ok": true})
-}
-
-// itemPath is the work item named in a plan path: "/api/plan/items/open-sabre/pool-3".
-func itemPath(path string) (string, bool) {
-	return strings.CutPrefix(path, "/api/plan/items/")
 }

@@ -127,3 +127,17 @@ func DecidePerson(reg []store.Person, entries map[string][]people.Entry, id, act
 	}
 	return reg, nil, ErrNoSuchAction
 }
+
+// WithDuties adds a person's work as staff to their page. Somebody who only works has no
+// entries to take a name from; their name is on the staff list.
+func WithDuties(v PersonView, st store.Staff, sv StaffingView) PersonView {
+	v.Duties, v.Physician = DutiesOf(v.ID, st, sv)
+	if len(v.Entries) == 0 {
+		for _, m := range st.Members {
+			if m.Person == v.ID {
+				v.Name, v.Club = m.Name, m.Club
+			}
+		}
+	}
+	return v
+}

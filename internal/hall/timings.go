@@ -1,6 +1,7 @@
 package hall
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"sort"
@@ -263,4 +264,51 @@ func SetAnomaly(list []string, key string, on bool) []string {
 		out = append(out, key)
 	}
 	return out
+}
+
+// SetExpected writes how many each discipline named expects; 0 takes the number off.
+// Shared with the browser demo.
+func SetExpected(plan *store.Plan, in map[string]int) error {
+	for _, n := range in {
+		if n < 0 || n > 200 {
+			return errors.New("expect between 0 and 200")
+		}
+	}
+	if plan.Expected == nil {
+		plan.Expected = map[string]int{}
+	}
+	for slug, n := range in {
+		if n == 0 {
+			delete(plan.Expected, slug)
+		} else {
+			plan.Expected[slug] = n
+		}
+	}
+	return nil
+}
+
+// SetSessions writes the block of the day each discipline named runs in (#136), of those
+// the event has. Shared with the browser demo.
+func SetSessions(plan *store.Plan, in map[string]int, slugs []string) error {
+	for slug, n := range in {
+		if !slices.Contains(slugs, slug) || n < 1 || n > 20 {
+			return errors.New("a block is a discipline of this event and a number from 1 to 20")
+		}
+	}
+	if plan.Sessions == nil {
+		plan.Sessions = map[string]int{}
+	}
+	for slug, n := range in {
+		plan.Sessions[slug] = n
+	}
+	return nil
+}
+
+// LearnTimings writes what the day measured into the template (#64). The changeover is
+// kept when nothing measured one.
+func LearnTimings(t *store.Timings, rep forecast.Report) {
+	t.Match = int(rep.Match / time.Second)
+	if rep.Changeover > 0 {
+		t.Changeover = int(rep.Changeover / time.Second)
+	}
 }

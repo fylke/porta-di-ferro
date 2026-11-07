@@ -165,28 +165,18 @@ func signupFiles(body []byte) ([]signup.File, error) {
 	return signup.DecodeFiles(in.Files)
 }
 
-// peopleRequest answers the event's people and signup paths, or reports it has none.
-func (e *Event) peopleRequest(method, bare string, parts []string, body []byte) (Response, bool) {
-	switch {
-	case method == "GET" && bare == "/api/people":
-		return ok(hall.ViewPeople(e.people, e.entries())), true
-	case method == "GET" && len(parts) == 3 && parts[1] == "people":
-		return e.getPerson(parts[2]), true
-	case method == "POST" && len(parts) == 4 && parts[1] == "people":
-		return e.postPerson(parts[2], parts[3], body), true
+// peopleRoutes are the event's people and its signup.
+func (e *Event) peopleRoutes() []route {
+	return []route{
+		on("GET /api/people", func(call) Response { return ok(hall.ViewPeople(e.people, e.entries())) }),
+		on("GET /api/people/{id}", func(c call) Response { return e.getPerson(c.param("id")) }),
+		on("POST /api/people/{id}/{action}", func(c call) Response { return e.postPerson(c.param("id"), c.param("action"), c.body) }),
 
-	case method == "GET" && bare == "/api/event/signup/ready":
-		return ok(hall.SignupReadyView(e.definition(true))), true
-	case method == "GET" && bare == "/api/event/signup/definition.json":
-		return ok(e.definition(true)), true
-	case method == "GET" && bare == "/api/event/signup/app.html":
-		return e.signupApp(), true
-	case method == "GET" && bare == "/api/event/signup/form.pdf":
-		return signupPDF(), true
-	case method == "POST" && bare == "/api/event/signup/preview":
-		return e.signupImport(body, false), true
-	case method == "POST" && bare == "/api/event/signup/import":
-		return e.signupImport(body, true), true
+		on("GET /api/event/signup/ready", func(call) Response { return ok(hall.SignupReadyView(e.definition(true))) }),
+		on("GET /api/event/signup/definition.json", func(call) Response { return ok(e.definition(true)) }),
+		on("GET /api/event/signup/app.html", func(call) Response { return e.signupApp() }),
+		on("GET /api/event/signup/form.pdf", func(call) Response { return signupPDF() }),
+		on("POST /api/event/signup/preview", func(c call) Response { return e.signupImport(c.body, false) }),
+		on("POST /api/event/signup/import", func(c call) Response { return e.signupImport(c.body, true) }),
 	}
-	return Response{}, false
 }

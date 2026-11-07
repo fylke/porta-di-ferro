@@ -127,3 +127,15 @@ func clampIndex(queue []ItemView, moving ItemView, index int) int {
 	}
 	return min(max(index, floor), max(ceiling, floor))
 }
+
+// MoveOrStep is a move from the mat board or a pool's controls: one step "up" or "down" the
+// item's own mat, or to a mat at an index, -1 for the end.
+func MoveOrStep(view MatsView, placed map[string]store.Placement, id string, mat, index int, move string, mats int) (map[string]store.Placement, bool, error) {
+	if move == "up" || move == "down" {
+		return Step(view, placed, id, move == "up", mats)
+	}
+	if index < 0 {
+		index = len(view.Items)
+	}
+	return Move(view, placed, id, mat, index, mats)
+}

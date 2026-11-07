@@ -176,15 +176,7 @@ func (c *Coordinator) getPerson(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if sv, _, st, err := c.StaffingNow(); err == nil {
-		v.Duties, v.Physician = hall.DutiesOf(v.ID, st, sv)
-		if len(v.Entries) == 0 {
-			// Somebody who only works: their name is on the staff list.
-			for _, m := range st.Members {
-				if m.Person == v.ID {
-					v.Name, v.Club = m.Name, m.Club
-				}
-			}
-		}
+		v = hall.WithDuties(v, st, sv)
 	}
 	writeJSON(w, http.StatusOK, v)
 }

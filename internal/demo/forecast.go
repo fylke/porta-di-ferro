@@ -71,147 +71,140 @@ func (e *Event) startAtFirstMatch() {
 	}
 }
 
-// planRequest answers the plan's times, or reports it has none.
-func (e *Event) planRequest(method, bare string, body []byte) (Response, bool) {
-	switch {
-	case method == "GET" && bare == "/api/forecast":
-		return ok(e.forecastView()), true
-	case method == "PUT" && bare == "/api/plan/timings":
-		var in store.Timings
-		if err := json.Unmarshal(body, &in); err != nil {
-			return fail(400, err), true
-		}
-		in, err := hall.CleanTimings(in)
-		if err != nil {
-			return fail(400, err), true
-		}
-		e.plan.Timings = in
-		return changed(e.forecastView()), true
-	case method == "POST" && bare == "/api/plan/timings/learn":
-		in, _, _ := e.times()
-		rep := forecast.Measure(in)
-		if rep.Samples == 0 {
-			return fail(409, errors.New("nothing has been fenced yet to learn from")), true
-		}
-		e.plan.Timings.Match = int(rep.Match / time.Second)
-		if rep.Changeover > 0 {
-			e.plan.Timings.Changeover = int(rep.Changeover / time.Second)
-		}
-		return changed(e.forecastView()), true
-	case method == "POST" && bare == "/api/plan/timings/default":
-		keep := e.timings()
-		keep.Close = ""
-		e.defaults = keep
-		return changed(map[string]any{"file": "this browser", "timings": keep}), true
-	case method == "PUT" && bare == "/api/plan/expected":
-		var in map[string]int
-		if err := json.Unmarshal(body, &in); err != nil {
-			return fail(400, err), true
-		}
-		if e.plan.Expected == nil {
-			e.plan.Expected = map[string]int{}
-		}
-		for slug, n := range in {
-			if n < 0 || n > 200 {
-				return fail(400, errors.New("expect between 0 and 200")), true
+// planRoutes are the plan's times.
+func (e *Event) planRoutes() []route {
+	view := func(call) Response { return ok(e.forecastView()) }
+	return []route{
+		on("GET /api/forecast", view),
+		on("PUT /api/plan/timings", func(c call) Response {
+			var in store.Timings
+			if err := json.Unmarshal(c.body, &in); err != nil {
+				return fail(400, err)
 			}
-			if n == 0 {
-				delete(e.plan.Expected, slug)
-			} else {
-				e.plan.Expected[slug] = n
+			in, err := hall.CleanTimings(in)
+			if err != nil {
+				return fail(400, err)
 			}
-		}
-		return changed(e.forecastView()), true
-	case method == "GET" && bare == "/api/plan/report":
-		in, _, inputs := e.times()
-		return ok(hall.ViewReport(forecast.Measure(in), inputs)), true
-	case method == "PUT" && bare == "/api/plan/anomalies":
-		var in struct {
-			Key     string `json:"key"`
-			Anomaly bool   `json:"anomaly"`
-		}
-		if err := json.Unmarshal(body, &in); err != nil || in.Key == "" {
-			return fail(400, fmt.Errorf("say which match")), true
-		}
-		e.plan.Anomalies = hall.SetAnomaly(e.plan.Anomalies, in.Key, in.Anomaly)
-		fin, _, inputs := e.times()
-		return changed(hall.ViewReport(forecast.Measure(fin), inputs)), true
-	case method == "PUT" && bare == "/api/plan/sessions":
-		var in map[string]int
-		if err := json.Unmarshal(body, &in); err != nil {
-			return fail(400, err), true
-		}
-		if e.plan.Sessions == nil {
-			e.plan.Sessions = map[string]int{}
-		}
-		for slug, n := range in {
-			if e.find(slug) == nil || n < 1 || n > 20 {
-				return fail(400, errors.New("a block is a discipline of this event and a number from 1 to 20")), true
+			e.plan.Timings = in
+			return changed(e.forecastView())
+		}),
+		on("POST /api/plan/timings/learn", func(call) Response {
+			in, _, _ := e.times()
+			rep := forecast.Measure(in)
+			if rep.Samples == 0 {
+				return fail(409, errors.New("nothing has been fenced yet to learn from"))
 			}
-			e.plan.Sessions[slug] = n
-		}
-		return changed(e.forecastView()), true
-	case method == "PUT" && bare == "/api/plan/finals":
-		var in struct {
-			Last bool `json:"last"`
-		}
-		if err := json.Unmarshal(body, &in); err != nil {
-			return fail(400, err), true
-		}
-		e.plan.FinalsLast = in.Last
-		return changed(e.forecastView()), true
-	case method == "PUT" && bare == "/api/plan/breaks":
-		var in []store.Break
-		if err := json.Unmarshal(body, &in); err != nil {
-			return fail(400, err), true
-		}
-		in, err := hall.CleanBreaks(in)
-		if err != nil {
-			return fail(400, err), true
-		}
-		e.plan.Breaks = in
-		return changed(e.forecastView()), true
-	case method == "PUT" && bare == "/api/plan/prep":
-		var in map[string]store.Prep
-		if err := json.Unmarshal(body, &in); err != nil {
-			return fail(400, err), true
-		}
-		if err := hall.SetPrep(&e.plan, in, e.slugs()); err != nil {
-			return fail(400, err), true
-		}
-		return changed(e.forecastView()), true
-	case method == "PUT" && bare == "/api/plan/starts":
-		var in map[string]string
-		if err := json.Unmarshal(body, &in); err != nil {
-			return fail(400, err), true
-		}
-		if err := hall.SetStarts(&e.plan, in, e.slugs()); err != nil {
-			return fail(400, err), true
-		}
-		return changed(e.forecastView()), true
-	case method == "POST" && bare == "/api/plan/suggest":
-		in, _, _ := e.times()
-		_, mats := e.placements()
-		return ok(hall.ViewSuggestion(forecast.Suggest(in, mats))), true
-	case method == "POST" && bare == "/api/plan/apply":
-		var want struct {
-			Signature string `json:"signature"`
-		}
-		if err := json.Unmarshal(body, &want); err != nil {
-			return fail(400, err), true
-		}
-		in, _, _ := e.times()
-		placed, mats := e.placements()
-		s := forecast.Suggest(in, mats)
-		if hall.SignatureOf(s) != want.Signature {
-			b, _ := json.Marshal(map[string]any{
-				"error":      "the plan has changed since that suggestion; here is a new one",
-				"suggestion": hall.ViewSuggestion(s),
-			})
-			return Response{Status: 409, ContentType: "application/json; charset=utf-8", Body: string(b)}, true
-		}
-		e.plan.Items = hall.ApplySuggestion(placed, s)
-		return changed(e.forecastView()), true
+			hall.LearnTimings(&e.plan.Timings, rep)
+			return changed(e.forecastView())
+		}),
+		on("POST /api/plan/timings/default", func(call) Response {
+			keep := e.timings()
+			keep.Close = ""
+			e.defaults = keep
+			return changed(map[string]any{"file": "this browser", "timings": keep})
+		}),
+		on("PUT /api/plan/expected", e.changePlan(func(c call) error {
+			var in map[string]int
+			if err := json.Unmarshal(c.body, &in); err != nil {
+				return err
+			}
+			return hall.SetExpected(&e.plan, in)
+		})),
+		on("GET /api/plan/report", func(call) Response { return ok(e.report()) }),
+		on("PUT /api/plan/anomalies", func(c call) Response {
+			var in struct {
+				Key     string `json:"key"`
+				Anomaly bool   `json:"anomaly"`
+			}
+			if err := json.Unmarshal(c.body, &in); err != nil || in.Key == "" {
+				return fail(400, fmt.Errorf("say which match"))
+			}
+			e.plan.Anomalies = hall.SetAnomaly(e.plan.Anomalies, in.Key, in.Anomaly)
+			return changed(e.report())
+		}),
+		on("PUT /api/plan/sessions", e.changePlan(func(c call) error {
+			var in map[string]int
+			if err := json.Unmarshal(c.body, &in); err != nil {
+				return err
+			}
+			return hall.SetSessions(&e.plan, in, e.slugs())
+		})),
+		on("PUT /api/plan/finals", e.changePlan(func(c call) error {
+			var in struct {
+				Last bool `json:"last"`
+			}
+			if err := json.Unmarshal(c.body, &in); err != nil {
+				return err
+			}
+			e.plan.FinalsLast = in.Last
+			return nil
+		})),
+		on("PUT /api/plan/breaks", e.changePlan(func(c call) error {
+			var in []store.Break
+			if err := json.Unmarshal(c.body, &in); err != nil {
+				return err
+			}
+			in, err := hall.CleanBreaks(in)
+			if err != nil {
+				return err
+			}
+			e.plan.Breaks = in
+			return nil
+		})),
+		on("PUT /api/plan/prep", e.changePlan(func(c call) error {
+			var in map[string]store.Prep
+			if err := json.Unmarshal(c.body, &in); err != nil {
+				return err
+			}
+			return hall.SetPrep(&e.plan, in, e.slugs())
+		})),
+		on("PUT /api/plan/starts", e.changePlan(func(c call) error {
+			var in map[string]string
+			if err := json.Unmarshal(c.body, &in); err != nil {
+				return err
+			}
+			return hall.SetStarts(&e.plan, in, e.slugs())
+		})),
+		on("POST /api/plan/suggest", func(call) Response {
+			in, _, _ := e.times()
+			_, mats := e.placements()
+			return ok(hall.ViewSuggestion(forecast.Suggest(in, mats)))
+		}),
+		on("POST /api/plan/apply", e.applySuggestion),
 	}
-	return Response{}, false
+}
+
+// changePlan is a change to the plan that answers with the forecast, or a 400.
+func (e *Event) changePlan(change func(call) error) func(call) Response {
+	return func(c call) Response {
+		if err := change(c); err != nil {
+			return fail(400, err)
+		}
+		return changed(e.forecastView())
+	}
+}
+
+func (e *Event) report() hall.ReportView {
+	in, _, inputs := e.times()
+	return hall.ViewReport(forecast.Measure(in), inputs)
+}
+
+func (e *Event) applySuggestion(c call) Response {
+	var want struct {
+		Signature string `json:"signature"`
+	}
+	if err := json.Unmarshal(c.body, &want); err != nil {
+		return fail(400, err)
+	}
+	in, _, _ := e.times()
+	placed, mats := e.placements()
+	s := forecast.Suggest(in, mats)
+	if hall.SignatureOf(s) != want.Signature {
+		return conflict(map[string]any{
+			"error":      "the plan has changed since that suggestion; here is a new one",
+			"suggestion": hall.ViewSuggestion(s),
+		})
+	}
+	e.plan.Items = hall.ApplySuggestion(placed, s)
+	return changed(e.forecastView())
 }

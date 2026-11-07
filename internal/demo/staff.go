@@ -3,8 +3,6 @@ package demo
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
-	"strings"
 
 	"github.com/fylke/porta-di-ferro/internal/hall"
 	"github.com/fylke/porta-di-ferro/internal/signup"
@@ -87,154 +85,122 @@ func (e *Event) addStaffFromSignup(slug string, rows []signup.Row) int {
 
 // removeStaffFrom is a discipline's Remove: off that discipline, and off its work.
 func (e *Event) removeStaffFrom(slug, id string) bool {
-	members, changed := staffing.RemoveFrom(e.staff.Members, slug, id, e.slugs())
-	if !changed {
-		return false
-	}
-	e.staff.Members = members
-	var kept []store.Assignment
-	for _, a := range e.staff.Assignments {
-		if !(a.Staff == id && strings.HasPrefix(a.Item, slug+"/")) {
-			kept = append(kept, a)
-		}
-	}
-	e.staff.Assignments = kept
-	return true
-}
-
-// staffRequest answers the staff paths, or reports it has none.
-func (e *Event) staffRequest(method, bare string, parts []string, body []byte) (Response, bool) {
-	switch {
-	case method == "GET" && bare == "/api/staff":
-		return e.staffView(), true
-	case method == "POST" && bare == "/api/staff":
-		var in struct {
-			store.StaffMember
-			Want string `json:"want"`
-		}
-		if err := json.Unmarshal(body, &in); err != nil {
-			return fail(400, err), true
-		}
-		m, err := staffing.Clean(in.StaffMember)
-		if err != nil {
-			return fail(400, err), true
-		}
-		m.ID, m.Signup = staffing.NewID(), ""
-		m.Person = e.personFor(m.Name, m.Club, "", "", in.Want)
-		e.staff.Members = append(e.staff.Members, m)
-		res := e.staffView()
-		res.Status, res.Changed = 201, true
-		return res, true
-	case method == "PUT" && bare == "/api/staff/crew":
-		var in map[string]int
-		if err := json.Unmarshal(body, &in); err != nil {
-			return fail(400, err), true
-		}
-		crew := staffing.CrewOf(e.staff.Crew)
-		for role, n := range in {
-			if _, ok := crew[role]; !ok || n < 0 || n > 6 {
-				return fail(400, fmt.Errorf("a mat needs between 0 and 6 of %q", role)), true
-			}
-			crew[role] = n
-		}
-		e.staff.Crew = crew
-		return changedView(e.staffView()), true
-	case method == "PUT" && bare == "/api/staff/assignments":
-		var in struct {
-			Item  string `json:"item"`
-			Role  string `json:"role"`
-			Slot  int    `json:"slot"`
-			Staff string `json:"staff"`
-		}
-		if err := json.Unmarshal(body, &in); err != nil {
-			return fail(400, err), true
-		}
-		next, err := hall.SetAssignment(e.staff, in.Item, in.Role, in.Slot, in.Staff)
-		if err != nil {
-			return fail(400, err), true
-		}
+	next, changed := hall.RemoveFromDiscipline(e.staff, slug, id, e.slugs())
+	if changed {
 		e.staff = next
-		return changedView(e.staffView()), true
-	case method == "POST" && bare == "/api/staff/suggest":
-		_, s := e.staffing()
-		return ok(s), true
-	case method == "POST" && bare == "/api/staff/apply":
-		var in struct {
-			Signature string `json:"signature"`
-		}
-		if err := json.Unmarshal(body, &in); err != nil {
-			return fail(400, err), true
-		}
-		_, s := e.staffing()
-		if s.Signature != in.Signature {
-			b, _ := json.Marshal(map[string]any{
-				"error":      "the staff or the plan changed since that suggestion; here is a new one",
-				"suggestion": s,
-			})
-			return Response{Status: 409, ContentType: "application/json; charset=utf-8", Body: string(b)}, true
-		}
-		e.staff.Assignments = s.Assignments
-		return changedView(e.staffView()), true
-	case len(parts) == 3 && parts[1] == "staff" && method == "PATCH":
-		var in struct {
-			Name        *string   `json:"name"`
-			Club        *string   `json:"club"`
-			Roles       *[]string `json:"roles"`
-			Disciplines *[]string `json:"disciplines"`
-		}
-		if err := json.Unmarshal(body, &in); err != nil {
-			return fail(400, err), true
-		}
-		for i, m := range e.staff.Members {
-			if m.ID != parts[2] {
-				continue
-			}
-			if in.Name != nil {
-				m.Name = *in.Name
-			}
-			if in.Club != nil {
-				m.Club = *in.Club
-			}
-			if in.Roles != nil {
-				m.Roles = *in.Roles
-			}
-			if in.Disciplines != nil {
-				m.Disciplines = *in.Disciplines
-			}
-			clean, err := staffing.Clean(m)
-			if err != nil {
-				return fail(400, err), true
-			}
-			e.staff.Members[i] = clean
-			return changedView(e.staffView()), true
-		}
-		return fail(404, fmt.Errorf("no staff member %s", parts[2])), true
-	case len(parts) == 3 && parts[1] == "staff" && method == "DELETE":
-		next, found := staffing.Without(e.staff, parts[2])
-		if !found {
-			return fail(404, errors.New("no staff member "+parts[2])), true
-		}
-		e.staff = next
-		return changedView(e.staffView()), true
 	}
-	return Response{}, false
-}
-
-func changedView(r Response) Response {
-	r.Changed = true
-	return r
+	return changed
 }
 
 // withDuties adds a person's work as staff to their page.
 func (e *Event) withDuties(v hall.PersonView) hall.PersonView {
 	sv, _ := e.staffing()
-	v.Duties, v.Physician = hall.DutiesOf(v.ID, e.staff, sv)
-	if len(v.Entries) == 0 {
-		for _, m := range e.staff.Members {
-			if m.Person == v.ID {
-				v.Name, v.Club = m.Name, m.Club
+	return hall.WithDuties(v, e.staff, sv)
+}
+
+// staffRoutes are the staff's paths.
+func (e *Event) staffRoutes() []route {
+	return []route{
+		on("GET /api/staff", func(call) Response { return e.staffView() }),
+		on("POST /api/staff", func(c call) Response {
+			var in struct {
+				store.StaffMember
+				Want string `json:"want"`
 			}
-		}
+			if err := json.Unmarshal(c.body, &in); err != nil {
+				return fail(400, err)
+			}
+			m, err := hall.NewMember(in.StaffMember)
+			if err != nil {
+				return fail(400, err)
+			}
+			m.Person = e.personFor(m.Name, m.Club, "", "", in.Want)
+			e.staff.Members = append(e.staff.Members, m)
+			res := e.staffView()
+			res.Status, res.Changed = 201, true
+			return res
+		}),
+		on("PUT /api/staff/crew", e.changeStaff(func(c call) error {
+			var in map[string]int
+			if err := json.Unmarshal(c.body, &in); err != nil {
+				return err
+			}
+			return hall.SetCrew(&e.staff, in)
+		})),
+		on("PUT /api/staff/assignments", e.changeStaff(func(c call) error {
+			var in struct {
+				Item  string `json:"item"`
+				Role  string `json:"role"`
+				Slot  int    `json:"slot"`
+				Staff string `json:"staff"`
+			}
+			if err := json.Unmarshal(c.body, &in); err != nil {
+				return err
+			}
+			next, err := hall.SetAssignment(e.staff, in.Item, in.Role, in.Slot, in.Staff)
+			if err != nil {
+				return err
+			}
+			e.staff = next
+			return nil
+		})),
+		on("POST /api/staff/suggest", func(call) Response {
+			_, s := e.staffing()
+			return ok(s)
+		}),
+		on("POST /api/staff/apply", e.applyStaff),
+		on("PATCH /api/staff/{id}", e.changeStaff(func(c call) error {
+			var in hall.MemberPatch
+			if err := json.Unmarshal(c.body, &in); err != nil {
+				return err
+			}
+			return hall.PatchMember(&e.staff, c.param("id"), in)
+		})),
+		on("DELETE /api/staff/{id}", e.changeStaff(func(c call) error {
+			next, found := staffing.Without(e.staff, c.param("id"))
+			if !found {
+				return hall.ErrNoMember(c.param("id"))
+			}
+			e.staff = next
+			return nil
+		})),
 	}
-	return v
+}
+
+// changeStaff is a change to the staff that answers with the staff panel: a 404 for a member
+// the staff does not have, a 400 for anything else wrong.
+func (e *Event) changeStaff(change func(call) error) func(call) Response {
+	return func(c call) Response {
+		err := change(c)
+		var missing hall.ErrNoMember
+		switch {
+		case errors.As(err, &missing):
+			return fail(404, err)
+		case err != nil:
+			return fail(400, err)
+		}
+		res := e.staffView()
+		res.Changed = true
+		return res
+	}
+}
+
+func (e *Event) applyStaff(c call) Response {
+	var in struct {
+		Signature string `json:"signature"`
+	}
+	if err := json.Unmarshal(c.body, &in); err != nil {
+		return fail(400, err)
+	}
+	_, s := e.staffing()
+	if s.Signature != in.Signature {
+		return conflict(map[string]any{
+			"error":      "the staff or the plan changed since that suggestion; here is a new one",
+			"suggestion": s,
+		})
+	}
+	e.staff.Assignments = s.Assignments
+	res := e.staffView()
+	res.Changed = true
+	return res
 }

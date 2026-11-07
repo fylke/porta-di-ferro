@@ -3,9 +3,7 @@ package httpapi
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/fylke/porta-di-ferro/internal/hall"
 	"github.com/fylke/porta-di-ferro/internal/people"
@@ -62,19 +60,10 @@ func (c *Coordinator) RemoveStaff(slug, id string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	members, changed := staffing.RemoveFrom(st.Members, slug, id, c.slugs())
+	st, changed := hall.RemoveFromDiscipline(st, slug, id, c.slugs())
 	if !changed {
 		return false, nil
 	}
-	st.Members = members
-	var kept []store.Assignment
-	for _, a := range st.Assignments {
-		if a.Staff == id && strings.HasPrefix(a.Item, slug+"/") {
-			continue
-		}
-		kept = append(kept, a)
-	}
-	st.Assignments = kept
 	if err := c.folder.SaveStaff(st); err != nil {
 		return false, err
 	}
@@ -183,17 +172,7 @@ func (c *Coordinator) putCrew(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	_, err := c.changeStaff(func(st *store.Staff) error {
-		crew := staffing.CrewOf(st.Crew)
-		for role, n := range in {
-			if _, ok := crew[role]; !ok || n < 0 || n > 6 {
-				return fmt.Errorf("a mat needs between 0 and 6 of %q", role)
-			}
-			crew[role] = n
-		}
-		st.Crew = crew
-		return nil
-	})
+	_, err := c.changeStaff(func(st *store.Staff) error { return hall.SetCrew(st, in) })
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
@@ -281,12 +260,11 @@ func (c *Coordinator) addStaff(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	m, err := staffing.Clean(in.StaffMember)
+	m, err := hall.NewMember(in.StaffMember)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	m.ID, m.Signup = staffing.NewID(), ""
 	if m.Person, err = c.PersonFor(m.Name, m.Club, "", "", in.Want); err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
@@ -304,43 +282,13 @@ func (c *Coordinator) addStaff(w http.ResponseWriter, r *http.Request) {
 // patchStaff changes a member's name, club, roles or disciplines.
 func (c *Coordinator) patchStaff(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	var in struct {
-		Name        *string   `json:"name"`
-		Club        *string   `json:"club"`
-		Roles       *[]string `json:"roles"`
-		Disciplines *[]string `json:"disciplines"`
-	}
+	var in hall.MemberPatch
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	_, err := c.changeStaff(func(st *store.Staff) error {
-		for i, m := range st.Members {
-			if m.ID != id {
-				continue
-			}
-			if in.Name != nil {
-				m.Name = *in.Name
-			}
-			if in.Club != nil {
-				m.Club = *in.Club
-			}
-			if in.Roles != nil {
-				m.Roles = *in.Roles
-			}
-			if in.Disciplines != nil {
-				m.Disciplines = *in.Disciplines
-			}
-			clean, err := staffing.Clean(m)
-			if err != nil {
-				return err
-			}
-			st.Members[i] = clean
-			return nil
-		}
-		return errNoMember(id)
-	})
-	var missing errNoMember
+	_, err := c.changeStaff(func(st *store.Staff) error { return hall.PatchMember(st, id, in) })
+	var missing hall.ErrNoMember
 	switch {
 	case errors.As(err, &missing):
 		writeErr(w, http.StatusNotFound, err)
@@ -351,21 +299,17 @@ func (c *Coordinator) patchStaff(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-type errNoMember string
-
-func (e errNoMember) Error() string { return fmt.Sprintf("no staff member %s", string(e)) }
-
 func (c *Coordinator) deleteMember(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	_, err := c.changeStaff(func(st *store.Staff) error {
 		next, found := staffing.Without(*st, id)
 		if !found {
-			return errNoMember(id)
+			return hall.ErrNoMember(id)
 		}
 		*st = next
 		return nil
 	})
-	var missing errNoMember
+	var missing hall.ErrNoMember
 	switch {
 	case errors.As(err, &missing):
 		writeErr(w, http.StatusNotFound, err)

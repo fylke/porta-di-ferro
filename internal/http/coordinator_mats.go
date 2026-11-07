@@ -188,20 +188,7 @@ func (c *Coordinator) MoveItem(id string, mat, index int, move string) error {
 	view := c.MatsNow()
 	c.planMu.Lock()
 	placed, mats := c.placementsLocked()
-	var (
-		next    map[string]store.Placement
-		changed bool
-		err     error
-	)
-	switch move {
-	case "up", "down":
-		next, changed, err = hall.Step(view, placed, id, move == "up", mats)
-	default:
-		if index < 0 {
-			index = len(view.Items)
-		}
-		next, changed, err = hall.Move(view, placed, id, mat, index, mats)
-	}
+	next, changed, err := hall.MoveOrStep(view, placed, id, mat, index, move, mats)
 	if err == nil && changed {
 		err = c.savePlacementsLocked(next)
 	}
