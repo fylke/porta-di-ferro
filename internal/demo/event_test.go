@@ -316,3 +316,22 @@ func TestTheLastScoreKeeperHeardHoldsTheMat(t *testing.T) {
 		}
 	}
 }
+
+// An identifier a discipline used to have leads to it until the event is reset; after
+// that, the discipline the visitor first found under it is there again (#153).
+func TestAnOldIdentifierGivesWayToTheDisciplineItNamed(t *testing.T) {
+	e := demo.NewEvent()
+	if res := e.Request("PUT", "/api/disciplines/open-sabre/identifier", []byte(`{"identifier":"sabre"}`)); res.Status != 200 {
+		t.Fatalf("changing the identifier returned %d: %s", res.Status, res.Body)
+	}
+	if res := e.Request("GET", "/api/d/open-sabre/state", nil); res.Status != 200 {
+		t.Fatalf("the old identifier still leads to the discipline, got %d", res.Status)
+	}
+	e.Request("POST", "/api/demo/reset", nil)
+	if res := e.Request("GET", "/api/d/open-sabre/state", nil); res.Status != 200 {
+		t.Fatalf("after a reset the sabre is open-sabre again, got %d: %s", res.Status, res.Body)
+	}
+	if res := e.Request("GET", "/api/d/sabre/state", nil); res.Status != 404 {
+		t.Errorf("after a reset nothing is called sabre, got %d", res.Status)
+	}
+}

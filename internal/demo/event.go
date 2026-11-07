@@ -69,6 +69,8 @@ func (e *Event) Reset() {
 	e.keepers = nil
 	e.people = nil
 	e.defaults = store.Timings{}
+	e.screens = store.Screens{}
+	e.moved = nil
 	e.id = "demo"
 	e.adopt(longsword)
 	e.adopt(sabre)
@@ -101,6 +103,7 @@ func (e *Event) Delete() {
 	e.people = nil
 	e.staff = store.Staff{}
 	e.screens = store.Screens{}
+	e.moved = nil
 	e.id = fmt.Sprintf("ev-%x", time.Now().UnixNano())
 }
 
@@ -109,14 +112,16 @@ func (e *Event) adopt(d *Demo) {
 	e.disciplines = append(e.disciplines, d)
 }
 
+// find is the discipline with an identifier, or the one that used to have it, as the
+// coordinator looks a discipline up.
 func (e *Event) find(slug string) *Demo {
-	if to, ok := e.moved[slug]; ok {
-		slug = to
-	}
 	for _, d := range e.disciplines {
 		if d.slug == slug {
 			return d
 		}
+	}
+	if to, ok := e.moved[slug]; ok {
+		return e.find(to)
 	}
 	return nil
 }
