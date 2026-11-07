@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MSL, replay, type Event } from './match';
-import { ended, lastStandingExchange, penaltyLoss } from './outcome';
+import { endDialog, endReasonOf, ended, lastStandingExchange, penaltyLoss, sideOutcome } from './outcome';
 
 const names = { red: 'Ada', blue: 'Bo' };
 
@@ -81,5 +81,40 @@ describe('the outcome of an ended match', () => {
       { seq: 2, type: 'end', elapsedMs: 2000, end: { reason: 'penalty' } },
     ];
     expect(ended(MSL, replay(MSL, log), names, log).headline).toBe('Bo is disqualified');
+  });
+});
+
+describe('the dialog that asks whether to end the match', () => {
+  it('names the winner and the score at a point cap', () => {
+    const state = { ...replay(MSL, [exchange(1, [2, 0], [0, 0])]), pending: 'point_cap' as const };
+    state.red = { ...state.red, score: 8 };
+    expect(endDialog(MSL, state, names, [], false)).toEqual({ headline: 'Ada wins 8–0', detail: '' });
+    expect(endReasonOf(state)).toBe('point_cap');
+  });
+
+  it('asks about the final exchange, unless sudden death decided it', () => {
+    const state = { ...replay(MSL, [exchange(1, [1, 0], [0, 0])]), pending: 'final_exchange' as const };
+    expect(endDialog(MSL, state, names, [], false).headline).toBe('Was that the final exchange?');
+    expect(endDialog(MSL, state, names, [], true)).toEqual({ headline: 'Ada wins on sudden death', detail: '1–0' });
+    expect(endReasonOf(state)).toBe('time');
+  });
+
+  it('says a level score is a draw', () => {
+    const state = { ...replay(MSL, [exchange(1, [1, 0], [1, 0])]), pending: 'point_cap' as const };
+    expect(endDialog(MSL, state, names, [], false).headline).toMatch(/^Draw /);
+  });
+});
+
+describe('how each side finished', () => {
+  it('is nothing while the match runs', () => {
+    expect(sideOutcome(MSL, replay(MSL, [exchange(1, [1, 0], [0, 0])]), 'red')).toBeNull();
+    expect(sideOutcome(MSL, null, 'red')).toBeNull();
+  });
+
+  it('beats both when both are out on warnings', () => {
+    const log = [exchange(1, [0, 3], [0, 3])];
+    const state = { ...replay(MSL, log), ended: true, endReason: 'penalty' as const, winner: '' as const };
+    expect(sideOutcome(MSL, state, 'red')).toBe('lost');
+    expect(sideOutcome(MSL, state, 'blue')).toBe('lost');
   });
 });

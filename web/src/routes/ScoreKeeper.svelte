@@ -12,7 +12,7 @@
   import { MSL, replay, type Side } from '../lib/match';
   import type { Client, Slot } from '../api';
   import * as db from '../lib/db';
-  import { ended, penaltyLoss } from '../lib/outcome';
+  import { endDialog, endReasonOf, ended, sideOutcome } from '../lib/outcome';
   import { summarise } from '../lib/drift';
   import { inSuddenDeath, suddenDeathDecided as decidedOnSuddenDeath } from '../lib/knockout';
   import { Heartbeat, deviceName } from '../lib/presence.svelte';
@@ -270,34 +270,14 @@
       !(matchState.pending === 'final_exchange' && !suddenDeathDecided && dismissedFinal === matchState.lastSeq),
   );
 
-  // The end dialog's wording. A penalty loss names the loser and why, because that is
-  // the one result a head referee will be asked to justify; the others name the winner.
-  const capText = $derived.by((): { headline: string; detail: string } => {
-    if (!matchState || !sk) return { headline: '', detail: '' };
-    if (matchState.pending === 'final_exchange' && suddenDeathDecided) {
-      const leader = matchState.red.score > matchState.blue.score ? names.red : names.blue;
-      return { headline: t('{name} wins on sudden death', { name: leader }), detail: `${matchState.red.score}–${matchState.blue.score}` };
-    }
-    if (matchState.pending === 'final_exchange') {
-      return { headline: t('Was that the final exchange?'), detail: '' };
-    }
-    if (matchState.pending === 'penalty_cap') {
-      return penaltyLoss(MSL, matchState, names, sk.log.events);
-    }
-    if (matchState.red.score === matchState.blue.score) {
-      return { headline: t('Draw {score}', { score: `${matchState.red.score}–${matchState.blue.score}` }), detail: '' };
-    }
-    const leader = matchState.red.score > matchState.blue.score ? names.red : names.blue;
-    const high = Math.max(matchState.red.score, matchState.blue.score);
-    const low = Math.min(matchState.red.score, matchState.blue.score);
-    return { headline: t('{name} wins {score}', { name: leader, score: `${high}–${low}` }), detail: '' };
-  });
+  // The end dialog's wording (lib/outcome.ts).
+  const capText = $derived(
+    matchState && sk ? endDialog(MSL, matchState, names, sk.log.events, suddenDeathDecided) : { headline: '', detail: '' },
+  );
 
   async function endMatch() {
     if (!matchState) return;
-    const reason =
-      matchState.pending === 'penalty_cap' ? 'penalty' : matchState.pending === 'point_cap' ? 'point_cap' : 'time';
-    await sk?.end(elapsed, reason);
+    await sk?.end(elapsed, endReasonOf(matchState));
   }
 
   async function secondAction() {
@@ -414,23 +394,9 @@
     matchState?.ended && sk ? ended(MSL, matchState, names, sk.log.events) : null,
   );
 
-  /**
-   * How each side finished, for the panel that side is shown on (issue #86). Null while
-   * the match is running, which is what keeps the scoring buttons on screen.
-   *
-   * Two warnings out of both of them is the case a plain winner/loser reading gets wrong:
-   * the engine records no winner, and "draw" on both halves would be a lie about a match
-   * that neither of them won. Both are beaten, so neither half says WINNER, and the centre
-   * says why.
-   */
+  /** How each side finished, for the panel that side is shown on (lib/outcome.ts). */
   function outcomeFor(side: Side): 'won' | 'lost' | 'drew' | null {
-    if (!matchState?.ended) return null;
-    if (matchState.winner) return matchState.winner === side ? 'won' : 'lost';
-    const bothOut =
-      matchState.endReason === 'penalty' &&
-      matchState.red.penalty >= MSL.penaltyLoss &&
-      matchState.blue.penalty >= MSL.penaltyLoss;
-    return bothOut ? 'lost' : 'drew';
+    return sideOutcome(MSL, matchState, side);
   }
 </script>
 

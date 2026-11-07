@@ -74,3 +74,49 @@ export function ended(r: Ruleset, state: State, names: Names, events: Event[]): 
   if (!state.winner) return { headline: t('Draw'), detail: score };
   return { headline: t('{name} wins', { name: names[state.winner] }), detail: score };
 }
+
+/**
+ * What the dialog that asks whether to end the match says. A penalty loss names the loser
+ * and why, because that is the one result a head referee will be asked to justify; the
+ * others name the winner. decidedOnSuddenDeath is a level match's first point after time.
+ */
+export function endDialog(r: Ruleset, state: State, names: Names, events: Event[], decidedOnSuddenDeath: boolean): Outcome {
+  if (state.pending === 'final_exchange' && decidedOnSuddenDeath) {
+    const leader = state.red.score > state.blue.score ? names.red : names.blue;
+    return { headline: t('{name} wins on sudden death', { name: leader }), detail: `${state.red.score}–${state.blue.score}` };
+  }
+  if (state.pending === 'final_exchange') {
+    return { headline: t('Was that the final exchange?'), detail: '' };
+  }
+  if (state.pending === 'penalty_cap') {
+    return penaltyLoss(r, state, names, events);
+  }
+  if (state.red.score === state.blue.score) {
+    return { headline: t('Draw {score}', { score: `${state.red.score}–${state.blue.score}` }), detail: '' };
+  }
+  const leader = state.red.score > state.blue.score ? names.red : names.blue;
+  const high = Math.max(state.red.score, state.blue.score);
+  const low = Math.min(state.red.score, state.blue.score);
+  return { headline: t('{name} wins {score}', { name: leader, score: `${high}–${low}` }), detail: '' };
+}
+
+/** Why a match the dialog ends ended: the cap it reached, or the time. */
+export function endReasonOf(state: State): 'penalty' | 'point_cap' | 'time' {
+  return state.pending === 'penalty_cap' ? 'penalty' : state.pending === 'point_cap' ? 'point_cap' : 'time';
+}
+
+/**
+ * How one side finished, for the panel it is shown on (issue #86), or null while the match
+ * is running, which is what keeps the scoring buttons on screen.
+ *
+ * Two warnings out of both of them is the case a plain winner/loser reading gets wrong: the
+ * engine records no winner, and "draw" on both halves would be a lie about a match that
+ * neither of them won. Both are beaten, so neither half says WINNER, and the centre says
+ * why.
+ */
+export function sideOutcome(r: Ruleset, state: State | null, side: Side): 'won' | 'lost' | 'drew' | null {
+  if (!state?.ended) return null;
+  if (state.winner) return state.winner === side ? 'won' : 'lost';
+  const bothOut = state.endReason === 'penalty' && state.red.penalty >= r.penaltyLoss && state.blue.penalty >= r.penaltyLoss;
+  return bothOut ? 'lost' : 'drew';
+}
