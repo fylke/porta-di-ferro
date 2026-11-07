@@ -16,7 +16,7 @@
   import { t } from "../lib/i18n.svelte";
   import { hall } from "../lib/event.svelte";
   import { apiBase } from "../lib/paths";
-  import { signupSubmissionId } from "../lib/signup-id";
+  import { signupResponse } from "../lib/signup-response";
   import { discipline } from "../router.svelte";
   import ConfirmDialog from "./ConfirmDialog.svelte";
   import SaveButton from "./SaveButton.svelte";
@@ -294,22 +294,17 @@
     }
 
     error = "";
-    const email = manualEmail.trim().toLowerCase();
-    const response = {
-      format: "porta.signup.response",
-      version: 2,
-      definitionId: definitionId.trim(),
-      submissionId: signupSubmissionId(definitionId, email),
-      participant: {
-        name: manualName.trim(),
-        club: manualClub.trim(),
-        email,
-      },
+    const response = signupResponse({
+      definitionId,
+      name: manualName.trim(),
+      club: manualClub.trim(),
+      email: manualEmail,
       entries,
-      ...(staffTournaments.length > 0 && manualRoles.length > 0
-        ? { staff: { tournaments: staffTournaments, roles: [...manualRoles] } }
-        : {}),
-    };
+      staff:
+        staffTournaments.length > 0 && manualRoles.length > 0
+          ? { tournaments: staffTournaments, roles: [...manualRoles] }
+          : undefined,
+    });
     const added = [...files, { source: source || t("Manual response"), body: JSON.stringify(response) }];
     files = added;
     manualName = "";

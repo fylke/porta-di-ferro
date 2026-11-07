@@ -1,5 +1,5 @@
 import { t } from './i18n.svelte';
-import { signupSubmissionId } from './signup-id';
+import { RESPONSE_FORMAT, RESPONSE_VERSION, signupResponse } from './signup-response';
 
 export async function pdfSignupJSON(data: ArrayBuffer): Promise<string> {
     if (data.byteLength > 2 * 1024 * 1024) {
@@ -29,17 +29,17 @@ export async function pdfSignupJSON(data: ArrayBuffer): Promise<string> {
         if (name.startsWith('role-')) roles.push(name.slice('role-'.length));
     }
     const definitionId = values.get('porta-event')?.trim();
-    if (values.get('porta-format') !== 'porta.signup.response/2' || !definitionId) {
+    if (values.get('porta-format') !== `${RESPONSE_FORMAT}/${RESPONSE_VERSION}` || !definitionId) {
         throw new Error(t('Not a supported Porta signup PDF. Ask the organizer for a new form.'));
     }
-    const email = (values.get('email') ?? '').trim().toLowerCase();
-    return JSON.stringify({
-        format: 'porta.signup.response',
-        version: 2,
-        definitionId,
-        submissionId: signupSubmissionId(definitionId, email),
-        participant: { name: values.get('name') ?? '', club: values.get('club') ?? '', email },
-        entries,
-        staff: { tournaments, roles },
-    });
+    return JSON.stringify(
+        signupResponse({
+            definitionId,
+            name: values.get('name') ?? '',
+            club: values.get('club') ?? '',
+            email: values.get('email') ?? '',
+            entries,
+            staff: { tournaments, roles },
+        }),
+    );
 }
