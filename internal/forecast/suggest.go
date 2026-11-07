@@ -1,6 +1,7 @@
 package forecast
 
 import (
+	"slices"
 	"sort"
 	"time"
 )
@@ -330,10 +331,11 @@ func (s *suggester) place(it Item) {
 }
 
 // lastResort is where an item goes when every mat would have to wait for one of its fencers:
-// behind the clash, on that mat, where it cannot start before they are free.
+// behind the clash, on that mat, where it cannot start before they are free -- when it may
+// go there. A pinned item or a held final waits on its own mat instead.
 func lastResort(candidates []int, clashes map[int]int) int {
 	for _, m := range candidates {
-		if c := clashes[m]; c != 0 {
+		if c := clashes[m]; c != 0 && slices.Contains(candidates, c) {
 			return c
 		}
 	}
