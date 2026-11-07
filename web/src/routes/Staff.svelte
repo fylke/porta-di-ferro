@@ -5,6 +5,7 @@
   import { clockOf } from '../lib/clock-of-day';
   import { itemLabel, roleLabel, ROLES, MAT_ROLES } from '../lib/items';
   import { t } from '../lib/i18n.svelte';
+  import { errorText } from '../lib/errors';
 
   /**
    * The event's staff (phase 5, #5): who has offered to work, in which roles and
@@ -26,7 +27,7 @@
     try {
       view = await api.staff();
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      error = errorText(e);
     }
   }
 
@@ -53,7 +54,7 @@
       const next = await f();
       if (next) view = next;
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      error = errorText(e);
     } finally {
       busy = false;
     }
@@ -171,7 +172,7 @@
       suggestion = await api.suggestStaff();
       note = '';
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      error = errorText(e);
     } finally {
       busy = false;
     }
@@ -188,7 +189,7 @@
         suggestion = (e.body as { suggestion?: StaffSuggestion }).suggestion ?? null;
         note = t('The staff or the plan changed since; this is a new suggestion.');
       } else {
-        error = e instanceof Error ? e.message : String(e);
+        error = errorText(e);
       }
     } finally {
       busy = false;

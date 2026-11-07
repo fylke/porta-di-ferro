@@ -13,6 +13,7 @@
  */
 import { api, type MatView, type MatsView, type Slot } from '../api';
 import { anotherEvent } from './forget';
+import { errorText } from './errors';
 
 const CACHE = 'porta.mats';
 
@@ -59,7 +60,7 @@ export class MatsLive {
       this.view = await api.mats();
       this.error = '';
     } catch (e) {
-      this.error = e instanceof Error ? e.message : String(e);
+      this.error = errorText(e);
     }
   }
 

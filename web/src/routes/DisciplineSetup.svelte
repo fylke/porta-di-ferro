@@ -4,6 +4,7 @@
   import { discipline, dhref } from '../router.svelte';
   import { t } from '../lib/i18n.svelte';
   import LangToggle from './LangToggle.svelte';
+  import { errorText } from '../lib/errors';
 
   /**
    * Setting up one discipline (#149), at /d/{discipline}/setup: just what it has to have
@@ -41,7 +42,7 @@
         done = !!snap.tournament.setUp;
         firstTime = !done && snap.pools.length === 0;
       } catch (e) {
-        error = e instanceof Error ? e.message : String(e);
+        error = errorText(e);
       }
     })();
   });
@@ -69,7 +70,7 @@
       }
       done = true;
     } catch (err) {
-      error = err instanceof Error ? err.message : String(err);
+      error = errorText(err);
     } finally {
       busy = false;
     }

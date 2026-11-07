@@ -13,6 +13,7 @@
   import { roundLabel } from './lib-display.svelte';
   import { t } from '../lib/i18n.svelte';
   import DayTimeline from './DayTimeline.svelte';
+  import { errorText } from '../lib/errors';
 
   /**
    * The mat board (docs/proposals/one-event-many-disciplines.md §10, phase 2; #101): the
@@ -98,7 +99,7 @@
       }
       draft = [];
     } catch (e) {
-      const why = e instanceof Error ? e.message : String(e);
+      const why = errorText(e);
       error = done > 0 ? t('{done} of {n} moves applied, then: {why}', { done, n: moves.length, why }) : why;
       draft = moves.slice(done);
     } finally {
@@ -221,7 +222,7 @@
       suggestion = await api.suggest();
       suggestNote = '';
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      error = errorText(e);
     } finally {
       busy = false;
     }
@@ -239,7 +240,7 @@
         suggestion = (e.body as { suggestion?: SuggestionView }).suggestion ?? null;
         suggestNote = t('The plan changed since; this is a new suggestion.');
       } else {
-        error = e instanceof Error ? e.message : String(e);
+        error = errorText(e);
       }
     } finally {
       busy = false;
@@ -270,7 +271,7 @@
       await fn();
       await live.refresh();
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      error = errorText(e);
     } finally {
       busy = false;
     }

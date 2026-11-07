@@ -13,6 +13,7 @@
  */
 import { api, type EventView, type Presence } from '../api';
 import { anotherEvent } from './forget';
+import { errorText } from './errors';
 
 const CACHE = 'porta.event';
 /** How long the first look waits for the server before going on without it. */
@@ -55,7 +56,7 @@ export class EventLive {
       this.set(await api.event());
       this.error = '';
     } catch (e) {
-      this.error = e instanceof Error ? e.message : String(e);
+      this.error = errorText(e);
     }
   }
 

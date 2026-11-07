@@ -7,6 +7,7 @@
 import { apiIn, type Presence, type Snapshot } from '../api';
 import { apiBase, namespace } from './paths';
 import { discipline } from '../router.svelte';
+import { errorText } from './errors';
 
 export class Live {
   #snapshot = $state<Snapshot | null>(null);
@@ -100,7 +101,7 @@ export class Live {
       this.snapshot = await apiIn(this.slug).state();
       this.error = '';
     } catch (e) {
-      this.error = e instanceof Error ? e.message : String(e);
+      this.error = errorText(e);
     }
   }
 

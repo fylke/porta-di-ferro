@@ -3,6 +3,7 @@
   import { api, type MatsAdvice, type Snapshot } from '../api';
   import { discipline } from '../router.svelte';
   import { t } from '../lib/i18n.svelte';
+  import { errorText } from '../lib/errors';
 
   /**
    * Tournament setup: mats, the pool size range, and the draw. Name, logo and discipline
@@ -45,7 +46,7 @@
       await api.saveTournament(mats, minPoolSize, maxPoolSize, undefined, Math.max(0, Math.round(capacity ?? 0)));
       onchange();
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      error = errorText(e);
     } finally {
       busy = false;
     }
@@ -59,7 +60,7 @@
       await api.generatePools();
       onchange();
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      error = errorText(e);
     } finally {
       busy = false;
     }

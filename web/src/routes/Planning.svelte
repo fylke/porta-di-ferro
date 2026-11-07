@@ -8,6 +8,7 @@
   import Programme from './Programme.svelte';
   import SaveButton from './SaveButton.svelte';
   import TourExample from './TourExample.svelte';
+  import { errorText } from '../lib/errors';
 
   /**
    * Planning the day (phase 4, #64, #6, #149). How long things take, when the day starts
@@ -86,7 +87,7 @@
       }
       if (forecast.live) report = await api.report();
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      error = errorText(e);
     }
   }
 
@@ -117,7 +118,7 @@
       note = done;
       return true;
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      error = errorText(e);
       return false;
     } finally {
       busy = false;

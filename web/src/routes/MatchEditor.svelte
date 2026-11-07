@@ -4,6 +4,7 @@
   import { MSL, replay, type Event, type Reason, type TimerAction } from '../lib/match';
   import { formatClock } from '../lib/clock.svelte';
   import { t } from '../lib/i18n.svelte';
+  import { errorText } from '../lib/errors';
 
   /**
    * Full history editing (design §7 item 1): the organizer corrects any entry in a match
@@ -43,7 +44,7 @@
         rows = await api.events(match.id, 0);
         backups = await api.backups(match.id);
       } catch (e) {
-        error = e instanceof Error ? e.message : String(e);
+        error = errorText(e);
       } finally {
         loading = false;
       }
@@ -123,7 +124,7 @@
       onSaved();
       onClose();
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      error = errorText(e);
     } finally {
       saving = false;
     }
