@@ -27,8 +27,10 @@ type Event struct {
 	disciplines []*Demo
 	// plan is where every discipline's work runs on the event's mats (phase 2).
 	plan store.Plan
-	// keepers are the score keepers registered in this tab, for the match each holds.
+	// keepers are the score keepers registered in this tab, for the match each holds, and
+	// beats counts their heartbeats, for which was heard from last.
 	keepers map[string]keeper
+	beats   int
 	// people is the event's registry of people (phase 3): people.json, in memory.
 	people []store.Person
 	// defaults is the template the visitor kept for new events (phase 4): the file beside

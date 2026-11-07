@@ -15,11 +15,19 @@ import (
 // hall.Place, BuildMats, Move -- over the demo's in-memory disciplines, so the mat board,
 // the score keeper and the screens in the demo cannot disagree with a real event.
 
-// keeper is a score keeper registered in the demo's one tab: which mat, which match.
+// keeper is a score keeper registered in the demo's one tab: which mat, which match, and
+// when it was last heard, counted in heartbeats.
 type keeper struct {
 	Mat        int
 	Match      string
 	Discipline string
+	seen       int
+}
+
+// place is where a keeper is, whenever it was heard.
+func (k keeper) place() keeper {
+	k.seen = 0
+	return k
 }
 
 // placements is the plan, with any item just drawn placed and kept.
@@ -50,13 +58,17 @@ func (e *Event) placements() (map[string]store.Placement, int) {
 	return placed, mats
 }
 
+// held is the match the score keeper on a mat is holding: the one heard from last, as the
+// server's registry has it, when there are two.
 func (e *Event) held(mat int) (string, string) {
+	var last keeper
+	found := false
 	for _, k := range e.keepers {
-		if k.Mat == mat && k.Match != "" {
-			return k.Discipline, k.Match
+		if k.Mat == mat && (!found || k.seen > last.seen) {
+			last, found = k, true
 		}
 	}
-	return "", ""
+	return last.Discipline, last.Match
 }
 
 // mats is the hall, as GET /api/mats answers it.
@@ -220,10 +232,11 @@ func (e *Event) register(id string, body []byte) Response {
 		e.keepers = map[string]keeper{}
 	}
 	prev, had := e.keepers[id]
-	now := keeper{Mat: in.Mat, Match: in.Match, Discipline: in.Discipline}
+	e.beats++
+	now := keeper{Mat: in.Mat, Match: in.Match, Discipline: in.Discipline, seen: e.beats}
 	e.keepers[id] = now
 	res := ok(map[string]any{"id": id, "role": in.Role, "name": in.Name, "mat": in.Mat, "match": in.Match, "alive": true})
-	res.Changed = !had || prev != now
+	res.Changed = !had || prev.place() != now.place()
 	return res
 }
 

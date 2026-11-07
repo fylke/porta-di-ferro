@@ -289,3 +289,30 @@ func TestTheDemoDeletesItsEvent(t *testing.T) {
 		t.Errorf("Start over should bring the visitor's event back, got %d disciplines and %q", len(v.Disciplines), v.ID)
 	}
 }
+
+// Two score keepers on one mat: the mat shows the match of the one heard from last, as the
+// server's registry has it, and not whichever the map happens to give first.
+func TestTheLastScoreKeeperHeardHoldsTheMat(t *testing.T) {
+	e := demo.NewEvent()
+	var mats hall.MatsView
+	if err := json.Unmarshal([]byte(e.Request("GET", "/api/mats", nil).Body), &mats); err != nil {
+		t.Fatal(err)
+	}
+	queue := mats.Mats[0].Queue
+	if len(queue) < 2 {
+		t.Fatalf("mat 1 needs two matches for this test, has %d", len(queue))
+	}
+	register := func(id string, s hall.Slot) {
+		e.Request("POST", "/api/clients/"+id, []byte(`{"role":"scorekeeper","mat":1,"match":"`+s.Match.ID+`","discipline":"`+s.Discipline+`"}`))
+	}
+	register("old", queue[0])
+	register("new", queue[1])
+	for try := 0; try < 30; try++ {
+		if err := json.Unmarshal([]byte(e.Request("GET", "/api/mats", nil).Body), &mats); err != nil {
+			t.Fatal(err)
+		}
+		if cur := mats.Mats[0].Current; cur == nil || cur.Match.ID != queue[1].Match.ID {
+			t.Fatalf("try %d: mat 1 is on %+v, want %s, the match of the tablet heard from last", try, cur, queue[1].Match.ID)
+		}
+	}
+}
