@@ -34,6 +34,12 @@
    * has drifted from the plan. A card moved by hand is pinned, so a suggested plan keeps it
    * on its mat; the menu pins and unpins, and holds an item until a time. Suggest a plan
    * shows what would move and when the day would end, and changes nothing until applied.
+   *
+   * The cards stand where the forecast has them on the day (#153), with a strip of hours
+   * between the mats and on the outsides, as the timeline above has them sideways. A card
+   * with little time says it on one line, with the rest when pointed at, and one still too
+   * short for its text pushes the next one down rather than hiding anything. The board with
+   * moves in the draft shows those mats as they would run, one item after another.
    */
   let {
     canSetCount = false,
@@ -188,6 +194,110 @@
   }
   const times = $derived(new Map((forecast?.items ?? []).map((x) => [x.id, x])));
   const itemById = $derived(new Map((view?.items ?? []).map((x) => [x.id, x])));
+
+  // --- the day down the board ---------------------------------------------------------
+
+  // How tall a minute is: enough for the shortest pool's card to hold its text, within
+  // reason. A day of long pools stays on a screen or two; a day of short ones stays legible.
+  const SHORTEST_POOL_PX = 92;
+  const MIN_SCALE = 1.5;
+  const MAX_SCALE = 3.5;
+  const CARD_GAP = 4;
+  // Below this a card's time would not hold its usual four lines.
+  const COMPACT_PX = 72;
+
+  /** The day's hours from the whole hour before the first item, with a mark every half hour. */
+  const axis = $derived.by(() => {
+    let from = Infinity;
+    let to = -Infinity;
+    let first = '';
+    let shortest = Infinity;
+    for (const x of forecast?.items ?? []) {
+      const s = Date.parse(x.start);
+      const e = Date.parse(x.end);
+      if (Number.isNaN(s) || Number.isNaN(e)) continue;
+      if (s < from) {
+        from = s;
+        first = x.start;
+      }
+      to = Math.max(to, e);
+      if (itemById.get(x.id)?.kind === 'pool' && e > s) shortest = Math.min(shortest, (e - s) / 60000);
+    }
+    if (!Number.isFinite(from) || to <= from) return null;
+    const hour = Number(first.slice(11, 13));
+    const start = from - (Number(first.slice(14, 16)) * 60 + Number(first.slice(17, 19) || 0)) * 1000;
+    const scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, SHORTEST_POOL_PX / shortest));
+    const minutes = Math.ceil((to - start) / 1800000) * 30;
+    const ticks: { y: number; label: string; hour: boolean }[] = [];
+    for (let m = 0; m <= minutes; m += 30) {
+      const whole = m % 60 === 0;
+      ticks.push({ y: m * scale, label: whole ? String((hour + m / 60) % 24).padStart(2, '0') : '–', hour: whole });
+    }
+    return { start, hour, scale, minutes, ticks };
+  });
+
+  // Each card's height as drawn: more than its time when its text needs more.
+  let drawn = $state<Record<string, number>>({});
+
+  /** Where every card goes on its mat, and how tall the board has to be. */
+  const layout = $derived.by(() => {
+    const cards = new Map<string, { top: number; height: number }>();
+    const ends = new Map<number, number>();
+    let height = 0;
+    if (!axis) return { cards, ends, height };
+    height = axis.minutes * axis.scale;
+    const inDraft = new Set<number>();
+    for (const mv of draft) {
+      inDraft.add(mv.mat);
+      const it = itemById.get(mv.id);
+      if (it) inDraft.add(it.mat);
+    }
+    const y = (ms: number) => ((ms - axis.start) / 60000) * axis.scale;
+    for (const [mat, list] of byMat) {
+      const span = (it: ItemView) => {
+        const x = times.get(it.id);
+        return { s: Date.parse(x?.start ?? ''), e: Date.parse(x?.end ?? '') };
+      };
+      // A mat with moves in the draft runs its movable cards one after another.
+      let cursor = Infinity;
+      if (inDraft.has(mat)) {
+        for (const it of list) {
+          const { s } = span(it);
+          if (it.movable && !Number.isNaN(s)) cursor = Math.min(cursor, s);
+        }
+      }
+      let edge = 0;
+      for (const it of list) {
+        const { s, e } = span(it);
+        const timed = !Number.isNaN(s) && !Number.isNaN(e);
+        let at = timed ? s : axis.start;
+        if (timed && inDraft.has(mat) && it.movable) {
+          at = cursor;
+          cursor = at + (e - s);
+        } else if (timed) {
+          cursor = Math.max(cursor === Infinity ? 0 : cursor, e);
+        }
+        const top = Math.max(y(at), edge);
+        const tall = timed ? ((e - s) / 60000) * axis.scale : 0;
+        cards.set(it.id, { top, height: tall });
+        edge = top + Math.max(tall, drawn[it.id] ?? 0) + CARD_GAP;
+      }
+      ends.set(mat, edge);
+      height = Math.max(height, edge);
+    }
+    return { cards, ends, height };
+  });
+
+  /** The hall's breaks, as a band across every mat. */
+  const rests = $derived.by(() => {
+    if (!axis) return [];
+    const at = (clock: string) => {
+      const [h, m] = clock.split(':').map(Number);
+      return (h * 60 + m - axis.hour * 60) * axis.scale;
+    };
+    return (forecast?.breaks ?? []).map((b) => ({ label: b.label === 'Lunch' ? t('Lunch') : (b.label ?? ''), top: at(b.from), height: at(b.to) - at(b.from) }));
+  });
+  const nowAt = $derived(axis && forecast?.live ? ((Date.now() - axis.start) / 60000) * axis.scale : -1);
 
   /** "10:40–11:25". */
   function span(it: ItemView): string {
@@ -559,10 +669,20 @@
   {#if !view}
     <p class="dim">{live.error || t('Loading…')}</p>
   {:else}
-    <div class="columns" class:dragging={!!drag}>
-      {#each mats as m (m.mat)}
+    <div class="columns" class:dragging={!!drag} class:timed={!!axis} style={axis ? `--mats: ${mats.length}` : undefined}>
+      {#snippet hours(col: number)}
+        <div class="axis" aria-hidden="true" style="grid-column: {col}; height: {layout.height}px">
+          {#each axis?.ticks ?? [] as tick (tick.y)}
+            <span class:hour={tick.hour} style="top: {tick.y}px">{tick.label}</span>
+          {/each}
+        </div>
+      {/snippet}
+      {#if axis}{@render hours(1)}{/if}
+      {#each mats as m, col (m.mat)}
         {@const list = byMat.get(m.mat) ?? []}
-        <div class="column" data-mat={m.mat}>
+        {#if axis && col > 0}{@render hours(col * 2 + 1)}{/if}
+        <div class="column" data-mat={m.mat} style={axis ? `grid-column: ${col * 2 + 2}` : undefined}>
+          <div class="column-head">
           <h3>{t('Mat {n}', { n: m.mat })}{#if m.name}{' · '}{m.name}{/if}</h3>
           {#each m.away ?? [] as a (a.from)}
             <p class="away">{t('away {from}–{to}', { from: a.from, to: a.to })}</p>
@@ -576,10 +696,21 @@
           {:else}
             <p class="now dim">{list.length === 0 ? t('Nothing placed here.') : t('Nothing to fence just now.')}</p>
           {/if}
-          <ol>
+          </div>
+          <ol class:lane={!!axis} style={axis ? `height: ${layout.height}px; --hour: ${60 * axis.scale}px` : undefined}>
+            {#each axis ? rests : [] as r, i (i)}
+              <li class="rest" aria-hidden="true" style="top: {r.top}px; height: {r.height}px"><span>{r.label}</span></li>
+            {/each}
+            {#if nowAt >= 0 && nowAt <= layout.height}<li class="nowline" aria-hidden="true" style="top: {nowAt}px"></li>{/if}
             {#each list as it (it.id)}
+              {@const place = layout.cards.get(it.id)}
               <li
                 class="card {it.status}"
+                class:open={menuFor === it.id}
+                class:compact={!!place && place.height < COMPACT_PX}
+                title={place && place.height < COMPACT_PX ? `${it.done}/${it.total}${statusLabel(it) ? ` · ${statusLabel(it)}` : ''}` : undefined}
+                style={place ? `top: ${place.top}px; min-height: ${place.height}px` : undefined}
+                bind:offsetHeight={drawn[it.id]}
                 class:short={shortOf.has(it.id) && it.status !== 'done'}
                 class:movable={canMove(it)}
                 class:moved={moved.has(it.id)}
@@ -597,7 +728,7 @@
                 <span class="what">
                   {#if disciplines > 1}<span class="disc">{it.disciplineName}</span>{/if}
                   <span class="name">{label(it)}</span>
-                  <span class="meta">
+                  <span class="meta tally">
                     {it.done}/{it.total}{#if statusLabel(it)}{' '}&middot; {statusLabel(it)}{/if}
                   </span>
                   {#if span(it) && it.status !== 'done'}
@@ -655,10 +786,11 @@
                 {/if}
               </li>
             {/each}
-            {#if dropAtEnd(m.mat, list)}<li class="drop-end" aria-hidden="true"></li>{/if}
+            {#if dropAtEnd(m.mat, list)}<li class="drop-end" aria-hidden="true" style={axis ? `top: ${layout.ends.get(m.mat) ?? 0}px` : undefined}></li>{/if}
           </ol>
         </div>
       {/each}
+      {#if axis}{@render hours(mats.length * 2 + 1)}{/if}
     </div>
   {/if}
 
@@ -720,6 +852,108 @@
   }
   .columns.dragging {
     user-select: none;
+  }
+  /* Hour strips between the mats and on the outsides, each mat's head above its lane. */
+  .columns.timed {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(var(--mats), 1.5rem minmax(13.5rem, 1fr)) 1.5rem;
+    grid-template-rows: auto auto;
+    gap: 0 0.3rem;
+  }
+  .timed .column {
+    grid-row: 1 / span 2;
+    display: grid;
+    grid-template-rows: subgrid;
+    row-gap: 0;
+  }
+  .axis {
+    grid-row: 2;
+    position: relative;
+    font-variant-numeric: tabular-nums;
+  }
+  .axis span {
+    position: absolute;
+    left: 0;
+    right: 0;
+    text-align: center;
+    transform: translateY(-50%);
+    font-size: 0.7rem;
+    line-height: 1;
+    color: var(--ink-dim);
+  }
+  .axis span.hour {
+    font-weight: 700;
+    font-size: 0.75rem;
+    color: var(--ink);
+  }
+  ol.lane {
+    display: block;
+    position: relative;
+    background-image: repeating-linear-gradient(to bottom, var(--line) 0 1px, transparent 1px var(--hour));
+  }
+  .lane .card {
+    position: absolute;
+    left: 0;
+    right: 0;
+    align-items: start;
+    box-sizing: border-box;
+    z-index: 1;
+  }
+  .lane .card.open {
+    z-index: 30;
+  }
+  /* Solid, so a planned card does not show the hours and the breaks through it. */
+  .lane .card.planned {
+    background: var(--panel-2);
+  }
+  /* A card with little time: one line, wrapping only if there really is more to say. */
+  .card.compact {
+    align-items: center;
+    padding-block: 0.1rem;
+  }
+  .card.compact .what {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 0.45rem;
+  }
+  .card.compact .disc {
+    display: inline;
+  }
+  .card.compact .tally {
+    display: none;
+  }
+  .card.compact .more {
+    padding-block: 0;
+  }
+  .lane .card .menu {
+    top: 2.2rem;
+  }
+  .lane .drop-end {
+    position: absolute;
+    left: 0;
+    right: 0;
+    z-index: 2;
+  }
+  .rest {
+    position: absolute;
+    left: 0;
+    right: 0;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    background: repeating-linear-gradient(135deg, transparent 0 6px, var(--line) 6px 7px);
+    font-size: 0.72rem;
+    color: var(--ink-dim);
+  }
+  .nowline {
+    position: absolute;
+    left: 0;
+    right: 0;
+    z-index: 3;
+    height: 2px;
+    background: var(--amber-bright);
+    pointer-events: none;
   }
   .columns.dragging .column {
     outline: 1px dashed var(--line);
