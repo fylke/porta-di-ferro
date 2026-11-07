@@ -116,7 +116,7 @@ func (c *Coordinator) placementsLocked() (map[string]store.Placement, int) {
 			active.Items[id] = p
 		}
 	}
-	placed, changed := hall.PlaceIn(items, active, mats, hall.OrderOf(file.Plan, slugs, started))
+	placed, changed := hall.Place(items, active, mats, hall.OrderOf(file.Plan, slugs, started))
 	for id, p := range kept {
 		placed[id] = p
 	}

@@ -100,7 +100,7 @@ func TestADisciplineAloneKeepsItsMats(t *testing.T) {
 	ls := discipline("ls", "draw1", []pool{{1, 1, 3, ""}, {2, 2, 3, ""}, {3, 1, 3, ""}}, nil, nil, nil)
 	its := items(ls)
 	mats := hall.MatCount(store.Plan{}, []store.Tournament{{Mats: 2}})
-	placed, changed := hall.Place(its, store.Plan{}, mats)
+	placed, changed := hall.Place(its, store.Plan{}, mats, hall.PlaceOrder{})
 	if !changed || mats != 2 {
 		t.Fatalf("a fresh plan should place everything, on the discipline's two mats (%d)", mats)
 	}
@@ -112,7 +112,7 @@ func TestADisciplineAloneKeepsItsMats(t *testing.T) {
 	if !reflect.DeepEqual(placed, want) {
 		t.Errorf("placements:\n got %v\nwant %v", placed, want)
 	}
-	again, changed := hall.Place(its, store.Plan{Items: placed}, mats)
+	again, changed := hall.Place(its, store.Plan{Items: placed}, mats, hall.PlaceOrder{})
 	if changed || !reflect.DeepEqual(again, placed) {
 		t.Error("placing what is already placed should change nothing")
 	}
@@ -124,19 +124,19 @@ func TestPlacementsSurviveUntilTheDrawChanges(t *testing.T) {
 		"ls/pool-1": {Mat: 2, Seq: 1, Stamp: "draw1"},
 		"ls/pool-2": {Mat: 2, Seq: 2, Stamp: "draw1"},
 	}}
-	placed, _ := hall.Place(items(ls), moved, 2)
+	placed, _ := hall.Place(items(ls), moved, 2, hall.PlaceOrder{})
 	if placed["ls/pool-1"].Mat != 2 {
 		t.Error("a pool the organizer moved should stay moved")
 	}
 
 	redrawn := discipline("ls", "draw2", []pool{{1, 1, 3, ""}, {2, 2, 3, ""}}, nil, nil, nil)
-	placed, changed := hall.Place(items(redrawn), moved, 2)
+	placed, changed := hall.Place(items(redrawn), moved, 2, hall.PlaceOrder{})
 	if !changed || placed["ls/pool-1"].Mat != 1 {
 		t.Errorf("a redraw is new pools, placed afresh: %+v", placed)
 	}
 
 	// A mat taken away: what was on it goes to the end of the mat its lane maps to.
-	placed, _ = hall.Place(items(ls), moved, 1)
+	placed, _ = hall.Place(items(ls), moved, 1, hall.PlaceOrder{})
 	if placed["ls/pool-1"].Mat != 1 || placed["ls/pool-2"].Mat != 1 {
 		t.Errorf("with one mat everything is on it: %+v", placed)
 	}
@@ -145,7 +145,7 @@ func TestPlacementsSurviveUntilTheDrawChanges(t *testing.T) {
 func TestTwoDisciplinesShareTheMats(t *testing.T) {
 	ls := discipline("ls", "d", []pool{{1, 1, 2, "cc"}, {2, 2, 2, "c"}}, nil, nil, nil)
 	sa := discipline("sa", "d", []pool{{1, 1, 2, ""}}, nil, nil, nil)
-	placed, _ := hall.Place(items(ls, sa), store.Plan{}, 2)
+	placed, _ := hall.Place(items(ls, sa), store.Plan{}, 2, hall.PlaceOrder{})
 	if p := placed["sa/pool-1"]; p.Mat != 1 || p.Seq != 2 {
 		t.Fatalf("Sabre's first pool should queue behind Longsword's on mat 1: %+v", p)
 	}
@@ -193,7 +193,7 @@ func TestTheBracketWaitsForItsFeeders(t *testing.T) {
 	done := map[string]bool{"e-qf1": true, "e-qf3": true}
 	ls := discipline("ls", "d", nil, eightBracket(), filled, done)
 	// The quarter-finals in this snapshot have competitors; the rest wait on results.
-	placed, _ := hall.Place(items(ls), store.Plan{}, 2)
+	placed, _ := hall.Place(items(ls), store.Plan{}, 2, hall.PlaceOrder{})
 	view := hall.BuildMats([]hall.MatsInput{ls}, placed, 2, func(int) (string, string) { return "", "" })
 	m1 := view.Mats[0]
 	if m1.Current != nil {
@@ -209,7 +209,7 @@ func TestTheBracketWaitsForItsFeeders(t *testing.T) {
 
 func TestMovingItems(t *testing.T) {
 	ls := discipline("ls", "d", []pool{{1, 1, 2, "r"}, {2, 1, 2, ""}, {3, 1, 2, ""}, {4, 2, 2, ""}}, nil, nil, nil)
-	placed, _ := hall.Place(items(ls), store.Plan{}, 2)
+	placed, _ := hall.Place(items(ls), store.Plan{}, 2, hall.PlaceOrder{})
 	none := func(int) (string, string) { return "", "" }
 	view := hall.BuildMats([]hall.MatsInput{ls}, placed, 2, none)
 
@@ -283,7 +283,7 @@ func TestThePlannedDaySurvivesTheDraw(t *testing.T) {
 		"ls/pool-1": {Mat: 2, Seq: 1, Pinned: true, NotBefore: "10:00"},
 		"ls/pool-2": {Mat: 1, Seq: 1},
 	}}
-	placed, changed := hall.Place(items(ls), plan, 2)
+	placed, changed := hall.Place(items(ls), plan, 2, hall.PlaceOrder{})
 	if !changed {
 		t.Error("taking over a projected placement should be written down")
 	}
@@ -295,7 +295,7 @@ func TestThePlannedDaySurvivesTheDraw(t *testing.T) {
 // A card moved by hand is pinned, so a suggestion keeps it on that mat.
 func TestAMoveByHandPins(t *testing.T) {
 	ls := discipline("ls", "d", []pool{{1, 1, 2, ""}, {2, 1, 2, ""}}, nil, nil, nil)
-	placed, _ := hall.Place(items(ls), store.Plan{}, 2)
+	placed, _ := hall.Place(items(ls), store.Plan{}, 2, hall.PlaceOrder{})
 	view := hall.BuildMats([]hall.MatsInput{ls}, placed, 2, func(int) (string, string) { return "", "" })
 	next, _, _ := hall.Move(view, placed, "ls/pool-2", 2, 0, 2)
 	if !next["ls/pool-2"].Pinned || next["ls/pool-1"].Pinned {
@@ -345,7 +345,7 @@ func TestAMatDoesNotWaitOnProjectedWork(t *testing.T) {
 	sa.Expected = 6
 	plan := store.Plan{Items: map[string]store.Placement{"sa/pool-1": {Mat: 1, Seq: 1}}}
 	all := append(items(ls), hall.PlanItems("sa", sa.Snapshot.Tournament, 6)...)
-	placed, _ := hall.Place(all, plan, 2)
+	placed, _ := hall.Place(all, plan, 2, hall.PlaceOrder{})
 	view := hall.BuildMats([]hall.MatsInput{ls, sa}, placed, 2, func(int) (string, string) { return "", "" })
 	if cur := view.Mats[0].Current; cur == nil || cur.Discipline != "ls" {
 		t.Errorf("mat 1 should be on the longsword's pool, not waiting for the sabre's draw: %+v", cur)
@@ -369,7 +369,7 @@ func TestAMatDoesNotWaitOnProjectedWork(t *testing.T) {
 func TestTheProjectionsOwnPlacementsGiveWay(t *testing.T) {
 	ls := discipline("ls", "drawn", []pool{{1, 1, 2, ""}, {2, 2, 2, ""}}, nil, nil, nil)
 	plan := store.Plan{Items: map[string]store.Placement{"ls/pool-2": {Mat: 1, Seq: 1}}}
-	placed, _ := hall.Place(items(ls), plan, 2)
+	placed, _ := hall.Place(items(ls), plan, 2, hall.PlaceOrder{})
 	if p := placed["ls/pool-2"]; p.Mat != 2 || p.Stamp != "drawn" {
 		t.Errorf("pool 2 should go to its drawn lane, mat 2: %+v", p)
 	}
@@ -379,7 +379,7 @@ func TestTheProjectionsOwnPlacementsGiveWay(t *testing.T) {
 // (#149): the eliminations follow the pools, the finals the eliminations.
 func TestOnlyPoolsMoveAndNeverBehindTheirBracket(t *testing.T) {
 	ls := discipline("ls", "d", []pool{{1, 1, 2, ""}, {2, 1, 2, ""}}, eightBracket(), nil, nil)
-	placed, _ := hall.Place(items(ls), store.Plan{}, 2)
+	placed, _ := hall.Place(items(ls), store.Plan{}, 2, hall.PlaceOrder{})
 	view := hall.BuildMats([]hall.MatsInput{ls}, placed, 2, func(int) (string, string) { return "", "" })
 
 	for _, id := range []string{"ls/elim-1", "ls/bronze", "ls/final"} {

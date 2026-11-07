@@ -43,7 +43,7 @@ func (e *Event) placements() (map[string]store.Placement, int) {
 		}
 		return false
 	}
-	placed, changed := hall.PlaceIn(items, e.plan, mats, hall.OrderOf(e.plan, e.slugs(), started))
+	placed, changed := hall.Place(items, e.plan, mats, hall.OrderOf(e.plan, e.slugs(), started))
 	if changed {
 		e.plan.Items = placed
 	}

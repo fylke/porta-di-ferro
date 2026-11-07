@@ -53,12 +53,8 @@ func StaffInput(in forecast.Input, r forecast.Result, st store.Staff, competing 
 	out := staffing.Input{Members: st.Members, Crew: st.Crew, Assignments: st.Assignments, Competing: competing}
 	for _, it := range in.Items {
 		s := spans[it.ID]
-		started := false
-		for _, m := range it.Matches {
-			started = started || m.Done || !m.Started.IsZero()
-		}
 		out.Items = append(out.Items, staffing.Item{ID: it.ID, Discipline: it.Discipline, Mat: s.Mat,
-			Start: s.Start, End: s.End, Started: started, People: it.People, Held: it.Held})
+			Start: s.Start, End: s.End, Started: it.Begun(), People: it.People, Held: it.Held})
 	}
 	return out
 }

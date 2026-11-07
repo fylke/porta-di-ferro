@@ -121,39 +121,15 @@ func Summarize(slug string, snap Snapshot) DisciplineSummary {
 		out.Entrants = append(out.Entrants, Entrant{ID: c.ID, Name: c.Name, Club: c.Club, Person: c.Person})
 	}
 
-	byID := map[string]MatchView{}
-	for _, p := range snap.Pools {
-		out.Pools++
-		for _, m := range p.Matches {
-			byID[m.ID] = m
-			out.MatchesTotal++
-			if m.Status == "complete" {
-				out.MatchesDone++
-			}
+	out.Pools = len(snap.Pools)
+	byID := snap.matchesByID()
+	snap.eachMatch(func(m *MatchView) {
+		out.MatchesTotal++
+		if m.Status == "complete" {
+			out.MatchesDone++
 		}
-	}
-	if snap.Bracket != nil {
-		for _, m := range snap.Bracket.Matches {
-			byID[m.ID] = m
-			out.MatchesTotal++
-			if m.Status == "complete" {
-				out.MatchesDone++
-			}
-		}
-	}
-
-	switch {
-	case len(snap.Pools) == 0:
-		out.Stage = "setup"
-	case !snap.PoolsComplete:
-		out.Stage = "pools"
-	case snap.Bracket == nil:
-		out.Stage = "waiting"
-	case !snap.Bracket.Complete:
-		out.Stage = "eliminations"
-	default:
-		out.Stage = "done"
-	}
+	})
+	out.Stage = stageIn(snap)
 	if snap.Bracket != nil {
 		if p := snap.Bracket.Podium; p.First != "" || p.Second != "" || p.Third != "" {
 			out.Podium = &PodiumNames{First: names[p.First], Second: names[p.Second], Third: names[p.Third]}
@@ -189,4 +165,19 @@ func SummaryMats(view MatsView, slug string) []MatSummary {
 		})
 	}
 	return out
+}
+
+// stageIn is where a discipline has got to (DisciplineSummary.Stage).
+func stageIn(snap Snapshot) string {
+	switch {
+	case len(snap.Pools) == 0:
+		return "setup"
+	case !snap.PoolsComplete:
+		return "pools"
+	case snap.Bracket == nil:
+		return "waiting"
+	case !snap.Bracket.Complete:
+		return "eliminations"
+	}
+	return "done"
 }
