@@ -5,11 +5,10 @@ A HEMA tournament app that lets anyone run a tournament. Built by two members of
 
 ## Key features
 - Simple setup - you're up and running in less than a minute
-  - No need to rely on shitty venue WiFi, you can run it off a phone hotspot
+  - No need to rely on spotty venue WiFi, you can run it off a phone hotspot
 - Hardly any infrastructure needed - you can do an entire tournament on one laptop and a phone 
   - Screens are optional
   - Webserver is optional (we even have a signup system that only requires email)
-  - Entire system can run
 - Graceful degradation
   - App crashes - score keepers can still record points and sync later
   - Score keeper phone crashes or runs out of battery - another can take over on the fly
