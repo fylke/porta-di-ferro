@@ -1,12 +1,22 @@
 # Porta di Ferro
 
-A HEMA tournament application: score matches at the mat, run pools, show results.
+A HEMA tournament app that lets anyone run a tournament. Built by two members of
+[MSL — Medeltida Stridsteknik Linköping](https://mslstridsteknik.se/).
 
-**A club can actually run it themselves.** One file to download, one to run, no external
-service, no account, no internet. Built by two members of
-[MSL — Medeltida Stridsteknik Linköping IF](https://msl.nu).
+## Key features
+- Simple setup - you're up and running in less than a minute
+  - No need to rely on shitty venue WiFi, you can run it off a phone hotspot
+- Hardly any infrastructure needed - you can do an entire tournament on one laptop and a phone 
+  - Screens are optional
+  - Webserver is optional (we even have a signup system that only requires email)
+  - Entire system can run
+- Graceful degradation
+  - App crashes - score keepers can still record points and sync later
+  - Score keeper phone crashes or runs out of battery - another can take over on the fly
+  - If your laptop catches on fire, you can continue on paper (given that you had the forethought to print them) 
+- Spectators can easily follow tournament standings by just scanning a QR code
 
-## Try it without installing anything
+## Check it out without installing anything
 
 **[fylke.github.io/porta-di-ferro](https://fylke.github.io/porta-di-ferro/)** — a
 tournament already half fenced, in a browser tab. Score a match, watch the standings
@@ -77,7 +87,7 @@ day, a pool can be run on paper and entered afterwards.
 
 ## What it does today
 
-This is Milestone 1, scoped to run MSL's club event on 15 November 2026:
+This is Milestone 1, scoped to run MSL's club event on 14 November 2026:
 
 - Up to 4 mats, up to 8 pools of up to 7 competitors — 56 per run
 - Pools, then eliminations: top 8 by the overall ranking, single elimination with a bronze
