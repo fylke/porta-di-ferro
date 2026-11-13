@@ -67,8 +67,9 @@ installer below. [How the demo works](docs/demo.md).
 Everything is stored as plain JSON in a folder you own, so you can read it, back it up, and
 in a pinch fix it in a text editor.
 
-**Print the pool sheets before the event** (`/print/pools`). If anything goes wrong on the
-day, a pool can be run on paper and entered afterwards.
+**Print the pool sheets before the event** (`/print/pools`). They include a page explaining
+how to rank everyone across the pools and seed the eliminations by hand. If anything goes
+wrong on the day, a pool can be run on paper and entered afterwards.
 
 ### The addresses
 

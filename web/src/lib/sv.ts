@@ -266,13 +266,46 @@ export const sv: Record<string, string> = {
   // --- pool sheets ---------------------------------------------------------------------
   'Print A4': 'Skriv ut A4',
   'Print letter': 'Skriv ut Letter',
-  'One sheet per pool. Turn background graphics off in the print dialog.':
-    'Ett blad per pool. Stäng av bakgrundsgrafik i utskriftsdialogen.',
+  'One sheet per pool, plus instructions. Turn background graphics off in the print dialog.':
+    'Ett blad per pool, plus instruktioner. Stäng av bakgrundsgrafik i utskriftsdialogen.',
   '8 points or 3 minutes · differential scoring': '8 poäng eller 3 minuter · differenspoäng',
   Score: 'Poäng',
   Warnings: 'Varningar',
   'Match points: win 9, draw 6, loss 3. A penalty loss or a forfeit is recorded 0–8 and earns none. Second warning deducts a point; third loses the match.':
     'Matchpoäng: seger 9, oavgjort 6, förlust 3. Förlust på bestraffning eller uppgiven match noteras 0–8 och ger inga. Andra varningen drar av en poäng; tredje förlorar matchen.',
+  'How to calculate the eliminations': 'Så räknar du fram elimineringarna',
+  'Use this page with the pool sheets. Finish every pool match first. Rank all eligible competitors together, not separately by pool.':
+    'Använd sidan tillsammans med poolprotokollen. Fäkta klart alla poolmatcher först. Ranka alla fäktare som fortfarande är kvar tillsammans, inte pool för pool.',
+  '1. Record each match': '1. Anteckna varje match',
+  'Record both final scores and each competitor’s result. Match points are: win 9, draw 6, loss 3. A penalty loss or forfeit earns 0 match points.':
+    'Anteckna slutpoängen och resultatet för båda fäktarna. Matchpoäng: seger 9, oavgjort 6, förlust 3. Förlust på bestraffning eller uppgiven match ger 0 matchpoäng.',
+  '2. Calculate each competitor’s indices': '2. Räkna ut varje fäktares index',
+  'Total each competitor’s match points, wins, points scored, and points conceded. Divide by their counted completed pool matches; ignore matches voided because someone withdrew.':
+    'Räkna ihop varje fäktares matchpoäng, vinster, gjorda poäng och insläppta poäng. Dela med de spelade poolmatcher som räknas; bortse från matcher som strukits för att någon utgått.',
+  'Match point index (MPI)': 'Matchpoängindex (MPI)',
+  'Total match points ÷ completed matches': 'Totala matchpoäng ÷ spelade matcher',
+  'Victory index (VI)': 'Segerindex (VI)',
+  'Wins ÷ completed matches': 'Vinster ÷ spelade matcher',
+  'Score index (SI)': 'Poängindex (SI)',
+  '(Points scored − points conceded) ÷ completed matches': '(Poäng gjorda − poäng insläppta) ÷ spelade matcher',
+  'Reception index (RI)': 'Mottaget index (RI)',
+  'Points conceded ÷ completed matches; lower is better': 'Poäng insläppta ÷ spelade matcher; lägre är bättre',
+  '3. Rank everyone across all pools': '3. Ranka alla över poolerna',
+  'Compare indices in this order: highest MPI, highest VI, highest SI, then lowest RI.':
+    'Jämför index i den här ordningen: högst MPI, högst VI, högst SI och sedan lägst RI.',
+  'If still tied, use the result between them if they fenced each other. For a paper-only event, draw lots for any remaining tie and record the result. The app resolves remaining ties with its repeatable seeded draw when results are entered.':
+    'Om det fortfarande är lika, använd inbördes resultat om de har fäktats mot varandra. Vid en helt manuell tävling lottar ni om återstående lika placeringar och antecknar resultatet. När resultaten matas in avgör appen återstående lika placeringar med sin upprepningsbara seedade lottning.',
+  '4. Choose who qualifies': '4. Välj vilka som går vidare',
+  'Count only competitors who have not withdrawn.': 'Räkna bara fäktare som inte har utgått.',
+  '8 or more competitors: ranks 1–8 qualify.': '8 fäktare eller fler: plats 1–8 går vidare.',
+  '4–7 competitors: ranks 1–4 qualify.': '4–7 fäktare: plats 1–4 går vidare.',
+  '2–3 competitors: ranks 1–2 qualify.': '2–3 fäktare: plats 1–2 går vidare.',
+  'Fewer than 2 competitors: no eliminations.': 'Färre än 2 fäktare: inga elimineringar.',
+  '5. Seed the bracket': '5. Seedning av elimineringarna',
+  '8 qualifiers: 1 vs 8, 4 vs 5, 2 vs 7, and 3 vs 6. Winners of the first two matches meet; winners of the last two meet.':
+    '8 fäktare: 1 mot 8, 4 mot 5, 2 mot 7 och 3 mot 6. Vinnarna av de två första matcherna möts; vinnarna av de två sista möts.',
+  '4 qualifiers: 1 vs 4 and 2 vs 3. 2 qualifiers: 1 vs 2. The higher seed is red. With 4 or 8 qualifiers, the semi-final losers fence for bronze. Eliminations are single-elimination; use sudden death to decide a tied match.':
+    '4 fäktare: 1 mot 4 och 2 mot 3. 2 fäktare: 1 mot 2. Den högre seedade har röd färg. Med 4 eller 8 fäktare möts semifinalernas förlorare om bronset. Elimineringarna avgörs genom utslagning; vid oavgjort avgör sudden death.',
   'Pools have not been drawn yet.': 'Poolerna är inte lottade ännu.',
 
   // --- mat picker -------------------------------------------------------------------------

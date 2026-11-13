@@ -53,7 +53,7 @@
   <p class="noprint">
     <button class:chosen={paper === 'A4'} onclick={() => printOn('A4')}>{t('Print A4')}</button>
     <button class:chosen={paper === 'letter'} onclick={() => printOn('letter')}>{t('Print letter')}</button>
-    {t('One sheet per pool. Turn background graphics off in the print dialog.')}
+    {t('One sheet per pool, plus instructions. Turn background graphics off in the print dialog.')}
     <LangToggle compact />
   </p>
 
@@ -106,6 +106,54 @@
     </article>
   {/each}
 
+  <article class="instructions">
+    <header>
+      <h1>{t('How to calculate the eliminations')}</h1>
+    </header>
+    <p class="intro">
+      {t('Use this page with the pool sheets. Finish every pool match first. Rank all eligible competitors together, not separately by pool.')}
+    </p>
+
+    <section>
+      <h2>{t('1. Record each match')}</h2>
+      <p>{t('Record both final scores and each competitor’s result. Match points are: win 9, draw 6, loss 3. A penalty loss or forfeit earns 0 match points.')}</p>
+    </section>
+
+    <section>
+      <h2>{t('2. Calculate each competitor’s indices')}</h2>
+      <p>{t('Total each competitor’s match points, wins, points scored, and points conceded. Divide by their counted completed pool matches; ignore matches voided because someone withdrew.')}</p>
+      <dl class="indices">
+        <div><dt>{t('Match point index (MPI)')}</dt><dd>{t('Total match points ÷ completed matches')}</dd></div>
+        <div><dt>{t('Victory index (VI)')}</dt><dd>{t('Wins ÷ completed matches')}</dd></div>
+        <div><dt>{t('Score index (SI)')}</dt><dd>{t('(Points scored − points conceded) ÷ completed matches')}</dd></div>
+        <div><dt>{t('Reception index (RI)')}</dt><dd>{t('Points conceded ÷ completed matches; lower is better')}</dd></div>
+      </dl>
+    </section>
+
+    <section>
+      <h2>{t('3. Rank everyone across all pools')}</h2>
+      <p>{t('Compare indices in this order: highest MPI, highest VI, highest SI, then lowest RI.')}</p>
+      <p>{t('If still tied, use the result between them if they fenced each other. For a paper-only event, draw lots for any remaining tie and record the result. The app resolves remaining ties with its repeatable seeded draw when results are entered.')}</p>
+    </section>
+
+    <section>
+      <h2>{t('4. Choose who qualifies')}</h2>
+      <p>{t('Count only competitors who have not withdrawn.')}</p>
+      <ul>
+        <li>{t('8 or more competitors: ranks 1–8 qualify.')}</li>
+        <li>{t('4–7 competitors: ranks 1–4 qualify.')}</li>
+        <li>{t('2–3 competitors: ranks 1–2 qualify.')}</li>
+        <li>{t('Fewer than 2 competitors: no eliminations.')}</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>{t('5. Seed the bracket')}</h2>
+      <p>{t('8 qualifiers: 1 vs 8, 4 vs 5, 2 vs 7, and 3 vs 6. Winners of the first two matches meet; winners of the last two meet.')}</p>
+      <p>{t('4 qualifiers: 1 vs 4 and 2 vs 3. 2 qualifiers: 1 vs 2. The higher seed is red. With 4 or 8 qualifiers, the semi-final losers fence for bronze. Eliminations are single-elimination; use sudden death to decide a tied match.')}</p>
+    </section>
+  </article>
+
   {#if (live.snapshot?.pools ?? []).length === 0}
     <p class="noprint">{t('Pools have not been drawn yet.')}</p>
   {/if}
@@ -144,6 +192,10 @@
     margin: 0 auto 2rem;
     page-break-after: always;
     break-after: page;
+  }
+  .instructions {
+    page-break-after: auto;
+    break-after: auto;
   }
   header {
     display: flex;
@@ -213,6 +265,50 @@
     color: #444;
     line-height: 1.5;
   }
+  .instructions header {
+    margin-bottom: 0.6rem;
+  }
+  .instructions .intro,
+  .instructions section p,
+  .instructions li {
+    font-size: 0.82rem;
+    line-height: 1.35;
+  }
+  .instructions .intro {
+    margin: 0 0 0.6rem;
+  }
+  .instructions section {
+    margin: 0 0 0.55rem;
+    break-inside: avoid;
+  }
+  .instructions h2 {
+    margin: 0 0 0.2rem;
+    font-size: 0.95rem;
+  }
+  .instructions section p {
+    margin: 0 0 0.3rem;
+  }
+  .indices {
+    display: grid;
+    grid-template-columns: 1fr 1.45fr;
+    gap: 0.15rem 1rem;
+    margin: 0;
+    font-size: 0.78rem;
+  }
+  .indices div {
+    display: contents;
+  }
+  .indices dt {
+    font-weight: 700;
+  }
+  .indices dd {
+    margin: 0;
+  }
+  .instructions ul {
+    margin: 0.2rem 0 0;
+    padding-left: 1.3rem;
+    columns: 2;
+  }
   @media print {
     .noprint {
       display: none;
@@ -222,6 +318,9 @@
     }
     article {
       margin-bottom: 0;
+    }
+    .instructions section {
+      break-inside: avoid;
     }
   }
 </style>

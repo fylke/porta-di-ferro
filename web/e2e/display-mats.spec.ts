@@ -22,5 +22,11 @@ test.describe('Display & Spectator Views', () => {
     // 4. Visit /print/pools
     await page.goto('/print/pools');
     await expect(page).toHaveURL('/print/pools');
+    await expect(page.getByRole('heading', { name: 'How to calculate the eliminations' })).toBeVisible();
+    await expect(page.getByText('Match point index (MPI)')).toBeVisible();
+
+    await page.getByRole('button', { name: 'SV' }).click();
+    await expect(page.getByRole('heading', { name: 'Så räknar du fram elimineringarna' })).toBeVisible();
+    await expect(page.getByText('Matchpoängindex (MPI)')).toBeVisible();
   });
 });

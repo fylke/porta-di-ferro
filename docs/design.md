@@ -777,7 +777,8 @@ Target: run the 15 November club event.
    rather than guaranteeing none. Generation also **assigns red and blue for every match**, aiming to
    give each competitor a roughly even split across their own matches — best-effort, like the ordering.
 10. **Export results as JSON.**
-11. **Printable pool sheets** as a paper fallback, listing each match with its assigned colours.
+11. **Printable pool sheets** as a paper fallback, listing each match with its assigned colours
+    and including a page explaining how to rank competitors across pools and seed the eliminations.
 12. **English UI.**
 13. **Undo of the last confirmed exchange.** Moved into MVP during review: it is what makes the
     confirm-step model acceptable, and both authors treated easy correction as essential.
