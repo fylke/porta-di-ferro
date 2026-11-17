@@ -4,6 +4,82 @@ This document provides architectural diagrams for Porta di Ferro, illustrating c
 
 ---
 
+## Shared Pure Functions (`internal/hall`)
+
+Before diving into deployment and state machines, here's the core logic shared by HTTP handlers and the demo:
+
+```mermaid
+graph TB
+    subgraph Sources["Data Sources (Read-only)"]
+        Store["*store.Store<br/>(JSON files)"]
+        Memory["Event in Memory<br/>(demo only)"]
+    end
+
+    subgraph PureFunctions["internal/hall & web lib (Pure Functions)"]
+        subgraph Snapshots["Snapshots & Summary"]
+            BuildSnapshot["BuildSnapshot(source)<br/>→ Snapshot"]
+            Summarize["Summarize(snapshots[])<br/>→ EventSummary"]
+        end
+        
+        subgraph PoolsRanking["Pools & Ranking"]
+            ViewPools["ViewPools()<br/>→ []Pool"]
+            ViewRanking["ViewRanking()<br/>→ []Standing"]
+        end
+        
+        subgraph Eliminations["Eliminations & Podium"]
+            ViewBracket["ViewBracket()<br/>→ Bracket"]
+            Podium["Podium(bracket)<br/>→ []Winner"]
+        end
+        
+        subgraph Mats["Event-Level Mats (hallwide)"]
+            BuildMats["BuildMats(plan, discipline snapshots)<br/>→ []Mat"]
+            Place["Place(item, mat)<br/>→ updated Plan"]
+            Move["Move/Step(item, mat, place)<br/>→ updated Plan"]
+        end
+        
+        subgraph People["People & Signup"]
+            ViewPeople["ViewPeople()<br/>→ []Person"]
+            Duplicates["Duplicates()<br/>→ [][]Person (name groups)"]
+            DecidePerson["DecidePerson(action)<br/>→ updated people.json"]
+        end
+        
+        subgraph Forecast["Timeline Forecast"]
+            ForecastInput["ForecastInput(plan, snapshots)<br/>→ Input"]
+            Run["Run(input)<br/>→ Timeline"]
+        end
+        
+        subgraph Staff["Staff & Assignments"]
+            ViewStaffing["ViewStaffing()<br/>→ Assignments"]
+            SuggestStaff["SuggestStaff()<br/>→ Suggestions"]
+        end
+    end
+
+    subgraph Callers["Callers (Must Coordinate Side Effects)"]
+        HTTPHandler["http handlers<br/>read disk + call + write disk"]
+        DemoEvent["demo.Event<br/>read memory + call + write memory"]
+        WebLib["web/src/lib<br/>call via API"]
+    end
+
+    Store --> PureFunctions
+    Memory --> PureFunctions
+    
+    PureFunctions --> HTTPHandler
+    PureFunctions --> DemoEvent
+    PureFunctions --> WebLib
+    
+    HTTPHandler -->|"(handler responsibility)"| Store
+    DemoEvent -->|"(holds tournament state)"| Memory
+    WebLib -->|"(API client)"| HTTPHandler
+
+    style PureFunctions fill:#e8f5e9
+    style Sources fill:#fff3e0
+    style Callers fill:#f3e5f5
+```
+
+**Key Principle:** Logic that decides outcomes lives as pure functions in `hall`. Handlers read the disk, call hall functions, and write the result. The demo calls the same functions over in-memory state. This prevents double implementations and keeps domain logic independent of I/O.
+
+---
+
 ## 1. System & Deployment Architecture
 
 Porta di Ferro runs as a single Go binary on the organizer's PC, embedding the Svelte 5 SPA via `//go:embed`. Devices connect locally across the venue LAN without requiring an external internet connection. One run is one event: every discipline in one process, at one address, each with its own data folder (§1a).
@@ -46,9 +122,85 @@ flowchart TB
 
 ---
 
-### 1a. One event, many disciplines
+### 1a. One event, many disciplines — Component & Data Flow Architecture
 
 One run of `porta` is one **event**: every discipline of the day in one process, at one address, each in a folder of its own (issue #102, [docs/proposals/one-event-many-disciplines.md](proposals/one-event-many-disciplines.md), phase 1). Each discipline is an `httpapi.Server` exactly as it was when it was a process of its own — its own `store.Store`, lock, SSE hub and presence — mounted by `httpapi.Coordinator` under `/api/d/{slug}/`. The coordinator owns what is about the event: `event.json` (the welcome, the wifi, the signup settings, the plan and the order of the disciplines), the event's stream, and the address everything is served from.
+
+**Component & Data Flow:**
+
+```mermaid
+graph TB
+    subgraph Coordinator["httpapi.Coordinator (One per Event)"]
+        EventFile["event.json<br/>(day, disciplines, plan, staff, wifi)"]
+        EventHub["event SSE hub<br/>(/api/event/stream)"]
+        EventAPI["Event API routes<br/>(/api/event/*, /api/disciplines/*)"]
+        PeopleReg["people.json<br/>(Person registry)"]
+        StaffReg["staff.json<br/>(Staff & assignments)"]
+        DisplaysReg["displays.json<br/>(Mat assignments)"]
+        
+        EventFile <--> EventAPI
+        PeopleReg <--> EventAPI
+        StaffReg <--> EventAPI
+        DisplaysReg <--> EventAPI
+        EventAPI -.->|state changes| EventHub
+    end
+
+    subgraph Discipline1["httpapi.Server: open-steel"]
+        Disc1Store["Store lock + files<br/>(matches, pools, rankings)"]
+        Disc1Hub["Discipline SSE hub<br/>(/api/d/open-steel/stream)"]
+        Disc1API["Discipline routes<br/>(/api/d/open-steel/api/*)"]
+        Disc1Engine["Go Match Engine<br/>(replay, scoring)"]
+        
+        Disc1Store <--> Disc1API
+        Disc1API <--> Disc1Engine
+        Disc1API -.->|state changes| Disc1Hub
+        Disc1API -.->|state changes| EventHub
+    end
+
+    subgraph Discipline2["httpapi.Server: open-sabre"]
+        Disc2Store["Store lock + files<br/>(matches, pools, rankings)"]
+        Disc2Hub["Discipline SSE hub<br/>(/api/d/open-sabre/stream)"]
+        Disc2API["Discipline routes<br/>(/api/d/open-sabre/api/*)"]
+        Disc2Engine["Go Match Engine<br/>(replay, scoring)"]
+        
+        Disc2Store <--> Disc2API
+        Disc2API <--> Disc2Engine
+        Disc2API -.->|state changes| Disc2Hub
+        Disc2API -.->|state changes| EventHub
+    end
+
+    subgraph Clients["Clients (Browsers)"]
+        Organizer["Organizer<br/>(/admin, /plan)"]
+        SK1["Score Keeper<br/>Mat 1<br/>(/score/1)"]
+        Display["Displays<br/>(/display/mat/1, /roster)"]
+    end
+
+    EventAPI -- "REST API" --> Organizer
+    EventHub -.->|"SSE stream"| Organizer
+    
+    Disc1API -- "POST /events (idempotent)" --> SK1
+    Disc1Hub -.->|"SSE stream"| SK1
+    
+    Disc1Hub -.->|"SSE stream"| Display
+    Disc2Hub -.->|"SSE stream"| Display
+    EventHub -.->|"SSE stream"| Display
+    
+    Organizer -- "writes (plan, staff, people)" --> EventAPI
+    Organizer -- "reads plan, staff" --> EventAPI
+    
+    style Coordinator fill:#e1f5ff
+    style Discipline1 fill:#f3e5f5
+    style Discipline2 fill:#f3e5f5
+    style Clients fill:#e8f5e9
+```
+
+**Key Rules:**
+- **Event is authoritative**: Only `Coordinator` writes `event.json`, `people.json`, `staff.json`, `displays.json`.
+- **Disciplines are independent**: Each has its own store lock, files, and SSE hub.
+- **Discipline servers read the event**: They fetch `event.json` to get the day's metadata but never write it directly.
+- **Score keeper pushes to discipline server**: `POST /api/d/{slug}/matches/{id}/events` with idempotent `(match_id, seq)`.
+- **All clients listen to event SSE**: For event-level changes (plan, staff, discipline list).
+- **Discipline SSE is per-discipline**: For match-level updates within that discipline.
 
 ```mermaid
 flowchart TB
@@ -240,43 +392,118 @@ flowchart LR
 
 `Tournament.Event` — the welcome message, the event's name, venue and date, and the venue wifi — is written only from Plan the event and read by the other two; the programme beside it is generated from the plan (#149). None of it reaches a result.
 
-### 1d. Offline signup
+### 1d. Offline Signup Workflow
 
 Registration without an internet-facing server (issue #91, [docs/proposals/offline-signup.md](proposals/offline-signup.md)). Two files and no network between them.
 
+**Detailed Workflow:**
+
 ```mermaid
-flowchart LR
-    A["/admin · Signup files"] -->|"one .html with the event baked in"| P[Participant, offline]
-    P -->|"one .json per person"| F[(A folder<br/>email or a stick)]
-    A -->|fillable PDF| PP[Participant, offline PDF viewer]
-    PP -->|saved PDF form| F
-    F -->|choose files| CV[Organizer's browser<br/>PDF fields to signup JSON]
-    CV -->|usable signup JSON| PR[POST /api/signup/preview<br/>writes nothing]
-    CV -->|unreadable PDF| M[Organizer reads and enters response]
-    M -->|signup JSON| PR
-    PR --> D{Organizer looks}
-    D -->|confirm| IM[POST /api/signup/import]
-    IM --> C[(competitors.json)]
-    IM --> T[(tournament.json · staff)]
+sequenceDiagram
+    autonumber
+    participant Org as Organizer (Browser)
+    participant Sys as Server / Web
+    participant Part as Participant (Offline)
+    participant Store as USB/Email Store
+    participant Sys2 as Organizer (Import)
+
+    Org->>Sys: GET /api/event/signup/form
+    Sys-->>Org: HTML app (baked-in event metadata)<br/>+ PDF form template
+    
+    Org->>Part: Distribute signup.html via USB/email
+    Org->>Part: Distribute signup.pdf via print/email
+    
+    Note over Part: Offline Phase
+    Part->>Part: Fill signup.html (name, club, disciplines, roles)
+    Part->>Store: Save response.json
+    Part->>Part: Fill signup.pdf (AcroForm fields)
+    Part->>Store: Save response.pdf
+    
+    Note over Sys2: Import Phase
+    Sys2->>Sys2: Drag response folder to organizer UI
+    Sys2->>Sys: POST /api/event/signup/preview<br/>(folder: mix of .json, .pdf files)
+    
+    alt PDF file
+        Sys->>Sys: internal/signup.ReadPDF<br/>Extract AcroForm fields
+        Sys->>Sys: Convert to canonical signup.json
+    else JSON file
+        Sys->>Sys: (already in signup.json format)
+    else Unreadable
+        Sys-->>Sys2: Report filename as unreadable
+        Sys2->>Sys2: Organizer types it manually
+    end
+    
+    Sys->>Sys: internal/signup.Check (all files)<br/>Validation: format, fields, duplicates
+    Sys->>Sys: people.For() per entry<br/>Lookup or create person
+    Sys-->>Sys2: Preview: entries grouped by person,<br/>which disciplines, staff roles
+    
+    Org->>Sys2: Review preview
+    Sys2->>Sys: POST /api/event/signup/import<br/>(folder again, re-checks signature)
+    
+    Sys->>Sys: internal/signup.Check (re-run)<br/>Reject if stale / different files
+    Sys->>Sys: Link entries to people<br/>Update people.json
+    Sys->>Sys: Create Competitor entries<br/>for each person in each discipline
+    Sys->>Sys: Create Staff entries<br/>for people offering to work
+    
+    Sys-->>Sys2: 200 OK<br/>Count of entrants added per discipline
+    
+    Note over Sys2: Deduplication Rules
+    Note over Sys2: - Same submission id = same person<br/>- Same email = same person<br/>- Same name (folded) = check People panel<br/>- Importing same folder twice = no duplicates added
 ```
 
-`internal/signup` decides everything and touches nothing: formats, validation, duplicate detection and the preview are pure functions over data. The confirm re-runs the same check rather than trusting the preview posted back to it, so the competitor list moving between the two calls cannot break the duplicate rule.
+**Offline Signup Features:**
 
-The installed server also generates a fillable PDF at `signup/form.pdf` using
-`signup.BuildPDF`. Participants fill its standard AcroForm fields and return the saved
-PDF without needing a server. On selection in the organizer's web app,
-`web/src/lib/signup-pdf.ts` reads the named fields locally with a lazy-loaded `pdf-lib`
-and produces the same versioned signup JSON as the HTML form. The import API accepts
-JSON only, never PDF bytes or base64 uploads. A PDF response's submission identifier
-is a SHA-256 hash of its event identifier and normalized email, so it is stable without
-exposing the address and works on the plain HTTP LAN origin. Scans, handwriting, and
-flattened forms are unsupported; they are reported by filename while readable files
-still preview, and organizers can enter unreadable responses manually. The browser-only
-demo hides the unsupported blank-PDF download action.
+```mermaid
+graph TB
+    subgraph Participant["Participant (Offline)"]
+        HTML["signup.html<br/>Self-contained, no server"]
+        PDF["signup.pdf<br/>Fillable form, AcroForm fields"]
+        RESP["response.json<br/>(or filled response.pdf)"]
+        HTML -->|saves| RESP
+        PDF -->|fills & saves| RESP
+    end
+    
+    subgraph Transport["Transport"]
+        STORE["USB stick / Email folder<br/>(one .json per person, or .pdf forms)"]
+        RESP -->|saves to| STORE
+    end
+    
+    subgraph Import["Organizer Import"]
+        PREVIEW["POST /api/event/signup/preview<br/>(no changes, just validation)"]
+        CHECK["internal/signup.Check()<br/>(pure function: format, duplicates)"]
+        LOOKUP["people.For()<br/>(find or create person)"]
+        CONFIRM["Organizer reviews<br/>then confirms"]
+        IMPORT["POST /api/event/signup/import<br/>(re-checks, commits)"]
+        
+        STORE -->|drag folder| PREVIEW
+        PREVIEW --> CHECK
+        CHECK --> LOOKUP
+        LOOKUP --> CONFIRM
+        CONFIRM --> IMPORT
+    end
+    
+    subgraph Results["Results"]
+        PEOPLE["people.json updated<br/>(Person registry)"]
+        COMP["Competitor entries created<br/>(one per person per discipline)"]
+        STAFF["Staff entries created<br/>(if offered)"]
+        IMPORT --> PEOPLE
+        IMPORT --> COMP
+        IMPORT --> STAFF
+    end
+    
+    style Participant fill:#e3f2fd
+    style Transport fill:#fff3e0
+    style Import fill:#f3e5f5
+    style Results fill:#c8e6c9
+```
 
-Importing the same folder twice adds nobody twice. Name and club are not an identity — two Anna Nilssons from the same club is a real thing — so the response carries a submission identifier made by the participant app, and the imported competitor remembers it in `Competitor.Signup`.
-
-A response can also offer to staff the disciplines its author is not fencing in (issue #5), in the roles they left ticked. The run that response names takes them into `Tournament.Staff` rather than the register; they carry the submission identifier too, so the duplicate rule covers both lists. The participant app builds the response in one pure function and sends it through `deliver()`, which is the one step an online signup would change — see "Towards online signup" in the proposal.
+**Key Properties:**
+- **Idempotent submission ID**: Same folder imported twice doesn't add duplicates.
+- **Email as identity**: Same email = same person across disciplines and devices.
+- **Pure validation**: `internal/signup.Check()` decides everything before writing.
+- **PDF support**: AcroForm fields extracted locally (lazy-load pdf-lib), converted to canonical JSON.
+- **Staff integration**: Offers to work create staff entries, linked to person (prevents double-booking).
+- **People deduplication**: Duplicates by folded name offered on /admin · People panel (merge/keep apart).
 
 ## 2. Match Engine State Machine & Scoring Logic
 
@@ -401,6 +628,47 @@ Displays: a screen opens `/display`, heartbeats with role `display`, and renders
 ## 4. Tournament Lifecycle & Ranking Pipeline
 
 Tournaments progress through competitor intake, pool generation, schedule assignment across mats, match execution, and multi-tier index ranking.
+
+**Tournament Stages & State Transitions:**
+
+```mermaid
+flowchart TD
+    Start["(1) Register & Setup<br/>Add competitors, configure mats/mat count"] 
+    Start --> DrawPools["(2) Draw Pools<br/>Generate pools: sizes balanced, clubs spread"]
+    
+    DrawPools --> PoolsNotes["(2.5) Pool Generation Details<br/>- Redraw retires old logs as .bak (match ids are positional)<br/>- Organizer can override pool order with Pool.Sequence<br/>- Snapshot serves pools in run order"]
+    PoolsNotes --> PoolsRun["(3) Run Pools<br/>Matches executed on mats, logged to disk"]
+    
+    PoolsRun --> CompetitorWithdrawn{Competitor<br/>withdrawn?}
+    CompetitorWithdrawn -->|Yes| VoidMatches["(3.5) Void Withdrawn Competitor<br/>All their matches removed, others replayed"]
+    CompetitorWithdrawn -->|No| KeepResults["(3.5) Keep Results<br/>All match logs stand"]
+    
+    VoidMatches --> RankPool["(4) Rank Within Pools<br/>Apply tie-break chain on each pool"]
+    KeepResults --> RankPool
+    
+    RankPool --> RankDetails["(4.5) Ranking Tie-Break Chain:<br/>① MPI (Match Points / Matches)<br/>② VI (Wins / Matches)<br/>③ SI (Points Scored / Matches)<br/>④ RI (Points Conceded / Matches, lower wins)<br/>⑤ H2H (Head-to-Head comparison)<br/>⑥ Deterministic draw (FNV seed)"]
+    RankDetails --> PoolsComplete["(5) Pool Results Stand<br/>Final Standing per pool"]
+    
+    PoolsComplete --> DrawBracket["(6) Draw Eliminations<br/>Overall ranking, top 8 qualifies<br/>Seeding: 1v8, 2v7, 3v6, 4v5"]
+    
+    DrawBracket --> ElimMatsDecision{Organizer set<br/>ElimMats?}
+    ElimMatsDecision -->|No| CalcMinMats["Compute min mats:<br/>fewest mats that complete<br/>bracket in as many passes as full set"]
+    ElimMatsDecision -->|Yes| UseMats["Use organizer's ElimMats count"]
+    CalcMinMats --> AssignElim["Spread bracket across mats"]
+    UseMats --> AssignElim
+    
+    AssignElim --> RunBracket["(7) Run Bracket Matches<br/>Quarters → Semis → Bronze & Final<br/>Later rounds filled from results"]
+    
+    RunBracket --> FinalResults["(8) Final Results<br/>Podium (Gold, Silver, Bronze)"]
+    
+    style Start fill:#bbdefb
+    style DrawPools fill:#bbdefb
+    style PoolsRun fill:#fff9c4
+    style RankPool fill:#c8e6c9
+    style DrawBracket fill:#bbdefb
+    style RunBracket fill:#fff9c4
+    style FinalResults fill:#c8e6c9
+```
 
 Drawing the pools again is a restart rather than a relabelling. Match ids are positional — pool 1's first match is `p1m1` in every draw — so the logs of the draw being replaced are retired to dated `.bak` files first, the bracket with them. Without that, a redrawn pool keeps the previous pool's results under the new competitors' names (issue #93).
 
