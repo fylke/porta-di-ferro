@@ -227,6 +227,26 @@ func Bracket(t store.Tournament, ranked []Standing) ([]store.Match, error) {
 // Fill resolves the competitors of later rounds from the results of the matches that
 // feed them. A slot stays empty until its feeder has ended with a winner.
 func Fill(bracket []store.Match, states map[string]match.State) []store.Match {
+	out := fill(bracket, states)
+	for i, m := range out {
+		// A slot nobody will fill is shown empty, and the match is a walkover.
+		if m.Red == nobody || m.Blue == nobody {
+			m.Walkover = true
+			if m.Red == nobody {
+				m.Red = ""
+			}
+			if m.Blue == nobody {
+				m.Blue = ""
+			}
+			out[i] = m
+		}
+	}
+	return out
+}
+
+// fill is Fill keeping nobody where nobody goes through. Run over a bracket already filled
+// it gives the same answer, because every fed slot is worked out again from its feed.
+func fill(bracket []store.Match, states map[string]match.State) []store.Match {
 	byID := map[string]store.Match{}
 	out := make([]store.Match, len(bracket))
 	for i, m := range bracket {
@@ -236,21 +256,52 @@ func Fill(bracket []store.Match, states map[string]match.State) []store.Match {
 		if m.FeedBlue != "" {
 			m.Blue = resolve(m.FeedBlue, byID, states)
 		}
+		m.Walkover = false
 		out[i] = m
 		byID[m.ID] = m
 	}
 	return out
 }
 
-// resolve turns "winner:e-qf1" into a competitor id, or "" if not decided yet.
+// nobody stands, inside fill, for a slot that will never be filled: a double penalty loss
+// upstream sends nobody through (#164).
+const nobody = "-nobody-"
+
+// resolve turns "winner:e-qf1" into a competitor id, "" if not decided yet, or nobody when
+// nobody goes through.
 func resolve(feed string, byID map[string]store.Match, states map[string]match.State) string {
 	want, id, ok := strings.Cut(feed, ":")
 	if !ok {
 		return ""
 	}
 	m, known := byID[id]
+	if !known {
+		return ""
+	}
+	if m.Red == nobody || m.Blue == nobody {
+		// A walkover: whoever is on the other side goes through once they are known, and
+		// nobody comes out of it as the loser.
+		other := m.Red
+		if other == nobody {
+			other = m.Blue
+		}
+		if other == "" {
+			return ""
+		}
+		if want == "loser" {
+			return nobody
+		}
+		return other
+	}
 	st, played := states[id]
-	if !known || !played || !st.Ended || st.Winner == "" || m.Red == "" || m.Blue == "" {
+	if !played || !st.Ended || m.Red == "" || m.Blue == "" {
+		return ""
+	}
+	if st.Winner == "" {
+		if st.NoMatchPoints {
+			// A double penalty loss: neither goes on, whichever was asked for.
+			return nobody
+		}
 		return ""
 	}
 	winner, loser := m.Red, m.Blue
@@ -274,11 +325,17 @@ type Podium struct {
 func Result(filled []store.Match, states map[string]match.State) Podium {
 	var out Podium
 	byID := map[string]store.Match{}
-	for _, m := range filled {
+	for _, m := range fill(filled, states) {
 		byID[m.ID] = m
 	}
-	out.First = resolve("winner:e-f", byID, states)
-	out.Second = resolve("loser:e-f", byID, states)
-	out.Third = resolve("winner:e-b", byID, states)
+	place := func(feed string) string {
+		if id := resolve(feed, byID, states); id != nobody {
+			return id
+		}
+		return ""
+	}
+	out.First = place("winner:e-f")
+	out.Second = place("loser:e-f")
+	out.Third = place("winner:e-b")
 	return out
 }

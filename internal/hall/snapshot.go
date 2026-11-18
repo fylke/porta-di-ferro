@@ -293,9 +293,6 @@ func (b snapshotBuilder) bracket() (*BracketView, error) {
 		if err != nil {
 			return nil, err
 		}
-		if !v.State.Ended {
-			bv.Complete = false
-		}
 		bv.Matches = append(bv.Matches, v)
 	}
 	// Fill again now that the bracket's own states are known, so a semi-final
@@ -303,6 +300,13 @@ func (b snapshotBuilder) bracket() (*BracketView, error) {
 	filled := tournament.Fill(b.t.Bracket, b.states)
 	for i := range bv.Matches {
 		bv.Matches[i].Match = filled[i]
+		// A walkover is nothing anybody fences (#164): settled, so no mat waits on it.
+		if filled[i].Walkover {
+			bv.Matches[i].Status = "complete"
+		}
+		if !bv.Matches[i].State.Ended && !filled[i].Walkover {
+			bv.Complete = false
+		}
 	}
 	bv.Podium = tournament.Result(filled, b.states)
 	return bv, nil

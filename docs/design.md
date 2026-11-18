@@ -738,6 +738,12 @@ correct because withdrawal removes them from the arithmetic entirely.
 Note that a penalty loss earns **no match points**, unlike an ordinary loss which is worth 3. That
 applies to level 3 and disqualification alike.
 
+**Both at once** (#164). When both competitors reach the losing level in the same exchange, the match
+is a **double loss**: recorded 0–0, nobody wins, and neither earns match points -- in a pool it
+counts as a loss for each, never as a draw. In the bracket neither goes through: whoever meets the
+empty slot in the next round goes on without fencing (a walkover), and a semi-final's double loss
+leaves the bronze match without one side the same way.
+
 **Once rules are data-driven** (Milestone 3), the treatment of a disqualification becomes an organizer
 choice — score it as a match loss, or void the competitor retroactively as MSL's written rule does.
 

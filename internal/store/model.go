@@ -55,6 +55,11 @@ type Match struct {
 	Slot     int    `json:"slot,omitempty"`
 	FeedRed  string `json:"feedRed,omitempty"`
 	FeedBlue string `json:"feedBlue,omitempty"`
+	// Walkover says one side of a bracket match will never be filled: the match that
+	// feeds it ended in a double loss, and neither of its competitors goes through (#164).
+	// Whoever is on the other side goes on without fencing. Set by tournament.Fill, never
+	// stored.
+	Walkover bool `json:"walkover,omitempty"`
 }
 
 // Pool is a group of competitors who each fence all the others once.

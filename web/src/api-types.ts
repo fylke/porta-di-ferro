@@ -41,6 +41,11 @@ export interface MatchView {
   slot?: number;
   feedRed?: string;
   feedBlue?: string;
+  /**
+   * One side will never be filled: the match feeding it ended in a double penalty loss,
+   * so nobody goes through, and whoever is on the other side walks over (#164).
+   */
+  walkover?: boolean;
   state: State;
   status: 'pending' | 'running' | 'complete';
   /**

@@ -180,3 +180,34 @@ func TestOverallRanksAcrossPools(t *testing.T) {
 		t.Error("one pool match unplayed; pools should not be complete")
 	}
 }
+
+// #164: a double penalty loss in the bracket sends nobody through. Whoever meets the empty
+// slot goes on without fencing, and the bronze match loses its loser too.
+func TestADoubleLossInTheBracketSendsNobodyThrough(t *testing.T) {
+	b, _ := tournament.Bracket(store.Tournament{Mats: 2}, ranked(8))
+	double := match.State{Ended: true, Reason: match.ReasonPenalty, NoMatchPoints: true}
+	states := map[string]match.State{
+		"e-qf1": double, "e-qf2": won(match.Blue), "e-qf3": won(match.Red), "e-qf4": won(match.Red),
+	}
+	f := byID(tournament.Fill(b, states))
+	if sf := f["e-sf1"]; sf.Red != "" || sf.Blue != "s5" || !sf.Walkover {
+		t.Fatalf("semi 1 should be a walkover for s5: %+v", sf)
+	}
+	states["e-sf2"] = won(match.Red) // s2
+	f = byID(tournament.Fill(b, states))
+	if fin := f["e-f"]; fin.Red != "s5" || fin.Blue != "s2" || fin.Walkover {
+		t.Errorf("the final should be s5 v s2, fenced: %+v", fin)
+	}
+	if br := f["e-b"]; br.Red != "" || br.Blue != "s3" || !br.Walkover {
+		t.Errorf("the bronze should be a walkover for s3, the loser of semi 2: %+v", br)
+	}
+	states["e-f"] = won(match.Blue)
+	if got := tournament.Result(tournament.Fill(b, states), states); got != (tournament.Podium{First: "s2", Second: "s5", Third: "s3"}) {
+		t.Errorf("podium: %+v", got)
+	}
+	// Undecided is not nobody: with semi 2 unplayed, the final waits.
+	delete(states, "e-sf2")
+	if fin := byID(tournament.Fill(b, states))["e-f"]; fin.Blue != "" || fin.Walkover {
+		t.Errorf("the final's second slot is undecided, not a walkover: %+v", fin)
+	}
+}
