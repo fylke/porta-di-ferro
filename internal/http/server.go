@@ -23,8 +23,9 @@ type Server struct {
 	addressCache addressCache
 	// presence is the connected-client registry: score keepers and displays, alive or
 	// not. In memory; a restart lets everyone register again.
-	presence *presence
-	stop     chan struct{}
+	presence  *presence
+	stop      chan struct{}
+	closeOnce sync.Once
 	// identity is which discipline this is: its name, slug and folder.
 	identity identity
 	// event is the event this discipline is part of, or nil for a server on its own.
@@ -79,8 +80,9 @@ func newServer(st *store.Store, assets fs.FS, self hall.Instance, shared *presen
 }
 
 // Close stops the background work. The tests call it; the product runs until the
-// process ends.
-func (s *Server) Close() { close(s.stop) }
+// process ends. Twice is harmless: two requests reloading one discipline at once both
+// close the one they replace (#166).
+func (s *Server) Close() { s.closeOnce.Do(func() { close(s.stop) }) }
 
 // Handler wires the routes. Go 1.22 routing covers this workload; a framework buys
 // nothing here.

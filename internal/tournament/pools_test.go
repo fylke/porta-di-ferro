@@ -140,3 +140,21 @@ func TestPastTheCeilingIsRejected(t *testing.T) {
 		t.Error("5 mats is past the ceiling of 4 and should be refused")
 	}
 }
+
+// #166: pools come out as small as the range allows -- the most pools that keep each at or
+// above the minimum -- which is what poolCount's comment now says.
+func TestPoolsAreAsSmallAsTheRangeAllows(t *testing.T) {
+	for _, c := range []struct{ n, min, max, pools int }{
+		{12, 3, 7, 4},
+		{4, 2, 7, 2},
+		{12, 4, 7, 3},
+	} {
+		drawn, err := tournament.Generate(store.Tournament{Mats: 1, MinPoolSize: c.min, MaxPoolSize: c.max}, field(c.n), tournament.DefaultLimits())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(drawn.Pools) != c.pools {
+			t.Errorf("%d entrants at %d-%d should make %d pools, got %d", c.n, c.min, c.max, c.pools, len(drawn.Pools))
+		}
+	}
+}

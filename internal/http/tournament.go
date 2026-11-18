@@ -3,6 +3,7 @@ package httpapi
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -244,6 +245,18 @@ func (s *Server) postEvents(w http.ResponseWriter, r *http.Request) {
 	var events []match.Event
 	if err := json.NewDecoder(r.Body).Decode(&events); err != nil {
 		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	if err := match.Check(events); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	// Only a match of the tournament has a log (#166): any other id would make a file.
+	if t, err := s.store.Tournament(); err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	} else if hall.DrawOf(t, id) == "" {
+		writeErr(w, http.StatusNotFound, fmt.Errorf("there is no match %s in this tournament", id))
 		return
 	}
 	s.writeMu.Lock()

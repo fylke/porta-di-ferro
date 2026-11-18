@@ -87,6 +87,9 @@ type worker struct {
 	// discipline that breaks mid-event still shows on the landing page, marked stale.
 	last     *hall.DisciplineSummary
 	unfollow func()
+	// closed makes close safe to call twice: a double click on Reload, or a rename and a
+	// retire racing, both close the worker they replace (#166).
+	closed sync.Once
 }
 
 // NewCoordinator loads every discipline in the event folder. An event with none has none
@@ -163,12 +166,14 @@ func (c *Coordinator) load(slug string) *worker {
 }
 
 func (w *worker) close() {
-	if w.unfollow != nil {
-		w.unfollow()
-	}
-	if w.srv != nil {
-		w.srv.Close()
-	}
+	w.closed.Do(func() {
+		if w.unfollow != nil {
+			w.unfollow()
+		}
+		if w.srv != nil {
+			w.srv.Close()
+		}
+	})
 }
 
 // follow listens to a discipline's stream for as long as it is in the event, and tells

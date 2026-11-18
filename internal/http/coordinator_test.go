@@ -560,3 +560,46 @@ func TestTwoAddsOfOneNameMakeOneDiscipline(t *testing.T) {
 		t.Errorf("eight adds of one name should make one discipline, made %d: %+v", made, view.Disciplines)
 	}
 }
+
+// #166: a double click on Reload closed the discipline it replaced twice, and panicked.
+func TestReloadingTwiceAtOnceIsHarmless(t *testing.T) {
+	h := openHall(t, t.TempDir())
+	var ev hall.EventView
+	h.must("GET", "/api/event", nil, &ev)
+	ls := ev.Disciplines[0].Slug
+	done := make(chan int, 20)
+	for i := 0; i < 20; i++ {
+		go func() { done <- h.do("POST", "/api/disciplines/"+ls+"/reload", nil, nil) }()
+	}
+	for i := 0; i < 20; i++ {
+		if code := <-done; code >= 500 || code == 0 {
+			t.Errorf("a reload answered %d", code)
+		}
+	}
+}
+
+// #166: a push is checked before it is written: a match the tournament does not have, or
+// an event the engine could not read, is refused rather than kept.
+func TestAPushIsChecked(t *testing.T) {
+	h := openHall(t, t.TempDir())
+	var ev hall.EventView
+	h.must("GET", "/api/event", nil, &ev)
+	ls := ev.Disciplines[0].Slug
+	h.draw("/api/d/"+ls, 4, 1)
+	timer := []map[string]any{{"seq": 1, "type": "timer", "timer": map[string]string{"action": "start"}}}
+	if code := h.do("POST", "/api/d/"+ls+"/matches/p9m9/events", timer, nil); code != 404 {
+		t.Errorf("a match the tournament does not have should be 404, got %d", code)
+	}
+	for _, bad := range [][]map[string]any{
+		{{"seq": 1, "type": "teleport"}},
+		{{"seq": 1, "type": "exchange"}},
+		{{"seq": 0, "type": "timer", "timer": map[string]string{"action": "start"}}},
+	} {
+		if code := h.do("POST", "/api/d/"+ls+"/matches/p1m1/events", bad, nil); code != 400 {
+			t.Errorf("%v should be refused with 400, got %d", bad, code)
+		}
+	}
+	if code := h.do("POST", "/api/d/"+ls+"/matches/p1m1/events", timer, nil); code != 200 {
+		t.Errorf("a good push should land, got %d", code)
+	}
+}

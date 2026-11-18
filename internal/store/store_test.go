@@ -160,3 +160,18 @@ func TestARetryAfterAFailedWriteLands(t *testing.T) {
 		t.Errorf("the log should hold both events, holds %d", len(all))
 	}
 }
+
+// #166: a history edit moves the revision too, so the hall built after it is not the old one.
+func TestAHistoryEditMovesTheRevision(t *testing.T) {
+	s, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := s.Revision()
+	if _, err := s.ReplaceEvents("p1m1", []match.Event{{Seq: 1, Type: match.TypeTimer, Timer: &match.Timer{Action: match.TimerStart}}}); err != nil {
+		t.Fatal(err)
+	}
+	if s.Revision() == before {
+		t.Error("a history edit should move the revision")
+	}
+}
