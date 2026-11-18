@@ -70,6 +70,8 @@ type File struct {
 	Plan store.Plan `json:"plan,omitempty"`
 	// Screens is how the mat screens look (#110).
 	Screens store.Screens `json:"screens,omitempty"`
+	// Halt is a global timeout in force, or nil (#157).
+	Halt *store.Halt `json:"halt,omitempty"`
 }
 
 // Placeholder says a slug is what a discipline got for having no name yet: "discipline",

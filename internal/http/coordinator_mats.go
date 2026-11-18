@@ -174,6 +174,7 @@ func (c *Coordinator) matsFrom(snaps []snapped) hall.MatsView {
 	view := hall.BuildMats(inputs, placed, mats, c.held)
 	view.Upcoming = store.UpcomingOf(file.Screens)
 	view.Event = file.ID
+	view.Halt = file.Halt
 	hall.NameMats(&view, file.Plan)
 	return view
 }
@@ -319,6 +320,27 @@ func (c *Coordinator) putMat(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
+	writeJSON(w, http.StatusOK, c.MatsNow())
+}
+
+// putHalt calls a global timeout, {"on": true, "reason": "..."}, or ends one (#157).
+func (c *Coordinator) putHalt(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		On     bool   `json:"on"`
+		Reason string `json:"reason"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	if _, err := c.folder.Update(func(f *event.File) error {
+		f.Halt = hall.SetHalt(f.Halt, in.On, in.Reason, c.now())
+		return nil
+	}); err != nil {
+		writeErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	c.republish()
 	writeJSON(w, http.StatusOK, c.MatsNow())
 }
 

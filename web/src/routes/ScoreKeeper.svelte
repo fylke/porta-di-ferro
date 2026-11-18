@@ -2,6 +2,7 @@
   import { onMount, untrack } from 'svelte';
   import { MatsLive, matOf, slotKey } from '../lib/mats.svelte';
   import { ScoreKeeperSession } from '../lib/scorekeeper.svelte';
+  import HaltBanner from './HaltBanner.svelte';
   import { Clock, formatClock, isFlashing } from '../lib/clock.svelte';
   import { keepAwake } from '../lib/wakelock';
   import CompetitorPanel from './variants/CompetitorPanel.svelte';
@@ -240,6 +241,13 @@
   });
 
   const matchState = $derived(sk ? sk.state : null);
+
+  // A global timeout (#157): the clock stops the moment it is called, and nothing is
+  // started or confirmed until the organizer lets the hall go on.
+  const halted = $derived(!!live.view?.halt);
+  $effect(() => {
+    if (halted && sk && matchState?.running && !matchState.ended) void sk.toggleClock(untrack(() => elapsed));
+  });
   $effect(() => {
     if (matchState?.ended && slot && !localDone.has(doneKey(slot))) {
       localDone = new Set([...localDone, doneKey(slot)]);
@@ -407,6 +415,9 @@
 </script>
 
 <main class="sk">
+  {#if halted}
+    <div class="halt-over"><HaltBanner halt={live.view?.halt} /></div>
+  {/if}
   <div class="corner left">
     <button
       class="corner-btn"
@@ -514,7 +525,7 @@
               <div class="rest over" role="status">{t('REST OVER')}</div>
             {/if}
             <div class="clock-row">
-              <button class="clock" onclick={() => void sk?.toggleClock(elapsed)}>
+              <button class="clock" disabled={halted && !matchState.running} onclick={() => void sk?.toggleClock(elapsed)}>
                 {matchState.running ? t('PAUSE') : t('PLAY')}
               </button>
               <!-- For a clock started by mistake. Small, because it is rare; confirmed, because
@@ -584,7 +595,7 @@
     {#if matchState.ended}
       <button class="confirm next" onclick={nextMatch}>{t('NEXT MATCH')}</button>
     {:else}
-      <button class="confirm" disabled={sk.log.sync === 'stale'} onclick={() => void sk?.confirm(elapsed)}>
+      <button class="confirm" disabled={sk.log.sync === 'stale' || halted} onclick={() => void sk?.confirm(elapsed)}>
         {t('CONFIRM EXCHANGE')}
       </button>
     {/if}
@@ -1059,6 +1070,13 @@
     background: var(--panel-2);
   }
 
+  .halt-over {
+    position: fixed;
+    top: 3rem;
+    left: 0;
+    right: 0;
+    z-index: 30;
+  }
   .waiting {
     display: grid;
     align-content: center;

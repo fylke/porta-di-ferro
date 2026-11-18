@@ -241,6 +241,8 @@ export const api = {
   setScreens: (screens: { upcoming: 'bottom' | 'list' | 'none' }) => req<MatsView>('PUT', '/api/screens', screens),
   /** How many mats the hall has. */
   setMats: (count: number) => req<MatsView>('PUT', '/api/mats', { count }),
+  /** Calls a global timeout -- every mat stops -- or ends it (#157). */
+  setHalt: (on: boolean, reason = '') => req<MatsView>('PUT', '/api/event/halt', { on, reason }),
   /** Moves a work item: to a place on a mat, or a step along its own. */
   moveItem: (id: string, to: { mat: number; index?: number } | { move: 'up' | 'down' }) =>
     req<MatsView>('PATCH', `/api/plan/items/${id.split('/').map(encodeURIComponent).join('/')}`, to),

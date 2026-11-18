@@ -131,6 +131,12 @@ export const sv: Record<string, string> = {
   'Draw the eliminations': 'Lotta elimineringarna',
   'Draw the eliminations again': 'Lotta om elimineringarna',
   'Mats for the eliminations': 'Mattor för slutspelet',
+  'Global timeout': 'Global timeout',
+  'The physician is needed. Every mat waits.': 'Sjukvården behövs. Alla mattor väntar.',
+  'since {time}': 'sedan {time}',
+  'End the global timeout': 'Avsluta den globala timeouten',
+  'Physician needed': 'Sjukvård behövs',
+  'Why the hall stops': 'Varför hallen stannar',
   'Block {n} on': 'Block {n} den',
   'Give a block a date of its own when the event runs over more than one day. The breaks are on every day.':
     'Ge ett block ett eget datum när tävlingen pågår mer än en dag. Pauserna gäller varje dag.',

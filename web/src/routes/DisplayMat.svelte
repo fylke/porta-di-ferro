@@ -4,6 +4,7 @@
   import Scoreboard from './Scoreboard.svelte';
   import { Clock } from './lib-display.svelte';
   import { MatsLive, matOf, slotElapsed, upcoming } from '../lib/mats.svelte';
+  import HaltBanner from './HaltBanner.svelte';
   import { t } from '../lib/i18n.svelte';
 
   let { mat }: { mat: number } = $props();
@@ -37,6 +38,7 @@
 </script>
 
 <main class="mode-{mode}">
+  <HaltBanner halt={live.view?.halt} />
   <div class="board">
     <Scoreboard {mat} {match} {names} {elapsed} discipline={current?.disciplineName ?? ''} matName={here?.name ?? ''} />
   </div>

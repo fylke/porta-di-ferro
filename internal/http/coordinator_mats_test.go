@@ -367,3 +367,26 @@ func TestAWithdrawalVoidsMatchesForTheMats(t *testing.T) {
 		t.Errorf("the mat should go on to the bracket: %+v", c)
 	}
 }
+
+// #157: a global timeout while the physician is busy. Every device following the mats is
+// told, the organizer's reason with it, and it ends when the organizer says so.
+func TestAGlobalTimeoutStopsTheHall(t *testing.T) {
+	h := openHall(t, t.TempDir())
+	if v := h.mats(); v.Halt != nil {
+		t.Fatalf("a hall starts going: %+v", v.Halt)
+	}
+	var v hall.MatsView
+	h.must("PUT", "/api/event/halt", map[string]any{"on": true, "reason": "  Physician on mat 2  "}, &v)
+	if v.Halt == nil || v.Halt.Since == "" || v.Halt.Reason != "Physician on mat 2" {
+		t.Fatalf("the hall should be halted, with the reason: %+v", v.Halt)
+	}
+	since := v.Halt.Since
+	h.must("PUT", "/api/event/halt", map[string]any{"on": true, "reason": "Still waiting"}, nil)
+	if got := h.mats().Halt; got == nil || got.Since != since || got.Reason != "Still waiting" {
+		t.Errorf("calling it again keeps its start and takes the new reason: %+v", got)
+	}
+	h.must("PUT", "/api/event/halt", map[string]any{"on": false}, nil)
+	if got := h.mats().Halt; got != nil {
+		t.Errorf("ended, the hall goes on: %+v", got)
+	}
+}

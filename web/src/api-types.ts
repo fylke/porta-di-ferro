@@ -338,6 +338,8 @@ export interface MatsView {
   upcoming?: 'bottom' | 'list' | 'none';
   /** The event's identity (#141). */
   event?: string;
+  /** A global timeout in force (#157): every mat stops until the organizer ends it. */
+  halt?: { since: string; reason?: string };
 }
 
 /** What one of a discipline's mats is running or has up next, for the event's pages. */

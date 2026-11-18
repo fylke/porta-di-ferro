@@ -255,6 +255,15 @@ type Person struct {
 	Apart []string `json:"apart,omitempty"`
 }
 
+// Halt is a global timeout (#157): every mat stops -- an injury needs the physician, who is
+// with somebody else -- until the organizer lets the hall go on.
+type Halt struct {
+	// Since is when it was called, RFC 3339.
+	Since string `json:"since"`
+	// Reason is what the screens say, or "" for the physician.
+	Reason string `json:"reason,omitempty"`
+}
+
 // Plan is where every discipline's work runs: the event's physical mats, and each work
 // item's place in one mat's queue (docs/proposals/one-event-many-disciplines.md §9). A
 // work item is a pool, a discipline's eliminations on one of its lanes, the bronze match

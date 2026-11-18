@@ -3,6 +3,8 @@ package hall
 import (
 	"fmt"
 	"sort"
+	"strings"
+	"time"
 
 	"github.com/fylke/porta-di-ferro/internal/store"
 )
@@ -88,6 +90,27 @@ type MatsView struct {
 	Upcoming string `json:"upcoming"`
 	// Event is the event's identity: a tablet that kept logs for another forgets them (#141).
 	Event string `json:"event,omitempty"`
+	// Halt is a global timeout in force (#157): every score keeper stops its clock and
+	// every screen says so, until the organizer ends it.
+	Halt *store.Halt `json:"halt,omitempty"`
+}
+
+// SetHalt calls a global timeout, or ends it (#157). Calling one already in force keeps its
+// start; the reason is the organizer's, trimmed and kept short.
+func SetHalt(cur *store.Halt, on bool, reason string, now time.Time) *store.Halt {
+	if !on {
+		return nil
+	}
+	reason = strings.TrimSpace(reason)
+	if len(reason) > 80 {
+		reason = reason[:80]
+	}
+	if cur != nil {
+		next := *cur
+		next.Reason = reason
+		return &next
+	}
+	return &store.Halt{Since: now.Format(time.RFC3339), Reason: reason}
 }
 
 // OnEventMats makes a discipline's snapshot speak the event's mats: every pool and bracket
