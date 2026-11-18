@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/fylke/porta-di-ferro/internal/hall"
 	"github.com/fylke/porta-di-ferro/internal/match"
 	"github.com/fylke/porta-di-ferro/internal/store"
 )
@@ -43,6 +44,8 @@ import (
 const (
 	headerClient = "X-Porta-Client"
 	headerEpoch  = "X-Porta-Epoch"
+	// headerDraw is the draw the events were scored in (hall.DrawOf, #160).
+	headerDraw = "X-Porta-Draw"
 )
 
 type claimResult struct {
@@ -182,12 +185,36 @@ func (s *Server) releaseAllClaims(client string) {
 // errHeld refuses an anonymous push to a match a device is scoring.
 var errHeld = errors.New("a device is scoring this match: claim it before writing to it")
 
+// errRedrawn is a push scored in a draw that has been replaced (#160).
+var errRedrawn = errors.New("this match has been drawn again since these exchanges were scored")
+
 // errBadEpoch is an epoch header that is not a number.
 var errBadEpoch = errors.New("the epoch header is not a number")
 
 // admit decides whether a push may be appended. Called with writeMu held. A stale push
 // is quarantined here and reported back as such; the caller only has to stop.
 func (s *Server) admit(r *http.Request, id string, events []match.Event) (stale bool, err error) {
+	// Scored in a draw that has since been replaced (#160): the match id is the same, the
+	// match is not. Set aside for the organizer, exactly like a push on a dead epoch,
+	// rather than appended to the new pairing's log.
+	if draw := r.Header.Get(headerDraw); draw != "" {
+		t, err := s.store.Tournament()
+		if err != nil {
+			return false, err
+		}
+		if now := hall.DrawOf(t, id); now != "" && now != draw {
+			client := r.Header.Get(headerClient)
+			name := client
+			if c := s.presence.get(client); c != nil {
+				name = c.Name
+			}
+			if err := s.store.Quarantine(id, client, name, events); err != nil {
+				return false, err
+			}
+			s.publishPresence()
+			return true, errRedrawn
+		}
+	}
 	writers, err := s.store.Writers()
 	if err != nil {
 		return false, err

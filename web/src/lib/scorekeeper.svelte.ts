@@ -28,9 +28,12 @@ export class ScoreKeeperSession {
   /** When the clock was last set running, for the live readout. */
   runningSince = $state<number | null>(null);
 
-  /** discipline is the one the match is in, from the snapshot it was picked out of. */
-  constructor(matchId: string, discipline: string) {
-    this.log = new MatchLog(matchId, discipline);
+  /**
+   * discipline is the one the match is in, and draw the draw it is from (#160), both from
+   * the snapshot it was picked out of.
+   */
+  constructor(matchId: string, discipline: string, draw = '') {
+    this.log = new MatchLog(matchId, discipline, draw);
   }
 
   async load(): Promise<void> {

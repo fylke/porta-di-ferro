@@ -112,7 +112,9 @@ func (s *Server) generatePools(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
-	drawn.GeneratedAt = time.Now().Format(time.RFC3339)
+	// To the nanosecond: the stamp is the draw's identity (#160), and two draws a second apart
+	// must not share one.
+	drawn.GeneratedAt = time.Now().Format(time.RFC3339Nano)
 	if err := s.store.SaveTournament(drawn); err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
@@ -151,7 +153,7 @@ func (s *Server) drawBracket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	t.Bracket = bracket
-	t.BracketAt = time.Now().Format(time.RFC3339)
+	t.BracketAt = time.Now().Format(time.RFC3339Nano)
 	if err := s.store.SaveTournament(t); err != nil {
 		writeErr(w, http.StatusInternalServerError, err)
 		return
@@ -251,6 +253,15 @@ func (s *Server) postEvents(w http.ResponseWriter, r *http.Request) {
 		written, err = s.store.Append(id, events)
 	}
 	s.writeMu.Unlock()
+	if errors.Is(err, errRedrawn) {
+		// The sender drops what it held for the old draw; the organizer has it.
+		writeJSON(w, http.StatusConflict, map[string]any{
+			"error":       err.Error(),
+			"quarantined": len(events),
+			"redrawn":     true,
+		})
+		return
+	}
 	if errors.Is(err, errHeld) {
 		writeErr(w, http.StatusConflict, err)
 		return

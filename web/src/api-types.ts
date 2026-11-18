@@ -41,6 +41,8 @@ export interface MatchView {
   slot?: number;
   feedRed?: string;
   feedBlue?: string;
+  /** The draw the match is from (#160): a score keeper keeps it with every event it logs. */
+  draw?: string;
   /**
    * A pool match that will not count, because one of its competitors has withdrawn (#162).
    * Nothing waits for it; any result it had stays visible.

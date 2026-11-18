@@ -15,6 +15,11 @@ type MatchView struct {
 	store.Match
 	State  match.State `json:"state"`
 	Status string      `json:"status"`
+	// Draw is the draw the match belongs to: the pools' GeneratedAt or the bracket's
+	// BracketAt. Match ids are positional -- p1m1 is in every draw -- so a score keeper keeps
+	// this with every event it logs and sends it with every push, and a log from a draw that
+	// has been replaced is set aside rather than merged into the new one (#160).
+	Draw string `json:"draw,omitempty"`
 	// Void says a pool match will not count: one of its competitors has withdrawn, which
 	// is as though they never took part (design §6). Nothing waits for a void match -- not
 	// its mat, not its pool, not the forecast -- but it stays in the list, with any result
@@ -243,7 +248,7 @@ func (b snapshotBuilder) view(m store.Match) (MatchView, error) {
 	case len(events) > 0:
 		status = "running"
 	}
-	v := MatchView{Match: m, State: st, Status: status, Options: match.OptionsOf(events)}
+	v := MatchView{Match: m, State: st, Status: status, Options: match.OptionsOf(events), Draw: DrawOf(b.t, m.ID)}
 	v.StartedAt, v.EndedAt = times(events, st.Ended)
 	if st.Running {
 		if at, ok := b.src.LastEventAt(m.ID); ok {
@@ -316,6 +321,24 @@ func (b snapshotBuilder) bracket() (*BracketView, error) {
 	}
 	bv.Podium = tournament.Result(filled, b.states)
 	return bv, nil
+}
+
+// DrawOf is the draw a match id belongs to in a tournament -- the pools' or the bracket's
+// stamp -- and "" when the tournament has no such match.
+func DrawOf(t store.Tournament, id string) string {
+	for _, p := range t.Pools {
+		for _, m := range p.Matches {
+			if m.ID == id {
+				return t.GeneratedAt
+			}
+		}
+	}
+	for _, m := range t.Bracket {
+		if m.ID == id {
+			return t.BracketAt
+		}
+	}
+	return ""
 }
 
 // Settled says nothing more will be fenced in the match: it has ended, or it is void.

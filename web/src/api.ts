@@ -136,12 +136,19 @@ function disciplineApi(base: () => string) {
      * or silently dropped. No stamp is the anonymous path, for the tests: refused while
      * a device holds the match.
      */
-    pushEvents: (matchId: string, events: Event[], writer?: { client: string; epoch: number }) =>
+    pushEvents: (matchId: string, events: Event[], writer?: { client: string; epoch: number; draw?: string }) =>
       req<{ written: number; state: State; lastSeq: number }>(
         'POST',
         `${base()}/matches/${matchId}/events`,
         events,
-        writer ? { 'X-Porta-Client': writer.client, 'X-Porta-Epoch': String(writer.epoch) } : {},
+        writer
+          ? {
+              'X-Porta-Client': writer.client,
+              'X-Porta-Epoch': String(writer.epoch),
+              // The draw it was scored in: a push from a replaced draw is set aside (#160).
+              ...(writer.draw ? { 'X-Porta-Draw': writer.draw } : {}),
+            }
+          : {},
       ),
     claim: (matchId: string, client: string, force = false) =>
       req<{ epoch: number; tookOverFrom?: string }>('POST', `${base()}/matches/${matchId}/claim`, {

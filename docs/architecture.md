@@ -622,6 +622,8 @@ sequenceDiagram
     O->>S: DELETE /api/quarantine/M (after looking)
 ```
 
+**A replaced draw is set aside the same way** (#160). Match ids are positional -- `p1m1` is in every draw -- so every match in the snapshot carries `draw` (the pools' `generatedAt` or the bracket's `bracketAt`, `hall.DrawOf`). The score keeper stores it with each event in IndexedDB and sends it as `X-Porta-Draw` on every push. A push from a draw that has been replaced is quarantined and answered `409 {redrawn: true}`, and the device then drops that draw's events; it never merges them into the new pairing's log.
+
 Displays: a screen opens `/display`, heartbeats with role `display`, and renders whatever `target` comes back (`mat/1`, `mats`, `mats/1,2`, `roster`; an old `audience/2` shows mat 2's scoreboard). The organizer sets it with `PUT /api/clients/{id}/target`; assignments are kept in `displays.json`.
 
 ---

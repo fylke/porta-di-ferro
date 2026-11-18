@@ -106,8 +106,11 @@
   // Matches this device has finished that the server may not know about yet -- the
   // whole point of running a pool offline. Found by replaying the logs on this device, so
   // they survive a reload, and kept up to date as matches end here.
+  // Keyed by draw too (#160): after a redraw p1m1 is a new match, and this device's
+  // finished p1m1 from the old draw says nothing about it.
   let localDone = $state(new Set<string>());
-  const queueKey = $derived(queue.map(slotKey).join(','));
+  const doneKey = (s: Slot) => `${slotKey(s)}@${s.match.draw ?? ''}`;
+  const queueKey = $derived(queue.map(doneKey).join(','));
   $effect(() => {
     const keys = queueKey ? queueKey.split(',') : [];
     if (keys.length === 0) return;
@@ -115,7 +118,8 @@
       const done = new Set<string>();
       for (const key of keys) {
         const cut = key.indexOf('/');
-        const events = await db.read(key.slice(0, cut), key.slice(cut + 1));
+        const at = key.lastIndexOf('@');
+        const events = await db.read(key.slice(0, cut), key.slice(cut + 1, at), key.slice(at + 1));
         if (events.length > 0 && replay(MSL, events).ended) done.add(key);
       }
       // Merged rather than replaced, so a match that ended here since the scan began is
@@ -126,7 +130,7 @@
 
   /** Open means neither the server nor this device has seen it end. */
   function isOpen(s: Slot): boolean {
-    return s.match.status !== 'complete' && !s.match.void && !localDone.has(slotKey(s));
+    return s.match.status !== 'complete' && !s.match.void && !localDone.has(doneKey(s));
   }
 
   function firstOpen(): string {
@@ -217,10 +221,12 @@
   });
 
   $effect(() => {
-    if (current && current !== loadedMatch && slot) {
-      loadedMatch = current;
+    // A redraw keeps the match id and changes the draw: that is another match (#160).
+    const key = slot ? `${current}@${slot.match.draw ?? ''}` : '';
+    if (current && key !== loadedMatch && slot) {
+      loadedMatch = key;
       dismissedFinal = 0;
-      const next = new ScoreKeeperSession(untrack(() => matchId), untrack(() => slug));
+      const next = new ScoreKeeperSession(untrack(() => matchId), untrack(() => slug), untrack(() => slot.match.draw ?? ''));
       sk?.log.stop();
       sk = next;
       void next.load();
@@ -235,8 +241,8 @@
 
   const matchState = $derived(sk ? sk.state : null);
   $effect(() => {
-    if (matchState?.ended && current && !localDone.has(current)) {
-      localDone = new Set([...localDone, current]);
+    if (matchState?.ended && slot && !localDone.has(doneKey(slot))) {
+      localDone = new Set([...localDone, doneKey(slot)]);
     }
   });
   const elapsed = $derived(sk && matchState ? clock.elapsed(matchState, sk.runningSince) : 0);
