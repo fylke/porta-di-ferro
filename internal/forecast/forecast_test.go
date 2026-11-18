@@ -582,3 +582,22 @@ func TestAPinnedItemWaitsOnItsOwnMatForAFencer(t *testing.T) {
 		t.Errorf("the held final stays on mat 1: %v", s.Order)
 	}
 }
+
+// #121: a pin keeps the item's mat and its place among the other pins on that mat. The
+// suggestion would otherwise put the bigger discipline's pool first.
+func TestPinsKeepTheirOrderOnTheirMat(t *testing.T) {
+	small := item("sa/pool-1", "sa", "pool", 1, 1, 3)
+	small.Pinned = true
+	big := item("ls/pool-1", "ls", "pool", 1, 2, 10)
+	big.Pinned = true
+	in := forecast.Input{Timings: tpl, Items: []forecast.Item{big, small}}
+	s := forecast.Suggest(in, 2)
+	if got := s.Order[1]; len(got) != 2 || got[0] != "sa/pool-1" || got[1] != "ls/pool-1" {
+		t.Errorf("the pins on mat 1 should stay in their order, Sabre's then the longsword's: %v", s.Order)
+	}
+	// Suggesting again moves nothing.
+	again := forecast.Suggest(in, 2)
+	if len(again.Moves) != len(s.Moves) || len(s.Moves) != 0 {
+		t.Errorf("pinned where they are, nothing should move: %+v", s.Moves)
+	}
+}
