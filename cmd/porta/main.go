@@ -25,6 +25,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/fylke/porta-di-ferro/internal/awake"
 	"github.com/fylke/porta-di-ferro/internal/event"
 	"github.com/fylke/porta-di-ferro/internal/hall"
 	httpapi "github.com/fylke/porta-di-ferro/internal/http"
@@ -89,13 +90,15 @@ func main() {
 		}
 	}()
 
+	quit := make(chan struct{})
 	if !*noBrowser {
 		// Choosing a server over a desktop application means "now open your browser" is
 		// part of the install. Opening it ourselves is the mitigation.
 		openBrowser(fmt.Sprintf("http://localhost:%d/admin", *port))
 	}
 
-	quit := make(chan struct{})
+	// The hall loses the server if this PC sleeps (#165).
+	awake.Keep(quit)
 	go runTray(clients, fmt.Sprintf("http://localhost:%d/admin", *port), quit)
 
 	stop := make(chan os.Signal, 1)
