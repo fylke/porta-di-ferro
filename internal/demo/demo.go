@@ -706,7 +706,7 @@ func (d *Demo) generatePools() Response {
 		return fail(400, err)
 	}
 	drawn.Mats = t.Mats
-	drawn.GeneratedAt = time.Now().Format(time.RFC3339)
+	drawn.GeneratedAt = time.Now().Format(time.RFC3339Nano)
 	d.tournament = drawn
 	return changed(drawn)
 }
@@ -761,7 +761,7 @@ func (d *Demo) drawBracket() Response {
 		return fail(400, err)
 	}
 	d.tournament.Bracket = bracket
-	d.tournament.BracketAt = time.Now().Format(time.RFC3339)
+	d.tournament.BracketAt = time.Now().Format(time.RFC3339Nano)
 	return changed(d.tournament)
 }
 

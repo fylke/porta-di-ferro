@@ -125,7 +125,7 @@ func Summarize(slug string, snap Snapshot) DisciplineSummary {
 	byID := snap.matchesByID()
 	snap.eachMatch(func(m *MatchView) {
 		out.MatchesTotal++
-		if m.Status == "complete" {
+		if m.Settled() {
 			out.MatchesDone++
 		}
 	})

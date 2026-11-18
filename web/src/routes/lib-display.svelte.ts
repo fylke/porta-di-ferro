@@ -56,7 +56,7 @@ export function nextOn(snapshot: Snapshot | null, mat: number): MatchView | null
   const onMat = (snapshot?.pools ?? [])
     .filter((p) => p.mat === mat)
     .flatMap((p) => p.matches)
-    .filter((m) => m.status !== 'complete');
+    .filter((m) => m.status !== 'complete' && !m.void);
   const i = onMat.findIndex((m) => m.id === current.id);
   return i >= 0 && i + 1 < onMat.length ? onMat[i + 1] : null;
 }
@@ -70,7 +70,7 @@ export function upcomingOn(snapshot: Snapshot | null, mat: number, count: number
   const current = matchOn(snapshot, mat);
   const onMat = matchesOn(snapshot, mat);
   const i = current ? onMat.findIndex((m) => m.id === current.id) : -1;
-  return onMat.slice(i + 1).filter((m) => m.status !== 'complete').slice(0, count);
+  return onMat.slice(i + 1).filter((m) => m.status !== 'complete' && !m.void).slice(0, count);
 }
 
 export function nameLookup(snapshot: Snapshot | null): (id: string) => string {

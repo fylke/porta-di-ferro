@@ -45,6 +45,9 @@ func (s *Store) ReplaceEvents(id string, events []match.Event) (string, error) {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// Like Append and RetireMatches: the hall is cached on the revision, and the snapshot
+	// published straight after an edit must not be built from the old log (#166).
+	defer s.rev.Add(1)
 
 	backup := ""
 	final := s.path(rel)

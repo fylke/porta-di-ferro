@@ -122,7 +122,9 @@ func poolCount(n, min, max, ceiling int, violations *[]string) int {
 	if count < 1 {
 		count = 1
 	}
-	// Prefer the fewest pools that keeps every pool at or above the minimum.
+	// Prefer the most pools that keeps every pool at or above the minimum -- the smallest
+	// pools the range allows, so a day of pools is shorter (#166 pins it): twelve entrants
+	// at a minimum of 3 make four pools of 3, and four at a minimum of 2 make two of 2.
 	for count < ceiling && n/(count+1) >= min && (n+count)/(count+1) <= max {
 		count++
 	}

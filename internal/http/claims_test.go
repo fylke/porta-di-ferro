@@ -120,3 +120,78 @@ func TestNothingIsTakenWithoutAsking(t *testing.T) {
 		t.Errorf("only the holder's exchange should be in the log, got %d events", len(log))
 	}
 }
+
+// #160: a tablet that scored p1m1 before a redraw still holds that log. Pushed again, with
+// the draw it was scored in, it is set aside for the organizer -- the new pairing starts at
+// 0-0 instead of finished with the old result.
+func TestALogFromAReplacedDrawIsSetAside(t *testing.T) {
+	h := openHall(t, t.TempDir())
+	var ev struct {
+		Disciplines []struct{ Slug string } `json:"disciplines"`
+	}
+	h.must("GET", "/api/event", nil, &ev)
+	ls := ev.Disciplines[0].Slug
+	h.draw("/api/d/"+ls, 4, 1)
+	state := func() (draw string, status string) {
+		var s struct {
+			Pools []struct {
+				Matches []struct {
+					ID     string `json:"id"`
+					Draw   string `json:"draw"`
+					Status string `json:"status"`
+				} `json:"matches"`
+			} `json:"pools"`
+		}
+		h.must("GET", "/api/d/"+ls+"/state", nil, &s)
+		m := s.Pools[0].Matches[0]
+		if m.ID != "p1m1" {
+			t.Fatalf("expected p1m1 first, got %s", m.ID)
+		}
+		return m.Draw, m.Status
+	}
+	old, _ := state()
+	if old == "" {
+		t.Fatal("every match should say which draw it is from")
+	}
+	log := []map[string]any{
+		{"seq": 1, "type": "timer", "elapsedMs": 0, "timer": map[string]string{"action": "start"}},
+		{"seq": 2, "type": "exchange", "elapsedMs": 1000, "exchange": map[string]any{"red": map[string]int{"value": 2}, "blue": map[string]int{"value": 0}}},
+		{"seq": 3, "type": "end", "elapsedMs": 2000, "end": map[string]string{"reason": "time"}},
+	}
+	push := func(draw string) int {
+		b, _ := json.Marshal(log)
+		req, _ := http.NewRequest("POST", h.url+"/api/d/"+ls+"/matches/p1m1/events", bytes.NewReader(b))
+		req.Header.Set("X-Porta-Client", "tab1")
+		req.Header.Set("X-Porta-Epoch", "1")
+		req.Header.Set("X-Porta-Draw", draw)
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		return res.StatusCode
+	}
+	h.must("POST", "/api/d/"+ls+"/matches/p1m1/claim", map[string]any{"client": "tab1"}, nil)
+	if code := push(old); code != 200 {
+		t.Fatalf("a push in the current draw should land, got %d", code)
+	}
+
+	h.must("POST", "/api/d/"+ls+"/tournament/pools", nil, nil)
+	now, status := state()
+	if now == old || status != "pending" {
+		t.Fatalf("the redraw should be a new draw, its p1m1 to fence: draw %q (was %q), %s", now, old, status)
+	}
+	if code := push(old); code != http.StatusConflict {
+		t.Errorf("the old draw's log should be refused, got %d", code)
+	}
+	if _, status := state(); status != "pending" {
+		t.Errorf("the new p1m1 should still be to fence, is %s", status)
+	}
+	var p struct {
+		Quarantined []struct{ Match string } `json:"quarantined"`
+	}
+	h.must("GET", "/api/presence", nil, &p)
+	if len(p.Quarantined) == 0 {
+		t.Error("the old log should be set aside for the organizer")
+	}
+}

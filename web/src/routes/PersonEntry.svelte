@@ -140,7 +140,9 @@
                 {opponent(f.match)}
               </span>
               <span class="result">
-                {#if f.match.status === 'pending'}
+                {#if f.match.void}
+                  <span class="dim">{t('void')}</span>
+                {:else if f.match.status === 'pending'}
                   <span class="dim">{f.match.eta ? t('about {time}', { time: clockOf(f.match.eta) }) : t('to come')}</span>
                 {:else}
                   <span class="mono score {outcome(f.match)}">{theirScore(f.match)}</span>

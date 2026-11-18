@@ -183,16 +183,32 @@ func (s *suggester) byPriority(free []Item) {
 	})
 }
 
-// nextReady is the first free item whose dependencies are placed. When there is none, what
-// it waits for is nowhere on the plan: the first is timed anyway.
+// nextReady is the first free item whose dependencies are placed, and -- for a pinned item
+// -- once every pinned item before it on its mat is placed, so the pins on a mat keep their
+// order (#121: "kept where they are"). When there is none, what it waits for is nowhere on
+// the plan: the first is timed anyway.
 func (s *suggester) nextReady(free []Item) int {
 	for i, it := range free {
 		wait, pause := s.deps(it)
-		if s.allPlaced(wait) && s.allPlaced(pause) {
+		if s.allPlaced(wait) && s.allPlaced(pause) && !pinnedBehind(it, free) {
 			return i
 		}
 	}
 	return 0
+}
+
+// pinnedBehind says a pinned item has another pinned item ahead of it on its mat that is
+// not placed yet.
+func pinnedBehind(it Item, free []Item) bool {
+	if !it.Pinned {
+		return false
+	}
+	for _, o := range free {
+		if o.Pinned && o.ID != it.ID && o.Mat == it.Mat && o.Seq < it.Seq {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *suggester) allPlaced(ids []string) bool {

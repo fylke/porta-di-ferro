@@ -450,3 +450,73 @@ func TestAMatNeverCrossesIntoAnotherDisciplineByItself(t *testing.T) {
 		t.Errorf("the hold should survive a restart: %+v", it)
 	}
 }
+
+// #162: a competitor withdrawn mid-pool. Their matches are void: the mat goes past them,
+// the pool finishes without them, and the bracket runs -- while their matches stay listed.
+func TestAWithdrawalVoidsMatchesForTheMats(t *testing.T) {
+	h := openHall(t, t.TempDir())
+	var ev hall.EventView
+	h.must("GET", "/api/event", nil, &ev)
+	ls := ev.Disciplines[0].Slug
+	h.draw("/api/d/"+ls, 4, 1)
+	var s hall.Snapshot
+	h.must("GET", "/api/d/"+ls+"/state", nil, &s)
+	gone := s.Pools[0].Matches[0].Red
+	h.must("PATCH", "/api/d/"+ls+"/competitors/"+gone, map[string]bool{"withdrawn": true}, nil)
+
+	var after hall.Snapshot
+	h.must("GET", "/api/d/"+ls+"/state", nil, &after)
+	v := h.mats()
+	if c := v.Mats[0].Current; c == nil || c.Red == "" || c.Match.Red == gone || c.Match.Blue == gone {
+		t.Fatalf("the mat should skip the withdrawn competitor's matches: %+v", c)
+	}
+	voids := 0
+	for _, m := range after.Pools[0].Matches {
+		if m.Void != (m.Red == gone || m.Blue == gone) {
+			t.Errorf("only the withdrawn competitor's matches are void: %+v", m.Match)
+		}
+		if m.Void {
+			voids++
+			continue
+		}
+		h.finish(ls, m.ID)
+	}
+	if voids != 3 {
+		t.Errorf("a pool of four has three void matches for one withdrawal, got %d", voids)
+	}
+	var done hall.Snapshot
+	h.must("GET", "/api/d/"+ls+"/state", nil, &done)
+	if !done.PoolsComplete || !done.Pools[0].Complete {
+		t.Errorf("the pool should be complete without the void matches: pools %v, pool %v", done.PoolsComplete, done.Pools[0].Complete)
+	}
+	if it := itemOf(h.mats(), ls+"/pool-1"); it.Status != "done" || it.Done != it.Total {
+		t.Errorf("the pool's card should be done: %+v", it)
+	}
+	h.must("POST", "/api/d/"+ls+"/tournament/bracket", nil, nil)
+	if c := h.mats().Mats[0].Current; c == nil || c.Match.Round == "" {
+		t.Errorf("the mat should go on to the bracket: %+v", c)
+	}
+}
+
+// #157: a global timeout while the physician is busy. Every device following the mats is
+// told, the organizer's reason with it, and it ends when the organizer says so.
+func TestAGlobalTimeoutStopsTheHall(t *testing.T) {
+	h := openHall(t, t.TempDir())
+	if v := h.mats(); v.Halt != nil {
+		t.Fatalf("a hall starts going: %+v", v.Halt)
+	}
+	var v hall.MatsView
+	h.must("PUT", "/api/event/halt", map[string]any{"on": true, "reason": "  Physician on mat 2  "}, &v)
+	if v.Halt == nil || v.Halt.Since == "" || v.Halt.Reason != "Physician on mat 2" {
+		t.Fatalf("the hall should be halted, with the reason: %+v", v.Halt)
+	}
+	since := v.Halt.Since
+	h.must("PUT", "/api/event/halt", map[string]any{"on": true, "reason": "Still waiting"}, nil)
+	if got := h.mats().Halt; got == nil || got.Since != since || got.Reason != "Still waiting" {
+		t.Errorf("calling it again keeps its start and takes the new reason: %+v", got)
+	}
+	h.must("PUT", "/api/event/halt", map[string]any{"on": false}, nil)
+	if got := h.mats().Halt; got != nil {
+		t.Errorf("ended, the hall goes on: %+v", got)
+	}
+}

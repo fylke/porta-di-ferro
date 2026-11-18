@@ -38,6 +38,9 @@ type Event struct {
 	staff store.Staff
 	// screens is how the mat screens look (#110).
 	screens store.Screens
+	// halt is a global timeout in force (#157). Not saved: a visitor coming back finds the
+	// hall going again.
+	halt *store.Halt
 	// id is the event's identity (event.File.ID): the same for the event a visitor
 	// arrives in, a new one for every event that replaces it (#141).
 	id string
@@ -185,6 +188,7 @@ func (e *Event) routes() []route {
 		on("GET /api/plan", func(call) Response { return ok(e.mats()) }),
 		on("PUT /api/mats", bodied(e.putMats)),
 		on("PUT /api/screens", bodied(e.putScreens)),
+		on("PUT /api/event/halt", bodied(e.putHalt)),
 		on("PUT /api/mats/{mat}", func(c call) Response { return e.putMat(c.param("mat"), c.body) }),
 		on("PATCH /api/plan/items/{id...}", func(c call) Response { return e.patchItem(c.param("id"), c.body) }),
 		on("GET /api/presence", answer(nobodyPresent)),
@@ -199,6 +203,9 @@ func (e *Event) routes() []route {
 		on("GET /api/disciplines/presets", func(call) Response { return ok(hall.Disciplines) }),
 		on("POST /api/disciplines", bodied(e.add)),
 		on("PATCH /api/disciplines/{d}", func(c call) Response { return e.rename(c.param("d"), c.body) }),
+		on("GET /api/gonogo", func(call) Response { return ok(e.goNoGoAll()) }),
+		on("GET /api/disciplines/{d}/gonogo", func(c call) Response { return e.goNoGo(c.param("d")) }),
+		on("POST /api/disciplines/{d}/gonogo", func(c call) Response { return e.signOff(c.param("d"), c.body) }),
 		on("DELETE /api/disciplines/{d}", func(c call) Response { return e.retire(c.param("d")) }),
 		on("PUT /api/disciplines/{d}/identifier", func(c call) Response { return e.setIdentifier(c.param("d"), c.body) }),
 		on("POST /api/disciplines/{d}/reload", func(c call) Response { return e.reload(c.param("d")) }),

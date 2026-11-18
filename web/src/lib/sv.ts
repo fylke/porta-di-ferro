@@ -147,6 +147,42 @@ export const sv: Record<string, string> = {
   'This screen fills in when the next item can start.': 'Skärmen fylls i när nästa moment kan börja.',
   'The hall has {n} mats now: the pools and the eliminations are drawn for {n}.':
     'Hallen har {n} mattor nu: poolerna och slutspelet lottas för {n}.',
+  'Go / no-go': 'Go / no-go',
+  'No go signed off yet for {names}: see each discipline’s admin page.':
+    'Inget go godkänt än för {names}: se varje grens adminsida.',
+  'Nothing to warn about.': 'Inget att varna för.',
+  'Nobody is on the staff yet.': 'Ingen är funktionär än.',
+  'Not enough staff: {roles} (short {n}).': 'För få funktionärer: {roles} (saknas {n}).',
+  'Runs until {end}, past the venue closing at {close}.': 'Pågår till {end}, efter att lokalen stänger {close}.',
+  'Only {mats} of the {recommended} mats its numbers ask for: the pools wait for each other, or run larger.':
+    'Bara {mats} av de {recommended} mattor som antalet kräver: poolerna får vänta på varandra eller bli större.',
+  'Go: signed off by {by} at {time}.': 'Go: godkänt av {by} klockan {time}.',
+  'Signed off by {by} at {time}, but {what} changed since: sign off again.':
+    'Godkänt av {by} klockan {time}, men {what} har ändrats sedan dess: godkänn igen.',
+  'Not signed off yet.': 'Inte godkänt än.',
+  'Signed off by': 'Godkänt av',
+  'Who signs off': 'Vem som godkänner',
+  'Go: sign off': 'Go: godkänn',
+  'the mats': 'mattorna',
+  'the block of the day': 'dagens block',
+  'the day': 'dagen',
+  'the start': 'starten',
+  'the pool sizes': 'poolstorlekarna',
+  'the mats for the eliminations': 'mattorna för slutspelet',
+  'Global timeout': 'Global timeout',
+  'The physician is needed. Every mat waits.': 'Sjukvården behövs. Alla mattor väntar.',
+  'since {time}': 'sedan {time}',
+  'End the global timeout': 'Avsluta den globala timeouten',
+  'Physician needed': 'Sjukvård behövs',
+  'Why the hall stops': 'Varför hallen stannar',
+  'Block {n} on': 'Block {n} den',
+  'Give a block a date of its own when the event runs over more than one day. The breaks are on every day.':
+    'Ge ett block ett eget datum när tävlingen pågår mer än en dag. Pauserna gäller varje dag.',
+  'You can look at this page here, but changes are made on the computer running Porta di Ferro.':
+    'Du kan titta på sidan här, men ändringar görs på datorn som kör Porta di Ferro.',
+  void: 'struken',
+  'nobody (double loss)': 'ingen (dubbel förlust)',
+  walkover: 'walkover',
   'Suggested — {n}': 'Föreslaget — {n}',
   '{n} of the {total} mats: more would not finish the bracket any sooner.':
     '{n} av {total} mattor: fler skulle inte göra slutspelet klart snabbare.',

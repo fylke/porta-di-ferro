@@ -83,6 +83,14 @@ func Rank(r match.Ruleset, pool store.Pool, competitors map[string]store.Competi
 				red.MatchPoints += r.LossPoints
 			}
 		default:
+			if st.NoMatchPoints {
+				// Both reached the losing penalty level in one exchange (#164): a double
+				// loss, as the engine and the score keeper's screen record it. Nobody
+				// wins, and neither earns anything.
+				red.Losses++
+				blue.Losses++
+				break
+			}
 			red.Draws++
 			blue.Draws++
 			red.MatchPoints += r.DrawPoints

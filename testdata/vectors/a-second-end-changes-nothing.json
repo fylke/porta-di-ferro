@@ -1,0 +1,58 @@
+{
+  "name": "a-second-end-changes-nothing",
+  "description": "A finished match stays finished: an end after the end -- a stray write -- does not change the result (#166).",
+  "events": [
+    {
+      "seq": 1,
+      "type": "exchange",
+      "elapsedMs": 10000,
+      "exchange": {
+        "red": {
+          "value": 2,
+          "penalty": 0
+        },
+        "blue": {
+          "value": 0,
+          "penalty": 0
+        }
+      }
+    },
+    {
+      "seq": 2,
+      "type": "end",
+      "elapsedMs": 15000,
+      "end": {
+        "reason": "time"
+      }
+    },
+    {
+      "seq": 3,
+      "type": "end",
+      "elapsedMs": 20000,
+      "end": {
+        "reason": "forfeit",
+        "forfeiter": "red"
+      }
+    }
+  ],
+  "expect": {
+    "red": {
+      "score": 2,
+      "penalty": 0
+    },
+    "blue": {
+      "score": 0,
+      "penalty": 0
+    },
+    "exchanges": 1,
+    "elapsedMs": 15000,
+    "running": false,
+    "ended": true,
+    "noMatchPoints": false,
+    "endReason": "time",
+    "winner": "red",
+    "pending": "none",
+    "lastSeq": 3,
+    "undoableSeq": 0
+  }
+}

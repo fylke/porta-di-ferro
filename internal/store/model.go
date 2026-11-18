@@ -55,6 +55,11 @@ type Match struct {
 	Slot     int    `json:"slot,omitempty"`
 	FeedRed  string `json:"feedRed,omitempty"`
 	FeedBlue string `json:"feedBlue,omitempty"`
+	// Walkover says one side of a bracket match will never be filled: the match that
+	// feeds it ended in a double loss, and neither of its competitors goes through (#164).
+	// Whoever is on the other side goes on without fencing. Set by tournament.Fill, never
+	// stored.
+	Walkover bool `json:"walkover,omitempty"`
 }
 
 // Pool is a group of competitors who each fence all the others once.
@@ -254,6 +259,23 @@ type Person struct {
 	Apart []string `json:"apart,omitempty"`
 }
 
+// Signoff is a discipline's go (#167): who gave it, when, and the facts it was given on, so a
+// major change since shows it is no longer current (hall.GoNoGo).
+type Signoff struct {
+	By    string            `json:"by"`
+	At    string            `json:"at"`
+	Basis map[string]string `json:"basis"`
+}
+
+// Halt is a global timeout (#157): every mat stops -- an injury needs the physician, who is
+// with somebody else -- until the organizer lets the hall go on.
+type Halt struct {
+	// Since is when it was called, RFC 3339.
+	Since string `json:"since"`
+	// Reason is what the screens say, or "" for the physician.
+	Reason string `json:"reason,omitempty"`
+}
+
 // Plan is where every discipline's work runs: the event's physical mats, and each work
 // item's place in one mat's queue (docs/proposals/one-event-many-disciplines.md §9). A
 // work item is a pool, a discipline's eliminations on one of its lanes, the bronze match
@@ -282,6 +304,13 @@ type Plan struct {
 	// the blocks before it is done. A discipline with no block of its own runs in a block
 	// of its own, in the event's order -- one discipline after another.
 	Sessions map[string]int `json:"sessions,omitempty"`
+	// Days are the dates the blocks run on, "2026-11-21" by block number (#122): a weekend
+	// event is blocks 1 and 2 on the Saturday and block 3 on the Sunday. A block with no
+	// date runs on the event's first day. Its times of day -- a hold, a discipline's start,
+	// the hall's breaks -- are that date's.
+	Days map[int]string `json:"days,omitempty"`
+	// Signoffs are the tournament manager's go for each discipline, by slug (#167).
+	Signoffs map[string]Signoff `json:"signoffs,omitempty"`
 	// FinalsLast holds every discipline's bronze match and final to the end of the day,
 	// one after another on mat 1 (#136).
 	FinalsLast bool `json:"finalsLast,omitempty"`

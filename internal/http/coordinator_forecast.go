@@ -221,6 +221,20 @@ func (c *Coordinator) putSessions(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, c.ForecastNow())
 }
 
+// putDays is the date each block of the day runs on (#122).
+func (c *Coordinator) putDays(w http.ResponseWriter, r *http.Request) {
+	var in map[int]string
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	if err := c.changePlan(func(p *store.Plan) error { return hall.SetDays(p, in) }); err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, c.ForecastNow())
+}
+
 // putFinals holds every final to the end of the day, or lets them go (#136).
 func (c *Coordinator) putFinals(w http.ResponseWriter, r *http.Request) {
 	var in struct {

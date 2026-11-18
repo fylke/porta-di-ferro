@@ -12,6 +12,7 @@
   import Signup from './Signup.svelte';
   import LangToggle from './LangToggle.svelte';
   import DeleteEvent from './DeleteEvent.svelte';
+  import LookOnly from './LookOnly.svelte';
   import { t } from '../lib/i18n.svelte';
 
   /**
@@ -64,6 +65,7 @@
 </script>
 
 <main class="admin">
+  <LookOnly />
   <header>
     <h1>
       Porta di Ferro

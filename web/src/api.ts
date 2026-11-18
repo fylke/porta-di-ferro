@@ -10,6 +10,7 @@ import type {
   EventSignupReady,
   EventView,
   ForecastView,
+  GoNoGoView,
   MatsView,
   PeopleView,
   PersonView,
@@ -136,12 +137,19 @@ function disciplineApi(base: () => string) {
      * or silently dropped. No stamp is the anonymous path, for the tests: refused while
      * a device holds the match.
      */
-    pushEvents: (matchId: string, events: Event[], writer?: { client: string; epoch: number }) =>
+    pushEvents: (matchId: string, events: Event[], writer?: { client: string; epoch: number; draw?: string }) =>
       req<{ written: number; state: State; lastSeq: number }>(
         'POST',
         `${base()}/matches/${matchId}/events`,
         events,
-        writer ? { 'X-Porta-Client': writer.client, 'X-Porta-Epoch': String(writer.epoch) } : {},
+        writer
+          ? {
+              'X-Porta-Client': writer.client,
+              'X-Porta-Epoch': String(writer.epoch),
+              // The draw it was scored in: a push from a replaced draw is set aside (#160).
+              ...(writer.draw ? { 'X-Porta-Draw': writer.draw } : {}),
+            }
+          : {},
       ),
     claim: (matchId: string, client: string, force = false) =>
       req<{ epoch: number; tookOverFrom?: string }>('POST', `${base()}/matches/${matchId}/claim`, {
@@ -234,6 +242,12 @@ export const api = {
   setScreens: (screens: { upcoming: 'bottom' | 'list' | 'none' }) => req<MatsView>('PUT', '/api/screens', screens),
   /** How many mats the hall has. */
   setMats: (count: number) => req<MatsView>('PUT', '/api/mats', { count }),
+  /** Every discipline's go / no-go, or one's, and the manager's sign-off (#167). */
+  goNoGoAll: () => req<GoNoGoView[]>('GET', '/api/gonogo'),
+  goNoGo: (slug: string) => req<GoNoGoView>('GET', `/api/disciplines/${encodeURIComponent(slug)}/gonogo`),
+  signOff: (slug: string, by: string) => req<GoNoGoView>('POST', `/api/disciplines/${encodeURIComponent(slug)}/gonogo`, { by }),
+  /** Calls a global timeout -- every mat stops -- or ends it (#157). */
+  setHalt: (on: boolean, reason = '') => req<MatsView>('PUT', '/api/event/halt', { on, reason }),
   /** Moves a work item: to a place on a mat, or a step along its own. */
   moveItem: (id: string, to: { mat: number; index?: number } | { move: 'up' | 'down' }) =>
     req<MatsView>('PATCH', `/api/plan/items/${id.split('/').map(encodeURIComponent).join('/')}`, to),
@@ -252,6 +266,8 @@ export const api = {
   setExpected: (expected: Record<string, number>) => req<ForecastView>('PUT', '/api/plan/expected', expected),
   /** Which block of the day each discipline runs in (#136). */
   setSessions: (sessions: Record<string, number>) => req<ForecastView>('PUT', '/api/plan/sessions', sessions),
+  /** The date each block runs on, "2026-11-22" by block number; "" for the first day (#122). */
+  setDays: (days: Record<number, string>) => req<ForecastView>('PUT', '/api/plan/days', days),
   /** Holds every final to the end of the day, one after another on mat 1. */
   setFinalsLast: (last: boolean) => req<ForecastView>('PUT', '/api/plan/finals', { last }),
   /** The hall's breaks, the whole list (#149). */

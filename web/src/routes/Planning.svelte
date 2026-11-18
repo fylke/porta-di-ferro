@@ -187,6 +187,12 @@
   function setSession(slug: string, n: number) {
     void run(async () => (forecast = await api.setSessions({ [slug]: n })));
   }
+  // The blocks in use, and the date each runs on (#122): a weekend is block 1 on the
+  // Saturday and block 2 on the Sunday. A block with no date runs on the first day.
+  const blocks = $derived([...new Set(Object.values(forecast?.sessions ?? {}))].sort((a, b) => a - b));
+  function setDay(block: number, date: string) {
+    void run(async () => (forecast = await api.setDays({ [block]: date })));
+  }
   function setFinalsLast(last: boolean) {
     void run(async () => (forecast = await api.setFinalsLast(last)));
   }
@@ -415,6 +421,18 @@
           <input type="checkbox" checked={forecast?.finalsLast ?? false} disabled={busy} onchange={(e) => setFinalsLast(e.currentTarget.checked)} />
           {t('Run the finals separately, at the end of the day')}
         </label>
+      {/if}
+      {#if blocks.length > 1}
+        <!-- An event of more than one day (#122). -->
+        <div class="days">
+          {#each blocks as b (b)}
+            <label>
+              {t('Block {n} on', { n: b })}
+              <input type="date" value={forecast?.days?.[b] ?? ''} disabled={busy} onchange={(e) => setDay(b, e.currentTarget.value)} />
+            </label>
+          {/each}
+          <p class="dim small">{t('Give a block a date of its own when the event runs over more than one day. The breaks are on every day.')}</p>
+        </div>
       {/if}
       <!-- A day pointed out as having no lunch has to be able to get one, here (#153). -->
       <label class="check">
@@ -656,6 +674,16 @@
   table.each input {
     width: 5rem;
     padding: 0.3rem 0.4rem;
+  }
+  .days {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    align-items: center;
+  }
+  .days p {
+    flex-basis: 100%;
+    margin: 0;
   }
   .checks {
     display: flex;

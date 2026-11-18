@@ -79,10 +79,26 @@ const streams = new Set<DemoEventSource>();
  * What a stream at this URL is sent: the event's view on /api/event/stream, the hall's
  * mats on /api/mats/stream, and a
  * discipline's snapshot on its own stream -- /api/d/{slug}/stream, or /api/stream while
- * the event has one discipline. The same frames the server's hubs push.
+ * the event has one discipline. The same frames the server's hubs push. On /api/streams,
+ * the page's one stream (#161), the frame of each topic asked for, tagged with it.
  */
-function frameFor(url: string): string | null {
-  const path = url.startsWith('http') ? new URL(url).pathname : url;
+function framesFor(url: string): string[] {
+  const at = url.startsWith('http') ? new URL(url) : new URL(url, 'http://demo');
+  if (at.pathname.endsWith('/api/streams')) {
+    const out: string[] = [];
+    for (const topic of at.searchParams.getAll('topic')) {
+      const path =
+        topic === 'event' ? '/api/event/stream' : topic === 'mats' ? '/api/mats/stream' : `${topic === 'd/' ? '/api' : `/api/${topic}`}/stream`;
+      const frame = frameFor(path);
+      if (frame) out.push(JSON.stringify({ topic, ...JSON.parse(frame) }));
+    }
+    return out;
+  }
+  const frame = frameFor(at.pathname);
+  return frame ? [frame] : [];
+}
+
+function frameFor(path: string): string | null {
   if (path.endsWith('/api/event/stream')) {
     const res = call('GET', '/api/event');
     return res.status === 200 ? JSON.stringify({ kind: 'event', data: JSON.parse(res.body) }) : null;
@@ -97,11 +113,10 @@ function frameFor(url: string): string | null {
 
 function broadcast(): void {
   // Several pages in one tab can follow the same stream; each frame is built once.
-  const frames = new Map<string, string | null>();
+  const frames = new Map<string, string[]>();
   for (const s of streams) {
-    if (!frames.has(s.url)) frames.set(s.url, frameFor(s.url));
-    const frame = frames.get(s.url);
-    if (frame) s.push(frame);
+    if (!frames.has(s.url)) frames.set(s.url, framesFor(s.url));
+    for (const frame of frames.get(s.url) ?? []) s.push(frame);
   }
 }
 

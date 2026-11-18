@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { keepAwake } from '../lib/wakelock';
   import Scoreboard from './Scoreboard.svelte';
+  import HaltBanner from './HaltBanner.svelte';
   import { Clock } from './lib-display.svelte';
   import { MatsLive, matOf, slotElapsed } from '../lib/mats.svelte';
   import { t } from '../lib/i18n.svelte';
@@ -47,6 +48,7 @@
   const compact = $derived(mats.length >= 3);
 </script>
 
+<HaltBanner halt={live.view?.halt} />
 <main class:compact style="--rows: {mats.length}">
   {#each mats as mat (mat)}
     {@const current = matOf(live.view, mat)?.current ?? null}

@@ -41,6 +41,18 @@ export interface MatchView {
   slot?: number;
   feedRed?: string;
   feedBlue?: string;
+  /** The draw the match is from (#160): a score keeper keeps it with every event it logs. */
+  draw?: string;
+  /**
+   * A pool match that will not count, because one of its competitors has withdrawn (#162).
+   * Nothing waits for it; any result it had stays visible.
+   */
+  void?: boolean;
+  /**
+   * One side will never be filled: the match feeding it ended in a double penalty loss,
+   * so nobody goes through, and whoever is on the other side walks over (#164).
+   */
+  walkover?: boolean;
   state: State;
   status: 'pending' | 'running' | 'complete';
   /**
@@ -257,6 +269,8 @@ export interface ForecastView {
   expected?: Record<string, number>;
   /** The block of the day each discipline runs in, and whether every final is held to the end (#136). */
   sessions?: Record<string, number>;
+  /** The date each block runs on, by block number, for an event of several days (#122). */
+  days?: Record<number, string>;
   finalsLast?: boolean;
   /** The hall's breaks, each discipline's gear check and briefing, and its earliest start (#149). */
   breaks: Break[];
@@ -332,6 +346,28 @@ export interface MatsView {
   upcoming?: 'bottom' | 'list' | 'none';
   /** The event's identity (#141). */
   event?: string;
+  /** A global timeout in force (#157): every mat stops until the organizer ends it. */
+  halt?: { since: string; reason?: string };
+}
+
+/** One discipline's go / no-go summary and sign-off (#167). */
+export interface GoNoGoView {
+  discipline: string;
+  name: string;
+  warnings: {
+    kind: 'staff' | 'overrun' | 'mats';
+    noStaff?: boolean;
+    short?: number;
+    roles?: string[];
+    end?: string;
+    close?: string;
+    mats?: number;
+    recommended?: number;
+  }[];
+  basis: Record<string, string>;
+  signoff?: { by: string; at: string; basis: Record<string, string> };
+  current: boolean;
+  changed?: string[];
 }
 
 /** What one of a discipline's mats is running or has up next, for the event's pages. */

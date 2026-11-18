@@ -135,3 +135,15 @@ func order(s []tournament.Standing) []string {
 	}
 	return out
 }
+
+// #164: both on the losing penalty level in one exchange is a loss for both, worth nothing.
+func TestADoublePenaltyLossIsALossForBoth(t *testing.T) {
+	ids := []string{"a", "b"}
+	p := pool(ids, m("m1", "a", "b"))
+	states := map[string]match.State{"m1": decided(0, 0, match.ReasonPenalty, true)}
+	for _, r := range tournament.Rank(match.MSL(), p, people(ids...), states, 1) {
+		if r.Losses != 1 || r.Draws != 0 || r.MatchPoints != 0 {
+			t.Errorf("%s should have one loss and no match points: %+v", r.Competitor, r)
+		}
+	}
+}

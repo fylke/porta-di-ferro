@@ -387,6 +387,51 @@ func TestTheEventStreamHearsEveryDiscipline(t *testing.T) {
 	}
 }
 
+// One stream per page (#161): the event's, the mats' and a discipline's updates over one
+// connection, each tagged with the stream it came from.
+func TestOneStreamCarriesEveryTopicAPageFollows(t *testing.T) {
+	h := openHall(t, t.TempDir())
+	h.must("POST", "/api/disciplines", map[string]string{"name": "Open Sabre"}, nil)
+
+	res, err := http.Get(h.url + "/api/streams?topic=event&topic=mats&topic=d/open-sabre&topic=nonsense")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	frames := make(chan string, 32)
+	go func() {
+		sc := bufio.NewScanner(res.Body)
+		sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+		for sc.Scan() {
+			if line := sc.Text(); strings.HasPrefix(line, "data: ") {
+				frames <- strings.TrimPrefix(line, "data: ")
+			}
+		}
+	}()
+	time.Sleep(100 * time.Millisecond)
+
+	h.must("POST", "/api/d/open-sabre/competitors", map[string]string{"name": "Bo", "club": "Lund"}, nil)
+	want := map[string]string{"event": "event", "d/open-sabre": "state"}
+	deadline := time.After(3 * time.Second)
+	for len(want) > 0 {
+		select {
+		case f := <-frames:
+			var u struct {
+				Topic string `json:"topic"`
+				Kind  string `json:"kind"`
+			}
+			if json.Unmarshal([]byte(f), &u) != nil {
+				t.Fatalf("a frame should be JSON: %s", f)
+			}
+			if want[u.Topic] == u.Kind {
+				delete(want, u.Topic)
+			}
+		case <-deadline:
+			t.Fatalf("the stream never carried %v", want)
+		}
+	}
+}
+
 // Opening a tournament folder from before events existed gives the same tournament, at
 // the same paths.
 func TestALegacyFolderServesAsBefore(t *testing.T) {
@@ -513,5 +558,48 @@ func TestTwoAddsOfOneNameMakeOneDiscipline(t *testing.T) {
 	h.must("GET", "/api/event", nil, &view)
 	if made != 1 || len(view.Disciplines) != 1 {
 		t.Errorf("eight adds of one name should make one discipline, made %d: %+v", made, view.Disciplines)
+	}
+}
+
+// #166: a double click on Reload closed the discipline it replaced twice, and panicked.
+func TestReloadingTwiceAtOnceIsHarmless(t *testing.T) {
+	h := openHall(t, t.TempDir())
+	var ev hall.EventView
+	h.must("GET", "/api/event", nil, &ev)
+	ls := ev.Disciplines[0].Slug
+	done := make(chan int, 20)
+	for i := 0; i < 20; i++ {
+		go func() { done <- h.do("POST", "/api/disciplines/"+ls+"/reload", nil, nil) }()
+	}
+	for i := 0; i < 20; i++ {
+		if code := <-done; code >= 500 || code == 0 {
+			t.Errorf("a reload answered %d", code)
+		}
+	}
+}
+
+// #166: a push is checked before it is written: a match the tournament does not have, or
+// an event the engine could not read, is refused rather than kept.
+func TestAPushIsChecked(t *testing.T) {
+	h := openHall(t, t.TempDir())
+	var ev hall.EventView
+	h.must("GET", "/api/event", nil, &ev)
+	ls := ev.Disciplines[0].Slug
+	h.draw("/api/d/"+ls, 4, 1)
+	timer := []map[string]any{{"seq": 1, "type": "timer", "timer": map[string]string{"action": "start"}}}
+	if code := h.do("POST", "/api/d/"+ls+"/matches/p9m9/events", timer, nil); code != 404 {
+		t.Errorf("a match the tournament does not have should be 404, got %d", code)
+	}
+	for _, bad := range [][]map[string]any{
+		{{"seq": 1, "type": "teleport"}},
+		{{"seq": 1, "type": "exchange"}},
+		{{"seq": 0, "type": "timer", "timer": map[string]string{"action": "start"}}},
+	} {
+		if code := h.do("POST", "/api/d/"+ls+"/matches/p1m1/events", bad, nil); code != 400 {
+			t.Errorf("%v should be refused with 400, got %d", bad, code)
+		}
+	}
+	if code := h.do("POST", "/api/d/"+ls+"/matches/p1m1/events", timer, nil); code != 200 {
+		t.Errorf("a good push should land, got %d", code)
 	}
 }

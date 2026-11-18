@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/fylke/porta-di-ferro/internal/hall"
 	"github.com/fylke/porta-di-ferro/internal/store"
@@ -87,6 +88,7 @@ func (e *Event) mats() hall.MatsView {
 	e.withSessions(inputs)
 	view := hall.BuildMats(inputs, placed, n, e.held)
 	view.Upcoming = store.UpcomingOf(e.screens)
+	view.Halt = e.halt
 	view.Event = e.id
 	hall.NameMats(&view, e.plan)
 	return view
@@ -106,6 +108,19 @@ func (e *Event) putMat(mat string, body []byte) Response {
 		return fail(400, err)
 	}
 	hall.SetMat(&e.plan, n, in)
+	return changed(e.mats())
+}
+
+// putHalt calls a global timeout or ends it (#157), as the coordinator does.
+func (e *Event) putHalt(body []byte) Response {
+	var in struct {
+		On     bool   `json:"on"`
+		Reason string `json:"reason"`
+	}
+	if err := json.Unmarshal(body, &in); err != nil {
+		return fail(400, err)
+	}
+	e.halt = hall.SetHalt(e.halt, in.On, in.Reason, time.Now())
 	return changed(e.mats())
 }
 

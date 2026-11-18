@@ -42,11 +42,13 @@
     const [how, from] = (feed ?? '').split(':');
     const feeder = matches.find((x) => x.id === from);
     if (!feeder) return { text: '—', known: false };
+    // Settled upstream with nobody coming through: a double loss, or a walkover's loser.
+    if (m.walkover && feeder.status === 'complete') return { text: t('nobody (double loss)'), known: false };
     const label = roundLabel(feeder).toLocaleLowerCase();
     return { text: how === 'loser' ? t('Loser of {match}', { match: label }) : t('Winner of {match}', { match: label }), known: false };
   }
   function score(m: MatchView, side: 'red' | 'blue'): string {
-    return m.status === 'pending' ? '' : String(m.state[side].score);
+    return m.status === 'pending' || m.walkover ? '' : String(m.state[side].score);
   }
 </script>
 
@@ -61,7 +63,7 @@
       <span class="pts mono">{score(m, 'blue')}</span>
     </div>
     <div class="foot">
-      <span>{t('mat {n}', { n: m.mat })}{#if m.status === 'running'} &middot; {t('under way')}{/if}</span>
+      <span>{t('mat {n}', { n: m.mat })}{#if m.status === 'running'} &middot; {t('under way')}{/if}{#if m.walkover} &middot; {t('walkover')}{/if}</span>
       {#if onedit && m.red && m.blue}
         <button class="edit plain" title={t("Edit this match's log")} aria-label={t('Edit the log of {match}', { match: roundLabel(m) })} onclick={() => onedit?.(m)}>&#9998;</button>
       {/if}

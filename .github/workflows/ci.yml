@@ -12,17 +12,17 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: '20'
+          node-version: '24'
           cache: npm
           cache-dependency-path: web/package-lock.json
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
-          go-version: '1.23'
+          go-version: '1.26'
           cache: true
 
       - name: Install web dependencies
@@ -57,6 +57,12 @@ jobs:
 
       - name: go vet
         run: go vet ./...
+
+      # Known vulnerabilities in the Go dependencies and the standard library this calls
+      # (#166). npm audit is not here: what it reports is in the dev tooling, and
+      # `npm audit --omit=dev` is clean.
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.10.0 ./...
 
       - name: Go engine, vectors, properties and end to end
         run: go test ./...

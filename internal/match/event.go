@@ -6,6 +6,8 @@
 // both test suites run. A vector that passes here and fails there fails the build.
 package match
 
+import "fmt"
+
 // Side identifies a competitor within a match. Red is always on the left of the score
 // keeper view and blue always on the right; that mapping mirrors the mat and never moves.
 type Side string
@@ -131,4 +133,35 @@ type Event struct {
 	Undo      *Undo     `json:"undo,omitempty"`
 	End       *End      `json:"end,omitempty"`
 	Options   *Options  `json:"options,omitempty"`
+}
+
+// Check says what is wrong with events as a client sent them, or nil: a sequence number
+// that is not positive, a type the engine does not know, or a type without the record it
+// needs. The engine would skip any of these on replay; refusing them at the door keeps
+// them out of the log in the first place (#166).
+func Check(events []Event) error {
+	for _, e := range events {
+		if e.Seq <= 0 {
+			return fmt.Errorf("event sequence numbers must be positive, got %d", e.Seq)
+		}
+		missing := false
+		switch e.Type {
+		case TypeExchange:
+			missing = e.Exchange == nil
+		case TypeTimer:
+			missing = e.Timer == nil
+		case TypeUndo:
+			missing = e.Undo == nil
+		case TypeEnd:
+			missing = e.End == nil
+		case TypeOptions:
+			missing = e.Options == nil
+		default:
+			return fmt.Errorf("event %d has an unknown type %q", e.Seq, e.Type)
+		}
+		if missing {
+			return fmt.Errorf("event %d is a %s without its %s record", e.Seq, e.Type, e.Type)
+		}
+	}
+	return nil
 }

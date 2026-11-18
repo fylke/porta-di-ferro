@@ -81,6 +81,12 @@ function open(): Promise<IDBDatabase> {
 interface StoredEvent extends Event {
   discipline: string;
   match: string;
+  /**
+   * The draw the event was scored in (the snapshot's match.draw, #160): match ids repeat
+   * from one draw to the next, so a log is only ever merged into the draw it came from.
+   * Absent on rows from before draws were kept.
+   */
+  draw?: string;
 }
 
 /** A match this device holds a log for, and the discipline it was scored in. */
@@ -109,13 +115,16 @@ function done(tx: IDBTransaction): Promise<void> {
   });
 }
 
-/** Appends events to the durable log. Writing an existing (discipline, match, seq) is a no-op. */
-export async function append(discipline: string, matchId: string, events: Event[]): Promise<void> {
+/**
+ * Appends events to the durable log, with the draw they were scored in. Writing an existing
+ * (discipline, match, seq) replaces it.
+ */
+export async function append(discipline: string, matchId: string, events: Event[], draw = ''): Promise<void> {
   await attempt<void>(undefined, async (db) => {
     const tx = db.transaction(STORE, 'readwrite');
     const store = tx.objectStore(STORE);
     for (const e of events) {
-      store.put({ ...e, discipline, match: matchId } satisfies StoredEvent);
+      store.put({ ...e, discipline, match: matchId, ...(draw ? { draw } : {}) } satisfies StoredEvent);
     }
     await done(tx);
   });
@@ -164,16 +173,49 @@ export async function matches(): Promise<HeldMatch[]> {
   });
 }
 
-/** Reads a match's durable log, in sequence order. Empty if storage is unavailable. */
-export async function read(discipline: string, matchId: string): Promise<Event[]> {
-  return attempt<Event[]>([], async (db) => {
+/**
+ * Reads a match's durable log, in sequence order. Empty if storage is unavailable. Given a
+ * draw, only that draw's events -- and rows from before draws were kept -- are read (#160).
+ */
+export async function read(discipline: string, matchId: string, draw = ''): Promise<Event[]> {
+  const byDraw = await readByDraw(discipline, matchId);
+  const out: Event[] = [];
+  for (const [d, events] of byDraw) if (!draw || !d || d === draw) out.push(...events);
+  return out.sort((a, b) => a.seq - b.seq);
+}
+
+/** A match's durable log, split by the draw each event was scored in ('' for unknown). */
+export async function readByDraw(discipline: string, matchId: string): Promise<Map<string, Event[]>> {
+  return attempt<Map<string, Event[]>>(new Map(), async (db) => {
     const index = db.transaction(STORE, 'readonly').objectStore(STORE).index('byMatch');
     const rows = await new Promise<StoredEvent[]>((resolve, reject) => {
       const req = index.getAll(IDBKeyRange.only([discipline, matchId]));
       req.onsuccess = () => resolve(req.result as StoredEvent[]);
       req.onerror = () => reject(req.error);
     });
-    // The discipline is where a row is kept, not part of the event the server is sent.
-    return rows.map(({ discipline: _, ...e }) => e as Event).sort((a, b) => a.seq - b.seq);
+    // The discipline and the draw are where a row is kept, not part of the event sent.
+    const out = new Map<string, Event[]>();
+    for (const { discipline: _, match: __, draw, ...e } of rows) {
+      const list = out.get(draw ?? '') ?? [];
+      list.push({ ...e, match: matchId } as Event);
+      out.set(draw ?? '', list);
+    }
+    for (const list of out.values()) list.sort((a, b) => a.seq - b.seq);
+    return out;
+  });
+}
+
+/** Drops what this device holds of a match from one draw: the server has set it aside. */
+export async function clearDraw(discipline: string, matchId: string, draw: string): Promise<void> {
+  await attempt<void>(undefined, async (db) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    const store = tx.objectStore(STORE);
+    const rows = await new Promise<StoredEvent[]>((resolve, reject) => {
+      const req = store.index('byMatch').getAll(IDBKeyRange.only([discipline, matchId]));
+      req.onsuccess = () => resolve(req.result as StoredEvent[]);
+      req.onerror = () => reject(req.error);
+    });
+    for (const r of rows) if ((r.draw ?? '') === draw) store.delete([discipline, matchId, r.seq]);
+    await done(tx);
   });
 }

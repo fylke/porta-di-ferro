@@ -16,29 +16,40 @@ jobs:
   windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: '20'
+          node-version: '24'
           cache: npm
           cache-dependency-path: web/package-lock.json
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
-          go-version: '1.23'
+          go-version: '1.26'
           cache: true
 
+      # The input on a manual run, the tag otherwise. GITHUB_REF_NAME is the branch on a
+      # manual run, so it cannot be the fallback (#166).
       - name: Work out the version
         id: version
         shell: bash
-        run: echo "value=${GITHUB_REF_NAME:-${{ github.event.inputs.version }}}" >> "$GITHUB_OUTPUT"
+        run: echo "value=${{ github.event.inputs.version || github.ref_name }}" >> "$GITHUB_OUTPUT"
 
       - name: Build the web bundle
         working-directory: web
         run: |
           npm ci
           npm run build
+
+      # A tag on a commit CI never passed must not publish an installer (#166): the same
+      # tests CI runs, here, before anything is built for an organizer.
+      - name: Test before releasing
+        shell: bash
+        run: |
+          (cd web && npm test && npm run check)
+          go vet ./...
+          go test ./...
 
       # One static binary with the web app embedded in it. No runtime, no container, no
       # separate database server -- the shortest possible path to "download one file and
@@ -93,14 +104,14 @@ jobs:
         run: |
           & '${{ steps.inno.outputs.path }}' /DMyAppVersion="${{ steps.version.outputs.value }}" installer\porta.iss
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: porta-di-ferro-windows
           path: installer/Output/*.exe
 
       - name: Publish to the release
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           files: installer/Output/*.exe
           generate_release_notes: false

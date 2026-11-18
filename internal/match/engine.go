@@ -170,7 +170,9 @@ func applyTimer(s *State, e Event) {
 }
 
 func applyEnd(r Ruleset, s *State, e Event) {
-	if e.End == nil {
+	// A second end -- a stray write, a hand-made request -- does not change a finished
+	// match's result (#166). Correcting one is the history editor's job.
+	if e.End == nil || s.Ended {
 		return
 	}
 	s.ElapsedMS = e.ElapsedMS

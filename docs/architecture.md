@@ -236,6 +236,7 @@ flowchart TB
 - **The day is the event's.** A discipline's snapshot carries `event.json` laid over its own tournament, which keeps none of it. A discipline's `PUT /api/d/{slug}/event` writes the day to the event, so every admin screen saves as it always did.
 - **A broken discipline is contained.** Each discipline's files are read when it loads; one that does not parse is listed with the reason, served as 503, shown on the landing page from its last summary, and reloaded with `POST /api/disciplines/{slug}/reload` once fixed. A broken `event.json` blanks the day and nothing else.
 - **The event's stream** carries `hall.Summarize` of every discipline — stage, progress, what is on each mat, the podium, the entrants — coalesced over 150 ms, so the event landing page holds one stream however many disciplines there are.
+- **One stream per page** (#161). A browser gives one address six HTTP/1.1 connections, so a page follows everything over `GET /api/streams?topic=event&topic=mats&topic=d/{slug}` (`d/` for the event's only discipline): each frame is a hub's update tagged with its `topic`, and the stream ends when any hub drops it, so EventSource reopens it. In the client, `lib/streams.ts` keeps that one connection for every `EventLive`, `MatsLive` and `Live` on the page, and lets it go after 15 seconds hidden; coming back, each follower asks for a fresh picture. The single streams (`/api/event/stream`, `/api/mats/stream`, `/api/d/{slug}/stream`) still answer.
 - **Clients keep disciplines apart.** IndexedDB is keyed `[discipline, match, seq]`, and an unsent exchange is pushed to the discipline it was scored in whatever page is open; the snapshot cache and the score keeper's remembered state are namespaced per discipline (`web/src/lib/paths.ts`).
 - **Opening an old folder** moves its files into `disciplines/<slug>/` and lifts its day into `event.json` (`internal/event/migrate.go`); the move resumes if interrupted.
 - **Deleting the event** (`DELETE /api/event`, #141) lets every discipline go, moves everything in the folder under `deleted/<time>-<name>/`, and starts an empty event in its place, with no disciplines, as a first start does. Every event has an identity (`id` in `event.json`, carried on `GET /api/event` and `GET /api/mats`); a device that sees a different one from the one it last saw clears its match logs and cached views before using the new one (`web/src/lib/forget.ts`), because the new event's `open-sabre/p1m1` has the same key as the old one's.
@@ -267,6 +268,9 @@ flowchart LR
 - **Moving** (`PATCH /api/plan/items/{discipline}/{key}`, `hall.Move`/`Step`): an item under way or done cannot move, and nothing can be put in front of it, so a mat never changes what it runs in the middle of an item. A discipline's own pool controls move its items the same way. `PUT /api/mats` sets how many mats the hall has; a mat running something cannot be taken away.
 - **Snapshots speak event mats** (`hall.OnEventMats`): every pool and bracket match in a discipline's snapshot says the mat the plan runs it on, so standings, rosters, pool sheets and personal pages need no change; `eventMats` says how many there are.
 - **Who owns the mat count.** The hall's count (`hall.MatCount`: `plan.mats` in `event.json` when the organizer set it, otherwise the largest discipline's) is the authority. A discipline's own `tournament.mats` is the organizer's choice for that discipline, kept as typed, and never more than the hall can give: `hall.EffectiveMatCount` caps it, and `hall.OnHall` is the tournament every draw (pools and bracket), the plan and the forecast work from. The snapshot's `usableMats` is that capped number, and the eliminations' mat choice offers it. Taking a mat away (`PUT /api/mats`) therefore takes it from every discipline at once, and giving it back returns it; nothing raises the hall's count on its own.
+- **Void matches** (#162). A pool match with a withdrawn competitor is `void` in the snapshot (`MatchView.Settled`): the mat, the pool's `complete`, the forecast and the progress counts all pass over it, as the ranking already did, while it stays listed with any result it had. Reinstating the competitor brings it back.
+- **Go / no-go** (#167). `GET /api/disciplines/{d}/gonogo` (and `GET /api/gonogo` for all) is `hall.GoNoGo`: what could go wrong with a discipline -- staff slots unfilled, a forecast past the venue's close, fewer mats than its numbers recommend -- and the tournament manager's sign-off, `POST` with `{"by": "Kim"}`, kept in `plan.signoffs` with the facts it was given on (mats, block, day, start, pool sizes, elimination mats). When one of those changes the sign-off is no longer `current`, and `changed` says which. It warns and never refuses: the discipline admin page shows it, the mat board names the disciplines without a current go, and nothing waits for one.
+- **A global timeout** (#157). `PUT /api/event/halt` (`{"on": true, "reason": "..."}`, from the mat board) stops the whole hall while the physician is busy: `event.json` keeps `halt`, and `GET /api/mats` and its stream carry it. Every score keeper pauses a running clock and will not start one or confirm an exchange, and every screen says so, until the organizer ends it.
 - **Devices are the event's.** Heartbeats, screen assignments (`displays.json` in the event folder) and the Screens panel are event-level, and one registry is shared by every discipline, so a claim on a match anywhere asks it whether the holder is alive. A score keeper registers its mat, match and the match's discipline, and the client keys everything it keeps by discipline and match id, because ids repeat across disciplines.
 - **The mat board** (`MatBoard.svelte`) shows every mat's queue as cards and moves them by a pointer-events drag or by each card's menu.
 
@@ -315,10 +319,11 @@ flowchart LR
 - **The programme is generated, never typed** (#149): `hall.ViewForecast` lists each discipline's gear check, staff briefing, pools, eliminations and final, and the breaks, in the order of the day. The landing pages, the info sheet and its PDF (`hall.ProgrammeSchedule`) and the signup's planned starts all read it. The forecast view's `gaps` point out a day with no break and a discipline with no gear check or briefing; nothing is refused.
 - **Projected work**: a discipline with entrants, or the number it expects (`PUT /api/plan/expected`), and no draw yet has the items `tournament.Generate` and `tournament.Bracket` would give it over stand-in entrants (`hall.ProjectedItems`). They are planned cards on the board, after all real work; a mat never waits on one; a place the organizer gave one (a move, a hold, an applied suggestion) is the drawn item's.
 - **The forecast** simulates each mat match by match: logged matches where the logs put them, the rest at the mat's pace, around programme breaks, after what each item waits for (eliminations after the discipline's pools plus the pause, the final after the eliminations and after the bronze match -- unless the bronze is let run with it, a flag on its card, #149), not before an item's hold time, and once the day is live never before now. The same run on the template from the day's start is the planned day, drawn as a ghost. It warns of a person in two items at once, an item placed before what it waits for, and a day ending after the venue closes.
+- **More than one day** (#122). `plan.days` gives a block of the day a date (`PUT /api/plan/days`, `{"2": "2026-11-22"}`). Its work, holds and discipline starts are times of that date, and no earlier than the day's start; the hall's breaks and the mats' times away repeat on every day; the nights between days are closed to every mat (`forecast.Input.Closed`) and kept out of the programme, which heads each day's rows with its date. Before anything is fenced the forecast starts on the first dated day; undated blocks run on the first day.
 - **How many mats** (#153). A discipline's setup does not ask. The forecast view's `mats` says what each discipline's numbers recommend (`tournament.RecommendedMats`: one per pool at its largest pool size, up to four, from what it expects or else its ceiling, and never fewer than have entered), and `matsRecommended` what the busiest block of the day comes to for the hall. A discipline takes the recommendation when its setup is first finished, and Planning the day chooses from there.
 - **The mat board has the day on it** (#153): the cards stand at their forecast times, with a strip of hours between the mats and on the outsides, and the hall's breaks across every mat. A card too short for its text pushes the next one down rather than hiding anything, and a mat with moves in the draft shows its movable cards one after another.
 - **Only pools move by hand** (#149). `hall.Move` refuses an elimination, bronze match or final, which follow the pools wherever the plan puts them, and a pool dropped behind its own discipline's bracket on a mat lands in front of it. A pool held to a later start pushes what follows on its mat only as far as they would overlap.
-- **Suggestions** (`POST /api/plan/suggest`) are greedy list scheduling: what is under way stays, pinned items keep their mat, the rest go in priority order to the mat where each can start soonest. The order never depends on the current plan, so suggesting again after applying moves nothing. `POST /api/plan/apply` works it out again and refuses a stale signature.
+- **Suggestions** (`POST /api/plan/suggest`) are greedy list scheduling: what is under way stays, pinned items keep their mat and their order among the other pins on it (#121), the rest go in priority order to the mat where each can start soonest. The order never depends on the current plan, so suggesting again after applying moves nothing. `POST /api/plan/apply` works it out again and refuses a stale signature.
 - A suggestion's reported finish and move start times come from re-running the shared match-by-match forecast over its proposed placements, so calibration and feeder waits match the applied plan.
 - **Where the hall sees it**: `GET /api/forecast` for the board and the planning panel; the event view's `programme`, which both landing pages and the info sheet list; and `Eta` on every pending match in a discipline's snapshot (filled through `EventMats.Hall`), which a person's page shows as "about 10:40". Times go out in the server's zone and are printed as written.
 
@@ -390,7 +395,9 @@ flowchart LR
 | `/` | competitors and spectators | no |
 | `/who/:person` | the same, one person at a time, across the event (`/who/c7` moves on to its person) | no |
 | `/info` | the wall by the entrance, on screen or printed | no |
-| `/admin`, `/plan` | the organizer | everything |
+| `/admin`, `/plan` | the organizer | everything, from the organizer's PC only (#165) |
+
+The server takes the organizer's writes from loopback alone, and refuses cross-site writes and foreign `Host` names before any handler runs (`internal/http/guard.go`; `docs/design.md`, "Who may change what"). A score keeper's exchanges and claims and every device's heartbeat are the hall's, and open to it.
 
 `Tournament.Event` — the welcome message, the event's name, venue and date, and the venue wifi — is written only from Plan the event and read by the other two; the programme beside it is generated from the plan (#149). None of it reaches a result.
 
@@ -568,8 +575,8 @@ sequenceDiagram
     LocalEngine->>Server: POST /api/matches/:id/events (seq, type, payload)
 
     alt Server accepts event
-        Server->>Server: Replay & Validate via Go Engine
-        Server->>Server: Append to Match JSON on Disk
+        Server->>Server: Check the match is in the draw and each event is well formed (match.Check)
+        Server->>Server: Append new seqs to the match log on disk, then replay it via the Go engine
         Server-->>LocalEngine: 200 OK (written, server-derived state, lastSeq)
         LocalEngine->>LocalEngine: Compare server state with own replay of the same log
         Note over LocalEngine: A difference is a dual-engine bug: banner + console report.<br/>Score keeper may adopt the server's state for the rest of the match.
@@ -622,6 +629,8 @@ sequenceDiagram
     S-)O: SSE presence (set aside: n events from A on M)
     O->>S: DELETE /api/quarantine/M (after looking)
 ```
+
+**A replaced draw is set aside the same way** (#160). Match ids are positional -- `p1m1` is in every draw -- so every match in the snapshot carries `draw` (the pools' `generatedAt` or the bracket's `bracketAt`, `hall.DrawOf`). The score keeper stores it with each event in IndexedDB and sends it as `X-Porta-Draw` on every push. A push from a draw that has been replaced is quarantined and answered `409 {redrawn: true}`, and the device then drops that draw's events; it never merges them into the new pairing's log.
 
 Displays: a screen opens `/display`, heartbeats with role `display`, and renders whatever `target` comes back (`mat/1`, `mats`, `mats/1,2`, `roster`; an old `audience/2` shows mat 2's scoreboard). The organizer sets it with `PUT /api/clients/{id}/target`; assignments are kept in `displays.json`.
 
@@ -716,25 +725,20 @@ flowchart TD
 
 ## 5. Offline & Local-First Resilience
 
-Scorekeeper devices stay operational even during transient venue Wi-Fi dropouts by leveraging a Service Worker app shell and IndexedDB event spooling. The last snapshot is kept in `localStorage` too, so a client opens with the pool's schedule and names when the server is unreachable; the score keeper client keeps its own record of which matches it has finished, so it can move through a whole pool offline. On reconnect, every match log on the device that the server is missing is pushed — not only the match on screen.
+Scorekeeper devices stay operational even during transient venue Wi-Fi dropouts through IndexedDB event spooling. The last snapshot is kept in `localStorage` too, so a client opens with the pool's schedule and names when the server is unreachable; the score keeper client keeps its own record of which matches it has finished, so it can move through a whole pool offline. On reconnect, every match log on the device that the server is missing is pushed — not only the match on screen.
+
+**A tablet cannot reload offline.** A service worker registers only on a secure origin, and every device but the organizer's PC reaches the server at `http://<LAN address>` (`docs/tech-stack.md` §6, `AGENTS.md`). So the service worker's app shell serves the organizer's browser on `localhost` alone; a tablet keeps working through a dropout because its page is already loaded, and a reload while the LAN is down fails until it is back (#166).
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor Scorekeeper
-    participant SW as Service Worker / App Shell
-    participant App as Scorekeeper Web App
+    participant App as Scorekeeper Web App (already loaded)
     participant IDB as IndexedDB (Outbox Queue)
     participant LAN as Venue LAN / Go Server
 
-    Scorekeeper->>SW: Load Scorekeeper URL
-    alt Online Initial Load
-        SW->>LAN: Fetch App Bundle
-        LAN-->>SW: HTML, JS, CSS Assets
-        SW->>SW: Cache in CacheStorage
-    else Offline Load / Reload
-        SW-->>App: Serve from CacheStorage
-    end
+    Scorekeeper->>LAN: Load Scorekeeper URL (needs the LAN: no service worker on http://<LAN address>)
+    LAN-->>App: HTML, JS, CSS, last snapshot cached in localStorage
 
     Scorekeeper->>App: Record Points / Warnings
     App->>IDB: Enqueue Event (matchId, seq, payload)

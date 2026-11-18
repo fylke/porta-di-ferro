@@ -15,6 +15,16 @@ type MatchView struct {
 	store.Match
 	State  match.State `json:"state"`
 	Status string      `json:"status"`
+	// Draw is the draw the match belongs to: the pools' GeneratedAt or the bracket's
+	// BracketAt. Match ids are positional -- p1m1 is in every draw -- so a score keeper keeps
+	// this with every event it logs and sends it with every push, and a log from a draw that
+	// has been replaced is set aside rather than merged into the new one (#160).
+	Draw string `json:"draw,omitempty"`
+	// Void says a pool match will not count: one of its competitors has withdrawn, which
+	// is as though they never took part (design §6). Nothing waits for a void match -- not
+	// its mat, not its pool, not the forecast -- but it stays in the list, with any result
+	// it already had, and comes back by itself if the competitor is reinstated (#162).
+	Void bool `json:"void,omitempty"`
 	// SinceMS is how long ago this server saw the last event in the match, and is set
 	// only while the clock is running.
 	//
@@ -248,7 +258,7 @@ func (b snapshotBuilder) view(m store.Match) (MatchView, error) {
 	case len(events) > 0:
 		status = "running"
 	}
-	v := MatchView{Match: m, State: st, Status: status, Options: match.OptionsOf(events)}
+	v := MatchView{Match: m, State: st, Status: status, Options: match.OptionsOf(events), Draw: DrawOf(b.t, m.ID)}
 	v.StartedAt, v.EndedAt = times(events, st.Ended)
 	if st.Running {
 		if at, ok := b.src.LastEventAt(m.ID); ok {
@@ -272,7 +282,8 @@ func (b snapshotBuilder) pools() ([]PoolView, error) {
 				return nil, err
 			}
 			states[m.ID] = v.State
-			if !v.State.Ended {
+			v.Void = b.byID[m.Red].Withdrawn || b.byID[m.Blue].Withdrawn
+			if !v.Settled() {
 				complete = false
 			}
 			views = append(views, v)
@@ -303,9 +314,6 @@ func (b snapshotBuilder) bracket() (*BracketView, error) {
 		if err != nil {
 			return nil, err
 		}
-		if !v.State.Ended {
-			bv.Complete = false
-		}
 		bv.Matches = append(bv.Matches, v)
 	}
 	// Fill again now that the bracket's own states are known, so a semi-final
@@ -313,10 +321,38 @@ func (b snapshotBuilder) bracket() (*BracketView, error) {
 	filled := tournament.Fill(b.t.Bracket, b.states)
 	for i := range bv.Matches {
 		bv.Matches[i].Match = filled[i]
+		// A walkover is nothing anybody fences (#164): settled, so no mat waits on it.
+		if filled[i].Walkover {
+			bv.Matches[i].Status = "complete"
+		}
+		if !bv.Matches[i].State.Ended && !filled[i].Walkover {
+			bv.Complete = false
+		}
 	}
 	bv.Podium = tournament.Result(filled, b.states)
 	return bv, nil
 }
+
+// DrawOf is the draw a match id belongs to in a tournament -- the pools' or the bracket's
+// stamp -- and "" when the tournament has no such match.
+func DrawOf(t store.Tournament, id string) string {
+	for _, p := range t.Pools {
+		for _, m := range p.Matches {
+			if m.ID == id {
+				return t.GeneratedAt
+			}
+		}
+	}
+	for _, m := range t.Bracket {
+		if m.ID == id {
+			return t.BracketAt
+		}
+	}
+	return ""
+}
+
+// Settled says nothing more will be fenced in the match: it has ended, or it is void.
+func (m MatchView) Settled() bool { return m.Status == "complete" || m.Void }
 
 // runningOn is the match a mat is on. A mat runs its pools in queue order, which is the
 // order snap.Pools is already in: when one finishes, that mat picks up its next -- and after
@@ -335,7 +371,7 @@ func (s Snapshot) runningOn(mat int, held string) string {
 			continue
 		}
 		for _, m := range p.Matches {
-			if m.Status != "complete" {
+			if !m.Settled() {
 				return m.ID
 			}
 		}

@@ -100,7 +100,7 @@
             <span class="n mono">{m.order}</span>
             <span class="red">{name(m.red)}</span>
             <span class="score mono">
-              {#if m.status === 'pending'}{t('v')}{:else}{m.state.red.score}–{m.state.blue.score}{/if}
+              {#if m.void}{t('void')}{:else if m.status === 'pending'}{t('v')}{:else}{m.state.red.score}–{m.state.blue.score}{/if}
             </span>
             <span class="blue">{name(m.blue)}</span>
           </li>

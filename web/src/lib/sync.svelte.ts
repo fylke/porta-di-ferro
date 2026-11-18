@@ -40,25 +40,23 @@ export async function flushAll(except?: { discipline: string; match: string }): 
       if (except && id === except.match && discipline === except.discipline) continue;
       // To the discipline it was scored in, whichever page is open now.
       const api = apiIn(discipline);
-      const local = await db.read(discipline, id);
-      if (local.length === 0) continue;
       const remote = await api.events(id, 0);
       const have = new Set(remote.map((e) => e.seq));
-      const missing = local.filter((e) => !have.has(e.seq));
-      if (missing.length === 0) continue;
-      // Claim it first, the way the open match was claimed. If somebody else holds it
-      // now, push anyway on a dead epoch: the server sets the events aside and the
-      // organizer sees them, which beats leaving them here where nobody will.
-      let epoch = 0;
-      try {
-        epoch = (await api.claim(id, clientId())).epoch;
-      } catch (e) {
-        if (!(e instanceof ApiError) || e.status !== 409) throw e;
-      }
-      try {
-        await api.pushEvents(id, missing, { client: clientId(), epoch });
-      } catch (e) {
-        if (!(e instanceof ApiError) || e.status !== 409) throw e;
+      // Each draw's events on their own, with the draw they were scored in: the server
+      // takes the current draw's and sets any replaced draw's aside (#160).
+      for (const [draw, local] of await db.readByDraw(discipline, id)) {
+        const missing = local.filter((e) => !have.has(e.seq));
+        if (missing.length === 0) continue;
+        // Claim it first, the way the open match was claimed. If somebody else holds it
+        // now, push anyway on a dead epoch: the server sets the events aside and the
+        // organizer sees them, which beats leaving them here where nobody will.
+        let epoch = 0;
+        try {
+          epoch = (await api.claim(id, clientId())).epoch;
+        } catch (e) {
+          if (!(e instanceof ApiError) || e.status !== 409) throw e;
+        }
+        await pushSetAside(discipline, id, missing, epoch, draw);
       }
     }
   } catch {
@@ -68,10 +66,29 @@ export async function flushAll(except?: { discipline: string; match: string }): 
   }
 }
 
+/**
+ * Pushes events, and when the server answers that they belong to a draw that has been
+ * replaced, drops them here: the organizer has them now (#160). A 409 for any other reason
+ * leaves them, as before.
+ */
+async function pushSetAside(discipline: string, id: string, events: Event[], epoch: number, draw: string): Promise<void> {
+  try {
+    await apiIn(discipline).pushEvents(id, events, { client: clientId(), epoch, draw });
+  } catch (e) {
+    if (!(e instanceof ApiError) || e.status !== 409) throw e;
+    if (draw && (e.body as { redrawn?: boolean } | null)?.redrawn) await db.clearDraw(discipline, id, draw);
+  }
+}
+
 export class MatchLog {
   matchId = $state('');
   /** The discipline the match is in: where its log is kept, and where it is sent. */
   readonly discipline: string;
+  /**
+   * The draw the match is from (the snapshot's match.draw, #160). Match ids repeat across
+   * draws, so only this draw's events are merged, and every push carries it.
+   */
+  readonly draw: string;
   private readonly api: ReturnType<typeof apiIn>;
   events = $state<Event[]>([]);
   sync = $state<SyncState>('idle');
@@ -120,9 +137,10 @@ export class MatchLog {
   // Note: reload() replaces this set outright, so it cannot be readonly.
   private timer: ReturnType<typeof setInterval> | null = null;
 
-  constructor(matchId: string, discipline: string) {
+  constructor(matchId: string, discipline: string, draw = '') {
     this.matchId = matchId;
     this.discipline = discipline;
+    this.draw = draw;
     this.api = apiIn(discipline);
   }
 
@@ -137,7 +155,14 @@ export class MatchLog {
    * device that has been offline needs.
    */
   async load(): Promise<void> {
-    const local = await db.read(this.discipline, this.matchId);
+    // What this device holds of the match from an earlier draw is not this match: it goes
+    // to the server once, which sets it aside for the organizer, and is never merged (#160).
+    if (this.draw) {
+      for (const [draw, events] of await db.readByDraw(this.discipline, this.matchId)) {
+        if (draw && draw !== this.draw) await pushSetAside(this.discipline, this.matchId, events, 0, draw).catch(() => {});
+      }
+    }
+    const local = await db.read(this.discipline, this.matchId, this.draw);
     let remote: Event[] = [];
     try {
       remote = await this.api.events(this.matchId, 0);
@@ -158,7 +183,7 @@ export class MatchLog {
     // on alone from here.
     const known = new Set(local.map((e) => e.seq));
     const missing = remote.filter((e) => !known.has(e.seq));
-    if (missing.length > 0) await db.append(this.discipline, this.matchId, missing);
+    if (missing.length > 0) await db.append(this.discipline, this.matchId, missing, this.draw);
 
     this.durable = db.usable();
     // Claimed as soon as it is opened, backlog or not, so a second device opening the
@@ -216,7 +241,7 @@ export class MatchLog {
   /** Appends to the log and returns. The push happens after; so does the disk write. */
   async write(events: Event[]): Promise<void> {
     this.events = [...this.events, ...events].sort((a, b) => a.seq - b.seq);
-    await db.append(this.discipline, this.matchId, events);
+    await db.append(this.discipline, this.matchId, events, this.draw);
     this.durable = db.usable();
     void this.flush();
   }
@@ -236,7 +261,7 @@ export class MatchLog {
       return;
     }
     await db.clear(this.discipline, this.matchId);
-    await db.append(this.discipline, this.matchId, remote);
+    await db.append(this.discipline, this.matchId, remote, this.draw);
     this.pushed = new Set(remote.map((e) => e.seq));
     this.events = remote;
     this.pendingCount = 0;
@@ -270,7 +295,7 @@ export class MatchLog {
     }
     this.sync = 'pushing';
     try {
-      const res = await this.api.pushEvents(this.matchId, batch, { client: clientId(), epoch: this.epoch });
+      const res = await this.api.pushEvents(this.matchId, batch, { client: clientId(), epoch: this.epoch, draw: this.draw });
       for (const e of batch) this.pushed.add(e.seq);
       this.check(res.state);
       this.pendingCount = 0;

@@ -5,6 +5,7 @@
 
 <script lang="ts">
   import { onMount } from 'svelte';
+  import HaltBanner from './HaltBanner.svelte';
   import { api, ApiError, type ForecastView, type ItemView, type MatView, type StaffingView, type SuggestionView, type Warning } from '../api';
   import { itemLabel, roleLabel } from '../lib/items';
   import { breakBands, canMove, cardLayout, dayAxis, drafted, lanesOf, placeOf as placeOn, type DraftMove } from '../lib/board';
@@ -300,6 +301,27 @@
   function setCount(n: number) {
     void send(() => api.setMats(n));
   }
+  // The disciplines with no current go (#167): pointed out, never stopped.
+  let notSignedOff = $state<string[]>([]);
+  async function loadGoNoGo() {
+    try {
+      notSignedOff = (await api.goNoGoAll()).filter((g) => !g.current).map((g) => g.name);
+    } catch {
+      // The board works without it.
+    }
+  }
+  $effect(() => {
+    void loadGoNoGo();
+    const every = setInterval(() => void loadGoNoGo(), 60_000);
+    return () => clearInterval(every);
+  });
+
+  // A global timeout (#157): every mat stops for the physician until it is ended here.
+  let haltReason = $state('');
+  function halt(on: boolean) {
+    void send(() => api.setHalt(on, on ? haltReason : ''));
+    if (!on) haltReason = '';
+  }
 
   /** "Pool 3", "Eliminations 2", "Bronze match", "Final". */
   function label(it: ItemView): string {
@@ -455,6 +477,13 @@
 <svelte:window onkeydown={(e) => e.key === 'Escape' && (cancel(), (menuFor = null))} />
 
 <section class="board">
+  {#if notSignedOff.length > 0}
+    <p class="unsigned">{t('No go signed off yet for {names}: see each discipline’s admin page.', { names: notSignedOff.join(', ') })}</p>
+  {/if}
+  {#if view?.halt}
+    <HaltBanner halt={view.halt} />
+    <p class="halt-end"><button disabled={busy} onclick={() => halt(false)}>{t('End the global timeout')}</button></p>
+  {/if}
   <div class="head">
     <h2>{t('Mats')}</h2>
     {#if canSetCount && view}
@@ -463,6 +492,12 @@
         <span>{t('{n} mats in the hall', { n: mats.length })}</span>
         <button aria-label={t('One mat more')} disabled={busy || mats.length >= MAX_MATS} onclick={() => setCount(mats.length + 1)}>+</button>
       </span>
+    {/if}
+    {#if view && !view.halt}
+      <form class="halt" onsubmit={(e) => (e.preventDefault(), halt(true))}>
+        <input bind:value={haltReason} maxlength="80" placeholder={t('Physician needed')} aria-label={t('Why the hall stops')} />
+        <button type="submit" disabled={busy}>{t('Global timeout')}</button>
+      </form>
     {/if}
   </div>
   <p class="dim">
@@ -896,6 +931,21 @@
     border-radius: 8px;
     background: var(--panel);
     border: 1px solid var(--line);
+  }
+  .unsigned {
+    margin: 0 0 0.6rem;
+    color: var(--amber-bright);
+  }
+  form.halt {
+    display: flex;
+    gap: 0.4rem;
+    margin-left: auto;
+  }
+  form.halt input {
+    width: 11rem;
+  }
+  .halt-end {
+    margin: 0.5rem 0 1rem;
   }
   .card.running {
     border-color: var(--amber-bright);

@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { ProgrammeRow } from '../api';
   import { clockOf } from '../lib/clock-of-day';
-  import { t } from '../lib/i18n.svelte';
+  import { t, locale } from '../lib/i18n.svelte';
 
   /**
    * The day's programme, generated from the plan (#149): each discipline's gear check,
@@ -30,6 +30,14 @@
         return r.name === 'Lunch' ? t('Lunch') : r.name;
     }
   }
+  // An event of several days says which day each row is on, at the first row of each (#122).
+  const dayOf = (iso: string) => iso.slice(0, 10);
+  const multiDay = $derived(new Set(rows.map((r) => dayOf(r.start))).size > 1);
+  function dayLabel(iso: string): string {
+    const d = new Date(`${dayOf(iso)}T12:00:00`);
+    return d.toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long' });
+  }
+
   function mats(r: ProgrammeRow): string {
     if (r.mats.length === 0) return '';
     if (r.mats.length === 1) return ` · ${t('mat {n}', { n: r.mats[0] })}`;
@@ -42,6 +50,9 @@
 {:else}
   <ol class="programme">
     {#each rows as r, i (i)}
+      {#if multiDay && (i === 0 || dayOf(rows[i - 1].start) !== dayOf(r.start))}
+        <li class="day">{dayLabel(r.start)}</li>
+      {/if}
       <li class:done={r.done} class:break={r.stage === 'break'}>
         <span class="when mono">{clockOf(r.start)}</span>
         <span class="what">
@@ -73,6 +84,11 @@
   }
   li.done {
     opacity: 0.55;
+  }
+  li.day {
+    display: block;
+    margin-top: 0.4rem;
+    font-weight: 600;
   }
   li.break .what {
     font-style: italic;

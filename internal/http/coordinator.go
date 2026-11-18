@@ -87,6 +87,9 @@ type worker struct {
 	// discipline that breaks mid-event still shows on the landing page, marked stale.
 	last     *hall.DisciplineSummary
 	unfollow func()
+	// closed makes close safe to call twice: a double click on Reload, or a rename and a
+	// retire racing, both close the worker they replace (#166).
+	closed sync.Once
 }
 
 // NewCoordinator loads every discipline in the event folder. An event with none has none
@@ -163,12 +166,14 @@ func (c *Coordinator) load(slug string) *worker {
 }
 
 func (w *worker) close() {
-	if w.unfollow != nil {
-		w.unfollow()
-	}
-	if w.srv != nil {
-		w.srv.Close()
-	}
+	w.closed.Do(func() {
+		if w.unfollow != nil {
+			w.unfollow()
+		}
+		if w.srv != nil {
+			w.srv.Close()
+		}
+	})
 }
 
 // follow listens to a discipline's stream for as long as it is in the event, and tells
@@ -383,6 +388,7 @@ func (c *Coordinator) Handler() http.Handler {
 	mux.HandleFunc("GET /api/event/stream", func(w http.ResponseWriter, r *http.Request) {
 		serveStream(w, r, c.hub)
 	})
+	mux.HandleFunc("GET /api/streams", c.streams)
 	mux.HandleFunc("GET /api/event/signup/ready", c.signupReady)
 	mux.HandleFunc("GET /api/event/signup/definition.json", c.signupDefinition)
 	mux.HandleFunc("GET /api/event/signup/app.html", c.signupApp)
@@ -406,6 +412,9 @@ func (c *Coordinator) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/disciplines/{d}/identifier", c.setIdentifier)
 	mux.HandleFunc("DELETE /api/disciplines/{d}", c.retireDiscipline)
 	mux.HandleFunc("POST /api/disciplines/{d}/reload", c.reloadDiscipline)
+	mux.HandleFunc("GET /api/gonogo", c.getGoNoGo)
+	mux.HandleFunc("GET /api/disciplines/{d}/gonogo", c.getGoNoGo)
+	mux.HandleFunc("POST /api/disciplines/{d}/gonogo", c.signOff)
 
 	mux.HandleFunc("GET /api/people", c.getPeople)
 	mux.HandleFunc("GET /api/people/{id}", c.getPerson)
@@ -428,12 +437,14 @@ func (c *Coordinator) Handler() http.Handler {
 	})
 	mux.HandleFunc("GET /api/plan", c.getMats)
 	mux.HandleFunc("PUT /api/screens", c.putScreens)
+	mux.HandleFunc("PUT /api/event/halt", c.putHalt)
 	mux.HandleFunc("GET /api/forecast", c.getForecast)
 	mux.HandleFunc("PUT /api/plan/timings", c.putTimings)
 	mux.HandleFunc("POST /api/plan/timings/learn", c.learnTimings)
 	mux.HandleFunc("POST /api/plan/timings/default", c.keepTimings)
 	mux.HandleFunc("PUT /api/plan/expected", c.putExpected)
 	mux.HandleFunc("PUT /api/plan/sessions", c.putSessions)
+	mux.HandleFunc("PUT /api/plan/days", c.putDays)
 	mux.HandleFunc("PUT /api/plan/finals", c.putFinals)
 	mux.HandleFunc("PUT /api/plan/breaks", c.putBreaks)
 	mux.HandleFunc("PUT /api/plan/prep", c.putPrep)
@@ -455,7 +466,8 @@ func (c *Coordinator) Handler() http.Handler {
 	mux.HandleFunc("/api/d/{d}/", c.discipline)
 	mux.HandleFunc("/api/", c.alias)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { serveAssets(c.assets, w, r) })
-	return mux
+	// Who may write, and from where (#165): guard.go.
+	return guard(mux)
 }
 
 // discipline hands a request to the discipline it names, with the prefix taken off: what

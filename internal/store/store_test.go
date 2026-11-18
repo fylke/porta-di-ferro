@@ -127,3 +127,51 @@ func TestEveryWriteMovesTheRevision(t *testing.T) {
 		t.Errorf("revisions %d, %d, %d, %d: each write moves it, the retry does not", r0, r1, r2, s.Revision())
 	}
 }
+
+// #163: a write that fails leaves nothing marked as written, so the client's retry lands.
+func TestARetryAfterAFailedWriteLands(t *testing.T) {
+	dir := t.TempDir()
+	s, err := store.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ev := func(seq int) match.Event {
+		return match.Event{Seq: seq, Type: match.TypeExchange, ElapsedMS: int64(seq) * 1000, Exchange: &match.Exchange{}}
+	}
+	if _, err := s.Append("p1m1", []match.Event{ev(1)}); err != nil {
+		t.Fatal(err)
+	}
+	// A transient failure: the matches folder is briefly not there.
+	if err := os.Rename(filepath.Join(dir, "matches"), filepath.Join(dir, "gone")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Append("p1m1", []match.Event{ev(2)}); err == nil {
+		t.Fatal("the append should fail with the folder gone")
+	}
+	if err := os.Rename(filepath.Join(dir, "gone"), filepath.Join(dir, "matches")); err != nil {
+		t.Fatal(err)
+	}
+	written, err := s.Append("p1m1", []match.Event{ev(2)})
+	if err != nil || len(written) != 1 {
+		t.Fatalf("the retry should write the event: wrote %d, err %v", len(written), err)
+	}
+	all, _ := s.Events("p1m1", 0)
+	if len(all) != 2 {
+		t.Errorf("the log should hold both events, holds %d", len(all))
+	}
+}
+
+// #166: a history edit moves the revision too, so the hall built after it is not the old one.
+func TestAHistoryEditMovesTheRevision(t *testing.T) {
+	s, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := s.Revision()
+	if _, err := s.ReplaceEvents("p1m1", []match.Event{{Seq: 1, Type: match.TypeTimer, Timer: &match.Timer{Action: match.TimerStart}}}); err != nil {
+		t.Fatal(err)
+	}
+	if s.Revision() == before {
+		t.Error("a history edit should move the revision")
+	}
+}
