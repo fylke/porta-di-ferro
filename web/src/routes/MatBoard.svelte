@@ -290,6 +290,21 @@
   function setCount(n: number) {
     void send(() => api.setMats(n));
   }
+  // The disciplines with no current go (#167): pointed out, never stopped.
+  let notSignedOff = $state<string[]>([]);
+  async function loadGoNoGo() {
+    try {
+      notSignedOff = (await api.goNoGoAll()).filter((g) => !g.current).map((g) => g.name);
+    } catch {
+      // The board works without it.
+    }
+  }
+  $effect(() => {
+    void loadGoNoGo();
+    const every = setInterval(() => void loadGoNoGo(), 60_000);
+    return () => clearInterval(every);
+  });
+
   // A global timeout (#157): every mat stops for the physician until it is ended here.
   let haltReason = $state('');
   function halt(on: boolean) {
@@ -449,6 +464,9 @@
 <svelte:window onkeydown={(e) => e.key === 'Escape' && (cancel(), (menuFor = null))} />
 
 <section class="board">
+  {#if notSignedOff.length > 0}
+    <p class="unsigned">{t('No go signed off yet for {names}: see each discipline’s admin page.', { names: notSignedOff.join(', ') })}</p>
+  {/if}
   {#if view?.halt}
     <HaltBanner halt={view.halt} />
     <p class="halt-end"><button disabled={busy} onclick={() => halt(false)}>{t('End the global timeout')}</button></p>
@@ -886,6 +904,10 @@
     border-radius: 8px;
     background: var(--panel);
     border: 1px solid var(--line);
+  }
+  .unsigned {
+    margin: 0 0 0.6rem;
+    color: var(--amber-bright);
   }
   form.halt {
     display: flex;

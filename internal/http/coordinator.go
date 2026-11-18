@@ -412,6 +412,9 @@ func (c *Coordinator) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/disciplines/{d}/identifier", c.setIdentifier)
 	mux.HandleFunc("DELETE /api/disciplines/{d}", c.retireDiscipline)
 	mux.HandleFunc("POST /api/disciplines/{d}/reload", c.reloadDiscipline)
+	mux.HandleFunc("GET /api/gonogo", c.getGoNoGo)
+	mux.HandleFunc("GET /api/disciplines/{d}/gonogo", c.getGoNoGo)
+	mux.HandleFunc("POST /api/disciplines/{d}/gonogo", c.signOff)
 
 	mux.HandleFunc("GET /api/people", c.getPeople)
 	mux.HandleFunc("GET /api/people/{id}", c.getPerson)

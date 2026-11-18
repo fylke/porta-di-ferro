@@ -399,3 +399,54 @@ func TestABlockCanRunOnAnotherDay(t *testing.T) {
 		t.Errorf("an empty date should take the block's date away: %v", after.Days)
 	}
 }
+
+// #167: go / no-go. The summary warns of too few staff, a day past the venue's close and too
+// few mats; the manager signs off; a change of mats asks for a new sign-off. Nothing is
+// refused for want of one.
+func TestGoNoGoWarnsAndAsksAgainAfterAMajorChange(t *testing.T) {
+	h := openHall(t, t.TempDir())
+	var ev hall.EventView
+	h.must("GET", "/api/event", nil, &ev)
+	ls := ev.Disciplines[0].Slug
+	h.draw("/api/d/"+ls, 24, 1)
+	h.must("PUT", "/api/plan/timings", map[string]any{"start": "09:00", "close": "09:30"}, nil)
+
+	var v hall.GoNoGoView
+	h.must("GET", "/api/disciplines/"+ls+"/gonogo", nil, &v)
+	kinds := map[string]hall.GoNoGoWarning{}
+	for _, w := range v.Warnings {
+		kinds[w.Kind] = w
+	}
+	if w, ok := kinds["overrun"]; !ok || w.Close != "09:30" {
+		t.Errorf("a day past 09:30 should be pointed out: %+v", v.Warnings)
+	}
+	if w, ok := kinds["mats"]; !ok || w.Mats != 1 || w.Recommended < 2 {
+		t.Errorf("one mat for 24 should be pointed out: %+v", v.Warnings)
+	}
+	if _, ok := kinds["staff"]; !ok {
+		t.Errorf("with nobody on the staff, the mats are short: %+v", v.Warnings)
+	}
+	if v.Signoff != nil || v.Current {
+		t.Fatalf("nothing is signed off yet: %+v", v)
+	}
+
+	if code := h.do("POST", "/api/disciplines/"+ls+"/gonogo", map[string]string{"by": " "}, nil); code != 400 {
+		t.Errorf("a sign-off says who gives it, got %d", code)
+	}
+	h.must("POST", "/api/disciplines/"+ls+"/gonogo", map[string]string{"by": "Kim"}, &v)
+	if v.Signoff == nil || v.Signoff.By != "Kim" || !v.Current {
+		t.Fatalf("Kim's sign-off should be current: %+v", v)
+	}
+
+	// The mats change: the sign-off is not current any more, and says why.
+	h.must("PUT", "/api/d/"+ls+"/tournament", map[string]int{"mats": 3, "minPoolSize": 4, "maxPoolSize": 6}, nil)
+	var all []hall.GoNoGoView
+	h.must("GET", "/api/gonogo", nil, &all)
+	if len(all) != 1 || all[0].Current || len(all[0].Changed) != 1 || all[0].Changed[0] != "mats" {
+		t.Errorf("a change of mats should ask for a new sign-off: %+v", all)
+	}
+	// It warns; it never refuses.
+	if code := h.do("POST", "/api/d/"+ls+"/tournament/pools", nil, nil); code != 200 {
+		t.Errorf("drawing without a current sign-off should still work, got %d", code)
+	}
+}

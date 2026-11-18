@@ -13,6 +13,7 @@
   import Signup from './Signup.svelte';
   import LangToggle from './LangToggle.svelte';
   import LookOnly from './LookOnly.svelte';
+  import GoNoGo from './GoNoGo.svelte';
   import { t, lang } from '../lib/i18n.svelte';
 
   /**
@@ -155,6 +156,12 @@
       {/if}
     </section>
 
+    {#if snapshot.instance.slug}
+      <GoNoGo
+        slug={snapshot.instance.slug}
+        refresh={`${snapshot.tournament.mats}/${snapshot.tournament.minPoolSize}-${snapshot.tournament.maxPoolSize}/${snapshot.competitors.length}/${snapshot.pools.length}`}
+      />
+    {/if}
     <div class="columns">
       <Competitors competitors={snapshot.competitors} poolsDrawn={drawn} onchange={refresh} multi />
       <Setup {snapshot} onchange={refresh} />

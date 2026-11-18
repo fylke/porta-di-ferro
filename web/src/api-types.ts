@@ -342,6 +342,26 @@ export interface MatsView {
   halt?: { since: string; reason?: string };
 }
 
+/** One discipline's go / no-go summary and sign-off (#167). */
+export interface GoNoGoView {
+  discipline: string;
+  name: string;
+  warnings: {
+    kind: 'staff' | 'overrun' | 'mats';
+    noStaff?: boolean;
+    short?: number;
+    roles?: string[];
+    end?: string;
+    close?: string;
+    mats?: number;
+    recommended?: number;
+  }[];
+  basis: Record<string, string>;
+  signoff?: { by: string; at: string; basis: Record<string, string> };
+  current: boolean;
+  changed?: string[];
+}
+
 /** What one of a discipline's mats is running or has up next, for the event's pages. */
 export interface MatSummary {
   mat: number;

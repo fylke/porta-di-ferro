@@ -10,6 +10,7 @@ import type {
   EventSignupReady,
   EventView,
   ForecastView,
+  GoNoGoView,
   MatsView,
   PeopleView,
   PersonView,
@@ -241,6 +242,10 @@ export const api = {
   setScreens: (screens: { upcoming: 'bottom' | 'list' | 'none' }) => req<MatsView>('PUT', '/api/screens', screens),
   /** How many mats the hall has. */
   setMats: (count: number) => req<MatsView>('PUT', '/api/mats', { count }),
+  /** Every discipline's go / no-go, or one's, and the manager's sign-off (#167). */
+  goNoGoAll: () => req<GoNoGoView[]>('GET', '/api/gonogo'),
+  goNoGo: (slug: string) => req<GoNoGoView>('GET', `/api/disciplines/${encodeURIComponent(slug)}/gonogo`),
+  signOff: (slug: string, by: string) => req<GoNoGoView>('POST', `/api/disciplines/${encodeURIComponent(slug)}/gonogo`, { by }),
   /** Calls a global timeout -- every mat stops -- or ends it (#157). */
   setHalt: (on: boolean, reason = '') => req<MatsView>('PUT', '/api/event/halt', { on, reason }),
   /** Moves a work item: to a place on a mat, or a step along its own. */

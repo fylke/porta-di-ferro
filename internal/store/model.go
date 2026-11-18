@@ -255,6 +255,14 @@ type Person struct {
 	Apart []string `json:"apart,omitempty"`
 }
 
+// Signoff is a discipline's go (#167): who gave it, when, and the facts it was given on, so a
+// major change since shows it is no longer current (hall.GoNoGo).
+type Signoff struct {
+	By    string            `json:"by"`
+	At    string            `json:"at"`
+	Basis map[string]string `json:"basis"`
+}
+
 // Halt is a global timeout (#157): every mat stops -- an injury needs the physician, who is
 // with somebody else -- until the organizer lets the hall go on.
 type Halt struct {
@@ -295,6 +303,8 @@ type Plan struct {
 	// date runs on the event's first day. Its times of day -- a hold, a discipline's start,
 	// the hall's breaks -- are that date's.
 	Days map[int]string `json:"days,omitempty"`
+	// Signoffs are the tournament manager's go for each discipline, by slug (#167).
+	Signoffs map[string]Signoff `json:"signoffs,omitempty"`
 	// FinalsLast holds every discipline's bronze match and final to the end of the day,
 	// one after another on mat 1 (#136).
 	FinalsLast bool `json:"finalsLast,omitempty"`
