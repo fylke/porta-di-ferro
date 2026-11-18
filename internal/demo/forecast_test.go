@@ -21,6 +21,9 @@ func TestDemoUsesTypicalPoolAndEliminationTimings(t *testing.T) {
 		{"POST", "/api/disciplines", `{"name":"Timing"}`},
 		{"PUT", "/api/d/timing/tournament", `{"mats":2,"minPoolSize":4,"maxPoolSize":6}`},
 		{"PUT", "/api/plan/expected", `{"timing":8}`},
+		// The fixture's day has a lunch, and the plan starts near the clock: without this
+		// the bracket ran into lunch, or not, depending on when the test ran.
+		{"PUT", "/api/event/info", `{"schedule":[]}`},
 	} {
 		if response := e.Request(request.method, request.path, []byte(request.body)); response.Status >= 300 {
 			t.Fatalf("%s: %d %s", request.path, response.Status, response.Body)
