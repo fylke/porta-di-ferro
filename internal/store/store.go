@@ -141,10 +141,13 @@ func (s *Store) SaveTournament(t Tournament) error {
 	return s.writeAtomic("tournament.json", t)
 }
 
+// ErrBadMatchID is a match id that cannot be a file name: the request's fault.
+var ErrBadMatchID = errors.New("invalid match id")
+
 func matchFile(id string) (string, error) {
 	// Match ids reach this from the network, and they become file names.
 	if id == "" || strings.ContainsAny(id, `/\.:`) {
-		return "", fmt.Errorf("invalid match id %q", id)
+		return "", fmt.Errorf("%w %q", ErrBadMatchID, id)
 	}
 	return filepath.Join("matches", id+".ndjson"), nil
 }
@@ -251,24 +254,36 @@ func (s *Store) Append(id string, events []match.Event) ([]match.Event, error) {
 	}
 	defer s.rev.Add(1)
 
+	// The index has to say what is on disk (#163). Any failure from here on -- a full
+	// disk, a file briefly locked, a write that got part of the way -- drops it, so the
+	// next append reads the file again instead of skipping the retry as already there.
+	if err := s.write(rel, fresh); err != nil {
+		delete(s.seen, id)
+		return nil, err
+	}
+	return fresh, nil
+}
+
+// write appends events to a log file and syncs it.
+func (s *Store) write(rel string, events []match.Event) error {
 	f, err := os.OpenFile(s.path(rel), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer f.Close()
 	w := bufio.NewWriter(f)
-	for _, e := range fresh {
+	for _, e := range events {
 		b, err := json.Marshal(e)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		w.Write(b)
 		w.WriteByte('\n')
 	}
 	if err := w.Flush(); err != nil {
-		return nil, err
+		return err
 	}
-	return fresh, f.Sync()
+	return f.Sync()
 }
 
 func (s *Store) indexLocked(rel string) (map[int]bool, error) {

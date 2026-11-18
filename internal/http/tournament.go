@@ -255,8 +255,13 @@ func (s *Server) postEvents(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusConflict, err)
 		return
 	}
-	if err != nil {
+	if errors.Is(err, store.ErrBadMatchID) || errors.Is(err, errBadEpoch) {
 		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	if err != nil {
+		// The disk, not the request (#163): the client keeps the events and tries again.
+		writeErr(w, http.StatusInternalServerError, err)
 		return
 	}
 	if stale {

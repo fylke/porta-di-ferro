@@ -3,6 +3,7 @@ package httpapi
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -181,6 +182,9 @@ func (s *Server) releaseAllClaims(client string) {
 // errHeld refuses an anonymous push to a match a device is scoring.
 var errHeld = errors.New("a device is scoring this match: claim it before writing to it")
 
+// errBadEpoch is an epoch header that is not a number.
+var errBadEpoch = errors.New("the epoch header is not a number")
+
 // admit decides whether a push may be appended. Called with writeMu held. A stale push
 // is quarantined here and reported back as such; the caller only has to stop.
 func (s *Server) admit(r *http.Request, id string, events []match.Event) (stale bool, err error) {
@@ -198,7 +202,7 @@ func (s *Server) admit(r *http.Request, id string, events []match.Event) (stale 
 	}
 	epoch, err := strconv.Atoi(epochHeader)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("%w: %v", errBadEpoch, err)
 	}
 	client := r.Header.Get(headerClient)
 	if !held || (current.Client == client && current.Epoch == epoch) {
