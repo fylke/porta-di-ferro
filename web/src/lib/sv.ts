@@ -144,7 +144,7 @@ export const sv: Record<string, string> = {
   'Signed off by {by} at {time}, but {what} changed since: sign off again.':
     'Godkänt av {by} klockan {time}, men {what} har ändrats sedan dess: godkänn igen.',
   'Not signed off yet.': 'Inte godkänt än.',
-  'Your name': 'Ditt namn',
+  'Signed off by': 'Godkänt av',
   'Who signs off': 'Vem som godkänner',
   'Go: sign off': 'Go: godkänn',
   'the mats': 'mattorna',

@@ -101,7 +101,7 @@
         <p class="warn">{t('Not signed off yet.')}</p>
       {/if}
       <form onsubmit={(e) => (e.preventDefault(), void signOff())}>
-        <input bind:value={by} maxlength="80" placeholder={t('Your name')} aria-label={t('Who signs off')} />
+        <input bind:value={by} maxlength="80" placeholder={t('Signed off by')} aria-label={t('Who signs off')} />
         <button type="submit" disabled={busy || !by.trim()}>{t('Go: sign off')}</button>
       </form>
     {/if}
