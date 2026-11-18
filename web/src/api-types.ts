@@ -164,6 +164,9 @@ export interface MatView {
   queue: Slot[];
   /** Matches of the head item still waiting on a feeder. */
   waiting?: Slot[];
+  /** The item the mat has stopped in front of, for the organizer to release, and why. */
+  held?: string;
+  heldFor?: 'organizer' | 'discipline';
 }
 
 /** One work item on the event's mats, for the mat board. */
@@ -177,9 +180,10 @@ export interface ItemView {
   position: number;
   /**
    * "planned" is an item not drawn yet (phase 4); "queued" waits for an earlier block of
-   * the day to finish (#136).
+   * the day to finish (#136); "held" is where its mat has stopped for the organizer to
+   * release it -- held by hand, or another discipline's than the mat ran last.
    */
-  status: 'waiting' | 'ready' | 'running' | 'done' | 'planned' | 'queued';
+  status: 'waiting' | 'ready' | 'running' | 'done' | 'planned' | 'queued' | 'held';
   done: number;
   total: number;
   movable: boolean;
@@ -190,6 +194,10 @@ export interface ItemView {
   notBefore?: string;
   /** A bronze match let run at the same time as the final (#149). */
   withFinal?: boolean;
+  /** Held by the organizer: its mat stops in front of it until it is released. */
+  hold?: boolean;
+  /** Why its mat has stopped in front of it, when status is "held". */
+  heldFor?: 'organizer' | 'discipline';
 }
 
 /** How long things take, in seconds, and the day's start and close as "HH:MM" (phase 4). */

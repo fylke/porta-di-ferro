@@ -131,6 +131,20 @@ export const sv: Record<string, string> = {
   'Draw the eliminations': 'Lotta elimineringarna',
   'Draw the eliminations again': 'Lotta om elimineringarna',
   'Mats for the eliminations': 'Mattor för slutspelet',
+  'waits for you to start it': 'väntar på att du startar det',
+  'the mat stops here': 'mattan stannar här',
+  'Waits for you before {item}: the mat does not start another discipline by itself.':
+    'Väntar på dig före {item}: mattan startar inte en annan gren av sig själv.',
+  'Stopped before {item}.': 'Stannad före {item}.',
+  Start: 'Starta',
+  'stop before': 'stanna före',
+  'Let the mat start this': 'Låt mattan starta detta',
+  'Stop the mat before this': 'Stanna mattan före detta',
+  'Mat {n} waits for the organizer to start {item}.': 'Matta {n} väntar på att arrangören startar {item}.',
+  'The organizer starts it from the mat board. This screen fills in when they do.':
+    'Arrangören startar det från mattöversikten. Skärmen fylls i när det sker.',
+  'Mat {n} waits for the block of the day before to finish.': 'Matta {n} väntar på att dagens föregående block blir klart.',
+  'This screen fills in when the next item can start.': 'Skärmen fylls i när nästa moment kan börja.',
   'The hall has {n} mats now: the pools and the eliminations are drawn for {n}.':
     'Hallen har {n} mattor nu: poolerna och slutspelet lottas för {n}.',
   'Suggested — {n}': 'Föreslaget — {n}',
