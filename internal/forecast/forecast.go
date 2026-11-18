@@ -140,16 +140,20 @@ type Input struct {
 	// MatBreaks are the times one mat is not available, by mat (#123): breaks for that
 	// mat alone.
 	MatBreaks map[int][]Break
+	// Closed are the nights between the days of an event of several (#122): no mat fences,
+	// and nothing goes in the programme.
+	Closed []Break
 	// Prep is each discipline's gear check and staff briefing, by slug, for the programme.
 	Prep map[string]Prep
 }
 
 // breaksOn is every break a mat keeps: the hall's and its own.
 func (in Input) breaksOn(mat int) []Break {
-	if len(in.MatBreaks[mat]) == 0 {
+	if len(in.MatBreaks[mat]) == 0 && len(in.Closed) == 0 {
 		return in.Breaks
 	}
-	return append(append([]Break{}, in.Breaks...), in.MatBreaks[mat]...)
+	out := append(append([]Break{}, in.Breaks...), in.MatBreaks[mat]...)
+	return append(out, in.Closed...)
 }
 
 // Span is one item's times.

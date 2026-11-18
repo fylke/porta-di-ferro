@@ -304,6 +304,30 @@ func SetSessions(plan *store.Plan, in map[string]int, slugs []string) error {
 	return nil
 }
 
+// SetDays writes the dates the blocks run on (#122): "2026-11-22" by block number, and
+// "" to let a block run on the event's first day again.
+func SetDays(plan *store.Plan, in map[int]string) error {
+	for n, s := range in {
+		if n < 1 || n > 20 {
+			return errors.New("a block is a number from 1 to 20")
+		}
+		if _, err := time.Parse(time.DateOnly, s); s != "" && err != nil {
+			return fmt.Errorf("%q is not a date; write it as 2026-11-22", s)
+		}
+	}
+	if plan.Days == nil {
+		plan.Days = map[int]string{}
+	}
+	for n, s := range in {
+		if s == "" {
+			delete(plan.Days, n)
+		} else {
+			plan.Days[n] = s
+		}
+	}
+	return nil
+}
+
 // LearnTimings writes what the day measured into the template (#64). The changeover is
 // kept when nothing measured one.
 func LearnTimings(t *store.Timings, rep forecast.Report) {

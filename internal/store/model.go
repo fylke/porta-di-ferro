@@ -281,6 +281,11 @@ type Plan struct {
 	// the blocks before it is done. A discipline with no block of its own runs in a block
 	// of its own, in the event's order -- one discipline after another.
 	Sessions map[string]int `json:"sessions,omitempty"`
+	// Days are the dates the blocks run on, "2026-11-21" by block number (#122): a weekend
+	// event is blocks 1 and 2 on the Saturday and block 3 on the Sunday. A block with no
+	// date runs on the event's first day. Its times of day -- a hold, a discipline's start,
+	// the hall's breaks -- are that date's.
+	Days map[int]string `json:"days,omitempty"`
 	// FinalsLast holds every discipline's bronze match and final to the end of the day,
 	// one after another on mat 1 (#136).
 	FinalsLast bool `json:"finalsLast,omitempty"`

@@ -440,6 +440,7 @@ func (c *Coordinator) Handler() http.Handler {
 	mux.HandleFunc("POST /api/plan/timings/default", c.keepTimings)
 	mux.HandleFunc("PUT /api/plan/expected", c.putExpected)
 	mux.HandleFunc("PUT /api/plan/sessions", c.putSessions)
+	mux.HandleFunc("PUT /api/plan/days", c.putDays)
 	mux.HandleFunc("PUT /api/plan/finals", c.putFinals)
 	mux.HandleFunc("PUT /api/plan/breaks", c.putBreaks)
 	mux.HandleFunc("PUT /api/plan/prep", c.putPrep)

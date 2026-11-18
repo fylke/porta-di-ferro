@@ -131,6 +131,9 @@ export const sv: Record<string, string> = {
   'Draw the eliminations': 'Lotta elimineringarna',
   'Draw the eliminations again': 'Lotta om elimineringarna',
   'Mats for the eliminations': 'Mattor för slutspelet',
+  'Block {n} on': 'Block {n} den',
+  'Give a block a date of its own when the event runs over more than one day. The breaks are on every day.':
+    'Ge ett block ett eget datum när tävlingen pågår mer än en dag. Pauserna gäller varje dag.',
   'You can look at this page here, but changes are made on the computer running Porta di Ferro.':
     'Du kan titta på sidan här, men ändringar görs på datorn som kör Porta di Ferro.',
   void: 'struken',

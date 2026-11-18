@@ -348,3 +348,54 @@ func TestTheProgrammeIsGeneratedFromThePlan(t *testing.T) {
 		t.Errorf("a negative gear check should be refused, got %d", code)
 	}
 }
+
+// #122: a weekend event. The second block runs on the Sunday: its work starts that morning,
+// never overnight, and the hall's lunch is on both days.
+func TestABlockCanRunOnAnotherDay(t *testing.T) {
+	h := openHall(t, t.TempDir())
+	var ev hall.EventView
+	h.must("GET", "/api/event", nil, &ev)
+	ls := ev.Disciplines[0].Slug
+	h.draw("/api/d/"+ls, 8, 1)
+	h.must("POST", "/api/disciplines", map[string]string{"name": "Open Sabre"}, nil)
+	h.draw("/api/d/open-sabre", 8, 1)
+	h.must("PUT", "/api/plan/sessions", map[string]int{ls: 1, "open-sabre": 2}, nil)
+	h.must("PUT", "/api/plan/timings", map[string]any{"start": "09:00", "close": "18:00"}, nil)
+	h.must("PUT", "/api/plan/breaks", []map[string]string{{"label": "", "from": "12:00", "to": "12:45"}}, nil)
+	if code := h.do("PUT", "/api/plan/days", map[string]string{"2": "Sunday"}, nil); code != 400 {
+		t.Errorf("a date that is not one should be refused, got %d", code)
+	}
+	var v hall.ForecastView
+	h.must("PUT", "/api/plan/days", map[string]string{"1": "2026-11-21", "2": "2026-11-22"}, &v)
+	if v.Days[2] != "2026-11-22" {
+		t.Errorf("the view should carry the dates: %v", v.Days)
+	}
+	for _, it := range v.Items {
+		start, _ := time.Parse(time.RFC3339, it.PlannedStart)
+		want := 21
+		if strings.HasPrefix(it.ID, "open-sabre/") {
+			want = 22
+		}
+		if start.Day() != want {
+			t.Errorf("%s should start on the %dth, starts %s", it.ID, want, it.PlannedStart)
+		}
+		if start.Day() == 22 && start.Hour() < 9 {
+			t.Errorf("%s should not start before the Sunday's 09:00: %s", it.ID, it.PlannedStart)
+		}
+	}
+	lunches := 0
+	for _, r := range v.Programme {
+		if r.Stage == "break" {
+			lunches++
+		}
+	}
+	if lunches != 2 {
+		t.Errorf("lunch should be in the programme on both days, found %d", lunches)
+	}
+	// Taken off again, the block runs on the first day.
+	var after hall.ForecastView // fresh: decoding into v's map would keep its keys
+	h.must("PUT", "/api/plan/days", map[string]string{"2": ""}, &after)
+	if _, ok := after.Days[2]; ok {
+		t.Errorf("an empty date should take the block's date away: %v", after.Days)
+	}
+}

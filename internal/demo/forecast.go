@@ -129,6 +129,13 @@ func (e *Event) planRoutes() []route {
 			}
 			return hall.SetSessions(&e.plan, in, e.slugs())
 		})),
+		on("PUT /api/plan/days", e.changePlan(func(c call) error {
+			var in map[int]string
+			if err := json.Unmarshal(c.body, &in); err != nil {
+				return err
+			}
+			return hall.SetDays(&e.plan, in)
+		})),
 		on("PUT /api/plan/finals", e.changePlan(func(c call) error {
 			var in struct {
 				Last bool `json:"last"`

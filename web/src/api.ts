@@ -256,6 +256,8 @@ export const api = {
   setExpected: (expected: Record<string, number>) => req<ForecastView>('PUT', '/api/plan/expected', expected),
   /** Which block of the day each discipline runs in (#136). */
   setSessions: (sessions: Record<string, number>) => req<ForecastView>('PUT', '/api/plan/sessions', sessions),
+  /** The date each block runs on, "2026-11-22" by block number; "" for the first day (#122). */
+  setDays: (days: Record<number, string>) => req<ForecastView>('PUT', '/api/plan/days', days),
   /** Holds every final to the end of the day, one after another on mat 1. */
   setFinalsLast: (last: boolean) => req<ForecastView>('PUT', '/api/plan/finals', { last }),
   /** The hall's breaks, the whole list (#149). */

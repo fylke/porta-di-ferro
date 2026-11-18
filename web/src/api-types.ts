@@ -261,6 +261,8 @@ export interface ForecastView {
   expected?: Record<string, number>;
   /** The block of the day each discipline runs in, and whether every final is held to the end (#136). */
   sessions?: Record<string, number>;
+  /** The date each block runs on, by block number, for an event of several days (#122). */
+  days?: Record<number, string>;
   finalsLast?: boolean;
   /** The hall's breaks, each discipline's gear check and briefing, and its earliest start (#149). */
   breaks: Break[];

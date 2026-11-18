@@ -71,8 +71,9 @@ type ForecastView struct {
 	// Expected is how many each discipline expects, by slug, for the planning panel.
 	Expected map[string]int `json:"expected,omitempty"`
 	// Sessions are the blocks of the day in force, by slug, and FinalsLast says the
-	// finals are held to the end (#136).
+	// finals are held to the end (#136). Days are the blocks' dates (#122).
 	Sessions   map[string]int `json:"sessions,omitempty"`
+	Days       map[int]string `json:"days,omitempty"`
 	FinalsLast bool           `json:"finalsLast,omitempty"`
 	// Breaks, Prep and Starts are the plan's, for the planning panel (#149).
 	Breaks []store.Break         `json:"breaks"`
@@ -142,6 +143,7 @@ func ViewPlan(v *ForecastView, plan store.Plan, ev store.Event, inputs []MatsInp
 		v.Breaks = []store.Break{}
 	}
 	v.Starts = plan.Starts
+	v.Days = plan.Days
 	v.Prep = map[string]store.Prep{}
 	for _, d := range inputs {
 		v.Prep[d.Slug] = PrepOf(plan, d.Slug)
@@ -236,18 +238,29 @@ func ApplyEtas(snap *Snapshot, etas map[string]string) {
 }
 
 // ForecastInput is what the forecast needs, from the disciplines and the plan. The day is
-// the one the first match was fenced on, or today's.
+// the one the first match was fenced on; before that, the first date the plan gives a
+// block (#122), or today's. A block with a date of its own runs on it.
 func ForecastInput(inputs []MatsInput, placed map[string]store.Placement, plan store.Plan,
 	ev store.Event, timings store.Timings, now time.Time) forecast.Input {
 
+	dated := DaysOf(plan, now.Location())
 	day := now
 	if first := firstFenced(inputs, now.Location()); !first.IsZero() {
 		day = first.In(now.Location())
+	} else if len(dated) > 0 {
+		day = earliest(dated)
 	}
 	clock := func(s string) time.Time {
 		t, _ := ParseClock(day, s)
 		return t
 	}
+	dayOf := func(session int) time.Time {
+		if d, ok := dated[session]; ok {
+			return d
+		}
+		return day
+	}
+	days := eventDays(day, dated)
 
 	out := forecast.Input{
 		Now: now,
@@ -259,9 +272,26 @@ func ForecastInput(inputs []MatsInput, placed map[string]store.Placement, plan s
 			Close:       clock(timings.Close),
 		},
 		Anomalies: map[string]bool{},
-		MatBreaks: matBreaks(plan, day),
-		Breaks:    hallBreaks(plan, ev, day),
 		Prep:      prepOfAll(plan, inputs),
+	}
+	// Every day of the event has the hall's breaks and the mats' times away; the nights
+	// between them, nothing at all (#122). The venue closes on the last day.
+	for i, d := range days {
+		out.Breaks = append(out.Breaks, hallBreaks(plan, ev, d)...)
+		for mat, b := range matBreaks(plan, d) {
+			if out.MatBreaks == nil {
+				out.MatBreaks = map[int][]forecast.Break{}
+			}
+			out.MatBreaks[mat] = append(out.MatBreaks[mat], b...)
+		}
+		if i > 0 {
+			shut, ok1 := ParseClock(days[i-1], timings.Close)
+			open, ok2 := ParseClock(d, timings.Start)
+			if ok1 && ok2 && open.After(shut) {
+				out.Closed = append(out.Closed, forecast.Break{From: shut, To: open})
+			}
+		}
+		out.Timings.Close, _ = ParseClock(d, timings.Close)
 	}
 	for _, k := range plan.Anomalies {
 		out.Anomalies[k] = true
@@ -275,10 +305,18 @@ func ForecastInput(inputs []MatsInput, placed map[string]store.Placement, plan s
 				continue
 			}
 			it := forecastItem(w, p, in, views, who, now.Location())
-			it.NotBefore = clock(p.NotBefore)
-			// No work of a discipline before it starts (#149).
-			if at := clock(plan.Starts[w.Discipline]); at.After(it.NotBefore) {
-				it.NotBefore = at
+			// Times of day are the item's own day's (#122).
+			on := dayOf(in.Session)
+			it.NotBefore, _ = ParseClock(on, p.NotBefore)
+			// No work of a discipline before it starts (#149), nor before its day does.
+			starts := []string{plan.Starts[w.Discipline]}
+			if !sameDay(on, day) {
+				starts = append(starts, timings.Start)
+			}
+			for _, s := range starts {
+				if at, ok := ParseClock(on, s); ok && at.After(it.NotBefore) {
+					it.NotBefore = at
+				}
 			}
 			out.Items = append(out.Items, it)
 		}
@@ -310,6 +348,50 @@ func whoIs(in MatsInput) map[string]string {
 		}
 	}
 	return who
+}
+
+// DaysOf is the plan's dates by block (#122), at midnight in loc. A date that does not parse
+// is left out.
+func DaysOf(plan store.Plan, loc *time.Location) map[int]time.Time {
+	out := map[int]time.Time{}
+	for n, s := range plan.Days {
+		if d, err := time.ParseInLocation(time.DateOnly, s, loc); err == nil {
+			out[n] = d
+		}
+	}
+	return out
+}
+
+func earliest(days map[int]time.Time) time.Time {
+	var first time.Time
+	for _, d := range days {
+		if first.IsZero() || d.Before(first) {
+			first = d
+		}
+	}
+	return first
+}
+
+// eventDays is every day the event runs on, in order: the first day and each block's date.
+func eventDays(first time.Time, dated map[int]time.Time) []time.Time {
+	out := []time.Time{first}
+	for _, d := range dated {
+		out = append(out, d)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Before(out[j]) })
+	uniq := out[:0]
+	for _, d := range out {
+		if len(uniq) == 0 || !sameDay(uniq[len(uniq)-1], d) {
+			uniq = append(uniq, d)
+		}
+	}
+	return uniq
+}
+
+func sameDay(a, b time.Time) bool {
+	ay, am, ad := a.Date()
+	by, bm, bd := b.Date()
+	return ay == by && am == bm && ad == bd
 }
 
 // clockSpan is two times of day on a day, when they are that and the second is the later.
