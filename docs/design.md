@@ -63,101 +63,86 @@ Defined first, because the names are used throughout.
 **Event Organizer** — All administrative and planning tasks:
 
 ```mermaid
-usecase diagram
-    actor Organizer as "Event Organizer"
+graph LR
+    EO["🏢 Event Organizer"]
     
-    Organizer --> (Welcome) : setup
-    Organizer --> (Plan Event) : create disciplines
-    Organizer --> (Plan Event) : set mats
-    Organizer --> (Plan Event) : set timings
-    Organizer --> (Add Competitors) : register
-    Organizer --> (Draw Pools) : generate pools
-    Organizer --> (Manage Signup) : import signup
-    Organizer --> (Manage Signup) : dedup competitors
-    Organizer --> (Manage People) : merge duplicates
-    Organizer --> (Draw Bracket) : create eliminations
-    Organizer --> (Assign Staff) : set volunteers
-    Organizer --> (View Results) : see standings
-    Organizer --> (View Results) : see podium
-    Organizer --> (Manage Mats) : move items
-    Organizer --> (Manage Mats) : assign mats
-    Organizer --> (Manage Mats) : view board
+    EO -->|setup| A["Welcome Setup"]
+    EO -->|create| B["Plan Event & Disciplines"]
+    EO -->|configure| C["Set Mats & Timings"]
+    EO -->|register| D["Add Competitors"]
+    EO -->|generate| E["Draw Pools"]
+    EO -->|import| F["Signup Management"]
+    EO -->|merge| G["Dedup Competitors"]
+    EO -->|create| H["Draw Bracket"]
+    EO -->|assign| I["Assign Staff"]
+    EO -->|view| J["View Standings & Podium"]
+    EO -->|organize| K["Manage Mat Board"]
 ```
 
 **Score Keeper** — Match scoring and in-the-moment decisions:
 
 ```mermaid
-usecase diagram
-    actor SK as "Score Keeper"
+graph LR
+    SK["⌚ Score Keeper"]
     
-    SK --> (Select Match) : choose mat
-    SK --> (Record Exchange) : point for red
-    SK --> (Record Exchange) : point for blue
-    SK --> (Issue Warning) : penalty 1
-    SK --> (Deduct Point) : penalty 2
-    SK --> (End Match) : loss on penalty 3
-    SK --> (Start Timer) : begin
-    SK --> (Pause Timer) : take break
-    SK --> (Reset Timer) : clear time
-    SK --> (Handle Pending Decision) : final exchange
-    SK --> (Handle Pending Decision) : point cap
-    SK --> (Handle Pending Decision) : penalty cap
-    SK --> (Undo Exchange) : correct mistake
-    SK --> (Record Forfeit) : concede
-    SK --> (Record Disqualification) : rule violation
-    SK --> (Confirm Results) : finish match
+    SK -->|select| A["Choose Match & Mat"]
+    SK -->|record| B["Points for Red"]
+    SK -->|record| C["Points for Blue"]
+    SK -->|issue| D["Warnings & Penalties"]
+    SK -->|handle| E["Final Exchange Decision"]
+    SK -->|handle| F["Point Cap Decision"]
+    SK -->|handle| G["Penalty Cap Decision"]
+    SK -->|control| H["Timer Start/Pause/Reset"]
+    SK -->|correct| I["Undo Exchange"]
+    SK -->|record| J["Forfeit"]
+    SK -->|record| K["Disqualification"]
+    SK -->|confirm| L["Finish Match"]
 ```
 
 **Competitor** — Viewing personal information and results:
 
 ```mermaid
-usecase diagram
-    actor Competitor
+graph LR
+    C["👤 Competitor"]
     
-    Competitor --> (View Schedule) : see my matches
-    Competitor --> (View Schedule) : view pool
-    Competitor --> (View Pool Standings) : see placement
-    Competitor --> (View Personal Results) : my record
-    Competitor --> (View Personal Results) : my opponents
-    Competitor --> (View Bracket Position) : eliminations
-    Competitor --> (View Podium) : see winners
-    Competitor --> (View Forecast) : see timing
+    C -->|view| A["My Schedule"]
+    C -->|see| B["My Pool & Standings"]
+    C -->|check| D["My Results & Opponents"]
+    C -->|track| E["Bracket Position"]
+    C -->|check| F["Forecasted Match Times"]
 ```
 
 **Audience / Spectator** — Viewing only, no interaction:
 
 ```mermaid
-usecase diagram
-    actor Audience
+graph LR
+    A["👥 Audience / Spectator"]
     
-    Audience --> (View Scoreboard) : current match
-    Audience --> (View Scoreboard) : live score
-    Audience --> (View Programme) : day schedule
-    Audience --> (View All Standings) : pool results
-    Audience --> (View Podium) : final rankings
-    Audience --> (View All Mats) : what's running
-    Audience --> (View All Competitors) : roster
+    A -->|watch| B["Current Scoreboard"]
+    A -->|read| C["Programme & Schedule"]
+    A -->|see| D["Pool Standings"]
+    A -->|see| E["Podium & Rankings"]
+    A -->|see| F["All Mats Status"]
+    A -->|browse| G["Competitor Roster"]
 ```
 
-**Head Referee** — Not directly in the app, but their decisions flow through it:
+**Head Referee** — Not directly in the app; decisions flow through score keeper:
 
 ```mermaid
-usecase diagram
-    actor Referee as "Head Referee"
+graph LR
+    HR["🎖️ Head Referee"]
+    SK["⌚ Score Keeper"]
+    APP["📱 App"]
     
-    Referee --> (Announce Points) : via score keeper
-    Referee --> (Issue Warnings) : via score keeper
-    Referee --> (Decide Final Exchange) : dialog
-    Referee --> (Decide Point Cap) : dialog
-    Referee --> (Decide Penalty Cap) : dialog
-    Referee --> (Call Forfeit) : to score keeper
-    Referee --> (Call Disqualification) : to score keeper
+    HR -->|announces| SK
+    SK -->|records| APP
     
-    note right of Referee
-        Head referee controls the match.
-        Score keeper records their calls.
-        App interprets nothing.
-    end note
+    HR -.->|decides| A["Announce Points"]
+    HR -.->|decides| B["Issue Warnings"]
+    HR -.->|decides| C["Final Exchange Outcome"]
+    HR -.->|decides| D["Forfeit/Disqualification"]
+    
+    note["<b>Design Principle:</b><br/>Head referee controls match.<br/>Score keeper records their calls.<br/>App interprets nothing."]
 ```
 
 **Scoring**
