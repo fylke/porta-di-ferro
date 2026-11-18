@@ -311,14 +311,144 @@ func TestProjectedItemsAreNotWrittenDown(t *testing.T) {
 	}
 }
 
-// fence fences a match to its end, red winning 2-0 on time.
-func (h *testHall) fence(slug, id string) {
+// finish fences a match to its end, red winning 2-0 on time.
+func (h *testHall) finish(slug, id string) {
 	h.t.Helper()
 	h.must("POST", "/api/d/"+slug+"/matches/"+id+"/events", []map[string]any{
 		{"seq": 1, "type": "timer", "elapsedMs": 0, "timer": map[string]string{"action": "start"}},
 		{"seq": 2, "type": "exchange", "elapsedMs": 1000, "exchange": map[string]any{"red": map[string]int{"value": 2}, "blue": map[string]int{"value": 0}}},
 		{"seq": 3, "type": "end", "elapsedMs": 2000, "end": map[string]string{"reason": "time"}},
 	}, nil)
+}
+
+// finishPools fences every pool match of a discipline.
+func (h *testHall) finishPools(slug string) {
+	h.t.Helper()
+	var s hall.Snapshot
+	h.must("GET", "/api/d/"+slug+"/state", nil, &s)
+	for _, p := range s.Pools {
+		for _, m := range p.Matches {
+			h.finish(slug, m.ID)
+		}
+	}
+}
+
+func (h *testHall) state(slug string) hall.Snapshot {
+	h.t.Helper()
+	var s hall.Snapshot // fresh every time: decoding into an old map would keep its keys
+	h.must("GET", "/api/d/"+slug+"/state", nil, &s)
+	return s
+}
+
+// The field test of 2026-11: a discipline run on two mats, the hall then cut to one. Mat 2
+// is gone from every discipline -- the eliminations offered, the bracket drawn, a redraw
+// of the pools -- while each discipline keeps the number its organizer chose.
+func TestAMatTakenAwayIsGoneFromEveryDiscipline(t *testing.T) {
+	h := openHall(t, t.TempDir())
+	var ev hall.EventView
+	h.must("GET", "/api/event", nil, &ev)
+	ls := ev.Disciplines[0].Slug
+	h.draw("/api/d/"+ls, 8, 2)
+	h.must("POST", "/api/disciplines", map[string]string{"name": "Open Sabre"}, nil)
+	h.draw("/api/d/open-sabre", 6, 1)
+	h.finishPools(ls)
+
+	h.must("PUT", "/api/mats", map[string]int{"count": 1}, nil)
+	s := h.state(ls)
+	if s.EventMats != 1 || s.UsableMats != 1 || s.Tournament.Mats != 2 {
+		t.Fatalf("the longsword should keep its own 2 but use the hall's 1: event %d usable %d own %d",
+			s.EventMats, s.UsableMats, s.Tournament.Mats)
+	}
+	if s.ElimMats != 1 || s.ElimMatsSuggested != 1 {
+		t.Errorf("the eliminations should be offered the hall's one mat: chosen %d, suggested %d", s.ElimMats, s.ElimMatsSuggested)
+	}
+	if len(s.Mats) != 1 {
+		t.Errorf("the snapshot should name one mat: %v", s.Mats)
+	}
+
+	h.must("POST", "/api/d/"+ls+"/tournament/bracket", nil, nil)
+	v := h.mats()
+	if len(v.Mats) != 1 {
+		t.Fatalf("the hall has one mat, got %d", len(v.Mats))
+	}
+	for _, it := range v.Items {
+		if it.Mat != 1 {
+			t.Errorf("%s is on mat %d of a hall of one", it.ID, it.Mat)
+		}
+		if it.ID == ls+"/elim-2" {
+			t.Errorf("the bracket should be drawn for one mat, not split in two lanes on it")
+		}
+	}
+
+	// Drawn again, the sabre's pools are drawn for the hall too, and its setting kept.
+	h.must("PUT", "/api/d/open-sabre/tournament", map[string]int{"mats": 3, "minPoolSize": 3, "maxPoolSize": 3}, nil)
+	h.must("POST", "/api/d/open-sabre/tournament/pools", nil, nil)
+	sabre := h.state("open-sabre")
+	for _, p := range sabre.Tournament.Pools {
+		if p.Mat != 1 {
+			t.Errorf("sabre's pool %d should be drawn on lane 1 of a hall of one, got %d", p.Number, p.Mat)
+		}
+	}
+	if sabre.Tournament.Mats != 3 || sabre.UsableMats != 1 {
+		t.Errorf("sabre keeps its own 3 and uses the hall's 1: %d, %d", sabre.Tournament.Mats, sabre.UsableMats)
+	}
+
+	// A mat given back is the discipline's to use again.
+	h.must("PUT", "/api/mats", map[string]int{"count": 2}, nil)
+	if s := h.state(ls); s.UsableMats != 2 {
+		t.Errorf("with the mat back, the longsword can use 2 again, got %d", s.UsableMats)
+	}
+}
+
+// The field test of 2026-11: two disciplines side by side in one block, the first one's
+// pools finished, and Next match took the mat straight into the second one's pools before
+// the first one's bracket was drawn. A mat never crosses into another discipline by
+// itself: it stops, and the organizer releases it from the mat board.
+func TestAMatNeverCrossesIntoAnotherDisciplineByItself(t *testing.T) {
+	h := openHall(t, t.TempDir())
+	var ev hall.EventView
+	h.must("GET", "/api/event", nil, &ev)
+	ls := ev.Disciplines[0].Slug
+	h.draw("/api/d/"+ls, 8, 2)
+	h.must("POST", "/api/disciplines", map[string]string{"name": "Open Sabre"}, nil)
+	h.draw("/api/d/open-sabre", 6, 1)
+	h.must("PUT", "/api/plan/sessions", map[string]int{ls: 1, "open-sabre": 1}, nil)
+	h.finishPools(ls)
+
+	v := h.mats()
+	m1 := v.Mats[0]
+	if m1.Current != nil || m1.Held != "open-sabre/pool-1" || m1.HeldFor != hall.HeldAtDiscipline {
+		t.Fatalf("mat 1 should stop in front of Sabre's pool: current %+v, held %q for %q", m1.Current, m1.Held, m1.HeldFor)
+	}
+	if it := itemOf(v, "open-sabre/pool-1"); it.Status != "held" || it.HeldFor != hall.HeldAtDiscipline {
+		t.Errorf("Sabre's card should say the mat waits for the organizer: %+v", it)
+	}
+
+	// Meanwhile the organizer draws the longsword's bracket and holds its first lane, to
+	// fence the quarter-finals later: the hold is kept, in event.json too.
+	h.must("POST", "/api/d/"+ls+"/tournament/bracket", nil, nil)
+	h.must("PATCH", "/api/plan/items/"+ls+"/elim-1", map[string]bool{"hold": true}, nil)
+	if it := itemOf(h.mats(), ls+"/elim-1"); !it.Hold {
+		t.Errorf("the hold should show on the card: %+v", it)
+	}
+	raw, _ := os.ReadFile(filepath.Join(h.dir, "event.json"))
+	if !strings.Contains(string(raw), `"hold": true`) {
+		t.Errorf("the hold should be written down:\n%s", raw)
+	}
+
+	// Released, mat 1 runs Sabre's pool.
+	var after hall.MatsView // fresh: Held is omitted when empty, so an old value would stay
+	h.must("PATCH", "/api/plan/items/open-sabre/pool-1", map[string]bool{"hold": false}, &after)
+	if c := after.Mats[0].Current; c == nil || c.Discipline != "open-sabre" || after.Mats[0].Held != "" {
+		t.Errorf("released, mat 1 should be on Sabre's first match: %+v %q", c, after.Mats[0].Held)
+	}
+
+	// The hold survives a restart of the server.
+	h.stop()
+	h2 := openHall(t, h.dir)
+	if it := itemOf(h2.mats(), ls+"/elim-1"); !it.Hold {
+		t.Errorf("the hold should survive a restart: %+v", it)
+	}
 }
 
 // #162: a competitor withdrawn mid-pool. Their matches are void: the mat goes past them,
@@ -349,7 +479,7 @@ func TestAWithdrawalVoidsMatchesForTheMats(t *testing.T) {
 			voids++
 			continue
 		}
-		h.fence(ls, m.ID)
+		h.finish(ls, m.ID)
 	}
 	if voids != 3 {
 		t.Errorf("a pool of four has three void matches for one withdrawal, got %d", voids)

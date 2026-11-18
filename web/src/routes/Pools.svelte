@@ -16,7 +16,8 @@
 
   const name = $derived(nameLookup(snapshot));
   const fmt = (n: number) => (Number.isFinite(n) ? n.toFixed(2) : '0.00');
-  const mats = $derived(Array.from({ length: snapshot.tournament.mats }, (_, i) => i + 1));
+  // In an event a pool moves on the hall's mats, which are the ones that exist.
+  const mats = $derived(Array.from({ length: snapshot.eventMats ?? snapshot.tournament.mats }, (_, i) => i + 1));
 
   // Pools the organizer has folded away (#110), per discipline.
   // svelte-ignore state_referenced_locally

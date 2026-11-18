@@ -56,9 +56,9 @@ func (c *Coordinator) Placements() (map[string]store.Placement, int) {
 
 func (c *Coordinator) placementsLocked() (map[string]store.Placement, int) {
 	file, _ := c.folder.Read()
-	var items []hall.WorkItem
 	var tournaments []store.Tournament
-	var failed, slugs []string
+	var entrants []int
+	var failed, slugs, readable []string
 	stores := map[string]*store.Store{}
 	for _, w := range c.snapshotWorkers() {
 		slugs = append(slugs, w.slug)
@@ -77,8 +77,16 @@ func (c *Coordinator) placementsLocked() (map[string]store.Placement, int) {
 			continue
 		}
 		tournaments = append(tournaments, t)
+		entrants = append(entrants, hall.Entrants(comps, file.Plan.Expected[w.slug]))
+		readable = append(readable, w.slug)
 		stores[w.slug] = w.srv.store
-		items = append(items, hall.PlanItems(w.slug, t, hall.Entrants(comps, file.Plan.Expected[w.slug]))...)
+	}
+	mats := hall.MatCount(file.Plan, tournaments)
+	// Each discipline's items are laid out for the mats the hall has, not the ones it
+	// asked for (hall.EffectiveMatCount).
+	var items []hall.WorkItem
+	for i, t := range tournaments {
+		items = append(items, hall.PlanItems(readable[i], hall.OnHall(t, mats), entrants[i])...)
 	}
 	c.projected = map[string]bool{}
 	for _, it := range items {
@@ -99,7 +107,6 @@ func (c *Coordinator) placementsLocked() (map[string]store.Placement, int) {
 		}
 		return false
 	}
-	mats := hall.MatCount(file.Plan, tournaments)
 	// A discipline that cannot be read keeps its placements for when it can be again,
 	// rather than losing every move the organizer made to it: they are set aside from the
 	// placing and put back as they were.

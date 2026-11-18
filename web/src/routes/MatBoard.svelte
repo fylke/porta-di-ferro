@@ -6,7 +6,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import HaltBanner from './HaltBanner.svelte';
-  import { api, ApiError, type ForecastView, type ItemView, type StaffingView, type SuggestionView, type Warning } from '../api';
+  import { api, ApiError, type ForecastView, type ItemView, type MatView, type StaffingView, type SuggestionView, type Warning } from '../api';
   import { itemLabel, roleLabel } from '../lib/items';
   import { breakBands, canMove, cardLayout, dayAxis, drafted, lanesOf, placeOf as placeOn, type DraftMove } from '../lib/board';
   import { MatsLive } from '../lib/mats.svelte';
@@ -260,6 +260,17 @@
     menuFor = null;
     void send(() => api.flagItem(it.id, { notBefore }));
   }
+  /**
+   * Stops the item's mat in front of it, or lets the mat start it. A mat never crosses into
+   * another discipline by itself: it stops, and this is how the organizer sends it on.
+   */
+  function stopAt(it: ItemView, stop: boolean) {
+    menuFor = null;
+    void send(() => api.flagItem(it.id, { hold: stop }));
+  }
+  function heldItem(m: MatView): ItemView | null {
+    return (view?.items ?? []).find((it) => it.id === m.held) ?? null;
+  }
   function openMenu(it: ItemView) {
     menuFor = menuFor === it.id ? null : it.id;
     holdUntil = it.notBefore ?? '';
@@ -329,6 +340,8 @@
         return t('not drawn yet');
       case 'queued':
         return t('after the block before');
+      case 'held':
+        return it.heldFor === 'discipline' ? t('waits for you to start it') : t('the mat stops here');
       default:
         return '';
     }
@@ -597,6 +610,14 @@
               {m.current.match.round ? roundLabel(m.current.match) : t('Pool {n}', { n: m.current.match.pool })}:
               {m.current.red} {t('v')} {m.current.blue}
             </p>
+          {:else if heldItem(m)}
+            {@const it = heldItem(m)!}
+            <p class="now stopped">
+              {it.heldFor === 'discipline'
+                ? t('Waits for you before {item}: the mat does not start another discipline by itself.', { item: `${it.disciplineName} · ${label(it)}` })
+                : t('Stopped before {item}.', { item: `${it.disciplineName} · ${label(it)}` })}
+              <button class="start" disabled={busy} onclick={() => stopAt(it, false)}>{t('Start')}</button>
+            </p>
           {:else}
             <p class="now dim">{list.length === 0 ? t('Nothing placed here.') : t('Nothing to fence just now.')}</p>
           {/if}
@@ -647,8 +668,9 @@
                       {t('Short of {roles}', { roles: shortOf.get(it.id)!.join(', ').toLocaleLowerCase() })}
                     </a>
                   {/if}
-                  {#if it.pinned || it.notBefore || it.withFinal}
+                  {#if it.pinned || it.notBefore || it.withFinal || it.hold}
                     <span class="meta flags">
+                      {#if it.hold}<span class="flag">{t('stop before')}</span>{/if}
                       {#if it.pinned}<span class="flag">{t('pinned')}</span>{/if}
                       {#if it.notBefore}<span class="flag">{t('not before {time}', { time: it.notBefore })}</span>{/if}
                       {#if it.withFinal}<span class="flag">{t('with the final')}</span>{/if}
@@ -668,6 +690,11 @@
                         <button role="menuitem" disabled={busy} onclick={() => pin(it, !it.pinned)}>{it.pinned ? t('Unpin') : t('Pin to this mat')}</button>
                       {:else}
                         <p class="menu-note">{t('Follows the pools: move the pools, and this comes after them.')}</p>
+                      {/if}
+                      {#if it.hold || it.status === 'held'}
+                        <button role="menuitem" disabled={busy} onclick={() => stopAt(it, false)}>{t('Let the mat start this')}</button>
+                      {:else}
+                        <button role="menuitem" disabled={busy} onclick={() => stopAt(it, true)}>{t('Stop the mat before this')}</button>
                       {/if}
                       {#if it.kind === 'bronze'}
                         <!-- Never alongside the final, unless the organizer says so (#149). -->
@@ -922,6 +949,19 @@
   }
   .card.running {
     border-color: var(--amber-bright);
+  }
+  /* Its mat has stopped in front of it, for the organizer to start. */
+  .card.held {
+    border-color: var(--amber-bright);
+    border-style: dashed;
+  }
+  .now.stopped {
+    color: var(--amber-bright);
+  }
+  .now .start {
+    margin-left: 0.4rem;
+    padding: 0.15rem 0.6rem;
+    font-size: 0.85rem;
   }
   /* Not drawn yet: planned time, not work anybody can fence. */
   .card.planned {

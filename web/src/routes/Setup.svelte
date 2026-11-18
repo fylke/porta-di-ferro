@@ -94,6 +94,9 @@
     </label>
   </div>
 
+  {#if snapshot.usableMats && mats > snapshot.usableMats}
+    <p class="warn">{t('The hall has {n} mats now: the pools and the eliminations are drawn for {n}.', { n: snapshot.usableMats })}</p>
+  {/if}
   {#if advice?.recommended}
     <p class="advice">{t('{n} recommended for {count} competitors: one mat for each pool, up to four.', { n: advice.recommended, count: advice.for ?? 0 })}</p>
   {/if}

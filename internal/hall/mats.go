@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/fylke/porta-di-ferro/internal/store"
+	"github.com/fylke/porta-di-ferro/internal/tournament"
 )
 
 // The mats as the hall sees them: every mat's queue, and what it is running.
@@ -53,7 +54,19 @@ type MatView struct {
 	// Waiting are matches of the head item that cannot be fenced yet, because a match
 	// that feeds them is still to be decided.
 	Waiting []Slot `json:"waiting,omitempty"`
+	// Held is the item the mat has stopped in front of, waiting for the organizer to
+	// release it, and HeldFor why: HeldByOrganizer or HeldAtDiscipline.
+	Held    string `json:"held,omitempty"`
+	HeldFor string `json:"heldFor,omitempty"`
 }
+
+// Why a mat stops in front of an item.
+const (
+	// HeldByOrganizer: the organizer held the item from its card.
+	HeldByOrganizer = "organizer"
+	// HeldAtDiscipline: the item is another discipline's than the one the mat last ran.
+	HeldAtDiscipline = "discipline"
+)
 
 // ItemView is one work item, placed, for the mat board.
 type ItemView struct {
@@ -66,7 +79,8 @@ type ItemView struct {
 	// Position is the item's place in its mat's queue, from 1.
 	Position int `json:"position"`
 	// Status is "waiting" (its matches cannot start yet), "queued" (its block of the day
-	// is not open yet, #136), "ready", "running", "done", or "planned" (not drawn yet).
+	// is not open yet, #136), "held" (its mat waits for the organizer to release it),
+	// "ready", "running", "done", or "planned" (not drawn yet).
 	Status string `json:"status"`
 	Done   int    `json:"done"`
 	Total  int    `json:"total"`
@@ -80,6 +94,10 @@ type ItemView struct {
 	NotBefore string `json:"notBefore,omitempty"`
 	// WithFinal is a bronze match let run at the same time as the final (#149).
 	WithFinal bool `json:"withFinal,omitempty"`
+	// Hold is the organizer's hold on the item: its mat stops in front of it.
+	Hold bool `json:"hold,omitempty"`
+	// HeldFor is why the mat has stopped in front of the item, when Status is "held".
+	HeldFor string `json:"heldFor,omitempty"`
 }
 
 // MatsView is the whole hall: every mat, and every work item on them.
@@ -151,6 +169,14 @@ func OnEventMats(snap *Snapshot, slug string, placed map[string]store.Placement,
 		}
 	}
 	snap.EventMats = mats
+	snap.UsableMats = EffectiveMatCount(mats, snap.Tournament.Mats)
+	// The eliminations' mats are answered for the hall's mats, not the discipline's: a
+	// discipline set up for two in a hall cut to one has one to offer.
+	if size := tournament.BracketSize(len(snap.Overall)); size > 0 {
+		t := snap.OnHall()
+		snap.ElimMats = tournament.EliminationMatsFor(t, size)
+		snap.ElimMatsSuggested = tournament.EliminationMats(t.Mats, size)
+	}
 	snap.Mats = map[int]string{}
 }
 
@@ -198,22 +224,35 @@ func BuildMats(inputs []MatsInput, placed map[string]store.Placement, mats int,
 	out := MatsView{Mats: make([]MatView, 0, mats), Items: []ItemView{}}
 	for mat := 1; mat <= mats; mat++ {
 		mv := MatView{Mat: mat, Queue: []Slot{}}
-		position := 0
-		var head *matEntry
+		// head is the first item the mat has still to run, and prev the drawn item it ran
+		// before that: what decides whether it may go on by itself.
+		var on []*matEntry
+		var head, prev *matEntry
 		for _, e := range all {
 			if e.place.Mat != mat {
 				continue
 			}
-			position++
-			out.Items = append(out.Items, e.itemView(mat, position))
-			mv.Queue = append(mv.Queue, e.slots...)
+			on = append(on, e)
 			// Work that is not drawn yet is never what a mat waits for.
 			if head == nil && e.status != "done" && !e.item.Projected {
 				head = e
 			}
+			if head == nil && !e.item.Projected {
+				prev = e
+			}
+		}
+		if head != nil {
+			if why := stopsBefore(head, prev); why != "" {
+				head.status, head.heldFor = "held", why
+				mv.Held, mv.HeldFor = head.item.ID(), why
+			}
+		}
+		for i, e := range on {
+			out.Items = append(out.Items, e.itemView(mat, i+1))
+			mv.Queue = append(mv.Queue, e.slots...)
 		}
 		mv.Current = heldSlot(mv.Queue, mat, held)
-		if head != nil && head.status != "queued" {
+		if head != nil && head.status != "queued" && head.status != "held" {
 			if mv.Current == nil && len(head.playable) > 0 {
 				s := head.slots[head.playable[0]]
 				mv.Current = &s
@@ -236,6 +275,32 @@ type matEntry struct {
 	playable []int
 	session  int
 	held     bool
+	heldFor  string
+}
+
+// stopsBefore says why a mat stops in front of its head item rather than start it on its
+// own, or "" when it goes on: the organizer held the item, or it is another discipline's
+// than the one the mat ran last and the organizer has not released it. An item under way
+// is never stopped -- a mat does not change what it runs in the middle of one.
+func stopsBefore(head, prev *matEntry) string {
+	if head.status != "ready" && head.status != "waiting" {
+		return ""
+	}
+	if head.place.Hold {
+		return HeldByOrganizer
+	}
+	if prev != nil && !ShouldAdvanceToDiscipline(prev.item, head.item, head.place) {
+		return HeldAtDiscipline
+	}
+	return ""
+}
+
+// ShouldAdvanceToDiscipline says a mat that has just run from may go on to next by itself:
+// within one discipline it may, and into another only once the organizer has released next.
+// Pools, eliminations and finals of one discipline follow each other; another discipline's
+// work is somebody else's day, and the organizer decides when it starts.
+func ShouldAdvanceToDiscipline(from, next WorkItem, p store.Placement) bool {
+	return from.Discipline == next.Discipline || p.Released
 }
 
 // entriesOf is a discipline's placed items, each with its matches and how far it has got.
@@ -246,7 +311,7 @@ func entriesOf(in MatsInput, placed map[string]store.Placement) []*matEntry {
 	}
 	views := in.Snapshot.matchesByID()
 	var out []*matEntry
-	for _, it := range PlanItems(in.Slug, in.Snapshot.Tournament, Entrants(in.Snapshot.Competitors, in.Expected)) {
+	for _, it := range PlanItems(in.Slug, in.Snapshot.OnHall(), Entrants(in.Snapshot.Competitors, in.Expected)) {
 		p, ok := placed[it.ID()]
 		if !ok {
 			continue
@@ -331,8 +396,9 @@ func (e *matEntry) itemView(mat, position int) ItemView {
 		ID: e.item.ID(), Discipline: e.item.Discipline, DisciplineName: e.name,
 		Kind: e.item.Kind, Number: e.item.Number, Mat: mat, Position: position,
 		Status: e.status, Done: e.done, Total: total,
-		Movable:   e.status == "ready" || e.status == "waiting" || e.status == "planned" || e.status == "queued",
+		Movable:   e.status == "ready" || e.status == "waiting" || e.status == "planned" || e.status == "queued" || e.status == "held",
 		Projected: e.item.Projected, Pinned: e.place.Pinned, NotBefore: e.place.NotBefore, WithFinal: e.place.WithFinal,
+		Hold: e.place.Hold, HeldFor: e.heldFor,
 	}
 }
 

@@ -32,6 +32,9 @@ export async function aPoolOfOurOwn(request: APIRequestContext, name: string): P
   }
   await ok(await request.put(`/api/d/${slug}/tournament`, { data: { mats: 1, minPoolSize: 4, maxPoolSize: 4 } }));
   await ok(await request.post(`/api/d/${slug}/tournament/pools`));
+  // Beside everybody else's, in the first block of the day: a discipline added later runs
+  // in a block of its own, and its mat waits for the blocks before it to finish (#169).
+  await ok(await request.put('/api/plan/sessions', { data: { [slug]: 1 } }));
   return slug;
 }
 

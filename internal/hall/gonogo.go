@@ -131,13 +131,8 @@ func SignoffBasis(in GoNoGoInput) map[string]string {
 }
 
 // usableMats is the mats the discipline can spread over: its own, never more than the hall
-// has.
-func usableMats(in GoNoGoInput) int {
-	if in.HallMats > 0 && in.Tournament.Mats > in.HallMats {
-		return in.HallMats
-	}
-	return in.Tournament.Mats
-}
+// has (EffectiveMatCount).
+func usableMats(in GoNoGoInput) int { return EffectiveMatCount(in.HallMats, in.Tournament.Mats) }
 
 // SignOff records the manager's go on the basis as it stands.
 func SignOff(plan *store.Plan, in GoNoGoInput, by string, now time.Time) error {

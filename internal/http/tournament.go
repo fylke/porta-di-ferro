@@ -108,11 +108,14 @@ func (s *Server) generatePools(w http.ResponseWriter, r *http.Request) {
 	t.Pools = nil
 	t.Bracket = nil
 	t.BracketAt = ""
-	drawn, err := tournament.Generate(t, competitors, s.limits)
+	// Drawn for the mats the hall has (hall.EffectiveMatCount); the organizer's own
+	// number is what is kept.
+	drawn, err := tournament.Generate(hall.OnHall(t, s.hallMats()), competitors, s.limits)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
+	drawn.Mats = t.Mats
 	// To the nanosecond: the stamp is the draw's identity (#160), and two draws a second apart
 	// must not share one.
 	drawn.GeneratedAt = time.Now().Format(time.RFC3339Nano)
@@ -140,7 +143,7 @@ func (s *Server) drawBracket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	t := snap.Tournament
-	bracket, err := tournament.Bracket(t, snap.Overall)
+	bracket, err := tournament.Bracket(snap.OnHall(), snap.Overall)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return

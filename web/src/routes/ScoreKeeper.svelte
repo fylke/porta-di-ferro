@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
-  import { MatsLive, matOf, slotKey } from '../lib/mats.svelte';
+  import { MatsLive, matOf, runnable, slotKey } from '../lib/mats.svelte';
+  import { itemLabel } from '../lib/items';
+  import { lanesOf } from '../lib/board';
   import { ScoreKeeperSession } from '../lib/scorekeeper.svelte';
   import HaltBanner from './HaltBanner.svelte';
   import { Clock, formatClock, isFlashing } from '../lib/clock.svelte';
@@ -94,6 +96,17 @@
   // and is left out until they are.
   const here = $derived(matOf(live.view, mat));
   const queue = $derived((here?.queue ?? []).filter((s) => s.match.red && s.match.blue));
+  // What the mat may run without the organizer: Next match never goes past an item the mat
+  // has stopped in front of -- another discipline's, one held by hand, or one whose block
+  // of the day is not open (the field test of 2026-11). Offline too, from the last view.
+  const ahead = $derived(runnable(here, live.view?.items ?? []).filter((s) => s.match.red && s.match.blue));
+  // The item the mat waits in front of, for the organizer to release, as the board names it.
+  const heldItem = $derived((live.view?.items ?? []).find((it) => it.id === here?.held) ?? null);
+  const heldName = $derived(
+    heldItem
+      ? `${heldItem.disciplineName} · ${itemLabel(heldItem.kind, heldItem.number, lanesOf(live.view?.items ?? [], heldItem.discipline))}`
+      : '',
+  );
   // The match on screen, as discipline/match.
   let current = $state('');
   const slot = $derived(queue.find((s) => slotKey(s) === current) ?? null);
@@ -135,7 +148,7 @@
   }
 
   function firstOpen(): string {
-    const s = queue.find(isOpen);
+    const s = ahead.find(isOpen);
     return s ? slotKey(s) : '';
   }
 
@@ -150,8 +163,9 @@
     } catch {
       // No memory on this browser; the mat's own position is the fallback.
     }
-    const open = queue.find((s) => slotKey(s) === remembered && isOpen(s));
+    const open = ahead.find((s) => slotKey(s) === remembered && isOpen(s));
     current = open ? slotKey(open) : firstOpen();
+    if (current) exhausted = false;
   });
 
   $effect(() => {
@@ -177,9 +191,9 @@
     // Let go of the finished match on the way out, so the log is flushed and the claim
     // released before the next device could want it.
     void sk?.log.release();
-    const i = queue.findIndex((s) => slotKey(s) === current);
-    const after = queue.slice(i + 1).find(isOpen);
-    const elsewhere = queue.find((s) => isOpen(s) && slotKey(s) !== current);
+    const i = ahead.findIndex((s) => slotKey(s) === current);
+    const after = ahead.slice(i + 1).find(isOpen);
+    const elsewhere = ahead.find((s) => isOpen(s) && slotKey(s) !== current);
     const next = after ?? elsewhere;
     current = next ? slotKey(next) : '';
     if (!current) {
@@ -603,9 +617,15 @@
     <div class="waiting">
       {#if live.error && queue.length === 0}
         <p>{live.error}</p>
+      {:else if heldItem && !firstOpen()}
+        <p>{t('Mat {n} waits for the organizer to start {item}.', { n: mat, item: heldName })}</p>
+        <p class="dim">{t('The organizer starts it from the mat board. This screen fills in when they do.')}</p>
       {:else if (here?.waiting ?? []).length > 0}
         <p>{t('Waiting for the {round}.', { round: roundLabel(here!.waiting![0].match).toLowerCase() })}</p>
         <p class="dim">{t('Its competitors come from matches still running on the other mats.')}</p>
+      {:else if !firstOpen() && queue.some(isOpen)}
+        <p>{t('Mat {n} waits for the block of the day before to finish.', { n: mat })}</p>
+        <p class="dim">{t('This screen fills in when the next item can start.')}</p>
       {:else if exhausted || (queue.length > 0 && !firstOpen())}
         <p>{t('Every match on mat {n} is done.', { n: mat })}</p>
         <p class="dim">{t('Nothing more is scheduled here. Check with the organizer.')}</p>

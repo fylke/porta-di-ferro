@@ -32,13 +32,15 @@ func (k keeper) place() keeper {
 
 // placements is the plan, with any item just drawn placed and kept.
 func (e *Event) placements() (map[string]store.Placement, int) {
-	var items []hall.WorkItem
 	var tournaments []store.Tournament
 	for _, d := range e.disciplines {
 		tournaments = append(tournaments, d.tournament)
-		items = append(items, hall.PlanItems(d.slug, d.tournament, hall.Entrants(d.competitors, e.plan.Expected[d.slug]))...)
 	}
 	mats := hall.MatCount(e.plan, tournaments)
+	var items []hall.WorkItem
+	for _, d := range e.disciplines {
+		items = append(items, hall.PlanItems(d.slug, hall.OnHall(d.tournament, mats), hall.Entrants(d.competitors, e.plan.Expected[d.slug]))...)
+	}
 	started := func(it hall.WorkItem) bool {
 		d := e.find(it.Discipline)
 		if d == nil {

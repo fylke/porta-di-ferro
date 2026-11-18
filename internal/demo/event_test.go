@@ -335,3 +335,31 @@ func TestAnOldIdentifierGivesWayToTheDisciplineItNamed(t *testing.T) {
 		t.Errorf("after a reset nothing is called sabre, got %d", res.Status)
 	}
 }
+
+// The demo caps a discipline's mats at the hall's the way the server does.
+func TestTheDemoCapsADisciplinesMatsAtTheHalls(t *testing.T) {
+	e := demo.NewEvent()
+	must := func(method, path, body string) {
+		t.Helper()
+		if r := e.Request(method, path, []byte(body)); r.Status != 200 && r.Status != 201 {
+			t.Fatalf("%s %s returned %d: %s", method, path, r.Status, r.Body)
+		}
+	}
+	must("DELETE", "/api/event", "")
+	must("POST", "/api/disciplines", `{"name":"Open Sabre"}`)
+	for _, n := range []string{"Ada", "Bo", "Cy", "Di", "Ek", "Fa", "Gu", "Hj"} {
+		must("POST", "/api/d/open-sabre/competitors", `{"name":"`+n+`","club":"`+n+`"}`)
+	}
+	must("PUT", "/api/d/open-sabre/tournament", `{"mats":2,"minPoolSize":4,"maxPoolSize":4}`)
+	must("PUT", "/api/mats", `{"count":1}`)
+	must("POST", "/api/d/open-sabre/tournament/pools", "")
+	s := snapIn(t, e, "open-sabre")
+	if s.EventMats != 1 || s.UsableMats != 1 || s.Tournament.Mats != 2 {
+		t.Errorf("the sabre should keep its own 2 and use the hall's 1: event %d, usable %d, own %d", s.EventMats, s.UsableMats, s.Tournament.Mats)
+	}
+	for _, p := range s.Tournament.Pools {
+		if p.Mat != 1 {
+			t.Errorf("pool %d should be drawn on lane 1 of a hall of one, got %d", p.Number, p.Mat)
+		}
+	}
+}

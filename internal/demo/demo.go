@@ -697,10 +697,15 @@ func (d *Demo) generatePools() Response {
 	}
 	t := d.tournament
 	t.Seed, t.Pools, t.Bracket, t.BracketAt = 0, nil, nil, ""
-	drawn, err := tournament.Generate(t, d.competitors, d.limits)
+	hallMats := 0
+	if d.event != nil {
+		_, hallMats = d.event.placements()
+	}
+	drawn, err := tournament.Generate(hall.OnHall(t, hallMats), d.competitors, d.limits)
 	if err != nil {
 		return fail(400, err)
 	}
+	drawn.Mats = t.Mats
 	drawn.GeneratedAt = time.Now().Format(time.RFC3339Nano)
 	d.tournament = drawn
 	return changed(drawn)
@@ -751,7 +756,7 @@ func (d *Demo) drawBracket() Response {
 		delete(d.logs, m.ID)
 		delete(d.lastEvent, m.ID)
 	}
-	bracket, err := tournament.Bracket(d.tournament, snap.Overall)
+	bracket, err := tournament.Bracket(snap.OnHall(), snap.Overall)
 	if err != nil {
 		return fail(400, err)
 	}

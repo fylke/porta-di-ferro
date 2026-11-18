@@ -251,8 +251,11 @@ export const api = {
   /** Moves a work item: to a place on a mat, or a step along its own. */
   moveItem: (id: string, to: { mat: number; index?: number } | { move: 'up' | 'down' }) =>
     req<MatsView>('PATCH', `/api/plan/items/${id.split('/').map(encodeURIComponent).join('/')}`, to),
-  /** Pins or unpins a work item, holds it until a time ("" lets it go), or lets a bronze match run with the final. */
-  flagItem: (id: string, flags: { pinned?: boolean; notBefore?: string; withFinal?: boolean }) =>
+  /**
+   * Pins or unpins a work item, holds it until a time ("" lets it go), lets a bronze match run
+   * with the final, or stops its mat in front of it (hold: true) and releases it (hold: false).
+   */
+  flagItem: (id: string, flags: { pinned?: boolean; notBefore?: string; withFinal?: boolean; hold?: boolean }) =>
     req<MatsView>('PATCH', `/api/plan/items/${id.split('/').map(encodeURIComponent).join('/')}`, flags),
 
   // The plan's times (phase 4).

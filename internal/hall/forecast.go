@@ -299,7 +299,7 @@ func ForecastInput(inputs []MatsInput, placed map[string]store.Placement, plan s
 	for _, in := range inputs {
 		views := in.Snapshot.matchesByID()
 		who := whoIs(in)
-		for _, w := range PlanItems(in.Slug, in.Snapshot.Tournament, Entrants(in.Snapshot.Competitors, in.Expected)) {
+		for _, w := range PlanItems(in.Slug, in.Snapshot.OnHall(), Entrants(in.Snapshot.Competitors, in.Expected)) {
 			p, ok := placed[w.ID()]
 			if !ok {
 				continue
