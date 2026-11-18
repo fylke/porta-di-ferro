@@ -14,6 +14,7 @@
 import { api, type EventView, type Presence } from '../api';
 import { anotherEvent } from './forget';
 import { errorText } from './errors';
+import { follow } from './streams';
 
 const CACHE = 'porta.event';
 /** How long the first look waits for the server before going on without it. */
@@ -27,7 +28,7 @@ export class EventLive {
   error = $state('');
   /** Every device in the hall and everything set aside, for the admin's Screens panel. */
   presence = $state<Presence | null>(null);
-  private source: EventSource | null = null;
+  private unfollowStream: (() => void) | null = null;
   private followers = 0;
 
   /**
@@ -68,33 +69,29 @@ export class EventLive {
    */
   follow(): void {
     this.followers++;
-    if (this.source) return;
-    const source = new EventSource('/api/event/stream');
-    this.source = source;
-    source.onopen = () => {
-      this.connected = true;
-      // Whatever changed while the stream was down, as Live does for a discipline.
-      void this.refresh();
-    };
-    source.onmessage = (ev) => {
-      try {
-        const update = JSON.parse(ev.data) as { kind: string; data: unknown };
+    if (this.unfollowStream) return;
+    // Over the page's one stream (#161).
+    this.unfollowStream = follow('event', {
+      onOpen: () => {
+        this.connected = true;
+        // Whatever changed while the stream was down, as Live does for a discipline.
+        void this.refresh();
+      },
+      onMessage: (update) => {
         if (update.kind === 'event') this.set(update.data as EventView);
         if (update.kind === 'presence') this.presence = update.data as Presence;
-      } catch {
-        // A malformed frame is not worth taking the stream down for.
-      }
-    };
-    source.onerror = () => {
-      this.connected = false;
-    };
+      },
+      onClose: () => {
+        this.connected = false;
+      },
+    });
   }
 
   unfollow(): void {
     this.followers = Math.max(0, this.followers - 1);
     if (this.followers > 0) return;
-    this.source?.close();
-    this.source = null;
+    this.unfollowStream?.();
+    this.unfollowStream = null;
     this.connected = false;
   }
 

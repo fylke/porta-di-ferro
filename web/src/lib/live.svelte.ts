@@ -5,9 +5,10 @@
  * breaking (design decision 15).
  */
 import { apiIn, type Presence, type Snapshot } from '../api';
-import { apiBase, namespace } from './paths';
+import { namespace } from './paths';
 import { discipline } from '../router.svelte';
 import { errorText } from './errors';
+import { follow } from './streams';
 
 export class Live {
   #snapshot = $state<Snapshot | null>(null);
@@ -35,7 +36,7 @@ export class Live {
    */
   replaced = $state<{ match: string; nonce: number } | null>(null);
 
-  private source: EventSource | null = null;
+  private unfollow: (() => void) | null = null;
   /**
    * The discipline this page follows: the one in its address, or the event's only one --
    * or one named outright, by a screen showing a discipline's roster from /display.
@@ -106,41 +107,37 @@ export class Live {
   }
 
   private connect(): void {
-    if (this.source) return;
-    const source = new EventSource(`${apiBase(this.slug)}/stream`);
-    this.source = source;
-    source.onopen = () => {
-      this.connected = true;
-      this.error = '';
-      // The server only pushes when something changes, and EventSource reconnects on its
-      // own without telling anyone what was missed -- so a display that lost the stream
-      // would sit on a stale score until the next event happened to arrive. Asking again
-      // on every open is what stops a scoreboard showing yesterday's score for the rest
-      // of a match, and it closes the same gap between the initial fetch and the stream
-      // being live.
-      void this.refresh();
-    };
-    source.onmessage = (ev) => {
-      try {
-        const update = JSON.parse(ev.data) as { kind: string; match?: string; data: unknown };
+    if (this.unfollow) return;
+    // Over the page's one stream (#161): "d/" is the event's only discipline, as /api is.
+    this.unfollow = follow(`d/${this.slug}`, {
+      onOpen: () => {
+        this.connected = true;
+        this.error = '';
+        // The server only pushes when something changes, and EventSource reconnects on its
+        // own without telling anyone what was missed -- so a display that lost the stream
+        // would sit on a stale score until the next event happened to arrive. Asking again
+        // on every open is what stops a scoreboard showing yesterday's score for the rest
+        // of a match, and it closes the same gap between the initial fetch and the stream
+        // being live.
+        void this.refresh();
+      },
+      onMessage: (update) => {
         if (update.kind === 'state') this.snapshot = update.data as Snapshot;
         if (update.kind === 'presence') this.presence = update.data as Presence;
         if (update.kind === 'log-replaced' && typeof update.match === 'string') {
           this.replaced = { match: update.match, nonce: Date.now() };
         }
-      } catch {
-        // A malformed frame is not worth taking the stream down for.
-      }
-    };
-    source.onerror = () => {
-      // EventSource retries on its own; all this has to do is say so on screen.
-      this.connected = false;
-    };
+      },
+      onClose: () => {
+        // The stream retries on its own; all this has to do is say so on screen.
+        this.connected = false;
+      },
+    });
   }
 
   stop(): void {
-    this.source?.close();
-    this.source = null;
+    this.unfollow?.();
+    this.unfollow = null;
     this.connected = false;
   }
 }

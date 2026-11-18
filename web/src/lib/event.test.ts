@@ -18,23 +18,30 @@ class FakeSource {
 describe('following the event', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it('keeps the stream open while any page still follows it', () => {
+  it('keeps the stream open while any page still follows it', async () => {
     vi.stubGlobal('EventSource', FakeSource);
     const hall = new EventLive();
+    // The page's one stream (#161) is reworked once the page has done mounting.
+    const settled = () => new Promise<void>((r) => setTimeout(r, 0));
     // The landing page hands over to a person's page: the new one follows before the old
     // one lets go.
     hall.follow();
     hall.follow();
+    await settled();
     expect(FakeSource.open).toBe(1);
     hall.unfollow();
+    await settled();
     expect(FakeSource.open).toBe(1);
     hall.unfollow();
+    await settled();
     expect(FakeSource.open).toBe(0);
     // One too many is harmless.
     hall.unfollow();
     hall.follow();
+    await settled();
     expect(FakeSource.open).toBe(1);
     hall.unfollow();
+    await settled();
     expect(FakeSource.open).toBe(0);
   });
 });

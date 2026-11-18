@@ -383,6 +383,7 @@ func (c *Coordinator) Handler() http.Handler {
 	mux.HandleFunc("GET /api/event/stream", func(w http.ResponseWriter, r *http.Request) {
 		serveStream(w, r, c.hub)
 	})
+	mux.HandleFunc("GET /api/streams", c.streams)
 	mux.HandleFunc("GET /api/event/signup/ready", c.signupReady)
 	mux.HandleFunc("GET /api/event/signup/definition.json", c.signupDefinition)
 	mux.HandleFunc("GET /api/event/signup/app.html", c.signupApp)

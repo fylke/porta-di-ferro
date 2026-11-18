@@ -387,6 +387,51 @@ func TestTheEventStreamHearsEveryDiscipline(t *testing.T) {
 	}
 }
 
+// One stream per page (#161): the event's, the mats' and a discipline's updates over one
+// connection, each tagged with the stream it came from.
+func TestOneStreamCarriesEveryTopicAPageFollows(t *testing.T) {
+	h := openHall(t, t.TempDir())
+	h.must("POST", "/api/disciplines", map[string]string{"name": "Open Sabre"}, nil)
+
+	res, err := http.Get(h.url + "/api/streams?topic=event&topic=mats&topic=d/open-sabre&topic=nonsense")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	frames := make(chan string, 32)
+	go func() {
+		sc := bufio.NewScanner(res.Body)
+		sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+		for sc.Scan() {
+			if line := sc.Text(); strings.HasPrefix(line, "data: ") {
+				frames <- strings.TrimPrefix(line, "data: ")
+			}
+		}
+	}()
+	time.Sleep(100 * time.Millisecond)
+
+	h.must("POST", "/api/d/open-sabre/competitors", map[string]string{"name": "Bo", "club": "Lund"}, nil)
+	want := map[string]string{"event": "event", "d/open-sabre": "state"}
+	deadline := time.After(3 * time.Second)
+	for len(want) > 0 {
+		select {
+		case f := <-frames:
+			var u struct {
+				Topic string `json:"topic"`
+				Kind  string `json:"kind"`
+			}
+			if json.Unmarshal([]byte(f), &u) != nil {
+				t.Fatalf("a frame should be JSON: %s", f)
+			}
+			if want[u.Topic] == u.Kind {
+				delete(want, u.Topic)
+			}
+		case <-deadline:
+			t.Fatalf("the stream never carried %v", want)
+		}
+	}
+}
+
 // Opening a tournament folder from before events existed gives the same tournament, at
 // the same paths.
 func TestALegacyFolderServesAsBefore(t *testing.T) {

@@ -14,6 +14,7 @@
 import { api, type MatView, type MatsView, type Slot } from '../api';
 import { anotherEvent } from './forget';
 import { errorText } from './errors';
+import { follow } from './streams';
 
 const CACHE = 'porta.mats';
 
@@ -28,7 +29,7 @@ export class MatsLive {
   /** The last match whose log the organizer rewrote, by discipline, with a nonce. */
   replaced = $state<{ discipline: string; match: string; nonce: number } | null>(null);
 
-  private source: EventSource | null = null;
+  private unfollow: (() => void) | null = null;
 
   get view(): MatsView | null {
     return this.#view;
@@ -79,34 +80,30 @@ export class MatsLive {
   }
 
   private connect(): void {
-    if (this.source) return;
-    const source = new EventSource('/api/mats/stream');
-    this.source = source;
-    source.onopen = () => {
-      this.connected = true;
-      this.error = '';
-      void this.refresh();
-    };
-    source.onmessage = (ev) => {
-      try {
-        const u = JSON.parse(ev.data) as { kind: string; match?: string; data: unknown };
+    if (this.unfollow) return;
+    // Over the page's one stream (#161).
+    this.unfollow = follow('mats', {
+      onOpen: () => {
+        this.connected = true;
+        this.error = '';
+        void this.refresh();
+      },
+      onMessage: (u) => {
         if (u.kind === 'mats') this.view = u.data as MatsView;
         if (u.kind === 'log-replaced' && typeof u.match === 'string') {
           const discipline = (u.data as { discipline?: string } | null)?.discipline ?? '';
           this.replaced = { discipline, match: u.match, nonce: Date.now() };
         }
-      } catch {
-        // A malformed frame is not worth taking the stream down for.
-      }
-    };
-    source.onerror = () => {
-      this.connected = false;
-    };
+      },
+      onClose: () => {
+        this.connected = false;
+      },
+    });
   }
 
   stop(): void {
-    this.source?.close();
-    this.source = null;
+    this.unfollow?.();
+    this.unfollow = null;
     this.connected = false;
   }
 }
