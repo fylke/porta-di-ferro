@@ -58,6 +58,108 @@ Defined first, because the names are used throughout.
 | **Coach** | One per competitor, permitted to advise during a match. Penalties for a coach's conduct fall on their competitor. Not modelled |
 | **Audience** | Spectators. Read the scoreboard and audience displays, and never interact with the app |
 
+### Use Cases by Persona
+
+**Event Organizer** — All administrative and planning tasks:
+
+```mermaid
+usecase diagram
+    actor Organizer as "Event Organizer"
+    
+    Organizer --> (Welcome) : setup
+    Organizer --> (Plan Event) : create disciplines
+    Organizer --> (Plan Event) : set mats
+    Organizer --> (Plan Event) : set timings
+    Organizer --> (Add Competitors) : register
+    Organizer --> (Draw Pools) : generate pools
+    Organizer --> (Manage Signup) : import signup
+    Organizer --> (Manage Signup) : dedup competitors
+    Organizer --> (Manage People) : merge duplicates
+    Organizer --> (Draw Bracket) : create eliminations
+    Organizer --> (Assign Staff) : set volunteers
+    Organizer --> (View Results) : see standings
+    Organizer --> (View Results) : see podium
+    Organizer --> (Manage Mats) : move items
+    Organizer --> (Manage Mats) : assign mats
+    Organizer --> (Manage Mats) : view board
+```
+
+**Score Keeper** — Match scoring and in-the-moment decisions:
+
+```mermaid
+usecase diagram
+    actor SK as "Score Keeper"
+    
+    SK --> (Select Match) : choose mat
+    SK --> (Record Exchange) : point for red
+    SK --> (Record Exchange) : point for blue
+    SK --> (Issue Warning) : penalty 1
+    SK --> (Deduct Point) : penalty 2
+    SK --> (End Match) : loss on penalty 3
+    SK --> (Start Timer) : begin
+    SK --> (Pause Timer) : take break
+    SK --> (Reset Timer) : clear time
+    SK --> (Handle Pending Decision) : final exchange
+    SK --> (Handle Pending Decision) : point cap
+    SK --> (Handle Pending Decision) : penalty cap
+    SK --> (Undo Exchange) : correct mistake
+    SK --> (Record Forfeit) : concede
+    SK --> (Record Disqualification) : rule violation
+    SK --> (Confirm Results) : finish match
+```
+
+**Competitor** — Viewing personal information and results:
+
+```mermaid
+usecase diagram
+    actor Competitor
+    
+    Competitor --> (View Schedule) : see my matches
+    Competitor --> (View Schedule) : view pool
+    Competitor --> (View Pool Standings) : see placement
+    Competitor --> (View Personal Results) : my record
+    Competitor --> (View Personal Results) : my opponents
+    Competitor --> (View Bracket Position) : eliminations
+    Competitor --> (View Podium) : see winners
+    Competitor --> (View Forecast) : see timing
+```
+
+**Audience / Spectator** — Viewing only, no interaction:
+
+```mermaid
+usecase diagram
+    actor Audience
+    
+    Audience --> (View Scoreboard) : current match
+    Audience --> (View Scoreboard) : live score
+    Audience --> (View Programme) : day schedule
+    Audience --> (View All Standings) : pool results
+    Audience --> (View Podium) : final rankings
+    Audience --> (View All Mats) : what's running
+    Audience --> (View All Competitors) : roster
+```
+
+**Head Referee** — Not directly in the app, but their decisions flow through it:
+
+```mermaid
+usecase diagram
+    actor Referee as "Head Referee"
+    
+    Referee --> (Announce Points) : via score keeper
+    Referee --> (Issue Warnings) : via score keeper
+    Referee --> (Decide Final Exchange) : dialog
+    Referee --> (Decide Point Cap) : dialog
+    Referee --> (Decide Penalty Cap) : dialog
+    Referee --> (Call Forfeit) : to score keeper
+    Referee --> (Call Disqualification) : to score keeper
+    
+    note right of Referee
+        Head referee controls the match.
+        Score keeper records their calls.
+        App interprets nothing.
+    end note
+```
+
 **Scoring**
 
 Two things called "points" exist, and confusing them is the easiest mistake to make here:
