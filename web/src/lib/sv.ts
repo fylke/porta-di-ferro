@@ -131,6 +131,7 @@ export const sv: Record<string, string> = {
   'Draw the eliminations': 'Lotta elimineringarna',
   'Draw the eliminations again': 'Lotta om elimineringarna',
   'Mats for the eliminations': 'Mattor för slutspelet',
+  void: 'struken',
   'nobody (double loss)': 'ingen (dubbel förlust)',
   walkover: 'walkover',
   'Suggested — {n}': 'Föreslaget — {n}',

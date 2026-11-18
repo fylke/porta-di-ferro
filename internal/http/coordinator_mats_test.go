@@ -310,3 +310,60 @@ func TestProjectedItemsAreNotWrittenDown(t *testing.T) {
 		t.Errorf("only the pinned projected item should be written down:\n%s", after)
 	}
 }
+
+// fence fences a match to its end, red winning 2-0 on time.
+func (h *testHall) fence(slug, id string) {
+	h.t.Helper()
+	h.must("POST", "/api/d/"+slug+"/matches/"+id+"/events", []map[string]any{
+		{"seq": 1, "type": "timer", "elapsedMs": 0, "timer": map[string]string{"action": "start"}},
+		{"seq": 2, "type": "exchange", "elapsedMs": 1000, "exchange": map[string]any{"red": map[string]int{"value": 2}, "blue": map[string]int{"value": 0}}},
+		{"seq": 3, "type": "end", "elapsedMs": 2000, "end": map[string]string{"reason": "time"}},
+	}, nil)
+}
+
+// #162: a competitor withdrawn mid-pool. Their matches are void: the mat goes past them,
+// the pool finishes without them, and the bracket runs -- while their matches stay listed.
+func TestAWithdrawalVoidsMatchesForTheMats(t *testing.T) {
+	h := openHall(t, t.TempDir())
+	var ev hall.EventView
+	h.must("GET", "/api/event", nil, &ev)
+	ls := ev.Disciplines[0].Slug
+	h.draw("/api/d/"+ls, 4, 1)
+	var s hall.Snapshot
+	h.must("GET", "/api/d/"+ls+"/state", nil, &s)
+	gone := s.Pools[0].Matches[0].Red
+	h.must("PATCH", "/api/d/"+ls+"/competitors/"+gone, map[string]bool{"withdrawn": true}, nil)
+
+	var after hall.Snapshot
+	h.must("GET", "/api/d/"+ls+"/state", nil, &after)
+	v := h.mats()
+	if c := v.Mats[0].Current; c == nil || c.Red == "" || c.Match.Red == gone || c.Match.Blue == gone {
+		t.Fatalf("the mat should skip the withdrawn competitor's matches: %+v", c)
+	}
+	voids := 0
+	for _, m := range after.Pools[0].Matches {
+		if m.Void != (m.Red == gone || m.Blue == gone) {
+			t.Errorf("only the withdrawn competitor's matches are void: %+v", m.Match)
+		}
+		if m.Void {
+			voids++
+			continue
+		}
+		h.fence(ls, m.ID)
+	}
+	if voids != 3 {
+		t.Errorf("a pool of four has three void matches for one withdrawal, got %d", voids)
+	}
+	var done hall.Snapshot
+	h.must("GET", "/api/d/"+ls+"/state", nil, &done)
+	if !done.PoolsComplete || !done.Pools[0].Complete {
+		t.Errorf("the pool should be complete without the void matches: pools %v, pool %v", done.PoolsComplete, done.Pools[0].Complete)
+	}
+	if it := itemOf(h.mats(), ls+"/pool-1"); it.Status != "done" || it.Done != it.Total {
+		t.Errorf("the pool's card should be done: %+v", it)
+	}
+	h.must("POST", "/api/d/"+ls+"/tournament/bracket", nil, nil)
+	if c := h.mats().Mats[0].Current; c == nil || c.Match.Round == "" {
+		t.Errorf("the mat should go on to the bracket: %+v", c)
+	}
+}

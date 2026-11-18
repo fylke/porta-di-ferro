@@ -126,7 +126,7 @@
 
   /** Open means neither the server nor this device has seen it end. */
   function isOpen(s: Slot): boolean {
-    return s.match.status !== 'complete' && !localDone.has(slotKey(s));
+    return s.match.status !== 'complete' && !s.match.void && !localDone.has(slotKey(s));
   }
 
   function firstOpen(): string {

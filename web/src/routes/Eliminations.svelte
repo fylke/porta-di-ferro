@@ -22,7 +22,7 @@
   const bracket = $derived(snapshot.bracket ?? null);
   const fmt = (n: number) => (Number.isFinite(n) ? n.toFixed(2) : '0.00');
   const toGo = $derived(
-    snapshot.pools.flatMap((p) => p.matches).filter((m) => m.status !== 'complete').length,
+    snapshot.pools.flatMap((p) => p.matches).filter((m) => m.status !== 'complete' && !m.void).length,
   );
   const cut = $derived(snapshot.overall.length >= 8 ? 8 : snapshot.overall.length >= 4 ? 4 : 2);
   const seeds = $derived(snapshot.overall.slice(0, cut));

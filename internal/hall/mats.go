@@ -253,6 +253,9 @@ func (e *matEntry) fill(in MatsInput, views map[string]MatchView, names map[stri
 			Red: names[m.Red], Blue: names[m.Blue],
 		})
 		switch {
+		case m.Void:
+			// A withdrawn competitor's match: nothing to fence, nothing to wait for (#162).
+			e.done++
 		case m.Status == "complete":
 			e.done++
 			running = true

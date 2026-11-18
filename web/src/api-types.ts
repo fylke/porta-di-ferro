@@ -42,6 +42,11 @@ export interface MatchView {
   feedRed?: string;
   feedBlue?: string;
   /**
+   * A pool match that will not count, because one of its competitors has withdrawn (#162).
+   * Nothing waits for it; any result it had stays visible.
+   */
+  void?: boolean;
+  /**
    * One side will never be filled: the match feeding it ended in a double penalty loss,
    * so nobody goes through, and whoever is on the other side walks over (#164).
    */

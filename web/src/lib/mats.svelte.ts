@@ -131,7 +131,7 @@ export function upcoming(mat: MatView | null, count: number): Slot[] {
   const i = mat.current ? playable.findIndex((s) => slotKey(s) === slotKey(mat.current!)) : -1;
   return playable
     .slice(i + 1)
-    .filter((s) => s.match.status !== 'complete')
+    .filter((s) => s.match.status !== 'complete' && !s.match.void)
     .slice(0, count);
 }
 

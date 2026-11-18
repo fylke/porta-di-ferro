@@ -15,6 +15,11 @@ type MatchView struct {
 	store.Match
 	State  match.State `json:"state"`
 	Status string      `json:"status"`
+	// Void says a pool match will not count: one of its competitors has withdrawn, which
+	// is as though they never took part (design §6). Nothing waits for a void match -- not
+	// its mat, not its pool, not the forecast -- but it stays in the list, with any result
+	// it already had, and comes back by itself if the competitor is reinstated (#162).
+	Void bool `json:"void,omitempty"`
 	// SinceMS is how long ago this server saw the last event in the match, and is set
 	// only while the clock is running.
 	//
@@ -262,7 +267,8 @@ func (b snapshotBuilder) pools() ([]PoolView, error) {
 				return nil, err
 			}
 			states[m.ID] = v.State
-			if !v.State.Ended {
+			v.Void = b.byID[m.Red].Withdrawn || b.byID[m.Blue].Withdrawn
+			if !v.Settled() {
 				complete = false
 			}
 			views = append(views, v)
@@ -312,6 +318,9 @@ func (b snapshotBuilder) bracket() (*BracketView, error) {
 	return bv, nil
 }
 
+// Settled says nothing more will be fenced in the match: it has ended, or it is void.
+func (m MatchView) Settled() bool { return m.Status == "complete" || m.Void }
+
 // runningOn is the match a mat is on. A mat runs its pools in queue order, which is the
 // order snap.Pools is already in: when one finishes, that mat picks up its next -- and after
 // the pools, the bracket matches assigned to it, once both their competitors are known. A
@@ -329,7 +338,7 @@ func (s Snapshot) runningOn(mat int, held string) string {
 			continue
 		}
 		for _, m := range p.Matches {
-			if m.Status != "complete" {
+			if !m.Settled() {
 				return m.ID
 			}
 		}

@@ -370,7 +370,7 @@ func forecastItem(w WorkItem, p store.Placement, in MatsInput, views map[string]
 		}
 		if v, ok := views[id]; ok {
 			m.Started, m.Ended = parseAt(v.StartedAt, loc), parseAt(v.EndedAt, loc)
-			m.Done = v.Status == "complete"
+			m.Done = v.Settled()
 			for _, c := range []string{v.Red, v.Blue} {
 				if c != "" {
 					people[who[c]] = true
