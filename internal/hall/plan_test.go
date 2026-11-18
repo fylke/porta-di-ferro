@@ -396,3 +396,22 @@ func TestOnlyPoolsMoveAndNeverBehindTheirBracket(t *testing.T) {
 		t.Errorf("pool 1 should stay in front of its eliminations: %+v", next)
 	}
 }
+
+// The hall's mats are the authority (field test, 2026-11): a discipline never spreads
+// over more mats than the hall has, and the hall never takes a discipline's choice to
+// use fewer.
+func TestEffectiveMatCount(t *testing.T) {
+	for _, c := range []struct{ hall, discipline, want int }{
+		{1, 2, 1}, // a mat taken away is taken from the discipline too
+		{3, 2, 2}, // a discipline may use fewer than the hall has
+		{2, 2, 2},
+		{0, 3, 3}, // a discipline on its own has its own
+	} {
+		if got := hall.EffectiveMatCount(c.hall, c.discipline); got != c.want {
+			t.Errorf("EffectiveMatCount(%d, %d) = %d, want %d", c.hall, c.discipline, got, c.want)
+		}
+	}
+	if got := hall.OnHall(store.Tournament{Mats: 2, MinPoolSize: 4}, 1); got.Mats != 1 || got.MinPoolSize != 4 {
+		t.Errorf("OnHall should cap the mats and nothing else: %+v", got)
+	}
+}

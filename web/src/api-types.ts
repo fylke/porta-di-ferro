@@ -593,6 +593,11 @@ export interface Snapshot {
    * event's, placed by its plan. Absent for a discipline on its own.
    */
   eventMats?: number;
+  /**
+   * How many of the event's mats this discipline can spread over: its own count, never more
+   * than the hall has. Absent for a discipline on its own, whose mats are tournament.mats.
+   */
+  usableMats?: number;
   tournament: {
     event?: EventInfo;
     mats: number;

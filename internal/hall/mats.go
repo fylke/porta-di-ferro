@@ -5,6 +5,7 @@ import (
 	"sort"
 
 	"github.com/fylke/porta-di-ferro/internal/store"
+	"github.com/fylke/porta-di-ferro/internal/tournament"
 )
 
 // The mats as the hall sees them: every mat's queue, and what it is running.
@@ -128,6 +129,14 @@ func OnEventMats(snap *Snapshot, slug string, placed map[string]store.Placement,
 		}
 	}
 	snap.EventMats = mats
+	snap.UsableMats = EffectiveMatCount(mats, snap.Tournament.Mats)
+	// The eliminations' mats are answered for the hall's mats, not the discipline's: a
+	// discipline set up for two in a hall cut to one has one to offer.
+	if size := tournament.BracketSize(len(snap.Overall)); size > 0 {
+		t := snap.OnHall()
+		snap.ElimMats = tournament.EliminationMatsFor(t, size)
+		snap.ElimMatsSuggested = tournament.EliminationMats(t.Mats, size)
+	}
 	snap.Mats = map[int]string{}
 }
 
@@ -223,7 +232,7 @@ func entriesOf(in MatsInput, placed map[string]store.Placement) []*matEntry {
 	}
 	views := in.Snapshot.matchesByID()
 	var out []*matEntry
-	for _, it := range PlanItems(in.Slug, in.Snapshot.Tournament, Entrants(in.Snapshot.Competitors, in.Expected)) {
+	for _, it := range PlanItems(in.Slug, in.Snapshot.OnHall(), Entrants(in.Snapshot.Competitors, in.Expected)) {
 		p, ok := placed[it.ID()]
 		if !ok {
 			continue
