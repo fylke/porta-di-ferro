@@ -399,3 +399,54 @@ func TestAMatTakenAwayIsGoneFromEveryDiscipline(t *testing.T) {
 		t.Errorf("with the mat back, the longsword can use 2 again, got %d", s.UsableMats)
 	}
 }
+
+// The field test of 2026-11: two disciplines side by side in one block, the first one's
+// pools finished, and Next match took the mat straight into the second one's pools before
+// the first one's bracket was drawn. A mat never crosses into another discipline by
+// itself: it stops, and the organizer releases it from the mat board.
+func TestAMatNeverCrossesIntoAnotherDisciplineByItself(t *testing.T) {
+	h := openHall(t, t.TempDir())
+	var ev hall.EventView
+	h.must("GET", "/api/event", nil, &ev)
+	ls := ev.Disciplines[0].Slug
+	h.draw("/api/d/"+ls, 8, 2)
+	h.must("POST", "/api/disciplines", map[string]string{"name": "Open Sabre"}, nil)
+	h.draw("/api/d/open-sabre", 6, 1)
+	h.must("PUT", "/api/plan/sessions", map[string]int{ls: 1, "open-sabre": 1}, nil)
+	h.finishPools(ls)
+
+	v := h.mats()
+	m1 := v.Mats[0]
+	if m1.Current != nil || m1.Held != "open-sabre/pool-1" || m1.HeldFor != hall.HeldAtDiscipline {
+		t.Fatalf("mat 1 should stop in front of Sabre's pool: current %+v, held %q for %q", m1.Current, m1.Held, m1.HeldFor)
+	}
+	if it := itemOf(v, "open-sabre/pool-1"); it.Status != "held" || it.HeldFor != hall.HeldAtDiscipline {
+		t.Errorf("Sabre's card should say the mat waits for the organizer: %+v", it)
+	}
+
+	// Meanwhile the organizer draws the longsword's bracket and holds its first lane, to
+	// fence the quarter-finals later: the hold is kept, in event.json too.
+	h.must("POST", "/api/d/"+ls+"/tournament/bracket", nil, nil)
+	h.must("PATCH", "/api/plan/items/"+ls+"/elim-1", map[string]bool{"hold": true}, nil)
+	if it := itemOf(h.mats(), ls+"/elim-1"); !it.Hold {
+		t.Errorf("the hold should show on the card: %+v", it)
+	}
+	raw, _ := os.ReadFile(filepath.Join(h.dir, "event.json"))
+	if !strings.Contains(string(raw), `"hold": true`) {
+		t.Errorf("the hold should be written down:\n%s", raw)
+	}
+
+	// Released, mat 1 runs Sabre's pool.
+	var after hall.MatsView // fresh: Held is omitted when empty, so an old value would stay
+	h.must("PATCH", "/api/plan/items/open-sabre/pool-1", map[string]bool{"hold": false}, &after)
+	if c := after.Mats[0].Current; c == nil || c.Discipline != "open-sabre" || after.Mats[0].Held != "" {
+		t.Errorf("released, mat 1 should be on Sabre's first match: %+v %q", c, after.Mats[0].Held)
+	}
+
+	// The hold survives a restart of the server.
+	h.stop()
+	h2 := openHall(t, h.dir)
+	if it := itemOf(h2.mats(), ls+"/elim-1"); !it.Hold {
+		t.Errorf("the hold should survive a restart: %+v", it)
+	}
+}

@@ -152,12 +152,25 @@ func TestTwoDisciplinesShareTheMats(t *testing.T) {
 	none := func(int) (string, string) { return "", "" }
 	view := hall.BuildMats([]hall.MatsInput{ls, sa}, placed, 2, none)
 
+	// Longsword's pool on mat 1 is done, and what comes next is Sabre's: the mat never
+	// crosses into another discipline by itself (field test, 2026-11).
 	m1 := view.Mats[0]
-	if m1.Current == nil || m1.Current.Discipline != "sa" || m1.Current.Match.ID != "p1m1" {
-		t.Errorf("Longsword's pool on mat 1 is done, so mat 1 moves on to Sabre: %+v", m1.Current)
+	if m1.Current != nil || m1.Held != "sa/pool-1" || m1.HeldFor != hall.HeldAtDiscipline {
+		t.Errorf("mat 1 should stop in front of Sabre's pool for the organizer: current %+v, held %q for %q", m1.Current, m1.Held, m1.HeldFor)
 	}
 	if len(m1.Queue) != 4 || m1.Queue[0].Discipline != "ls" || m1.Queue[3].Discipline != "sa" {
 		t.Errorf("the queue should be Longsword's matches then Sabre's: %+v", m1.Queue)
+	}
+
+	// The organizer releases it: mat 1 moves on to Sabre.
+	placed, err := hall.SetItemFlags(placed, "sa/pool-1", hall.ItemFlags{Hold: ptr(false)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	view = hall.BuildMats([]hall.MatsInput{ls, sa}, placed, 2, none)
+	m1 = view.Mats[0]
+	if m1.Current == nil || m1.Current.Discipline != "sa" || m1.Current.Match.ID != "p1m1" || m1.Held != "" {
+		t.Fatalf("released, mat 1 moves on to Sabre: %+v", m1.Current)
 	}
 	if m1.Current.Red != "Astrid" || m1.Current.DisciplineName != "sa" {
 		t.Errorf("a slot carries the names and the discipline: %+v", m1.Current)
@@ -185,6 +198,44 @@ func TestTwoDisciplinesShareTheMats(t *testing.T) {
 	}
 	if status["ls/pool-1"] != "done" || status["ls/pool-2"] != "running" || status["sa/pool-1"] != "ready" {
 		t.Errorf("item statuses: %v", status)
+	}
+}
+
+func ptr[T any](v T) *T { return &v }
+
+// The organizer's hold (QUEUE-1/2): a mat stops in front of a held item, even within one
+// discipline, until it is released -- and never in the middle of one under way.
+func TestAHeldItemStopsItsMat(t *testing.T) {
+	ls := discipline("ls", "d", []pool{{1, 1, 2, "cc"}, {2, 1, 2, ""}, {3, 2, 2, "r"}}, nil, nil, nil)
+	placed, _ := hall.Place(items(ls), store.Plan{}, 2, hall.PlaceOrder{})
+	none := func(int) (string, string) { return "", "" }
+
+	placed, _ = hall.SetItemFlags(placed, "ls/pool-2", hall.ItemFlags{Hold: ptr(true)})
+	placed, _ = hall.SetItemFlags(placed, "ls/pool-3", hall.ItemFlags{Hold: ptr(true)})
+	view := hall.BuildMats([]hall.MatsInput{ls}, placed, 2, none)
+	if m := view.Mats[0]; m.Current != nil || m.Held != "ls/pool-2" || m.HeldFor != hall.HeldByOrganizer {
+		t.Errorf("mat 1 should wait in front of the held pool 2: current %+v, held %q for %q", m.Current, m.Held, m.HeldFor)
+	}
+	if m := view.Mats[1]; m.Current == nil || m.Current.Match.ID != "p3m1" || m.Held != "" {
+		t.Errorf("pool 3 is under way: holding it changes nothing: %+v", m)
+	}
+	for _, it := range view.Items {
+		if it.ID == "ls/pool-2" && (it.Status != "held" || !it.Hold || !it.Movable) {
+			t.Errorf("the held card should say so, and still move: %+v", it)
+		}
+	}
+
+	placed, _ = hall.SetItemFlags(placed, "ls/pool-2", hall.ItemFlags{Hold: ptr(false)})
+	view = hall.BuildMats([]hall.MatsInput{ls}, placed, 2, none)
+	if m := view.Mats[0]; m.Current == nil || m.Current.Match.ID != "p2m1" {
+		t.Errorf("released, mat 1 starts pool 2: %+v", m.Current)
+	}
+
+	// The hold and the release are the organizer's, so they are written down even for an
+	// item not drawn yet.
+	kept := hall.Persisted(map[string]store.Placement{"sa/pool-1": {Mat: 1, Seq: 1, Hold: true}}, map[string]bool{"sa/pool-1": true})
+	if !kept["sa/pool-1"].Hold {
+		t.Errorf("a hold on a projected item should be kept: %+v", kept)
 	}
 }
 

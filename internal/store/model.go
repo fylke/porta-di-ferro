@@ -435,6 +435,20 @@ type Placement struct {
 	// WithFinal lets a bronze match run at the same time as its final (#149). Without it
 	// the final waits for the bronze match.
 	WithFinal bool `json:"withFinal,omitempty"`
+	// Hold stops the mat in front of this item: the mat does not start it on its own, and
+	// waits until the organizer releases it (hall.BuildMats). Released says the organizer
+	// has let the mat start it, which is what lets a mat cross from one discipline to
+	// another -- it never does that by itself (the field test of 2026-11, where a mat went
+	// from one discipline's finished pools to the next discipline's).
+	Hold     bool `json:"hold,omitempty"`
+	Released bool `json:"released,omitempty"`
+}
+
+// Chosen says the organizer settled something about this placement -- a pin, a time, a
+// place from a suggestion, a hold or a release -- so it is kept rather than worked out
+// again, a projected item's included.
+func (p Placement) Chosen() bool {
+	return p.Pinned || p.NotBefore != "" || p.Planned || p.Hold || p.Released
 }
 
 // Defaults returns the MVP tournament setup: two mats, pools of four to seven.
