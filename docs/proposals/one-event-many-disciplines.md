@@ -507,6 +507,9 @@ Two rules keep this safe:
 - **A mat never changes discipline in the middle of a match.** The queue moves on only when the
   work item's last match is finished *and* the score keeper has pressed *Next match*, which is the
   moment the device already lets go of a match today.
+- **Nor by itself.** Since the field test of 2026-11 a mat stops in front of another discipline's
+  item and waits for the organizer to start it from the mat board (`docs/architecture.md`, "Where
+  a mat stops"). The sequence above is what follows once they have.
 - **Offline is unchanged.** A device that loses the LAN keeps scoring the match it has, and the
   unsent exchanges carry their full path, `/api/d/longsword/matches/p3m4/events`, so they land in
   the right discipline whenever the network comes back — even if the mat has moved on.

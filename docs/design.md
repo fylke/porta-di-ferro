@@ -279,7 +279,9 @@ what tier 2 of the fallback ladder (§12) actually rests on.
 
 **A whole pool, not only a match.** The client keeps the last snapshot it saw, so it opens with the
 pool, the names and the running order even when the server is out of reach, and it keeps its own
-account of which matches it has finished, so *Next match* works with nobody to ask. When the LAN is
+account of which matches it has finished, so *Next match* works with nobody to ask -- within what the
+mat may run on its own: it never goes past an item the mat has stopped in front of, such as another
+discipline's, which the organizer starts from the mat board. When the LAN is
 back, it hands over every match log on the device the server is missing — not just the one on
 screen — because by then the earlier matches are closed and nobody would reopen them by hand.
 
