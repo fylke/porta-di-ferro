@@ -163,6 +163,30 @@ avoid.
 Clients join over the venue LAN via a printed URL or QR code. **The server also serves the web app
 itself** — at a venue with no internet, that's how a device that has never opened it gets it.
 
+### Who may change what
+
+Decided in #165. The poster by the door puts every phone in the hall on the venue wifi and at the
+server's address, so the address alone cannot decide who runs the event.
+
+- **Reading is open to the hall.** Results, the programme, the mats, a person's page: a spectator's
+  phone needs all of it, and none of it changes anything.
+- **The organizer's changes come from the organizer's PC.** The server takes a write from loopback
+  only — the PC it runs on, which is where `/admin` opens — except the few the hall's devices make:
+  a score keeper's exchanges and its claim on a match, and every device's heartbeat. An organizer
+  page opened from a phone says it can only look. This rules out running the event from a second
+  laptop until there is a login, which is the planned way in from elsewhere.
+- **A change has to come from this server's own pages.** A write the browser says came from another
+  site is refused, so a web page open in the organizer's browser cannot redraw the pools behind
+  their back, and a request naming an address that is not the server's own is refused, which closes
+  DNS rebinding.
+- **Requests are bounded** at 16 MB.
+- **What is still trusted.** Any device on the wifi can push exchanges to a match the way a score
+  keeper does, and a claim's holder and epoch can be read and copied. Scoring is the hall's job and
+  stays open to it; a misused claim is set aside and shown to the organizer, and nothing a write
+  replaces is destroyed — a redraw, a history edit and a deleted event all keep what they replaced.
+- **The PC stays awake** while the server runs (Windows), because a sleeping laptop takes the whole
+  hall's server with it. Closing the lid can still sleep it if the power settings say so.
+
 ### Displays
 
 A display is just a page the server serves, so **what renders it is not an application concern**:

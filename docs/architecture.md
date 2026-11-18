@@ -390,7 +390,9 @@ flowchart LR
 | `/` | competitors and spectators | no |
 | `/who/:person` | the same, one person at a time, across the event (`/who/c7` moves on to its person) | no |
 | `/info` | the wall by the entrance, on screen or printed | no |
-| `/admin`, `/plan` | the organizer | everything |
+| `/admin`, `/plan` | the organizer | everything, from the organizer's PC only (#165) |
+
+The server takes the organizer's writes from loopback alone, and refuses cross-site writes and foreign `Host` names before any handler runs (`internal/http/guard.go`; `docs/design.md`, "Who may change what"). A score keeper's exchanges and claims and every device's heartbeat are the hall's, and open to it.
 
 `Tournament.Event` — the welcome message, the event's name, venue and date, and the venue wifi — is written only from Plan the event and read by the other two; the programme beside it is generated from the plan (#149). None of it reaches a result.
 

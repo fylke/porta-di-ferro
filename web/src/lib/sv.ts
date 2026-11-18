@@ -131,6 +131,8 @@ export const sv: Record<string, string> = {
   'Draw the eliminations': 'Lotta elimineringarna',
   'Draw the eliminations again': 'Lotta om elimineringarna',
   'Mats for the eliminations': 'Mattor för slutspelet',
+  'You can look at this page here, but changes are made on the computer running Porta di Ferro.':
+    'Du kan titta på sidan här, men ändringar görs på datorn som kör Porta di Ferro.',
   void: 'struken',
   'nobody (double loss)': 'ingen (dubbel förlust)',
   walkover: 'walkover',

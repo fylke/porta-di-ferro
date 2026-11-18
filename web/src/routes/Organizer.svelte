@@ -12,6 +12,7 @@
   import Eliminations from './Eliminations.svelte';
   import Signup from './Signup.svelte';
   import LangToggle from './LangToggle.svelte';
+  import LookOnly from './LookOnly.svelte';
   import { t, lang } from '../lib/i18n.svelte';
 
   /**
@@ -76,6 +77,7 @@
 </script>
 
 <main class="admin">
+  <LookOnly />
   <header>
     <h1>
       Porta di Ferro

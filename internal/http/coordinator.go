@@ -456,7 +456,8 @@ func (c *Coordinator) Handler() http.Handler {
 	mux.HandleFunc("/api/d/{d}/", c.discipline)
 	mux.HandleFunc("/api/", c.alias)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { serveAssets(c.assets, w, r) })
-	return mux
+	// Who may write, and from where (#165): guard.go.
+	return guard(mux)
 }
 
 // discipline hands a request to the discipline it names, with the prefix taken off: what
