@@ -54,8 +54,12 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          const copy = response.clone();
-          caches.open(SHELL).then((cache) => cache.put('/', copy));
+          // Only a good answer becomes the shell: an error page fetched once would
+          // otherwise be what every offline reload shows (#166).
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(SHELL).then((cache) => cache.put('/', copy));
+          }
           return response;
         })
         .catch(() => caches.match('/').then((hit) => hit || Response.error())),

@@ -1,4 +1,5 @@
 import { test, expect, type APIRequestContext } from '@playwright/test';
+import { aPoolOfOurOwn, onAMatOfItsOwn } from './discipline';
 
 /**
  * A match scored in the browser, end to end (#166): the score keeper's taps reach the
@@ -16,28 +17,15 @@ async function ok(res: Awaited<ReturnType<APIRequestContext['get']>>) {
 }
 
 test('a scored match reaches the server, and a redraw is not undone by the tablet that scored it', async ({ page, request }) => {
-  const added = await ok(await request.post('/api/disciplines', { data: { name: `Redraw ${Date.now()}` } }));
-  const slug: string = added.slug;
-  for (const name of ['Bo', 'Cy', 'Di', 'Ek']) {
-    await ok(await request.post(`/api/d/${slug}/competitors`, { data: { name, club: name } }));
-  }
-  await ok(await request.put(`/api/d/${slug}/tournament`, { data: { mats: 1, minPoolSize: 4, maxPoolSize: 4 } }));
-
+  const slug = await aPoolOfOurOwn(request, 'Redraw');
   // Its pool 1 first on a mat nobody else uses.
-  const ownMat = async () => {
-    const view = await ok(await request.get('/api/mats'));
-    const mat = view.mats.length + 1;
-    await ok(await request.put('/api/mats', { data: { count: mat } }));
-    await ok(await request.patch(`/api/plan/items/${slug}/pool-1`, { data: { mat, index: 0 } }));
-    return mat;
-  };
+  const ownMat = () => onAMatOfItsOwn(request, slug);
   const p1m1 = async () => {
     const state = await ok(await request.get(`/api/d/${slug}/state`));
     const events = await ok(await request.get(`/api/d/${slug}/matches/p1m1/events`));
     return { match: state.pools[0].matches.find((m: { id: string }) => m.id === 'p1m1'), events: events.length as number };
   };
 
-  await ok(await request.post(`/api/d/${slug}/tournament/pools`));
   const mat = await ownMat();
 
   // Score an exchange on the tablet: 2 to red.

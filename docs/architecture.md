@@ -570,8 +570,8 @@ sequenceDiagram
     LocalEngine->>Server: POST /api/matches/:id/events (seq, type, payload)
 
     alt Server accepts event
-        Server->>Server: Replay & Validate via Go Engine
-        Server->>Server: Append to Match JSON on Disk
+        Server->>Server: Check the match is in the draw and each event is well formed (match.Check)
+        Server->>Server: Append new seqs to the match log on disk, then replay it via the Go engine
         Server-->>LocalEngine: 200 OK (written, server-derived state, lastSeq)
         LocalEngine->>LocalEngine: Compare server state with own replay of the same log
         Note over LocalEngine: A difference is a dual-engine bug: banner + console report.<br/>Score keeper may adopt the server's state for the rest of the match.
@@ -720,25 +720,20 @@ flowchart TD
 
 ## 5. Offline & Local-First Resilience
 
-Scorekeeper devices stay operational even during transient venue Wi-Fi dropouts by leveraging a Service Worker app shell and IndexedDB event spooling. The last snapshot is kept in `localStorage` too, so a client opens with the pool's schedule and names when the server is unreachable; the score keeper client keeps its own record of which matches it has finished, so it can move through a whole pool offline. On reconnect, every match log on the device that the server is missing is pushed — not only the match on screen.
+Scorekeeper devices stay operational even during transient venue Wi-Fi dropouts through IndexedDB event spooling. The last snapshot is kept in `localStorage` too, so a client opens with the pool's schedule and names when the server is unreachable; the score keeper client keeps its own record of which matches it has finished, so it can move through a whole pool offline. On reconnect, every match log on the device that the server is missing is pushed — not only the match on screen.
+
+**A tablet cannot reload offline.** A service worker registers only on a secure origin, and every device but the organizer's PC reaches the server at `http://<LAN address>` (`docs/tech-stack.md` §6, `AGENTS.md`). So the service worker's app shell serves the organizer's browser on `localhost` alone; a tablet keeps working through a dropout because its page is already loaded, and a reload while the LAN is down fails until it is back (#166).
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor Scorekeeper
-    participant SW as Service Worker / App Shell
-    participant App as Scorekeeper Web App
+    participant App as Scorekeeper Web App (already loaded)
     participant IDB as IndexedDB (Outbox Queue)
     participant LAN as Venue LAN / Go Server
 
-    Scorekeeper->>SW: Load Scorekeeper URL
-    alt Online Initial Load
-        SW->>LAN: Fetch App Bundle
-        LAN-->>SW: HTML, JS, CSS Assets
-        SW->>SW: Cache in CacheStorage
-    else Offline Load / Reload
-        SW-->>App: Serve from CacheStorage
-    end
+    Scorekeeper->>LAN: Load Scorekeeper URL (needs the LAN: no service worker on http://<LAN address>)
+    LAN-->>App: HTML, JS, CSS, last snapshot cached in localStorage
 
     Scorekeeper->>App: Record Points / Warnings
     App->>IDB: Enqueue Event (matchId, seq, payload)

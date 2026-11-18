@@ -146,7 +146,8 @@ function applyTimer(s: State, e: Event): void {
 }
 
 function applyEnd(r: Ruleset, s: State, e: Event): void {
-  if (!e.end) return;
+  // A second end does not change a finished match's result (#166); the history editor does.
+  if (!e.end || s.ended) return;
   s.elapsedMs = e.elapsedMs;
   s.ended = true;
   s.running = false;

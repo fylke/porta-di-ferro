@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { aPoolOfOurOwn, onAMatOfItsOwn } from './discipline';
 
 test.describe('Offline & Route Fallthrough', () => {
   test('direct navigation to SPA routes fallthrough to index.html', async ({ page }) => {
@@ -10,16 +11,28 @@ test.describe('Offline & Route Fallthrough', () => {
     await expect(page.url()).toContain('/display/mat/2');
   });
 
-  test('resilient during temporary offline status', async ({ page, context }) => {
-    await page.goto('/score/1');
+  // The score keeper keeps scoring when the wifi drops, and what was scored reaches the
+  // server when it is back (#166: this used to assert only that the URL had not changed).
+  test('an exchange scored offline reaches the server when the network is back', async ({ page, context, request }) => {
+    const slug = await aPoolOfOurOwn(request, 'Offline');
+    const mat = await onAMatOfItsOwn(request, slug);
+    const redScore = async () => {
+      const state = await (await request.get(`/api/d/${slug}/state`)).json();
+      return state.pools[0].matches[0].state.red.score as number;
+    };
 
-    // Simulate network going offline
+    await page.goto(`/score/${mat}`);
+    await expect(page.getByRole('button', { name: 'CONFIRM EXCHANGE' })).toBeVisible();
     await context.setOffline(true);
 
-    // Page state remains intact
-    await expect(page.url()).toContain('/score/1');
+    const red = page.getByRole('region', { name: /^red competitor/i });
+    await red.getByRole('button', { name: '2', exact: true }).click();
+    await page.getByRole('button', { name: 'CONFIRM EXCHANGE' }).click();
+    // Scored on the tablet, with nobody to tell.
+    await expect(red.getByLabel('score')).toHaveText('2');
+    expect(await redScore()).toBe(0);
 
-    // Restore network
     await context.setOffline(false);
+    await expect.poll(redScore, { message: 'the offline exchange should reach the server', timeout: 15_000 }).toBe(2);
   });
 });
