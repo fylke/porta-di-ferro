@@ -11,7 +11,7 @@
  * exchange is kept with the discipline its match is in, and reaches that discipline when
  * the LAN comes back (lib/db.ts).
  */
-import { api, type MatView, type MatsView, type Slot } from '../api';
+import { api, type ItemView, type MatView, type MatsView, type Slot } from '../api';
 import { anotherEvent } from './forget';
 import { errorText } from './errors';
 
@@ -119,6 +119,23 @@ export function matOf(view: MatsView | null, mat: number): MatView | null {
 /** A slot's identity across the event: match ids repeat from one discipline to the next. */
 export function slotKey(s: { discipline: string; match: { id: string } }): string {
   return `${s.discipline}/${s.match.id}`;
+}
+
+/**
+ * The part of a mat's queue it may run without the organizer: every match up to the first
+ * item the mat has stopped in front of -- held, or waiting for its block of the day. A score
+ * keeper's Next match never goes past it, offline included, so a mat never crosses into
+ * another discipline, or another block, by itself (the field test of 2026-11).
+ */
+export function runnable(mat: MatView | null, items: ItemView[]): Slot[] {
+  if (!mat) return [];
+  const stopped = new Set(items.filter((it) => it.status === 'held' || it.status === 'queued').map((it) => it.id));
+  const out: Slot[] = [];
+  for (const s of mat.queue) {
+    if (stopped.has(s.item)) break;
+    out.push(s);
+  }
+  return out;
 }
 
 /**

@@ -33,7 +33,9 @@
   // hours: four quarter-finals over three mats take two passes, and so do two, so the
   // third is staffed for nothing. The server suggests the fewest that costs no pass; this
   // is where the organizer says otherwise, because only they know who is still standing.
-  const mats = $derived(Array.from({ length: snapshot.tournament.mats }, (_, i) => i + 1));
+  // In an event, never more than the hall has: a mat taken away is gone from here too.
+  const usable = $derived(snapshot.usableMats ?? snapshot.tournament.mats);
+  const mats = $derived(Array.from({ length: usable }, (_, i) => i + 1));
   const chosen = $derived(snapshot.tournament.elimMats ?? 0);
   const suggested = $derived(snapshot.elimMatsSuggested);
 
@@ -136,8 +138,8 @@
         </label>
         <span class="dim">
           {#if chosen === 0 || chosen === suggested}
-            {suggested < snapshot.tournament.mats
-              ? t('{n} of the {total} mats: more would not finish the bracket any sooner.', { n: suggested, total: snapshot.tournament.mats })
+            {suggested < usable
+              ? t('{n} of the {total} mats: more would not finish the bracket any sooner.', { n: suggested, total: usable })
               : t('Every mat is busy through the bracket.')}
           {:else if chosen > suggested}
             {t('More than the {n} the bracket needs. The extra mats wait between matches.', { n: suggested })}

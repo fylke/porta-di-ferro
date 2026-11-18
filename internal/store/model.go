@@ -147,10 +147,14 @@ type Tournament struct {
 	Capacity int `json:"capacity,omitempty"`
 	// SetUp says the organizer has been through the discipline's setup -- its mats and
 	// the size of its pools -- and finished it (#149): what "done setting it up" means.
-	SetUp       bool `json:"setUp,omitempty"`
-	Mats        int  `json:"mats"`
-	MinPoolSize int  `json:"minPoolSize"`
-	MaxPoolSize int  `json:"maxPoolSize"`
+	SetUp bool `json:"setUp,omitempty"`
+	// Mats is how many mats the organizer wants this discipline spread over. In an event
+	// it is not the authority: the hall's count is (Plan.Mats, through hall.MatCount), and
+	// hall.EffectiveMatCount caps this at it for every draw, the plan and the forecast.
+	// Kept as the organizer typed it, so a mat given back to the hall is used again.
+	Mats        int `json:"mats"`
+	MinPoolSize int `json:"minPoolSize"`
+	MaxPoolSize int `json:"maxPoolSize"`
 	// Event is the day around the tournament: the welcome message, the agenda and the
 	// venue wifi (issue #98). Nothing here reaches a result.
 	Event Event `json:"event,omitempty"`
@@ -258,6 +262,8 @@ type Person struct {
 type Plan struct {
 	// Mats is how many mats the hall has, or 0 for as many as the disciplines ask for --
 	// which, with one discipline, keeps a one-discipline event exactly as it always was.
+	// Once set it is the authority over every discipline's own Tournament.Mats
+	// (hall.EffectiveMatCount): a mat taken away here is gone from all of them.
 	Mats int `json:"mats,omitempty"`
 	// Items is each work item's placement, by "slug/key": "open-sabre/pool-3".
 	Items map[string]Placement `json:"items,omitempty"`
@@ -429,6 +435,20 @@ type Placement struct {
 	// WithFinal lets a bronze match run at the same time as its final (#149). Without it
 	// the final waits for the bronze match.
 	WithFinal bool `json:"withFinal,omitempty"`
+	// Hold stops the mat in front of this item: the mat does not start it on its own, and
+	// waits until the organizer releases it (hall.BuildMats). Released says the organizer
+	// has let the mat start it, which is what lets a mat cross from one discipline to
+	// another -- it never does that by itself (the field test of 2026-11, where a mat went
+	// from one discipline's finished pools to the next discipline's).
+	Hold     bool `json:"hold,omitempty"`
+	Released bool `json:"released,omitempty"`
+}
+
+// Chosen says the organizer settled something about this placement -- a pin, a time, a
+// place from a suggestion, a hold or a release -- so it is kept rather than worked out
+// again, a projected item's included.
+func (p Placement) Chosen() bool {
+	return p.Pinned || p.NotBefore != "" || p.Planned || p.Hold || p.Released
 }
 
 // Defaults returns the MVP tournament setup: two mats, pools of four to seven.

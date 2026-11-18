@@ -110,6 +110,16 @@ type Snapshot struct {
 	// one: every Mat in this snapshot is then one of those, placed by the event's plan
 	// (OnEventMats). Zero for a discipline on its own, whose mats are Tournament.Mats.
 	EventMats int `json:"eventMats,omitempty"`
+	// UsableMats is how many of those mats this discipline can spread over: its own
+	// Tournament.Mats capped at the hall's (EffectiveMatCount). Zero for a discipline on
+	// its own. The eliminations' mat choice offers this many, never Tournament.Mats.
+	UsableMats int `json:"usableMats,omitempty"`
+}
+
+// OnHall is the snapshot's tournament as the hall can run it (hall.OnHall): unchanged for
+// a discipline on its own.
+func (s Snapshot) OnHall() store.Tournament {
+	return OnHall(s.Tournament, s.EventMats)
 }
 
 // Source is the stored state a snapshot is built from. *store.Store is one, and the

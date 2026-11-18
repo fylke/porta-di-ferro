@@ -26,6 +26,15 @@ type EventMats interface {
 // UseMats puts this discipline's work on the event's mats. Called once, before it serves.
 func (s *Server) UseMats(m EventMats) { s.mats = m }
 
+// hallMats is how many mats the event's hall has, or 0 for a discipline on its own.
+func (s *Server) hallMats() int {
+	if s.mats == nil {
+		return 0
+	}
+	_, n := s.mats.Placements()
+	return n
+}
+
 // ReleaseClaims lets go of every match a device holds in this discipline: the device left
 // on purpose, from the event's mats.
 func (s *Server) ReleaseClaims(client string) {

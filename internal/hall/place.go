@@ -71,7 +71,7 @@ func Persisted(placed map[string]store.Placement, projected map[string]bool) map
 	out := make(map[string]store.Placement, len(placed))
 	queues := map[int][]string{}
 	for id, p := range placed {
-		if projected[id] && !p.Pinned && p.NotBefore == "" && !p.Planned {
+		if projected[id] && !p.Chosen() {
 			continue
 		}
 		out[id] = p
@@ -93,16 +93,20 @@ func Persisted(placed map[string]store.Placement, projected map[string]bool) map
 	return out
 }
 
-// ItemFlags are what the card menu sets on a work item: a pin, a time to hold it to, and
-// for a bronze match whether it may run at the same time as the final (#149).
+// ItemFlags are what the card menu sets on a work item: a pin, a time to hold it to, for a
+// bronze match whether it may run at the same time as the final (#149), and whether the mat
+// stops in front of it (Hold: true) or may start it (Hold: false, which releases it).
 type ItemFlags struct {
 	Pinned    *bool   `json:"pinned"`
 	NotBefore *string `json:"notBefore"`
 	WithFinal *bool   `json:"withFinal"`
+	Hold      *bool   `json:"hold"`
 }
 
 // Any says the request sets a flag.
-func (f ItemFlags) Any() bool { return f.Pinned != nil || f.NotBefore != nil || f.WithFinal != nil }
+func (f ItemFlags) Any() bool {
+	return f.Pinned != nil || f.NotBefore != nil || f.WithFinal != nil || f.Hold != nil
+}
 
 // SetItemFlags pins or unpins a work item, holds it to a time, or lets a bronze match run
 // with its final, in the placements.
@@ -125,6 +129,9 @@ func SetItemFlags(placed map[string]store.Placement, id string, f ItemFlags) (ma
 			return placed, errors.New("only a bronze match can run with the final")
 		}
 		p.WithFinal = *f.WithFinal
+	}
+	if f.Hold != nil {
+		p.Hold, p.Released = *f.Hold, !*f.Hold
 	}
 	next := make(map[string]store.Placement, len(placed))
 	for k, v := range placed {
@@ -173,7 +180,7 @@ func sortOutPlaced(items []WorkItem, plan store.Plan, mats int) (placed map[stri
 	placed = make(map[string]store.Placement, len(items))
 	for _, it := range items {
 		p, ok := plan.Items[it.ID()]
-		chosen := p.Pinned || p.NotBefore != "" || p.Planned
+		chosen := p.Chosen()
 		switch {
 		case !ok || p.Mat < 1 || p.Mat > mats:
 		case p.Stamp == it.Stamp && (!it.Projected || chosen):

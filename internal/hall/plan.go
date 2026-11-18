@@ -150,3 +150,24 @@ func MatCount(plan store.Plan, tournaments []store.Tournament) int {
 	}
 	return n
 }
+
+// EffectiveMatCount is how many mats a discipline can spread its pools and eliminations
+// over: its own count, never more than the hall has. hallMats is MatCount, or 0 for a
+// discipline on its own. The hall's count is the authority: an organizer who takes a mat
+// away takes it from every discipline, and a discipline asking for two mats in a hall of
+// one draws its pools and its bracket for one (the field test of 2026-11, where mat 2
+// stayed in a discipline's eliminations after the hall had lost it).
+func EffectiveMatCount(hallMats, disciplineMats int) int {
+	if hallMats > 0 && disciplineMats > hallMats {
+		return hallMats
+	}
+	return disciplineMats
+}
+
+// OnHall is a discipline's tournament as the hall can run it: its Mats capped by
+// EffectiveMatCount. It is what the draw and the plan work from; what is saved, and what
+// the discipline's setup shows, is the organizer's own number.
+func OnHall(t store.Tournament, hallMats int) store.Tournament {
+	t.Mats = EffectiveMatCount(hallMats, t.Mats)
+	return t
+}
