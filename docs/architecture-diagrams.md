@@ -209,8 +209,9 @@ A quick guide to all Mermaid diagrams in [architecture.md](./architecture.md), o
 
 ## Related Documentation
 
-- [repo_structure.md](./repo_structure.md) — Where code lives and why
-- [design.md](./design.md) — Product decisions and terminology
+- [repo-structure.md](./repo-structure.md) — Where code lives and why
+- [design.md](./design.md) — Product decisions and personas
+- [e2e-coverage-roadmap.md](./e2e-coverage-roadmap.md) — What E2E tests exist and what should be added next
 - [tech-stack.md](./tech-stack.md) — Engineering decisions (Go, Svelte, etc.)
 - [demo.md](./demo.md) — How the WASM demo reuses production code
 - [proposals/](./proposals/) — Early-stage ideas and decisions under discussion
