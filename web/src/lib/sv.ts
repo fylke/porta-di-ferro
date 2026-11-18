@@ -136,7 +136,7 @@ export const sv: Record<string, string> = {
     'Inget go godkänt än för {names}: se varje grens adminsida.',
   'Nothing to warn about.': 'Inget att varna för.',
   'Nobody is on the staff yet.': 'Ingen är funktionär än.',
-  'Short of staff: {n} places unfilled ({roles}).': 'Funktionärer saknas: {n} platser obemannade ({roles}).',
+  'Not enough staff: {roles} (short {n}).': 'För få funktionärer: {roles} (saknas {n}).',
   'Runs until {end}, past the venue closing at {close}.': 'Pågår till {end}, efter att lokalen stänger {close}.',
   'Only {mats} of the {recommended} mats its numbers ask for: the pools wait for each other, or run larger.':
     'Bara {mats} av de {recommended} mattor som antalet kräver: poolerna får vänta på varandra eller bli större.',

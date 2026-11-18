@@ -69,7 +69,7 @@
             {#if w.kind === 'staff'}
               {w.noStaff
                 ? t('Nobody is on the staff yet.')
-                : t('Short of staff: {n} places unfilled ({roles}).', {
+                : t('Not enough staff: {roles} (short {n}).', {
                     n: w.short ?? 0,
                     roles: (w.roles ?? []).map(roleLabel).join(', ').toLocaleLowerCase(),
                   })}
