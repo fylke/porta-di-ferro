@@ -22,6 +22,10 @@
     }
   },
   "forwardPorts": [8080],
-  "postCreateCommand": "cd web && npm install && npx playwright install --with-deps chromium",
-  "remoteUser": "vscode"
+  "postCreateCommand": "cd web && npm install && npx playwright install --with-deps chromium && eval $(ssh-agent -s) && ssh-add ~/.ssh/id_* 2>/dev/null || true",
+  "remoteUser": "vscode",
+  "mounts": [
+    "source=${env:HOME}/.ssh,target=/home/vscode/.ssh,type=bind,readonly"
+  ]
 }
+
