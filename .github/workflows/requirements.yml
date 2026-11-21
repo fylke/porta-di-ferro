@@ -1,0 +1,56 @@
+name: Requirements
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  # Every requirement in req/ traced to the code that implements it and a test that
+  # verifies it, and every tag in the code naming a requirement that exists
+  # (docs/requirements-as-code.md). req/trace.sh is the whole check, so a failure here
+  # is the same failure you get running it locally.
+  trace:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version: '1.26'
+          # cmd/lobster-tags needs only the standard library; nothing worth caching.
+          cache: false
+
+      # The runner's Python refuses a system-wide pip install (PEP 668), so the pinned
+      # tools go in a virtual environment of their own.
+      - name: Install TRLC and LOBSTER
+        run: |
+          python3 -m venv "$RUNNER_TEMP/req"
+          "$RUNNER_TEMP/req/bin/pip" install --quiet -r req/requirements.txt
+          echo "$RUNNER_TEMP/req/bin" >> "$GITHUB_PATH"
+
+      - name: Trace every requirement
+        shell: bash
+        run: |
+          status=0
+          sh req/trace.sh 2>&1 | tee "$RUNNER_TEMP/trace.log" || status=$?
+          {
+            echo "### Requirements"
+            echo '```'
+            grep -E '^coverage:|lobster error' "$RUNNER_TEMP/trace.log" || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+
+      # The HTML report: every requirement, what traces to it, and what is missing.
+      - name: Upload the traceability report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: requirements-report
+          path: build/req/report.html
+          if-no-files-found: ignore
+          retention-days: 7
