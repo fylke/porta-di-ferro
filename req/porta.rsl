@@ -1,0 +1,63 @@
+/* The kinds of requirement Porta di Ferro records, and what each one carries.
+ *
+ * Every requirement is traced by LOBSTER to the code that implements it and to a test
+ * that verifies it (lobster.yaml), or says in `untraced` why it cannot be. See
+ * docs/requirements-as-code.md for how to add or change one.
+ */
+package Porta
+
+enum Status {
+  Draft  // agreed in an issue or a proposal, not built yet
+  Active // built, and held to its traces
+}
+
+enum Role {
+  Organizer   // runs the event from the organizer's PC
+  ScoreKeeper // the sekretariat at a mat
+  Competitor
+  Spectator   // the audience, in the hall or on its phones
+}
+
+abstract type Requirement {
+  // One line, as the HTML report and a reviewer read it.
+  title String
+
+  // What must hold, in the product's own words (docs/design.md, Definitions).
+  description String
+
+  // Why, when it is not obvious from the description.
+  rationale optional String
+
+  // Where it was decided: a section of a document, an issue, or both.
+  source String
+
+  status Status
+
+  // Why this requirement has no trace to code or to a test, when it cannot have one:
+  // checked by hand, done by the release workflow, or not built yet. LOBSTER counts it
+  // as justified instead of missing.
+  untraced optional String
+}
+
+// What a person does with the application, by role (docs/design.md, Use Cases by Persona).
+type UserStory extends Requirement {
+  role Role
+}
+
+// A rule of behaviour: scoring, pools, the bracket, the mats, sync.
+type Functional extends Requirement {}
+
+// A quality the whole application keeps: offline, secure, installable, readable data.
+type NonFunctional extends Requirement {}
+
+// A rule of the code's own shape that keeps the rest true (AGENTS.md).
+type Constraint extends Requirement {}
+
+checks Requirement {
+  status != Status.Draft or untraced != null,
+    error "a draft requirement is not built yet, so it says so in untraced"
+  len(title) <= 72,
+    warning "keep the title to one line", title
+  len(source) > 0,
+    error "say where this was decided", source
+}

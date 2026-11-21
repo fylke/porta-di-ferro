@@ -1,0 +1,157 @@
+package Porta
+
+/* Qualities the whole application keeps. The premise is that a club can run it
+ * themselves: any club, any laptop, no external service, no account, no internet
+ * (docs/design.md §1).
+ */
+
+NonFunctional NFR_PERF_01 {
+  title       = "The network is never in the scoring path"
+  description = '''
+    A tap on the score keeper's device writes to its own log and returns at once;
+    pushing to the server happens in the background. The score keeper never waits
+    on the LAN, and a device that never reaches the server still scores a match.
+  '''
+  source      = "docs/design.md §3 Sync"
+  status      = Status.Active
+}
+
+NonFunctional NFR_PERF_02 {
+  title       = "What a phone downloads cold is measured on every build"
+  description = '''
+    The size of what a phone downloads opening the app for the first time, gzipped,
+    is measured and printed on every build, so a regression is seen before an event.
+  '''
+  source      = "docs/design.md §12 Cold-load budget; docs/tech-stack.md §11"
+  status      = Status.Active
+  untraced    = "Done by the Cold-load budget step in .github/workflows/ci.yml, which is not code LOBSTER reads."
+}
+
+NonFunctional NFR_OFFLINE_01 {
+  title       = "No internet, no account, no external service"
+  description = '''
+    Everything runs on the venue LAN from the organizer's PC. The server serves the
+    web app itself, so a device that has never opened it gets it with no internet,
+    and every client page loads from the server's own address.
+  '''
+  source      = "docs/design.md §1 Why build it at all; §2 decision 3; §3 Three surfaces"
+  status      = Status.Active
+}
+
+NonFunctional NFR_OFFLINE_02 {
+  title       = "Nothing a hall device needs requires a secure context"
+  description = '''
+    Every client but the organizer's browser runs on http://<LAN address>, where
+    browsers withhold crypto.randomUUID, the wake lock, service workers and the
+    clipboard. Those are guarded or avoided, so nothing works on localhost and fails
+    on a tablet.
+  '''
+  source      = "AGENTS.md Key Conventions; #81; #144"
+  status      = Status.Active
+}
+
+NonFunctional NFR_BROWSER_01 {
+  title       = "Any modern browser, nothing installed on a client"
+  description = '''
+    Clients are standard web pages in any modern browser, with nothing to install.
+    Android is the tested score keeper target; iPhones, all WebKit, are score keeper
+    devices rather than displays.
+  '''
+  source      = "docs/design.md §2 decision 4; §12 iOS / WebKit check"
+  status      = Status.Active
+  untraced    = "Checked by hand on real devices (docs/design.md §12: iOS / WebKit check, LAN dress rehearsal); the browser suites run Chromium only."
+}
+
+NonFunctional NFR_BROWSER_02 {
+  title       = "The score keeper view fits the device, red always left"
+  description = '''
+    The score keeper view is laid out for the device it is on -- tablet landscape or
+    phone portrait -- rather than shrunk, with Confirm exchange at the bottom where
+    the thumb is. Red stays on the left and blue on the right in every layout unless
+    the score keeper deliberately swaps them.
+  '''
+  source      = "docs/design.md §4"
+  status      = Status.Active
+  untraced    = "Layout is checked by eye on phones and tablets at club-night trials (docs/design.md §12); no suite measures it."
+}
+
+NonFunctional NFR_DATA_01 {
+  title       = "The organizer's data is plain JSON they can read"
+  description = '''
+    The event is a folder of plain JSON files on the organizer's PC: the event's own
+    files and one folder per discipline. Files are written whole and atomically, a
+    torn final line in a match log costs at most that event, and a missing file reads
+    as empty.
+  '''
+  source      = "docs/design.md §2 decision 8; docs/tech-stack.md §8"
+  status      = Status.Active
+}
+
+NonFunctional NFR_DATA_02 {
+  title       = "The match log is append-only, and the score derived"
+  description = '''
+    A match is stored as its append-only event log, never as a score: corrections at
+    the mat are appended, and the score, the standings and the bracket are derived
+    from the logs. The organizer's history editor is the one exception (FR_EDIT_01).
+  '''
+  source      = "docs/design.md §2 decision 5; AGENTS.md Append-Only Event Stream"
+  status      = Status.Active
+}
+
+NonFunctional NFR_INSTALL_01 {
+  title       = "One executable, installed in under five minutes"
+  description = '''
+    The server is one Go binary with the web app embedded in it, with no cgo, built
+    for Windows and published with an installer on the repository's GitHub Releases
+    page. A non-programmer goes from download to a running tournament in under five
+    minutes with nothing installed first.
+  '''
+  source      = "docs/design.md §1 Distribution; §12 Installability test"
+  status      = Status.Active
+  untraced    = "Built and published by .github/workflows/release.yml and installer/; the five minutes are an acceptance test by hand on a clean machine (docs/design.md §12)."
+}
+
+NonFunctional NFR_INSTALL_02 {
+  title       = "The organizer's PC stays awake while the server runs"
+  description = '''
+    While the server runs on Windows, it keeps the PC from sleeping, because a
+    sleeping laptop takes the whole hall's server with it.
+  '''
+  source      = "docs/design.md §3 Who may change what"
+  status      = Status.Active
+}
+
+NonFunctional NFR_SEC_01 {
+  title       = "The organizer's changes come from the organizer's PC"
+  description = '''
+    Reading is open to the hall. The server takes a write only from loopback -- the
+    PC it runs on -- except the writes the hall's devices make: a score keeper's
+    exchanges and claim on a match, and every device's heartbeat. An organizer page
+    opened from elsewhere says it can only look.
+  '''
+  source      = "docs/design.md §3 Who may change what; #165"
+  status      = Status.Active
+}
+
+NonFunctional NFR_SEC_02 {
+  title       = "Writes come from the server's own pages, and are bounded"
+  description = '''
+    A write the browser says came from another site is refused, and so is a request
+    naming a host that is not one of the server's own addresses, which closes DNS
+    rebinding. No request body is larger than 16 MB.
+  '''
+  source      = "docs/design.md §3 Who may change what; #165"
+  status      = Status.Active
+}
+
+NonFunctional NFR_AWAKE_01 {
+  title       = "Score keeper devices and displays stay awake"
+  description = '''
+    A score keeper's device and every display keep their screen on: with the wake lock
+    where the browser grants it, and otherwise with a looping silent video started on
+    the first tap.
+  '''
+  source      = "docs/design.md §3 What a display shows; #144"
+  status      = Status.Active
+  untraced    = "Only a real device dims; checked by hand on tablets (docs/design.md §12 LAN dress rehearsal)."
+}
