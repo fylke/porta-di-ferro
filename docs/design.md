@@ -4,6 +4,11 @@
 > [`tech-stack.md`](tech-stack.md). This document stays the product authority; that one holds the
 > engineering decisions.
 >
+> **The decisions here are also requirements.** Each one this document settles is a record in
+> [`req/`](../req), traced to the code that implements it and a test that verifies it
+> ([`requirements-as-code.md`](requirements-as-code.md)). This document is where they are argued;
+> the records cite the section they came from.
+>
 > **This is a living document.** Everything in it is current best understanding rather than a
 > commitment. Real use will overturn parts of it — a club night, the 15 November event, watching how
 > another club runs theirs, or simply a better idea arriving mid-build — and that is the plan working

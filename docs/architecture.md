@@ -2,6 +2,8 @@
 
 This document provides architectural diagrams for Porta di Ferro, illustrating component boundaries, state lifecycles, event synchronization, tournament ranking pipelines, and offline-first capabilities.
 
+The rules these diagrams keep are the constraints `DC_*` in [`req/constraints.trlc`](../req/constraints.trlc), and the behaviour they show is the requirements in [`req/`](../req), each traced to its code and tests ([requirements-as-code.md](requirements-as-code.md)).
+
 ---
 
 ## Shared Pure Functions (`internal/hall`)
