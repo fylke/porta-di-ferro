@@ -18,7 +18,7 @@ mkdir -p "$out"
 
 trlc --brief req
 lobster-trlc --config req/lobster-trlc.yaml --out "$out/requirements.lobster"
-go run ./cmd/lobster-tags -out "$out" internal cmd e2e web/src web/e2e web/signup testdata/vectors
+go run ./cmd/lobster-tags -out "$out" internal cmd e2e web/embed.go web/src web/e2e web/signup testdata/vectors
 lobster-report --lobster-config req/lobster.yaml --out "$out/report.lobster"
 lobster-html-report "$out/report.lobster" --out "$out/report.html" --source-root ../..
 lobster-ci-report --show-coverage "$out/report.lobster"

@@ -13,7 +13,7 @@
 //
 // Usage:
 //
-//	go run ./cmd/lobster-tags -out build/req internal cmd e2e web/src web/e2e web/signup testdata/vectors
+//	go run ./cmd/lobster-tags -out build/req internal cmd e2e web/embed.go web/src web/e2e web/signup testdata/vectors
 //
 // It writes one file per tracing level, always all of them so the tracing policy can name
 // each one, and fails on a tag it cannot read or place.
