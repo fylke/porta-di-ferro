@@ -42,6 +42,7 @@ func genLog(t *rapid.T) []match.Event {
 // most MaxValue to one competitor, and can only ever take a point off through a penalty.
 // The exception is an exchange that reaches the losing penalty level, which rewrites the
 // score to the recorded 0-8 by rule.
+// REQ: FR_MATCH_03
 func TestNoExchangeMovesAScoreTooFar(t *testing.T) {
 	rules := match.MSL()
 	rapid.Check(t, func(t *rapid.T) {
@@ -75,6 +76,7 @@ func TestNoExchangeMovesAScoreTooFar(t *testing.T) {
 
 // TestPenaltyEscalationIsMonotonic checks that a level never falls. Warnings only ever
 // escalate within a match; the count resets between matches, which is a different log.
+// REQ: FR_MATCH_04
 func TestPenaltyEscalationIsMonotonic(t *testing.T) {
 	rules := match.MSL()
 	rapid.Check(t, func(t *rapid.T) {
@@ -92,6 +94,7 @@ func TestPenaltyEscalationIsMonotonic(t *testing.T) {
 
 // TestReplayIsDeterministic is the property the whole append-only design rests on: state
 // is a function of the log alone.
+// REQ: FR_MATCH_01
 func TestReplayIsDeterministic(t *testing.T) {
 	rules := match.MSL()
 	rapid.Check(t, func(t *rapid.T) {
@@ -105,6 +108,7 @@ func TestReplayIsDeterministic(t *testing.T) {
 
 // TestScoreNeverGoesNegative guards the deduction floor. Recorded as a property because
 // the ranking indices divide by it and a negative would quietly distort the standings.
+// REQ: FR_MATCH_04
 func TestScoreNeverGoesNegative(t *testing.T) {
 	rules := match.MSL()
 	rapid.Check(t, func(t *rapid.T) {

@@ -1,6 +1,7 @@
 {
   "name": "end-match-draw",
   "description": "Draws are possible in pools and are worth 6 match points each.",
+  "requirements": ["FR_MATCH_01"],
   "events": [
     {
       "seq": 1,

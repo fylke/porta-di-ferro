@@ -58,6 +58,7 @@ type State struct {
 // It shares its threshold with the final-exchange dialog rather than merely sitting near
 // it. The flash is what tells the mat the next exchange is the last, so the moment it
 // starts is the moment a confirmation has to offer to end the match.
+// REQ: FR_MATCH_06
 func (r Ruleset) Flashing(elapsedMS int64, ended bool) bool {
 	return !ended && elapsedMS >= r.FinalExchangeMS
 }

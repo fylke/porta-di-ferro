@@ -10,6 +10,7 @@ import { clientId, randomId } from './presence.svelte';
 describe('the client id on a LAN address', () => {
   afterEach(() => vi.unstubAllGlobals());
 
+  // REQ: NFR_OFFLINE_02
   it('is made without crypto.randomUUID', () => {
     // A browser on http://192.168.1.20: getRandomValues is there, randomUUID is not.
     vi.stubGlobal('crypto', {

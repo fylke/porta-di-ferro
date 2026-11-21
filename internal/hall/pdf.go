@@ -55,6 +55,7 @@ var pdfSwedish = map[string]string{
 
 // BuildPDF lays the snapshot out on A4. The core fonts cover Latin-1, which covers
 // Swedish; a name from further afield loses its accents rather than breaking the page.
+// REQ: FR_EXPORT_01, FR_I18N_01
 func BuildPDF(snap Snapshot, swedish bool) *fpdf.Fpdf {
 	pdf := fpdf.New("P", "mm", "A4", "")
 	d := results{pdf: pdf, tr: pdf.UnicodeTranslatorFromDescriptor(""), swedish: swedish, snap: snap}

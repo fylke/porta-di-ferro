@@ -42,6 +42,7 @@ const dynamic = [
 ];
 
 describe('Swedish', () => {
+  // REQ: FR_I18N_01
   it('has an entry for every key the source uses', () => {
     const missing = [...keysInSource(), ...dynamic].filter((k) => !(k in sv));
     expect(missing).toEqual([]);

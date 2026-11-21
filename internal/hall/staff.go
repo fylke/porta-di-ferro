@@ -46,6 +46,7 @@ func StillIn(inputs []MatsInput) map[string][]string {
 
 // StaffInput is what an assignment needs: every item the forecast times, with the people
 // fencing in it, who is still competing where, and the staff.
+// REQ: FR_STAFF_01
 func StaffInput(in forecast.Input, r forecast.Result, st store.Staff, competing map[string][]string) staffing.Input {
 	spans := map[string]forecast.Span{}
 	for _, s := range r.Items {
@@ -179,6 +180,7 @@ type StaffSuggestion struct {
 }
 
 // SuggestStaff proposes assignments for every slot, keeping the organizer's choices.
+// REQ: FR_STAFF_01
 func SuggestStaff(si staffing.Input) StaffSuggestion {
 	res := staffing.Assign(si)
 	out := StaffSuggestion{Assignments: res.Assignments, Short: []ShortView{}, Signature: staffing.Signature(res.Assignments)}
@@ -201,6 +203,7 @@ func SuggestStaff(si staffing.Input) StaffSuggestion {
 }
 
 // SetAssignment puts a member in a slot by hand, pinned, or empties it with staff "".
+// REQ: FR_STAFF_01
 func SetAssignment(st store.Staff, item, role string, slot int, staff string) (store.Staff, error) {
 	if slot < 1 {
 		return st, fmt.Errorf("slots count from 1")

@@ -9,6 +9,7 @@
  * says it can only look (LookOnly). The demo is a browser tab whose visitor is the
  * organizer of everything in it.
  */
+// REQ: NFR_SEC_01
 export function onOrganizerPC(hostname = typeof location === 'undefined' ? '' : location.hostname): boolean {
   if (import.meta.env.VITE_DEMO === 'true') return true;
   return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]' || hostname === '::1';

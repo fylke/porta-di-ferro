@@ -205,6 +205,7 @@ const prior = 3
 const longestChangeover = 15 * time.Minute
 
 // Run forecasts the plan.
+// REQ: FR_PLAN_01
 func Run(in Input) Result {
 	tpl := in.Timings
 	if tpl.Match <= 0 {
@@ -244,6 +245,7 @@ func Run(in Input) Result {
 
 // Paces is each mat's pace: the template, moved towards what the mat's own matches have
 // taken, through what the whole hall's have taken.
+// REQ: FR_PLAN_01
 func Paces(in Input) map[int]Pace {
 	type sample struct{ match, gap []time.Duration }
 	byMat := map[int]*sample{}

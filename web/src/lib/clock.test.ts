@@ -50,6 +50,7 @@ describe('the clock anchor', () => {
   });
 });
 
+// REQ: FR_MATCH_06, US_SK_03
 describe('the readout', () => {
   it('counts up in minutes and seconds, and past the match time', () => {
     expect(formatClock(0)).toBe('00:00');

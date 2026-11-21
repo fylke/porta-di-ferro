@@ -195,6 +195,7 @@ func TestPlanningBeforeTheEntries(t *testing.T) {
 }
 
 // A suggestion writes nothing; applying it is checked against what the organizer saw.
+// REQ: FR_PLAN_01
 func TestSuggestAndApply(t *testing.T) {
 	h := openHall(t, filepath.Join(t.TempDir(), "event"))
 	h.c.Clock = func() time.Time { return time.Date(2026, 11, 14, 8, 0, 0, 0, time.Local) }
@@ -259,6 +260,7 @@ func TestMatsHaveNamesAndAwayTimes(t *testing.T) {
 // briefing come before its first pool (#153), the hall's breaks stop the mats and are listed,
 // a discipline starts no earlier than it is told to -- and what a day usually has and this
 // one lacks is pointed out.
+// REQ: US_SPEC_03
 func TestTheProgrammeIsGeneratedFromThePlan(t *testing.T) {
 	h := openHall(t, filepath.Join(t.TempDir(), "event"))
 	h.c.Clock = func() time.Time { return time.Date(2026, 11, 14, 8, 0, 0, 0, time.Local) }

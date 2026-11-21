@@ -1,6 +1,7 @@
 {
   "name": "undo-clears-a-pending-cap",
   "description": "Undo is the second action of the cap dialogs, so voiding the exchange that tripped a cap must take the dialog with it.",
+  "requirements": ["FR_MATCH_05"],
   "events": [
     {
       "seq": 1,

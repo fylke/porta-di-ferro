@@ -33,6 +33,7 @@ type claimHolder struct {
 // Nothing is taken from a device without somebody asking (#150): not from a live one,
 // and not from one that has only gone quiet either. Taking over is a deliberate act,
 // and whatever the device it was taken from sends afterwards is set aside.
+// REQ: FR_TABLET_01
 func TestNothingIsTakenWithoutAsking(t *testing.T) {
 	h := openHall(t, t.TempDir())
 	var ev struct {
@@ -124,6 +125,7 @@ func TestNothingIsTakenWithoutAsking(t *testing.T) {
 // #160: a tablet that scored p1m1 before a redraw still holds that log. Pushed again, with
 // the draw it was scored in, it is set aside for the organizer -- the new pairing starts at
 // 0-0 instead of finished with the old result.
+// REQ: FR_TABLET_02
 func TestALogFromAReplacedDrawIsSetAside(t *testing.T) {
 	h := openHall(t, t.TempDir())
 	var ev struct {

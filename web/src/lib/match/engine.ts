@@ -9,6 +9,7 @@ import { emptyState, type Ruleset } from './ruleset';
  * mutation, and why full history editing (Milestone 2) is a UI change rather than a data
  * migration: the engine already skips any voided record, not merely the last one.
  */
+// REQ: FR_MATCH_01, FR_MATCH_05, DC_ENGINE_01
 export function replay(r: Ruleset, events: Event[]): State {
   const undone = new Set<number>();
   for (const e of events) {
@@ -51,6 +52,7 @@ export function replay(r: Ruleset, events: Event[]): State {
   return s;
 }
 
+// REQ: FR_MATCH_02, FR_MATCH_03, FR_MATCH_07, FR_MATCH_09
 function applyExchange(r: Ruleset, s: State, e: Event): boolean {
   if (s.ended || !e.exchange) return false;
   // After either cap the match is over by rule, and the only legal next records are the
@@ -120,6 +122,7 @@ function applyExchange(r: Ruleset, s: State, e: Event): boolean {
  * level. The deduction fires when the level crosses the deduction level, so an immediate
  * escalation from 0 straight to 2 still costs the point.
  */
+// REQ: FR_MATCH_04
 function applyPenalty(r: Ruleset, c: Competitor, levels: number): boolean {
   if (levels <= 0) return false;
   const before = c.penalty;
@@ -133,6 +136,7 @@ function applyPenalty(r: Ruleset, c: Competitor, levels: number): boolean {
   return c.penalty >= r.penaltyLoss;
 }
 
+// REQ: FR_MATCH_06
 function applyTimer(s: State, e: Event): void {
   if (s.ended || !e.timer) return;
   s.elapsedMs = e.elapsedMs;
@@ -145,6 +149,7 @@ function applyTimer(s: State, e: Event): void {
   }
 }
 
+// REQ: FR_MATCH_06, FR_MATCH_08
 function applyEnd(r: Ruleset, s: State, e: Event): void {
   // A second end does not change a finished match's result (#166); the history editor does.
   if (!e.end || s.ended) return;

@@ -1,6 +1,7 @@
 {
   "name": "warning-not-repeated-does-not-escalate",
   "description": "A warning cleared before confirmation has no effect at all: the next exchange carries no penalty and the level stays where it was.",
+  "requirements": ["FR_MATCH_04"],
   "events": [
     {
       "seq": 1,

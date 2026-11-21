@@ -1,6 +1,7 @@
 {
   "name": "undo-reverts-a-penalty-level",
   "description": "A penalty is part of the exchange, so undoing the exchange takes the level back too.",
+  "requirements": ["FR_MATCH_05"],
   "events": [
     {
       "seq": 1,

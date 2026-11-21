@@ -13,6 +13,7 @@ import (
 // rejected an empty name and PATCH accepted one, so a competitor could be blanked after
 // entry. A blank name is not a harmless record -- it reaches the scoreboard and the
 // printed pool sheets, where nobody can tell who is meant to be fencing.
+// REQ: US_ORG_02
 func TestCompetitorNameValidationIsConsistent(t *testing.T) {
 	s := start(t)
 
@@ -62,6 +63,7 @@ func TestDeletingAnUnknownCompetitorIs404(t *testing.T) {
 // TestMissingFilesAre404WhileClientRoutesFallThrough guards the SPA fallthrough. Answering
 // a stale hashed asset with 200 and a page of HTML makes the browser fail to parse it as a
 // script, which is a miserable thing to debug at a venue.
+// REQ: NFR_OFFLINE_01
 func TestMissingFilesAre404WhileClientRoutesFallThrough(t *testing.T) {
 	s := start(t)
 

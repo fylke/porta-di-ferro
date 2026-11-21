@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { onOrganizerPC } from './organizer';
 
+// REQ: NFR_SEC_01
 describe('the organizer’s PC (#142)', () => {
   it('is loopback, and no LAN address', () => {
     expect(onOrganizerPC('localhost')).toBe(true);

@@ -24,6 +24,7 @@ export function defaultOptions(): Options {
  * Separate from replay on purpose. State is what the vectors pin, field for field, in
  * both engines; colours are not a scoring matter and must not be able to fail a vector.
  */
+// REQ: FR_MATCH_10
 export function optionsOf(events: Event[]): Options {
   const out = defaultOptions();
   for (const e of events) {

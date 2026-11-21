@@ -3,6 +3,7 @@ import { signupSubmissionId } from './signup-id';
 import { signupResponse } from './signup-response';
 
 describe('a signup response made in the browser', () => {
+  // REQ: DC_SIGNUP_02
   it('is the participant app’s format, named by the event and the email', () => {
     const r = signupResponse({ definitionId: ' open-2026 ', name: 'Åsa', club: 'MSL', email: ' ASA@Example.org ', entries: ['open-sabre'] });
     expect(r).toEqual({

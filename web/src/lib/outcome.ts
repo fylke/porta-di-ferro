@@ -39,6 +39,7 @@ export function lastStandingExchange(events: Event[]): Event | null {
  * How many levels the deciding exchange applied is what separates a third ordinary
  * warning from an immediate escalation, and the log carries that.
  */
+// REQ: FR_MATCH_04, FR_MATCH_09
 export function penaltyLoss(r: Ruleset, state: State, names: Names, events: Event[]): Outcome {
   const out = (side: Side) => state[side].penalty >= r.penaltyLoss;
   const last = lastStandingExchange(events);
@@ -80,6 +81,7 @@ export function ended(r: Ruleset, state: State, names: Names, events: Event[]): 
  * and why, because that is the one result a head referee will be asked to justify; the
  * others name the winner. decidedOnSuddenDeath is a level match's first point after time.
  */
+// REQ: FR_MATCH_02, FR_MATCH_04
 export function endDialog(r: Ruleset, state: State, names: Names, events: Event[], decidedOnSuddenDeath: boolean): Outcome {
   if (state.pending === 'final_exchange' && decidedOnSuddenDeath) {
     const leader = state.red.score > state.blue.score ? names.red : names.blue;

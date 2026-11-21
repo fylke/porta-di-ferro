@@ -1,6 +1,7 @@
 {
   "name": "a-second-end-changes-nothing",
   "description": "A finished match stays finished: an end after the end -- a stray write -- does not change the result (#166).",
+  "requirements": ["FR_MATCH_01"],
   "events": [
     {
       "seq": 1,

@@ -1,6 +1,7 @@
 {
   "name": "escalation-to-level-two-deducts-a-point",
   "description": "Milestone 2 immediate escalation is the same field carrying more than one level. Jumping straight to 2 still costs the point.",
+  "requirements": ["FR_MATCH_04"],
   "events": [
     {
       "seq": 1,

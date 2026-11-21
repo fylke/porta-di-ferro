@@ -116,7 +116,8 @@ This is Milestone 1, scoped to run MSL's club event on 14 November 2026:
   on their own page
 
 The full picture is in [`docs/design.md`](docs/design.md); the engineering decisions and
-what was ruled out are in [`docs/tech-stack.md`](docs/tech-stack.md).
+what was ruled out are in [`docs/tech-stack.md`](docs/tech-stack.md). What it must do, one
+requirement at a time and each traced to its code and its tests, is in [`req/`](req).
 
 ## For developers
 
@@ -127,6 +128,7 @@ go test ./...              # engine, ranking, store, and end to end against the 
 cd web && npm ci && npm test   # the TypeScript engine against the same shared vectors
 cd web && npm run build    # the bundle //go:embed picks up
 go run ./cmd/porta -host 127.0.0.1 -dir ../porta-scratch   # a scratch event; http://localhost:8080/admin
+sh req/trace.sh            # every requirement traced to code and a test (pip install -r req/requirements.txt)
 ```
 
 The match engine exists twice, in Go and in TypeScript, because the score keeper client
@@ -151,7 +153,10 @@ web/                Svelte 5 + Vite
 testdata/vectors/   the shared corpus
 installer/          Inno Setup
 e2e/                drives the built binary over HTTP
+req/                the requirements, traced to the code by cmd/lobster-tags
 ```
+
+A change to behaviour is a change to a requirement: see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Licence
 

@@ -191,6 +191,7 @@ func TestPoolCalibrationPreservesCustomTimingsAndOtherWork(t *testing.T) {
 	}
 }
 
+// REQ: FR_PLAN_01
 func TestMeasuredPaceGraduallyReplacesPoolCalibration(t *testing.T) {
 	measured := item("ls/pool-1", "ls", "pool", 1, 1, 6)
 	for index := range measured.Matches {
@@ -246,6 +247,7 @@ func TestAPlannedDay(t *testing.T) {
 	}
 }
 
+// REQ: FR_PLAN_01
 func TestLunchStopsTheMats(t *testing.T) {
 	in := forecast.Input{Timings: tpl, Breaks: []forecast.Break{{From: at("09:04"), To: at("10:00")}},
 		Items: []forecast.Item{item("ls/pool-1", "ls", "pool", 1, 1, 2)}}
@@ -296,6 +298,7 @@ func TestASlowMatPushesOnlyItself(t *testing.T) {
 	}
 }
 
+// REQ: FR_PLAN_01
 func TestSomebodyInTwoPlacesAtOnce(t *testing.T) {
 	a := item("ls/pool-1", "ls", "pool", 1, 1, 6)
 	b := item("sa/pool-1", "sa", "pool", 2, 1, 6)
@@ -312,6 +315,7 @@ func TestSomebodyInTwoPlacesAtOnce(t *testing.T) {
 	}
 }
 
+// REQ: FR_PLAN_01
 func TestTheDayOverrunsAndAPlanOutOfOrder(t *testing.T) {
 	late := tpl
 	late.Close = at("09:20")
@@ -343,6 +347,7 @@ func TestTheReportLearnsFromTheDayButNotItsAnomalies(t *testing.T) {
 
 // Four pools stacked on one mat of two: the suggestion spreads them, keeps what is under
 // way and what is pinned, and finishes the day sooner.
+// REQ: FR_PLAN_01
 func TestASuggestionSpreadsTheWork(t *testing.T) {
 	running := item("ls/pool-1", "ls", "pool", 1, 1, 3)
 	running.Matches[0].Started = at("09:00")

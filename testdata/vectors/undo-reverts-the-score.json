@@ -1,6 +1,7 @@
 {
   "name": "undo-reverts-the-score",
   "description": "Undo appends a correcting record; the voided exchange is skipped on replay rather than removed from the log.",
+  "requirements": ["FR_MATCH_05"],
   "events": [
     {
       "seq": 1,

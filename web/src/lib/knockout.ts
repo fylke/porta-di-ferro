@@ -11,6 +11,7 @@
 import type { State } from './match';
 
 /** The match is in sudden death: past the threshold, scores level, not over. */
+// REQ: FR_ELIM_03
 export function inSuddenDeath(state: State | null, knockout: boolean): boolean {
   return (
     knockout &&
@@ -26,6 +27,7 @@ export function inSuddenDeath(state: State | null, knockout: boolean): boolean {
  * latest exchange broke the tie. The match ends on it; the only alternative is that the
  * entry was a mistake, so the second action is undo, not continue.
  */
+// REQ: FR_ELIM_03
 export function suddenDeathDecided(state: State | null, knockout: boolean, wasLevel: boolean): boolean {
   return (
     knockout &&

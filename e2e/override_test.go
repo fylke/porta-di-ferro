@@ -9,6 +9,7 @@ import (
 
 // TestOrganizerOverridesTheMatAssignment drives the override through the API and checks
 // that the one thing every screen reads -- which match is up on each mat -- follows it.
+// REQ: FR_MATS_01
 func TestOrganizerOverridesTheMatAssignment(t *testing.T) {
 	s := start(t)
 	for i := 1; i <= 16; i++ {

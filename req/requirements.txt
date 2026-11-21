@@ -1,0 +1,8 @@
+# The requirements toolchain, pinned so a check that passes today passes tomorrow.
+# pip install -r req/requirements.txt
+# TRLC is GPL-3.0 and LOBSTER AGPL-3.0. Both are tools run at build time, like a compiler:
+# nothing of them is vendored, imported or shipped, so Porta di Ferro stays MIT.
+# cmd/lobster-tags writes LOBSTER's JSON format itself and uses none of its code.
+trlc==3.1.2
+bmw-lobster-core==1.1.0
+bmw-lobster-tool-trlc==1.1.0

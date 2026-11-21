@@ -124,6 +124,7 @@ export function slotKey(s: { discipline: string; match: { id: string } }): strin
  * keeper's Next match never goes past it, offline included, so a mat never crosses into
  * another discipline, or another block, by itself (the field test of 2026-11).
  */
+// REQ: FR_MATS_02, FR_OFFLINE_02
 export function runnable(mat: MatView | null, items: ItemView[]): Slot[] {
   if (!mat) return [];
   const stopped = new Set(items.filter((it) => it.status === 'held' || it.status === 'queued').map((it) => it.id));

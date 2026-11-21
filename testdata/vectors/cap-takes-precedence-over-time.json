@@ -1,6 +1,7 @@
 {
   "name": "cap-takes-precedence-over-time",
   "description": "One confirmation past the match time that also reaches the cap raises the cap dialog, not the final-exchange one.",
+  "requirements": ["FR_MATCH_02"],
   "events": [
     {
       "seq": 1,

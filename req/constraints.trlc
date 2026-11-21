@@ -1,0 +1,106 @@
+package Porta
+
+/* Rules of the code's own shape, from AGENTS.md and the decisions behind them. Each one
+ * is what keeps a requirement above true as the code changes.
+ */
+
+Constraint DC_ARCH_01 {
+  title       = "One process serves the event, one server per discipline"
+  description = '''
+    One process serves the whole event at one address: httpapi.Coordinator over one
+    httpapi.Server per discipline, each with its own folder under the event's.
+    Nothing below the coordinator may assume it is the only discipline.
+  '''
+  source      = "AGENTS.md; docs/proposals/one-event-many-disciplines.md §5; docs/architecture.md §1a"
+  status      = Status.Active
+}
+
+Constraint DC_ARCH_02 {
+  title       = "What the server and the demo share lives in internal/hall"
+  description = '''
+    Every decision the coordinator and the demo must agree on -- snapshots, the plan,
+    the forecast and the staff as pages read them, the printed sheets, the decisions
+    over people and signup -- is a pure function in internal/hall, which opens no
+    file, starts no goroutine and knows nothing of requests.
+  '''
+  rationale   = "A decision made in a handler is a decision the demo will get wrong."
+  source      = "AGENTS.md; docs/architecture.md Shared Pure Functions"
+  status      = Status.Active
+}
+
+Constraint DC_ARCH_03 {
+  title       = "A discipline writes the event's day only through EventInfo"
+  description = '''
+    Nothing in a discipline writes the event's day (event.json) except through the
+    EventInfo the coordinator gives it, so the day is typed once for every discipline.
+  '''
+  source      = "AGENTS.md; docs/proposals/one-event-many-disciplines.md R3, §7"
+  status      = Status.Active
+}
+
+Constraint DC_API_01 {
+  title       = "A discipline lives under its slug, on the server and the device"
+  description = '''
+    A discipline's API is mounted at /api/d/{slug}/ and its pages at /d/{slug}/.
+    The client writes links inside them with dhref(), calls the API through api or
+    apiIn(slug), and namespaces anything a device keeps about a discipline, because
+    every discipline shares one origin and the same match ID exists in each.
+  '''
+  source      = "AGENTS.md; docs/proposals/one-event-many-disciplines.md §6"
+  status      = Status.Active
+}
+
+Constraint DC_API_02 {
+  title       = "The demo runs the real code, route for route"
+  description = '''
+    The public demo, which runs in a browser with no server, reuses internal/match,
+    internal/tournament and internal/hall rather than reimplementing them, and
+    answers every route the coordinator serves.
+  '''
+  source      = "AGENTS.md The public demo; docs/demo.md"
+  status      = Status.Active
+}
+
+Constraint DC_ENGINE_01 {
+  title       = "Two match engines, held together by shared vectors"
+  description = '''
+    The match engine is implemented in Go (internal/match) and in TypeScript
+    (web/src/lib/match), and both replay every vector in testdata/vectors to the same
+    state; a divergence fails the build. A bug found in a real match earns a vector
+    before it earns a fix. Pool generation and ranking stay on the server only.
+  '''
+  source      = "docs/design.md §2 decision 13; §12 Engine parity suite; docs/tech-stack.md §4"
+  status      = Status.Active
+}
+
+Constraint DC_SIGNUP_01 {
+  title       = "The participant app is one self-contained HTML file"
+  description = '''
+    web/signup/signup.html is plain HTML in one file that works from a file:// URL
+    with no server, no build step and nothing that needs a secure context.
+  '''
+  source      = "AGENTS.md Offline signup; docs/proposals/offline-signup.md"
+  status      = Status.Active
+}
+
+Constraint DC_SIGNUP_02 {
+  title       = "The response file is the contract for any signup"
+  description = '''
+    internal/signup holds the definition and response formats and every rule about
+    importing them, as pure functions. Any way of signing up, online included, makes
+    the same response file and feeds the same signup.Check.
+  '''
+  source      = "AGENTS.md Offline signup; docs/proposals/offline-signup.md Towards online signup"
+  status      = Status.Active
+}
+
+Constraint DC_TRANSPORT_01 {
+  title       = "The server pushes over SSE, clients write with POST"
+  description = '''
+    Everything the server pushes is a server-sent event stream, one per page carrying
+    every topic it follows, and everything a client writes is a plain request. There
+    is no WebSocket.
+  '''
+  source      = "docs/design.md §2 decision 15; #161"
+  status      = Status.Active
+}

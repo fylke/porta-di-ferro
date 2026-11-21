@@ -9,6 +9,7 @@ import (
 )
 
 // #165: who may write, and from where.
+// REQ: NFR_SEC_01, NFR_SEC_02
 func TestTheGuard(t *testing.T) {
 	reached := false
 	var read int64

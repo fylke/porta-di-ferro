@@ -1,3 +1,4 @@
+<!-- REQ: US_ORG_05 -->
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api, ApiError, type StaffingView, type StaffItem, type StaffMember, type StaffSuggestion } from '../api';

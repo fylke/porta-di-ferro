@@ -1,5 +1,13 @@
 # Plan: Requirements-as-Code Integration (TRLC + Lobster)
 
+> **Implemented** (issue #172). The requirements are `req/*.trlc`, the tracing policy is
+> `req/lobster.yaml`, the check is `req/trace.sh`, run in CI by
+> `.github/workflows/requirements.yml`, and how to use it is
+> [`docs/requirements-as-code.md`](../requirements-as-code.md). Where the built thing differs
+> from this plan, the differences are listed at the bottom under "What was built". The
+> syntax shown in §4 and §7 is illustrative: the real TRLC and LOBSTER syntax is in those
+> files.
+
 ## Executive Summary
 
 This plan proposes integrating **TRLC** (The Requirements Language Compiler, by BMW Software Engineering) and **Lobster** (Lightweight Open BMW Software Traceability Evidence Report) into the Porta di Ferro tournament application. This enables managing requirements as executable code, with built-in traceability between requirements, design decisions, code implementation, and tests.
@@ -568,3 +576,54 @@ func TestMatchFinishesAt8Points(t *testing.T) {
 **Date**: 2026-11-19  
 **Author**: Copilot (AI Assistant)  
 **Status**: Proposal for review
+
+---
+
+## What was built
+
+The places where the built thing differs from this plan, each deliberate:
+
+**The real tools' syntax.** TRLC has no `REQUIREMENT ... { }` form. A requirement is a
+record of a type declared in a schema, which is `req/porta.rsl` here, and the checks on it
+(a draft must justify having no trace, a title fits on one line) are written in that
+schema. LOBSTER has no `lobster-collect` and no extractor for Go, TypeScript or Svelte;
+`cmd/lobster-tags` is that extractor, writing LOBSTER's own interchange format, and
+`lobster-trlc`, `lobster-report`, `lobster-html-report` and `lobster-ci-report` do the rest.
+The versions are pinned in `req/requirements.txt`.
+
+**IDs use underscores.** `FR_MATCH_03`, not `FR-MATCH-03`, because a TRLC record name
+cannot contain a hyphen. The ID is written the same in the record, the code and the tests,
+so one search finds all three.
+
+**Every requirement is traced, rather than 80%.** The plan's coverage threshold became
+LOBSTER's own policy: every requirement must be traced to code and to a test, or say in
+`untraced` why it cannot be, and every tag must name a real requirement. A percentage
+lets the newest requirement be the one that slips; a complete check does not. Five
+requirements are justified rather than traced, each with its reason.
+
+**The requirements come from the documents, not from §4's list.** 78 records were written
+from `docs/design.md`, the two proposals and `AGENTS.md`, each citing its source. Where the
+list in §4 did not match the product, the product won. For example, pools are ranked by
+the match point, victory, score and reception indices rather than "SOS, D, V". Warnings
+escalate to a point deduction and a 0-8 loss, not "yellow, red". There is no 2-second
+ranking budget, because no document sets one. And the cold-load budget is measured rather
+than bounded.
+
+**No owner or priority fields.** Every active requirement is held to the same check, so a
+priority would change nothing, and the owner of every requirement is this repository. Git
+records the revision, date and author the plan wanted fields for.
+
+**No `backlog.trlc` yet.** A requirement that is agreed but not built is a `Draft` record
+with an `untraced` reason, in whichever file it belongs to. TRLC refuses a draft without
+one. There are none today; a backlog file can come when there is something to put in it.
+
+**Stories trace to code and tests directly.** User stories are traced to the pages that
+implement them and the end-to-end tests that walk them, like any other requirement, rather
+than through the functional requirements under them. That keeps one tracing level for
+requirements and one rule for all of them.
+
+**`docs/design.md` stays the product authority.** It has not become a summary. It is
+where decisions are argued, and the records cite it; it and `docs/architecture.md` now
+point to `req/`. There is no PR template to update, so the coverage goes in the
+workflow's run summary and the report is its artifact.
+

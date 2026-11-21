@@ -1,3 +1,4 @@
+<!-- REQ: FR_I18N_01 -->
 <script lang="ts">
   import { lang, setLang } from '../lib/i18n.svelte';
 

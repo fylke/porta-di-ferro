@@ -1,0 +1,11 @@
+# How lobster-trlc turns the TRLC records in req/ into LOBSTER requirements: every kind of
+# requirement, as "req Porta.<ID>", with its title and description as the text a reviewer
+# reads in the report, and `untraced` as the justification for having no trace down.
+inputs: [req]
+conversion-rules:
+  - package: Porta
+    record-type: Requirement
+    applies-to-derived-types: true
+    namespace: req
+    description-fields: [title, description]
+    justification-down-fields: untraced

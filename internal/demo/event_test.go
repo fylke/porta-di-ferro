@@ -82,6 +82,7 @@ func TestTheDemoIsAnEventOfThreeDisciplines(t *testing.T) {
 	}
 }
 
+// REQ: DC_ARCH_03
 func TestTheDemoEventsDayIsTypedOnce(t *testing.T) {
 	e := demo.NewEvent()
 	if res := e.Request("PUT", "/api/event/info", []byte(`{"welcome":"Typed once"}`)); res.Status != 200 || !res.Changed {
@@ -193,6 +194,7 @@ func TestTheDemoEventSavesAndLoads(t *testing.T) {
 
 // The demo's mats are the event's (phase 2): the same plan, queues and moves as a real
 // event, so the board, the score keeper and the screens can be tried in a browser tab.
+// REQ: DC_API_02, DC_ARCH_02
 func TestTheDemoRunsTheEventsMats(t *testing.T) {
 	e := demo.NewEvent()
 	res := e.Request("GET", "/api/mats", nil)
@@ -292,6 +294,7 @@ func TestTheDemoDeletesItsEvent(t *testing.T) {
 
 // Two score keepers on one mat: the mat shows the match of the one heard from last, as the
 // server's registry has it, and not whichever the map happens to give first.
+// REQ: FR_DISPLAY_03
 func TestTheLastScoreKeeperHeardHoldsTheMat(t *testing.T) {
 	e := demo.NewEvent()
 	var mats hall.MatsView
@@ -337,6 +340,7 @@ func TestAnOldIdentifierGivesWayToTheDisciplineItNamed(t *testing.T) {
 }
 
 // The demo caps a discipline's mats at the hall's the way the server does.
+// REQ: FR_MATS_02
 func TestTheDemoCapsADisciplinesMatsAtTheHalls(t *testing.T) {
 	e := demo.NewEvent()
 	must := func(method, path, body string) {

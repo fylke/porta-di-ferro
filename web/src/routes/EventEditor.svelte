@@ -1,3 +1,4 @@
+<!-- REQ: US_ORG_01 -->
 <script lang="ts">
   import { untrack } from 'svelte';
   import type { EventInfo } from '../api';

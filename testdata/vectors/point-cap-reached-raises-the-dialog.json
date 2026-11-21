@@ -1,6 +1,7 @@
 {
   "name": "point-cap-reached-raises-the-dialog",
   "description": "Reaching the cap ends the match by rule, so the engine raises the dialog and stops accepting exchanges; the End record is what actually closes it.",
+  "requirements": ["FR_MATCH_02"],
   "events": [
     {
       "seq": 1,

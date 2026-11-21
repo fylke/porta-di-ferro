@@ -26,6 +26,7 @@ import (
 // ReplaceEvents rewrites a match log wholesale, keeping the previous version as
 // <id>.ndjson.<timestamp>.bak. Returns the backup's file name, or "" if there was
 // nothing to back up.
+// REQ: FR_EDIT_01
 func (s *Store) ReplaceEvents(id string, events []match.Event) (string, error) {
 	rel, err := matchFile(id)
 	if err != nil {
@@ -102,6 +103,7 @@ func (s *Store) ReplaceEvents(id string, events []match.Event) (string, error) {
 }
 
 // Backups lists the dated backups kept for a match, newest first.
+// REQ: FR_EDIT_01
 func (s *Store) Backups(id string) ([]string, error) {
 	rel, err := matchFile(id)
 	if err != nil {

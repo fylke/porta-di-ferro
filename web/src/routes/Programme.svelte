@@ -1,3 +1,4 @@
+<!-- REQ: US_SPEC_03 -->
 <script lang="ts">
   import type { ProgrammeRow } from '../api';
   import { clockOf } from '../lib/clock-of-day';

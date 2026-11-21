@@ -1,6 +1,7 @@
 {
   "name": "warning-second-deducts-a-point",
   "description": "Level 2 takes one point off the warned competitor.",
+  "requirements": ["FR_MATCH_04"],
   "events": [
     {
       "seq": 1,

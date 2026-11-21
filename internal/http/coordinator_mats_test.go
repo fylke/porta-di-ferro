@@ -46,6 +46,7 @@ func itemOf(v hall.MatsView, id string) hall.ItemView {
 	return hall.ItemView{}
 }
 
+// REQ: FR_MATS_02
 func TestTheMatsAreTheEvents(t *testing.T) {
 	h := openHall(t, t.TempDir())
 	var ev hall.EventView
@@ -135,6 +136,7 @@ func TestARunningItemStays(t *testing.T) {
 
 // A score keeper is the event's: it registers at a physical mat, the mat holds the match
 // it holds, and leaving lets go of its claim in whichever discipline that was.
+// REQ: US_SK_01, FR_MATS_02
 func TestAScoreKeeperBelongsToTheMat(t *testing.T) {
 	h := openHall(t, t.TempDir())
 	var ev hall.EventView
@@ -404,6 +406,7 @@ func TestAMatTakenAwayIsGoneFromEveryDiscipline(t *testing.T) {
 // pools finished, and Next match took the mat straight into the second one's pools before
 // the first one's bracket was drawn. A mat never crosses into another discipline by
 // itself: it stops, and the organizer releases it from the mat board.
+// REQ: FR_MATS_02, US_ORG_07
 func TestAMatNeverCrossesIntoAnotherDisciplineByItself(t *testing.T) {
 	h := openHall(t, t.TempDir())
 	var ev hall.EventView
@@ -453,6 +456,7 @@ func TestAMatNeverCrossesIntoAnotherDisciplineByItself(t *testing.T) {
 
 // #162: a competitor withdrawn mid-pool. Their matches are void: the mat goes past them,
 // the pool finishes without them, and the bracket runs -- while their matches stay listed.
+// REQ: FR_POOLS_04
 func TestAWithdrawalVoidsMatchesForTheMats(t *testing.T) {
 	h := openHall(t, t.TempDir())
 	var ev hall.EventView

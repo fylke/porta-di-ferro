@@ -1,3 +1,4 @@
+<!-- REQ: US_ORG_01 -->
 <script lang="ts">
   import { onMount } from 'svelte';
   import { hall } from '../lib/event.svelte';

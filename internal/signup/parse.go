@@ -36,6 +36,7 @@ func DecodeFiles(uploads []UploadFile) ([]File, error) {
 }
 
 // ParseResponse reads one participant's file and checks it is usable.
+// REQ: DC_SIGNUP_02
 func ParseResponse(body []byte) (Response, error) {
 	if len(body) == 0 {
 		return Response{}, fmt.Errorf("the file is empty")

@@ -6,6 +6,7 @@ package match
 // applies everything that survives. That is why a correction is an append rather than a
 // mutation, and why full history editing (Milestone 2) is a UI change rather than a data
 // migration: the engine already skips any voided record, not merely the last one.
+// REQ: FR_MATCH_01, FR_MATCH_05, NFR_DATA_02, DC_ENGINE_01
 func Replay(r Ruleset, events []Event) State {
 	undone := map[int]bool{}
 	for _, e := range events {
@@ -58,6 +59,7 @@ func Replay(r Ruleset, events []Event) State {
 }
 
 // applyExchange resolves one confirmed exchange.
+// REQ: FR_MATCH_02, FR_MATCH_03, FR_MATCH_07, FR_MATCH_09
 func applyExchange(r Ruleset, s *State, e Event) bool {
 	if s.Ended || e.Exchange == nil {
 		return false
@@ -128,6 +130,7 @@ func applyExchange(r Ruleset, s *State, e Event) bool {
 // applyPenalty advances a competitor's penalty level and reports whether that took them
 // to the losing level. The deduction fires when the level crosses the deduction level,
 // so an immediate escalation from 0 straight to 2 still costs the point.
+// REQ: FR_MATCH_04
 func applyPenalty(r Ruleset, c *Competitor, levels int) bool {
 	if levels <= 0 {
 		return false
@@ -150,6 +153,7 @@ func applyPenalty(r Ruleset, c *Competitor, levels int) bool {
 
 func (s *State) pendEnd(p Pending) { s.Pending = p }
 
+// REQ: FR_MATCH_06
 func applyTimer(s *State, e Event) {
 	if s.Ended || e.Timer == nil {
 		return
@@ -169,6 +173,7 @@ func applyTimer(s *State, e Event) {
 	}
 }
 
+// REQ: FR_MATCH_06, FR_MATCH_08
 func applyEnd(r Ruleset, s *State, e Event) {
 	// A second end -- a stray write, a hand-made request -- does not change a finished
 	// match's result (#166). Correcting one is the history editor's job.

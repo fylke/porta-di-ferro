@@ -1,3 +1,4 @@
+<!-- REQ: FR_EXPORT_02 -->
 <script lang="ts">
   import { onMount } from 'svelte';
   import { Live, nameLookup } from './lib-display.svelte';

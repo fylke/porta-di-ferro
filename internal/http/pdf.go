@@ -6,6 +6,7 @@ import (
 	"github.com/fylke/porta-di-ferro/internal/hall"
 )
 
+// REQ: FR_EXPORT_01
 func (s *Server) exportPDF(w http.ResponseWriter, r *http.Request) {
 	snap, err := s.snapshot()
 	if err != nil {

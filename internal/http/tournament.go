@@ -78,6 +78,7 @@ func (s *Server) retireDraw(t store.Tournament) error {
 	return err
 }
 
+// REQ: US_ORG_03
 func (s *Server) generatePools(w http.ResponseWriter, r *http.Request) {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
@@ -130,6 +131,7 @@ func (s *Server) generatePools(w http.ResponseWriter, r *http.Request) {
 // drawBracket is the cut: the eliminations drawn from the overall ranking once every
 // pool match is in. Drawing again replaces the bracket, which is the same escape hatch
 // drawing the pools again is, and carries the same warning in the organizer view.
+// REQ: US_ORG_04
 func (s *Server) drawBracket(w http.ResponseWriter, r *http.Request) {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
@@ -243,6 +245,7 @@ func (s *Server) getEvents(w http.ResponseWriter, r *http.Request) {
 //
 // The response carries the server's derived state so a client that has been offline can
 // check itself against the source of truth without a second round trip.
+// REQ: FR_OFFLINE_01
 func (s *Server) postEvents(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var events []match.Event

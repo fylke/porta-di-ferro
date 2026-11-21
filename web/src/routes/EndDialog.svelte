@@ -1,3 +1,4 @@
+<!-- REQ: US_SK_06, FR_MATCH_02 -->
 <script lang="ts">
   import type { Pending } from '../lib/match';
   import { t } from '../lib/i18n.svelte';

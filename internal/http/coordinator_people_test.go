@@ -51,6 +51,7 @@ func twoDisciplines(t *testing.T) (*testHall, string) {
 	return h, ls
 }
 
+// REQ: FR_PEOPLE_01, US_COMP_01
 func TestEveryEntryIsSomebody(t *testing.T) {
 	h, ls := twoDisciplines(t)
 	h.must("POST", "/api/d/"+ls+"/competitors", map[string]string{"name": "Astrid", "club": "Gbg"}, nil)
@@ -93,6 +94,7 @@ func TestEveryEntryIsSomebody(t *testing.T) {
 
 // A merge is the organizer's, it moves the entries, an old link still finds the person,
 // and it can be undone exactly.
+// REQ: FR_PEOPLE_01
 func TestTheOrganizerMergesAndUndoes(t *testing.T) {
 	h, ls := twoDisciplines(t)
 	h.must("POST", "/api/d/"+ls+"/competitors", map[string]string{"name": "Karl-Johan"}, nil)

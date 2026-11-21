@@ -1,6 +1,7 @@
 {
   "name": "options-do-not-touch-the-score",
   "description": "An options record changes how the match is shown and nothing about its score; both engines carry it and ignore it.",
+  "requirements": ["FR_MATCH_10"],
   "events": [
     {
       "seq": 1,

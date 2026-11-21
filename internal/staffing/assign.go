@@ -144,10 +144,12 @@ func contests(items []Item, competing map[string][]string) map[string][]contest 
 }
 
 // Assign staffs every item.
+// REQ: FR_STAFF_01
 func Assign(in Input) Result { return run(in, true) }
 
 // Check is the assignments as they are, judged: every slot left empty and every rule
 // broken, with nothing filled in or taken away.
+// REQ: FR_STAFF_01
 func Check(in Input) Result { return run(in, false) }
 
 func run(in Input, fill bool) Result {

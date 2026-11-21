@@ -37,6 +37,7 @@ type Standing struct {
 // wins), head-to-head, random draw. A withdrawn competitor is not in the table at all,
 // and their matches count for nobody -- their results are voided as though they never
 // entered.
+// REQ: FR_POOLS_03, FR_POOLS_04, FR_MATCH_08, FR_MATCH_09
 func Rank(r match.Ruleset, pool store.Pool, competitors map[string]store.Competitor,
 	states map[string]match.State, seed int64) []Standing {
 
@@ -159,6 +160,7 @@ func pairKey(a, b string) string {
 }
 
 // headToHead records who won each decided meeting, for the fifth tie-break.
+// REQ: FR_POOLS_03
 func headToHead(pool store.Pool, states map[string]match.State) map[string]string {
 	out := map[string]string{}
 	for _, m := range pool.Matches {
@@ -175,6 +177,7 @@ func headToHead(pool store.Pool, states map[string]match.State) map[string]strin
 	return out
 }
 
+// REQ: FR_POOLS_03
 func drawValue(seed int64, id string) uint64 {
 	h := fnv.New64a()
 	var b [8]byte

@@ -11,6 +11,7 @@ import (
 // TestSimulatedEvent is the whole thing end to end against the real binary: enter
 // competitors, draw the pools, score every match, and assert the standings that come out
 // (docs/design.md §12).
+// REQ: US_ORG_06, FR_EXPORT_01
 func TestSimulatedEvent(t *testing.T) {
 	s := start(t)
 

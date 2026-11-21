@@ -1,6 +1,7 @@
 {
   "name": "timer-reset-then-start-again",
   "description": "After a reset the next start is a fresh one from zero, and exchanges count from there.",
+  "requirements": ["FR_MATCH_06"],
   "events": [
     {
       "seq": 1,

@@ -38,6 +38,7 @@ import (
 // to pin a known-good build and say which one they are running.
 var version = "dev"
 
+// REQ: NFR_INSTALL_01
 func main() {
 	dir := flag.String("dir", defaultDir(), "event data directory")
 	port := flag.Int("port", 8080, "port to listen on")

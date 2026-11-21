@@ -39,6 +39,7 @@ export function formatClock(ms: number): string {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
+// REQ: FR_MATCH_06
 export function isFlashing(ms: number, ended: boolean): boolean {
   return !ended && ms >= MSL.finalExchangeMs;
 }

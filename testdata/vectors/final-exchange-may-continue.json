@@ -1,6 +1,7 @@
 {
   "name": "final-exchange-may-continue",
   "description": "Continuing is a legitimate call after time, so the dialog simply comes back after the next confirmation. The clock keeps running throughout and the match does not end at three minutes.",
+  "requirements": ["FR_MATCH_06"],
   "events": [
     {
       "seq": 1,

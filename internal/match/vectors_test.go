@@ -14,6 +14,7 @@ import (
 
 // TestVectors runs the shared corpus. The TypeScript mirror runs the same files, so a
 // vector that passes here and fails there fails the build (docs/tech-stack.md §4).
+// REQ: DC_ENGINE_01
 func TestVectors(t *testing.T) {
 	vectors, err := loadVectors("../../testdata/vectors")
 	if err != nil {
@@ -53,6 +54,21 @@ func TestVectorsAreDeterministic(t *testing.T) {
 	}
 }
 
+// TestEveryVectorNamesItsRequirements keeps the corpus traced: a vector is a test of a
+// rule, and the requirements check (req/trace.sh) only counts it as one when it says
+// which rule. The IDs themselves are checked there, against req/.
+func TestEveryVectorNamesItsRequirements(t *testing.T) {
+	vectors, err := loadVectors("../../testdata/vectors")
+	if err != nil {
+		t.Fatalf("loading vectors: %v", err)
+	}
+	for _, v := range vectors {
+		if len(v.Requirements) == 0 {
+			t.Errorf("%s names no requirement; add \"requirements\": [\"FR_MATCH_...\"]", v.Name)
+		}
+	}
+}
+
 // vector is one shared test case from testdata/vectors/. Each is a sequence of log
 // events and the expected derived state. Both this package's tests and the TypeScript
 // mirror's run the same corpus, and a vector that passes in one and fails in the other
@@ -62,10 +78,13 @@ func TestVectorsAreDeterministic(t *testing.T) {
 // than the duplication costs: when rules become data-driven in Milestone 3, it is
 // already the specification a ruleset definition has to satisfy.
 type vector struct {
-	Name        string        `json:"name"`
-	Description string        `json:"description"`
-	Events      []match.Event `json:"events"`
-	Expect      match.State   `json:"expect"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	// Requirements are the IDs in req/ the vector verifies, which cmd/lobster-tags
+	// reads so the requirements check counts the vector as their test.
+	Requirements []string      `json:"requirements"`
+	Events       []match.Event `json:"events"`
+	Expect       match.State   `json:"expect"`
 }
 
 // loadVectors reads every vector in dir, sorted by file name so both suites report in

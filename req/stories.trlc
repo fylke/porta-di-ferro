@@ -1,0 +1,216 @@
+package Porta
+
+/* What each person does with the application, from the use cases by persona in
+ * docs/design.md §1. The head referee is not here on purpose: the application records
+ * their decisions through the score keeper and interprets nothing (decision 1).
+ */
+
+// ---------------------------------------------------------------- Event organizer
+
+UserStory US_ORG_01 {
+  title       = "Set up the event"
+  role        = Role.Organizer
+  description = '''
+    From /admin, the organizer sets up the event: its name, day and wifi, the
+    disciplines it runs, the hall's mats, and the timings and breaks of the day.
+    A first start opens with a welcome that walks them through it.
+  '''
+  source      = "docs/design.md §1 Use Cases by Persona; #102; #149"
+  status      = Status.Active
+}
+
+UserStory US_ORG_02 {
+  title       = "Enter the competitors"
+  role        = Role.Organizer
+  description = '''
+    The organizer enters a discipline's competitors by name and club, by hand or by
+    importing the response files of the offline signup, and can withdraw one.
+  '''
+  source      = "docs/design.md §6 item 7.1; docs/proposals/offline-signup.md; #1"
+  status      = Status.Active
+}
+
+UserStory US_ORG_03 {
+  title       = "Draw the pools"
+  role        = Role.Organizer
+  description = '''
+    The organizer sets how many mats a discipline uses and the smallest and largest
+    pool, and draws the pools, with their matches, running order and colours.
+    Drawing again replaces the draw and keeps what it replaced.
+  '''
+  source      = "docs/design.md §6 items 7.2, 7.3 and 9; #3"
+  status      = Status.Active
+}
+
+UserStory US_ORG_04 {
+  title       = "Draw the bracket"
+  role        = Role.Organizer
+  description = '''
+    Once every pool match is in, the organizer draws the eliminations from the overall
+    ranking and follows them to the podium.
+  '''
+  source      = "docs/design.md §7 item 3"
+  status      = Status.Active
+}
+
+UserStory US_ORG_05 {
+  title       = "Staff the event"
+  role        = Role.Organizer
+  description = '''
+    The organizer keeps the event's staff, from signups or by hand, sets how many of
+    each role a mat needs, and assigns them to the day's work, taking the app's
+    suggestion or choosing themselves.
+  '''
+  source      = "docs/design.md §8 item 17; #5; docs/architecture.md Staff (phase 5)"
+  status      = Status.Active
+}
+
+UserStory US_ORG_06 {
+  title       = "See the standings and the podium"
+  role        = Role.Organizer
+  description = '''
+    The organizer sees each pool's standings with the indices that produced them, the
+    overall ranking, the bracket and the podium, and exports them.
+  '''
+  source      = "docs/design.md §1 Use Cases by Persona; §6 item 10; §7 item 12"
+  status      = Status.Active
+}
+
+UserStory US_ORG_07 {
+  title       = "Run the mat board"
+  role        = Role.Organizer
+  description = '''
+    On the mat board the organizer sees what every mat is running and what comes
+    next across every discipline, moves work between mats, and starts a mat on the
+    next discipline's work when it has stopped in front of it.
+  '''
+  source      = "docs/proposals/one-event-many-disciplines.md §10 The mat board"
+  status      = Status.Active
+}
+
+// ---------------------------------------------------------------- Score keeper
+
+UserStory US_SK_01 {
+  title       = "Choose the mat and the match"
+  role        = Role.ScoreKeeper
+  description = '''
+    The score keeper opens the mat they sit at, from the printed code or the mat
+    picker, and is given the match that mat runs next.
+  '''
+  source      = "docs/design.md §1 Use Cases by Persona; docs/proposals/one-event-many-disciplines.md §6"
+  status      = Status.Active
+}
+
+UserStory US_SK_02 {
+  title       = "Record an exchange"
+  role        = Role.ScoreKeeper
+  description = '''
+    The score keeper records what the head referee announces for an exchange: the
+    points for red, the points for blue and any warning, and confirms it.
+  '''
+  source      = "docs/design.md §4"
+  status      = Status.Active
+}
+
+UserStory US_SK_03 {
+  title       = "Run the match clock"
+  role        = Role.ScoreKeeper
+  description = '''
+    The score keeper starts and pauses the match clock for the head referee's
+    time-outs, and can reset a clock started by mistake.
+  '''
+  source      = "docs/design.md §4 Timer"
+  status      = Status.Active
+}
+
+UserStory US_SK_04 {
+  title       = "Correct a mistake"
+  role        = Role.ScoreKeeper
+  description = '''
+    The score keeper undoes the last confirmed exchange when it was entered wrongly.
+  '''
+  source      = "docs/design.md §6 item 13"
+  status      = Status.Active
+}
+
+UserStory US_SK_05 {
+  title       = "Record a forfeit or a severe penalty"
+  role        = Role.ScoreKeeper
+  description = '''
+    From the corner menu, the score keeper records a forfeit, or a penalty the head
+    referee escalates straight to a point deduction, a lost match or a
+    disqualification.
+  '''
+  source      = "docs/design.md §4 Corner controls; §7 item 2"
+  status      = Status.Active
+}
+
+UserStory US_SK_06 {
+  title       = "End the match and go to the next"
+  role        = Role.ScoreKeeper
+  description = '''
+    When the match ends, the score keeper confirms the result, reads it back to the
+    head referee from the screen, and goes on to the next match with Next match.
+  '''
+  source      = "docs/design.md §4 Match-ending dialogs; After the match"
+  status      = Status.Active
+}
+
+// ---------------------------------------------------------------- Competitor
+
+UserStory US_COMP_01 {
+  title       = "See my day"
+  role        = Role.Competitor
+  description = '''
+    A competitor finds themselves and sees their whole day in one place: their
+    matches in every discipline, on which mat and when they are forecast, and any
+    staff duty they have.
+  '''
+  source      = "docs/design.md §1 Use Cases by Persona; docs/proposals/one-event-many-disciplines.md §3 Goals"
+  status      = Status.Active
+}
+
+UserStory US_COMP_02 {
+  title       = "Follow my pool and my bracket"
+  role        = Role.Competitor
+  description = '''
+    A competitor sees their pool, its standings and their results, and where they
+    stand in the bracket.
+  '''
+  source      = "docs/design.md §1 Use Cases by Persona"
+  status      = Status.Active
+}
+
+// ---------------------------------------------------------------- Spectator
+
+UserStory US_SPEC_01 {
+  title       = "Watch a mat"
+  role        = Role.Spectator
+  description = '''
+    A spectator reads a mat's scoreboard: the names in their colours, the score, the
+    warnings and the time, the winner once decided, and what comes next on that mat.
+  '''
+  source      = "docs/design.md §3 What a display shows; §7 item 5"
+  status      = Status.Active
+}
+
+UserStory US_SPEC_02 {
+  title       = "See every mat at once"
+  role        = Role.Spectator
+  description = '''
+    A spectator sees every active mat, or a chosen few, on one screen.
+  '''
+  source      = "docs/design.md §3 Displays"
+  status      = Status.Active
+}
+
+UserStory US_SPEC_03 {
+  title       = "Read the programme and the roster"
+  role        = Role.Spectator
+  description = '''
+    A spectator reads the event's programme, the roster of matches and the results on
+    their own phone, from the poster's QR code, with nothing installed.
+  '''
+  source      = "docs/design.md §3 Displays; docs/proposals/one-event-many-disciplines.md R1"
+  status      = Status.Active
+}

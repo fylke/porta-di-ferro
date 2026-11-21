@@ -37,6 +37,7 @@ func won(side match.Side) match.State {
 	return st
 }
 
+// REQ: FR_ELIM_01, FR_ELIM_02
 func TestBracketOfEightSeedsTheStandardWay(t *testing.T) {
 	b, err := tournament.Bracket(store.Tournament{Mats: 2}, ranked(9))
 	if err != nil {
@@ -80,6 +81,7 @@ func TestBracketOfEightSeedsTheStandardWay(t *testing.T) {
 	}
 }
 
+// REQ: FR_ELIM_01
 func TestSmallerFieldsCutAtFourAndTwo(t *testing.T) {
 	four, _ := tournament.Bracket(store.Tournament{Mats: 1}, ranked(6))
 	if len(four) != 4 || four[0].ID != "e-sf1" || four[0].Red != "s1" || four[0].Blue != "s4" {
@@ -98,6 +100,7 @@ func TestSmallerFieldsCutAtFourAndTwo(t *testing.T) {
 	}
 }
 
+// REQ: FR_ELIM_04
 func TestFillFollowsResultsRoundByRound(t *testing.T) {
 	b, _ := tournament.Bracket(store.Tournament{Mats: 2}, ranked(8))
 	states := map[string]match.State{}
@@ -135,6 +138,7 @@ func TestFillFollowsResultsRoundByRound(t *testing.T) {
 
 // TestACorrectedQuarterFinalCorrectsTheSemi: the bracket is derived, not stored, so a
 // changed result upstream changes who is in the next round -- no migration, no button.
+// REQ: FR_ELIM_04
 func TestACorrectedQuarterFinalCorrectsTheSemi(t *testing.T) {
 	b, _ := tournament.Bracket(store.Tournament{Mats: 2}, ranked(8))
 	states := map[string]match.State{"e-qf1": won(match.Red)}
@@ -149,6 +153,7 @@ func TestACorrectedQuarterFinalCorrectsTheSemi(t *testing.T) {
 
 // TestOverallRanksAcrossPools: the same chain as a pool table, over everyone, so two
 // competitors from different pools compare on their per-match indices.
+// REQ: FR_ELIM_01
 func TestOverallRanksAcrossPools(t *testing.T) {
 	comps := map[string]store.Competitor{}
 	for _, id := range []string{"a", "b", "c", "d"} {
@@ -183,6 +188,7 @@ func TestOverallRanksAcrossPools(t *testing.T) {
 
 // #164: a double penalty loss in the bracket sends nobody through. Whoever meets the empty
 // slot goes on without fencing, and the bronze match loses its loser too.
+// REQ: FR_ELIM_04, FR_MATCH_09
 func TestADoubleLossInTheBracketSendsNobodyThrough(t *testing.T) {
 	b, _ := tournament.Bracket(store.Tournament{Mats: 2}, ranked(8))
 	double := match.State{Ended: true, Reason: match.ReasonPenalty, NoMatchPoints: true}

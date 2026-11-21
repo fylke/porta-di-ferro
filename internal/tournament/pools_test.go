@@ -16,6 +16,7 @@ func field(n int) []store.Competitor {
 	return out
 }
 
+// REQ: FR_POOLS_01, FR_MATS_01
 func TestPoolsHonourTheSizeRangeAndMatAssignment(t *testing.T) {
 	for _, mats := range []int{1, 2, 3, 4} {
 		for _, n := range []int{4, 5, 7, 8, 12, 20, 28, 41, 56} {
@@ -58,6 +59,7 @@ func TestPoolsHonourTheSizeRangeAndMatAssignment(t *testing.T) {
 	}
 }
 
+// REQ: FR_POOLS_02
 func TestEveryPairMeetsExactlyOnce(t *testing.T) {
 	setup := store.Tournament{Mats: 2, MinPoolSize: 4, MaxPoolSize: 7}
 	drawn, err := tournament.Generate(setup, field(13), tournament.DefaultLimits())
@@ -83,6 +85,7 @@ func TestEveryPairMeetsExactlyOnce(t *testing.T) {
 
 // TestColoursAreRoughlyEven checks the best-effort split: nobody should be red or blue
 // far more often than the other within their own pool.
+// REQ: FR_POOLS_02
 func TestColoursAreRoughlyEven(t *testing.T) {
 	setup := store.Tournament{Mats: 2, MinPoolSize: 4, MaxPoolSize: 7}
 	drawn, err := tournament.Generate(setup, field(24), tournament.DefaultLimits())
@@ -105,6 +108,7 @@ func TestColoursAreRoughlyEven(t *testing.T) {
 
 // TestConsecutiveMatchesAreMinimised checks the running order. The circle method plus the
 // greedy pass at each seam should leave nothing to report at these sizes.
+// REQ: FR_POOLS_02
 func TestConsecutiveMatchesAreMinimised(t *testing.T) {
 	setup := store.Tournament{Mats: 2, MinPoolSize: 4, MaxPoolSize: 7}
 	drawn, err := tournament.Generate(setup, field(22), tournament.DefaultLimits())
@@ -127,6 +131,7 @@ func TestConsecutiveMatchesAreMinimised(t *testing.T) {
 	}
 }
 
+// REQ: FR_POOLS_01
 func TestPastTheCeilingIsRejected(t *testing.T) {
 	setup := store.Tournament{Mats: 4, MinPoolSize: 4, MaxPoolSize: 7}
 	if _, err := tournament.Generate(setup, field(56), tournament.DefaultLimits()); err != nil {
@@ -143,6 +148,7 @@ func TestPastTheCeilingIsRejected(t *testing.T) {
 
 // #166: pools come out as small as the range allows -- the most pools that keep each at or
 // above the minimum -- which is what poolCount's comment now says.
+// REQ: FR_POOLS_01
 func TestPoolsAreAsSmallAsTheRangeAllows(t *testing.T) {
 	for _, c := range []struct{ n, min, max, pools int }{
 		{12, 3, 7, 4},

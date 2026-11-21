@@ -1,6 +1,7 @@
 {
   "name": "forfeit-recorded-zero-eight",
   "description": "A conceded match is recorded 0-8; the winner takes 9 match points and the forfeiter none.",
+  "requirements": ["FR_MATCH_08"],
   "events": [
     {
       "seq": 1,

@@ -71,6 +71,7 @@ func Active(people []store.Person, id string) bool {
 // one who came in on the same signup, else the one who signed up with the same email
 // (#142), else somebody new. Returns the people, a new one added or an email learnt if
 // need be, the id, and whether the people changed.
+// REQ: FR_PEOPLE_01
 func For(people []store.Person, name, club, submission, email, want string) ([]store.Person, string, bool) {
 	email = strings.ToLower(strings.TrimSpace(email))
 	if want != "" {
@@ -104,6 +105,7 @@ func For(people []store.Person, name, club, submission, email, want string) ([]s
 }
 
 // ByEmail is who signed up with an email -- followed through any merge -- or "".
+// REQ: FR_PEOPLE_01
 func ByEmail(people []store.Person, email string) string {
 	email = strings.ToLower(strings.TrimSpace(email))
 	if email == "" {
@@ -134,6 +136,7 @@ func (e Entry) Key() string { return e.Discipline + "/" + e.Competitor }
 // every pair of them already said to be somebody else -- or signed up with two different
 // email addresses, which two people do and one person does not (#142). The organizer is
 // asked; nothing here merges anybody.
+// REQ: FR_PEOPLE_01
 func Duplicates(people []store.Person, entries map[string][]Entry) [][]string {
 	groups := map[string][]string{}
 	for _, p := range people {
@@ -188,6 +191,7 @@ func Duplicates(people []store.Person, entries map[string][]Entry) [][]string {
 
 // Merge records that from is into: their entries, listed in moved, now point at into.
 // The caller moves the entries; this keeps what is needed to move them back.
+// REQ: FR_PEOPLE_01
 func Merge(people []store.Person, from, into string, moved []string) ([]store.Person, error) {
 	if from == into {
 		return people, errors.New("that is the same person")
@@ -209,6 +213,7 @@ func Merge(people []store.Person, from, into string, moved []string) ([]store.Pe
 
 // Unmerge undoes a merge: the person is themselves again, and the entries that were
 // moved, returned, go back to them.
+// REQ: FR_PEOPLE_01
 func Unmerge(people []store.Person, id string) ([]store.Person, []string, error) {
 	i := index(people, id)
 	if i < 0 {
@@ -225,6 +230,7 @@ func Unmerge(people []store.Person, id string) ([]store.Person, []string, error)
 
 // KeepApart records that two people with the same name are two people, so they stop being
 // offered as a duplicate.
+// REQ: FR_PEOPLE_01
 func KeepApart(people []store.Person, a, b string) ([]store.Person, error) {
 	i, j := index(people, a), index(people, b)
 	if i < 0 || j < 0 || a == b {

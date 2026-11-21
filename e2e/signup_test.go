@@ -66,6 +66,7 @@ func response(t *testing.T, name, submission string, entries ...string) map[stri
 	return map[string]string{"source": name + ".json", "body": string(body)}
 }
 
+// REQ: FR_SIGNUP_01, DC_SIGNUP_02, US_ORG_02
 func TestOfflineSignupRoundTrip(t *testing.T) {
 	s := start(t)
 	configureEvent(t, s)

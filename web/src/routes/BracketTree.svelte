@@ -1,3 +1,4 @@
+<!-- REQ: US_COMP_02 -->
 <script lang="ts">
   import type { MatchView } from '../api';
   import { t } from '../lib/i18n.svelte';

@@ -16,6 +16,8 @@ import (
 	"io/fs"
 )
 
+// REQ: NFR_OFFLINE_01, NFR_INSTALL_01
+//
 //go:embed all:dist
 var dist embed.FS
 

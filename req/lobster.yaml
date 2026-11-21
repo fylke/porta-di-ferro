@@ -1,0 +1,44 @@
+# The tracing policy (docs/requirements-as-code.md). Every requirement must be traced to
+# code that implements it, in Go or TypeScript, and to a test that verifies it, of any
+# kind -- or say in `untraced` why it cannot be. Every tag in the code and the tests must
+# name a requirement that exists. lobster-ci-report fails the build on anything else.
+#
+# Paths are from the repository root, where req/trace.sh runs; the files are written by
+# lobster-trlc (requirements) and cmd/lobster-tags (the rest).
+levels:
+  - name: Requirements
+    kind: requirements
+    source: [build/req/requirements.lobster]
+    requires:
+      - [Go code, TypeScript code]
+      - [Go tests, TypeScript tests, Browser tests, Shared vectors]
+
+  - name: Go code
+    kind: implementation
+    source: [build/req/go-code.lobster]
+    trace-to: [Requirements]
+
+  - name: TypeScript code
+    kind: implementation
+    source: [build/req/ts-code.lobster]
+    trace-to: [Requirements]
+
+  - name: Go tests
+    kind: activity
+    source: [build/req/go-tests.lobster]
+    trace-to: [Requirements]
+
+  - name: TypeScript tests
+    kind: activity
+    source: [build/req/ts-tests.lobster]
+    trace-to: [Requirements]
+
+  - name: Browser tests
+    kind: activity
+    source: [build/req/browser-tests.lobster]
+    trace-to: [Requirements]
+
+  - name: Shared vectors
+    kind: activity
+    source: [build/req/vectors.lobster]
+    trace-to: [Requirements]

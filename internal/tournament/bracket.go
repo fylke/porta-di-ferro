@@ -35,6 +35,7 @@ const (
 // Every index is per match completed, which is what makes rows from different pools
 // comparable. Head-to-head applies only to two who met, which means the same pool; the
 // seeded draw settles what is left, as it does within a pool.
+// REQ: FR_ELIM_01
 func Overall(r match.Ruleset, t store.Tournament, competitors map[string]store.Competitor,
 	states map[string]match.State) []Standing {
 
@@ -79,6 +80,7 @@ func Overall(r match.Ruleset, t store.Tournament, competitors map[string]store.C
 // PoolsComplete reports whether every pool match involving two entered competitors has
 // ended. The cut is made from finished pools; a bracket drawn early would seed from a
 // table that is still moving.
+// REQ: FR_ELIM_01
 func PoolsComplete(t store.Tournament, competitors map[string]store.Competitor,
 	states map[string]match.State) bool {
 	for _, p := range t.Pools {
@@ -96,6 +98,7 @@ func PoolsComplete(t store.Tournament, competitors map[string]store.Competitor,
 
 // BracketSize is how many of the ranked make the cut: top 8, cut at 4 for a small field
 // and at 2 for a very small one. 0 means there are not enough to run eliminations.
+// REQ: FR_ELIM_01
 func BracketSize(ranked int) int {
 	switch {
 	case ranked >= 8:
@@ -182,6 +185,7 @@ func EliminationMatsFor(t store.Tournament, size int) int {
 //
 // How many mats it spreads over is EliminationMatsFor: fewest that costs no extra pass,
 // unless the organizer said otherwise.
+// REQ: FR_ELIM_01, FR_ELIM_02
 func Bracket(t store.Tournament, ranked []Standing) ([]store.Match, error) {
 	size := BracketSize(len(ranked))
 	if size == 0 {
@@ -226,6 +230,7 @@ func Bracket(t store.Tournament, ranked []Standing) ([]store.Match, error) {
 
 // Fill resolves the competitors of later rounds from the results of the matches that
 // feed them. A slot stays empty until its feeder has ended with a winner.
+// REQ: FR_ELIM_04
 func Fill(bracket []store.Match, states map[string]match.State) []store.Match {
 	out := fill(bracket, states)
 	for i, m := range out {
@@ -269,6 +274,7 @@ const nobody = "-nobody-"
 
 // resolve turns "winner:e-qf1" into a competitor id, "" if not decided yet, or nobody when
 // nobody goes through.
+// REQ: FR_ELIM_04
 func resolve(feed string, byID map[string]store.Match, states map[string]match.State) string {
 	want, id, ok := strings.Cut(feed, ":")
 	if !ok {
@@ -322,6 +328,7 @@ type Podium struct {
 }
 
 // Result reads the podium off a filled bracket.
+// REQ: FR_ELIM_02
 func Result(filled []store.Match, states map[string]match.State) Podium {
 	var out Podium
 	byID := map[string]store.Match{}

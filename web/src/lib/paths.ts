@@ -37,12 +37,14 @@ export function routeOf(path: string): string {
 }
 
 /** A page of a discipline: /score/1 in Sabre is /d/open-sabre/score/1. */
+// REQ: DC_API_01
 export function within(slug: string, to: string): string {
   if (!slug || !to.startsWith('/')) return to;
   return `/d/${encodeURIComponent(slug)}${to}`;
 }
 
 /** Where a discipline's API is: its own prefix, or the unprefixed paths of a one-discipline event. */
+// REQ: DC_API_01
 export function apiBase(slug: string): string {
   return slug ? `/api/d/${encodeURIComponent(slug)}` : '/api';
 }
@@ -52,6 +54,7 @@ export function apiBase(slug: string): string {
  * discipline in its address, so a device that kept something before events existed still
  * finds it, and "open-sabre." otherwise, so two disciplines' "p1m1" never meet.
  */
+// REQ: DC_API_01
 export function namespace(slug: string): string {
   return slug ? `${slug}.` : '';
 }

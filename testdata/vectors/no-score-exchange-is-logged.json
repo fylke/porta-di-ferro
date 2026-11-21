@@ -1,6 +1,7 @@
 {
   "name": "no-score-exchange-is-logged",
   "description": "Confirming with nothing selected is a real event: it is counted, and neither score moves.",
+  "requirements": ["FR_MATCH_07"],
   "events": [
     {
       "seq": 1,

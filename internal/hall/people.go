@@ -74,6 +74,7 @@ func ViewPeople(reg []store.Person, entries map[string][]people.Entry) PeopleVie
 }
 
 // ViewPerson is one person by an id they have now or had before a merge.
+// REQ: US_COMP_01
 func ViewPerson(reg []store.Person, id string, entries map[string][]people.Entry) (PersonView, bool) {
 	id = people.Resolve(reg, id)
 	for _, p := range reg {
@@ -98,6 +99,7 @@ var ErrNoSuchAction = errors.New("no such thing to do to a person")
 // DecidePerson is the organizer deciding about people, over the registry: merge one into
 // another, undo that, keep two apart, or say an entry is this person. Returns the people
 // and the entries to point at someone else. Shared with the browser demo.
+// REQ: FR_PEOPLE_01, DC_ARCH_02
 func DecidePerson(reg []store.Person, entries map[string][]people.Entry, id, action string, in PersonAction) ([]store.Person, people.Links, error) {
 	switch action {
 	case "merge":
@@ -130,6 +132,7 @@ func DecidePerson(reg []store.Person, entries map[string][]people.Entry, id, act
 
 // WithDuties adds a person's work as staff to their page. Somebody who only works has no
 // entries to take a name from; their name is on the staff list.
+// REQ: US_COMP_01
 func WithDuties(v PersonView, st store.Staff, sv StaffingView) PersonView {
 	v.Duties, v.Physician = DutiesOf(v.ID, st, sv)
 	if len(v.Entries) == 0 {

@@ -17,6 +17,7 @@ func (s *Server) serveApp(w http.ResponseWriter, r *http.Request) { serveAssets(
 
 // serveAssets serves a web bundle. The event coordinator serves the one bundle for every
 // discipline; a discipline's server serves it only when it runs on its own.
+// REQ: NFR_OFFLINE_01
 func serveAssets(assets fs.FS, w http.ResponseWriter, r *http.Request) {
 	if assets == nil {
 		http.NotFound(w, r)
@@ -66,6 +67,7 @@ func serveAssets(assets fs.FS, w http.ResponseWriter, r *http.Request) {
 	serveIndex(assets, w, r)
 }
 
+// REQ: NFR_OFFLINE_01
 func serveIndex(assets fs.FS, w http.ResponseWriter, r *http.Request) {
 	b, err := fs.ReadFile(assets, "index.html")
 	if err != nil {

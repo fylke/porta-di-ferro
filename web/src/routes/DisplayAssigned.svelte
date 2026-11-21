@@ -1,3 +1,4 @@
+<!-- REQ: FR_DISPLAY_02 -->
 <script lang="ts">
   import { onMount } from 'svelte';
   import { Heartbeat, deviceName } from '../lib/presence.svelte';

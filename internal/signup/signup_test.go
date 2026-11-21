@@ -124,6 +124,7 @@ func TestAnUnnamedDisciplineIsNotOffered(t *testing.T) {
 }
 
 // The whole point of the preview: the organizer sees what would happen, and nothing has.
+// REQ: FR_SIGNUP_01
 func TestPreviewSortsTheFolderOut(t *testing.T) {
 	def := definition()
 	existing := []store.Competitor{
@@ -189,6 +190,7 @@ func TestPreviewSortsTheFolderOut(t *testing.T) {
 
 // Importing the same folder twice is the case this is built around: an organizer who is
 // not sure whether they already did it should be able to just do it again.
+// REQ: FR_SIGNUP_01
 func TestImportingTwiceAddsNobodyTwice(t *testing.T) {
 	def := definition()
 	files := []signup.File{
@@ -296,6 +298,7 @@ func TestAnEmailIsReadAsTheSameAddressHoweverTyped(t *testing.T) {
 	}
 }
 
+// REQ: FR_SIGNUP_01, DC_SIGNUP_02
 func TestResponsesThatCannotBeUsedAreRefusedWithAReason(t *testing.T) {
 	ok := signup.Response{
 		Format: signup.ResponseFormat, Version: signup.Version,

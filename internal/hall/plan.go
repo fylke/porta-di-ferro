@@ -157,6 +157,7 @@ func MatCount(plan store.Plan, tournaments []store.Tournament) int {
 // away takes it from every discipline, and a discipline asking for two mats in a hall of
 // one draws its pools and its bracket for one (the field test of 2026-11, where mat 2
 // stayed in a discipline's eliminations after the hall had lost it).
+// REQ: FR_MATS_02
 func EffectiveMatCount(hallMats, disciplineMats int) int {
 	if hallMats > 0 && disciplineMats > hallMats {
 		return hallMats

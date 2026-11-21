@@ -12,6 +12,7 @@ import (
 // The rounds come from the circle method, which already guarantees that nobody appears
 // twice within a round. What is left is the seam between rounds, which a greedy pass
 // smooths over: at each step it prefers a match sharing nobody with the one just placed.
+// REQ: FR_POOLS_02
 func schedule(pool, mat int, ids []string) ([]store.Match, []string) {
 	rounds := circle(ids)
 
@@ -75,6 +76,7 @@ type pair struct{ a, b string }
 
 // circle is the round-robin circle method. With an odd number of competitors one sits out
 // each round, which is how uneven pool sizes stay legal rather than special.
+// REQ: FR_POOLS_02
 func circle(ids []string) [][]pair {
 	players := append([]string(nil), ids...)
 	const bye = ""

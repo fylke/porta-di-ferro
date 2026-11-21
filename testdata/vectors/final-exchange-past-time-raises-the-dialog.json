@@ -1,6 +1,7 @@
 {
   "name": "final-exchange-past-time-raises-the-dialog",
   "description": "Past the match time, every confirmation asks whether that was the last one.",
+  "requirements": ["FR_MATCH_06"],
   "events": [
     {
       "seq": 1,

@@ -1,6 +1,7 @@
 {
   "name": "timer-start-stop-resume",
   "description": "The clock control exists for the head referee's time-outs, not for ordinary exchanges.",
+  "requirements": ["FR_MATCH_06"],
   "events": [
     {
       "seq": 1,

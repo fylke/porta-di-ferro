@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { defaultOptions, optionsOf } from './options';
 import type { Event } from './types';
 
+// REQ: FR_MATCH_10
 describe('optionsOf', () => {
   it('has the defaults for a log with no options record', () => {
     expect(optionsOf([])).toEqual(defaultOptions());

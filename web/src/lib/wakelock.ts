@@ -12,6 +12,7 @@ import { mp4, webm } from './nosleep-media';
  * on the first one -- on a score keeper's tablet, the first point pressed -- and again on
  * the first tap after the page has been in the background, which pauses it.
  */
+// REQ: NFR_AWAKE_01, NFR_OFFLINE_02
 export function keepAwake(): () => void {
   let sentinel: WakeLockSentinel | null = null;
   let video: HTMLVideoElement | null = null;

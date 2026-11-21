@@ -1,3 +1,4 @@
+<!-- REQ: US_ORG_04 -->
 <script lang="ts">
   import { api, type MatchView, type Snapshot } from '../api';
   import { nameLookup } from './lib-display.svelte';

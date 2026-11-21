@@ -1,6 +1,7 @@
 {
   "name": "warning-third-loses-the-match-zero-eight",
   "description": "Level 3 is a match loss recorded 0-8 against the warned competitor, whatever the running score was, and it raises the dialog rather than ending the match itself.",
+  "requirements": ["FR_MATCH_04"],
   "events": [
     {
       "seq": 1,

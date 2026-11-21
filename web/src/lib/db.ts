@@ -119,6 +119,7 @@ function done(tx: IDBTransaction): Promise<void> {
  * Appends events to the durable log, with the draw they were scored in. Writing an existing
  * (discipline, match, seq) replaces it.
  */
+// REQ: FR_OFFLINE_01
 export async function append(discipline: string, matchId: string, events: Event[], draw = ''): Promise<void> {
   await attempt<void>(undefined, async (db) => {
     const tx = db.transaction(STORE, 'readwrite');
@@ -156,6 +157,7 @@ export async function forgetAll(): Promise<void> {
 }
 
 /** Every match this device holds a log for. Empty if storage is unavailable. */
+// REQ: FR_OFFLINE_02
 export async function matches(): Promise<HeldMatch[]> {
   return attempt<HeldMatch[]>([], async (db) => {
     const store = db.transaction(STORE, 'readonly').objectStore(STORE);

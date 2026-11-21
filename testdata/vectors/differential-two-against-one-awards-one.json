@@ -1,6 +1,7 @@
 {
   "name": "differential-two-against-one-awards-one",
   "description": "A 2 against a 1 gives the winner 1 point and the other nothing.",
+  "requirements": ["FR_MATCH_03"],
   "events": [
     {
       "seq": 1,

@@ -39,6 +39,7 @@ let hidden = false;
 let hiding: ReturnType<typeof setTimeout> | null = null;
 
 /** Follows a topic -- "event", "mats" or "d/{slug}" -- until the returned function is called. */
+// REQ: DC_TRANSPORT_01
 export function follow(topic: string, f: Follower): () => void {
   let set = followers.get(topic);
   if (!set) followers.set(topic, (set = new Set()));

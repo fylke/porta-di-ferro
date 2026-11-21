@@ -1,0 +1,482 @@
+package Porta
+
+/* Rules of behaviour. The match rules are MSL's SM ruleset as docs/design.md §5 records
+ * it, hardcoded until rulesets become data (design §8 item 12); both match engines hold
+ * them, checked by the shared vectors in testdata/vectors (DC_ENGINE_01).
+ */
+
+// ---------------------------------------------------------------- The match
+
+Functional FR_MATCH_01 {
+  title       = "A match is its log, replayed"
+  description = '''
+    A match's state -- each competitor's score and penalty level, the clock, whether
+    it has ended, how and who won -- is derived by replaying its event log in
+    sequence order, and the same log always gives the same state. A match is not
+    started until its first event, running until it ends, and ended by an end event;
+    events after the end change nothing.
+  '''
+  source      = "docs/design.md §2 decision 5; docs/architecture.md §2"
+  status      = Status.Active
+}
+
+Functional FR_MATCH_02 {
+  title       = "The point cap ends a match at 8, and the score is not clamped"
+  description = '''
+    Confirming an exchange that takes either competitor to or past 8 points asks
+    whether to end the match, naming the result ("Red wins 9-3"), with End match or
+    Undo last exchange. The actual score is recorded: at 7, a clean 2 records 9. When
+    one confirmation reaches both the cap and the final exchange, the cap decides.
+  '''
+  rationale   = "Point difference feeds two of the ranking indices; clamping would distort the standings."
+  source      = "docs/design.md §4 Match-ending dialogs; §5"
+  status      = Status.Active
+}
+
+Functional FR_MATCH_03 {
+  title       = "Exchanges are scored by difference"
+  description = '''
+    The difference between the two competitors' assessed values is awarded to the one
+    with the higher value: a 2 against a 1 gives that competitor 1 point and the other
+    nothing, and a 2 against a 2 gives nobody anything. The log records both raw
+    values; the net is derived.
+  '''
+  rationale   = "Afterblows and doubles need no special case: they net out."
+  source      = "docs/design.md §5 Exchange scoring is differential"
+  status      = Status.Active
+}
+
+Functional FR_MATCH_04 {
+  title       = "Warnings climb a ladder of penalty levels"
+  description = '''
+    Each competitor has a penalty level per match, starting at 0 and reset every
+    match. Level 1 is recorded and shown with no effect on the score; level 2 takes
+    one point off the warned competitor, never below zero; level 3 loses them the
+    match 0-8 with no match points. A warning raises the level by one; an immediate
+    escalation from the corner menu raises it by two or three and commits with the
+    exchange. Reaching level 3 asks before ending the match, naming how it was
+    reached.
+  '''
+  source      = "docs/design.md §5 Warnings; §7 item 2"
+  status      = Status.Active
+}
+
+Functional FR_MATCH_05 {
+  title       = "The last exchange can be undone"
+  description = '''
+    Undo, behind a confirmation, takes back the last confirmed exchange: its points,
+    its penalty levels and any end it had raised. The undo is appended to the log as
+    a record of its own; the exchange it undoes stays in the log.
+  '''
+  source      = "docs/design.md §6 item 13; §3 Sync"
+  status      = Status.Active
+}
+
+Functional FR_MATCH_06 {
+  title       = "The clock counts up and the final exchange ends the match"
+  description = '''
+    The match clock counts up from 00:00 toward the 3-minute match time, and is not
+    paused for scoring. Selecting a point starts it if it is stopped. From 02:50 it
+    flashes, and from then on confirming an exchange asks End match or Continue one
+    more exchange. It keeps running past 03:00 until a final exchange is confirmed,
+    and that exchange's time is the match's end. A reset, behind a confirmation,
+    puts it back to 00:00 as a record in the log.
+  '''
+  source      = "docs/design.md §4 Timer; Match-ending dialogs"
+  status      = Status.Active
+}
+
+Functional FR_MATCH_07 {
+  title       = "An exchange is selected, then confirmed"
+  description = '''
+    For each competitor the score keeper selects at most one of the point values,
+    and a warning independently of it; tapping a selected button deselects it.
+    Nothing takes effect until Confirm exchange: the score does not move and nothing
+    is written. Confirming with nothing selected records an exchange where nobody
+    scored.
+  '''
+  source      = "docs/design.md §4 Selection model; On confirmation"
+  status      = Status.Active
+}
+
+Functional FR_MATCH_08 {
+  title       = "Forfeit and disqualification"
+  description = '''
+    A forfeit, asked before it is recorded, ends the match 0-8 against the forfeiter:
+    the opponent takes 9 match points and the forfeiter none. A disqualification ends
+    the match as level 3 does, lost 0-8 with no match points; removing the competitor
+    from the tournament is done separately, by withdrawing them.
+  '''
+  source      = "docs/design.md §1 Scoring; §5 Warnings"
+  status      = Status.Active
+}
+
+Functional FR_MATCH_09 {
+  title       = "Both competitors losing on penalties is a double loss"
+  description = '''
+    When both competitors reach the losing penalty level in the same exchange, the
+    match is recorded 0-0 with no winner and no match points for either; in a pool it
+    counts as a loss for each, never as a draw.
+  '''
+  source      = "docs/design.md §5 Warnings, Both at once; #164"
+  status      = Status.Active
+}
+
+Functional FR_MATCH_10 {
+  title       = "Colours and sides are presentation only"
+  description = '''
+    The competitors' colours and which side each takes on the displays are an options
+    record in the match log, which every screen reads and the engine ignores for the
+    score. The score keeper's own side swap is kept on its device, apart from the
+    displays'.
+  '''
+  source      = "docs/design.md §7 item 6; §3 The exchange log"
+  status      = Status.Active
+}
+
+// ---------------------------------------------------------------- Pools
+
+Functional FR_POOLS_01 {
+  title       = "Pools are drawn within the size range, clubs spread"
+  description = '''
+    The draw makes as few pools as the organizer's smallest and largest pool size
+    allow, within the ceiling of 8 pools of 7 on 4 mats, refusing a field past it.
+    Pool sizes differ by at most one. Competitors of the same club are spread across
+    the pools as evenly as possible, and any clash that remains is reported. The same
+    seed always gives the same draw.
+  '''
+  source      = "docs/design.md §6 items 5 and 9; §7 items 7 and 13; #3"
+  status      = Status.Active
+}
+
+Functional FR_POOLS_02 {
+  title       = "Running order and colours are fair and reported"
+  description = '''
+    Within a pool every pair meets exactly once. The running order keeps competitors
+    from fencing back to back as far as it can, and reports any back-to-back match
+    that remains. Red and blue are assigned for every match at the draw, splitting
+    each competitor's matches between the colours as evenly as possible.
+  '''
+  source      = "docs/design.md §6 item 9; §5 Red / blue assignment"
+  status      = Status.Active
+}
+
+Functional FR_POOLS_03 {
+  title       = "Pools are ranked by the index chain"
+  description = '''
+    A pool result is worth 9 match points for a win, 6 for a draw and 3 for a loss
+    (none for a penalty loss or a forfeit). Competitors are ranked by, in order: match
+    point index, victory index, score index (points scored less conceded) and
+    reception index (points conceded, lowest first), each divided by matches
+    completed; then the result between the two; then a draw that is the same every
+    time for the same pool.
+  '''
+  source      = "docs/design.md §5 Pool ranking"
+  status      = Status.Active
+}
+
+Functional FR_POOLS_04 {
+  title       = "A withdrawal voids the competitor's results"
+  description = '''
+    A competitor withdrawn during the pools is treated as if they never entered:
+    their matches are void and everyone else's indices are recomputed without them.
+  '''
+  source      = "docs/design.md §5; §12 Ranking suite"
+  status      = Status.Active
+}
+
+// ---------------------------------------------------------------- Eliminations
+
+Functional FR_ELIM_01 {
+  title       = "The bracket takes the top of the overall ranking"
+  description = '''
+    Once every pool match is in, the overall ranking across all pools, by the full
+    index chain, sends its top 8 to a single-elimination bracket (top 4 for a field
+    under eight, top 2 under four), seeded 1 v 8 and 4 v 5 into one semi-final and
+    2 v 7 and 3 v 6 into the other. The higher seed takes red.
+  '''
+  source      = "docs/design.md §5; §7 item 3"
+  status      = Status.Active
+}
+
+Functional FR_ELIM_02 {
+  title       = "The semi-final losers fence for third place"
+  description = '''
+    A bracket with semi-finals has a match for third place between their losers.
+  '''
+  source      = "docs/design.md §5; §7 item 3"
+  status      = Status.Active
+}
+
+Functional FR_ELIM_03 {
+  title       = "A bracket match goes to sudden death"
+  description = '''
+    A bracket match cannot be drawn: a level score at the final exchange goes to
+    sudden death, and the first exchange that breaks the tie wins it. Pool matches
+    may be drawn.
+  '''
+  source      = "docs/design.md §5; §7 item 3"
+  status      = Status.Active
+}
+
+Functional FR_ELIM_04 {
+  title       = "Later rounds follow from results"
+  description = '''
+    Who meets whom in later rounds is derived from the results, never stored, so a
+    corrected quarter-final corrects the semi-final by itself. After a double loss
+    nobody goes through: whoever meets the empty slot goes on without fencing.
+  '''
+  source      = "docs/design.md §7 item 3; §5 Both at once"
+  status      = Status.Active
+}
+
+// ---------------------------------------------------------------- The event
+
+Functional FR_DISCIPLINE_01 {
+  title       = "One event runs several disciplines"
+  description = '''
+    One run of the application is one event of several disciplines, each a
+    tournament of its own with its own competitors, pools and results. The organizer
+    adds, renames and takes out disciplines from /admin; taking one out keeps its
+    folder. Every page names the discipline it shows, and the landing page lists
+    them all.
+  '''
+  source      = "docs/design.md §7 item 9; #102"
+  status      = Status.Active
+}
+
+Functional FR_DISCIPLINE_02 {
+  title       = "A broken discipline is contained"
+  description = '''
+    A discipline whose files cannot be read, or whose code fails, degrades on its own:
+    the rest of the event and the pages everyone is looking at keep working.
+  '''
+  source      = "docs/proposals/one-event-many-disciplines.md R2, §11"
+  status      = Status.Active
+}
+
+Functional FR_MATS_01 {
+  title       = "Pools go to mats in turn, and the organizer can move them"
+  description = '''
+    By default pool N runs on mat ((N - 1) mod mats) + 1, and a mat's pools run in
+    number order. The organizer moves a pool to another mat, where it queues last,
+    or steps it up or down its mat's queue; every screen follows, and a moved pool is
+    marked as moved.
+  '''
+  source      = "docs/design.md §6 Mat assignment; §7 items 7 and 8"
+  status      = Status.Active
+}
+
+Functional FR_MATS_02 {
+  title       = "The mats are the event's"
+  description = '''
+    What each mat runs, and in what order, comes from the event's plan across every
+    discipline, and a discipline never uses more mats than the hall has. A mat never
+    moves on into another discipline's work by itself: it stops in front of it until
+    the organizer starts it from the mat board. A device at a mat follows that mat
+    from one discipline to the next.
+  '''
+  source      = "docs/proposals/one-event-many-disciplines.md R5, §9; docs/design.md §3 Sync; #169"
+  status      = Status.Active
+}
+
+Functional FR_PEOPLE_01 {
+  title       = "A person is one person across disciplines"
+  description = '''
+    Every entry in every discipline belongs to a person of the event. Two entries are
+    never made one person because their names match: possible duplicates are offered
+    to the organizer, who merges them or keeps them apart, and a merge can be undone.
+    Two different email addresses are never the same person.
+  '''
+  source      = "docs/proposals/one-event-many-disciplines.md R4, §8; AGENTS.md"
+  status      = Status.Active
+}
+
+Functional FR_PLAN_01 {
+  title       = "The plan is suggested, changeable, and forecast"
+  description = '''
+    The app suggests a plan for the day that the organizer can change at any moment.
+    The forecast estimates when each block of work runs from typical durations, then
+    from the day's measured pace, and stops the mats for the hall's breaks. It warns
+    -- somebody in two places at once, a day that overruns -- and never refuses.
+  '''
+  source      = "docs/proposals/one-event-many-disciplines.md R6, §10; AGENTS.md"
+  status      = Status.Active
+}
+
+Functional FR_STAFF_01 {
+  title       = "Staff are never assigned while they compete"
+  description = '''
+    Staff are assigned by role to the plan's work, by the app's suggestion or by the
+    organizer, whose choices stand. A member is linked to a person, and is never
+    assigned while that person fences, is on another mat, or competes in another
+    discipline.
+  '''
+  source      = "docs/design.md §8 item 17; #5; AGENTS.md"
+  status      = Status.Active
+}
+
+Functional FR_SIGNUP_01 {
+  title       = "Signup works offline, and an import is checked"
+  description = '''
+    The organizer downloads the event's signup definition and the participant app.
+    A participant signs up for one or more disciplines with no internet and no
+    server, and sends back a response file. The organizer previews responses before
+    importing them: invalid, stale, duplicate and unknown-discipline responses are
+    refused with a reason, and importing the same response again adds nobody twice.
+  '''
+  source      = "docs/proposals/offline-signup.md Acceptance Criteria"
+  status      = Status.Active
+}
+
+// ---------------------------------------------------------------- Score keeper devices
+
+Functional FR_TABLET_01 {
+  title       = "One device writes a match, and hands it over"
+  description = '''
+    A device claims a match before it writes to it and stamps every push with the
+    epoch it was granted. A claim another device holds is refused, naming the holder,
+    and can be taken over explicitly; nothing is taken from a device without somebody
+    asking, even from one that has gone quiet. A device that has been taken over
+    locks its scoring and names the device that took it. Hand over this mat releases
+    a match gracefully, and Next match releases the finished one.
+  '''
+  source      = "docs/design.md §3 Sync; §7 item 10; #150"
+  status      = Status.Active
+}
+
+Functional FR_TABLET_02 {
+  title       = "A late push from a replaced device is set aside"
+  description = '''
+    A push stamped with an epoch older than the match's is quarantined and shown to
+    the organizer, never appended and never silently dropped. A push with no stamp is
+    refused while a device holds the match.
+  '''
+  source      = "docs/design.md §3 Sync; §7 item 10"
+  status      = Status.Active
+}
+
+Functional FR_OFFLINE_01 {
+  title       = "Scoring writes locally first and ships the log"
+  description = '''
+    A confirmed exchange is written to the score keeper device's own log first, and
+    pushed to the server after every confirmation, so a lost device costs at most one
+    exchange. Reconnecting sends everything after the last sequence the server holds,
+    and a match's events are keyed by (match, sequence), so a retried push is
+    harmless.
+  '''
+  source      = "docs/design.md §3 Sync"
+  status      = Status.Active
+}
+
+Functional FR_OFFLINE_02 {
+  title       = "A score keeper runs a whole pool without the server"
+  description = '''
+    The score keeper client keeps the last snapshot it saw, so it opens with the pool,
+    the names and the running order when the server is out of reach, and Next match
+    works with nobody to ask -- never past an item the mat has stopped in front of.
+    When the server is back it hands over every match log on the device the server is
+    missing, not only the one on screen.
+  '''
+  source      = "docs/design.md §3 Sync, A whole pool; §12 Offline test"
+  status      = Status.Active
+}
+
+// ---------------------------------------------------------------- Displays
+
+Functional FR_DISPLAY_01 {
+  title       = "Displays are addressed by URL"
+  description = '''
+    /display/mat/N shows one mat's scoreboard, /display/mats every active mat (or the
+    ones in ?ids=), and /display/roster the matches. They are read-only and open to
+    any browser on the LAN. The combined view shows one full scoreboard, two side by
+    side, or from three mats on one compact row per mat.
+  '''
+  source      = "docs/design.md §3 Displays; §6 item 8"
+  status      = Status.Active
+}
+
+Functional FR_DISPLAY_02 {
+  title       = "The organizer can assign a screen"
+  description = '''
+    A device that opens /display is shown whatever the organizer assigns it under
+    Screens, reassignable on the fly, with the screens that are live listed. The
+    assignment is kept on disk, so a hall of screens survives the organizer's PC
+    restarting. URL addressing stays alongside it.
+  '''
+  source      = "docs/design.md §7 item 4"
+  status      = Status.Active
+}
+
+Functional FR_DISPLAY_03 {
+  title       = "A mat follows its score keeper"
+  description = '''
+    A mat shows the match its live score keeper holds, finished or not, until the
+    score keeper presses Next match, so every display shows a result for exactly as
+    long as the score keeper does. The score keeper's result stays on screen until
+    then.
+  '''
+  source      = "docs/design.md §7 item 5; §4 After the match"
+  status      = Status.Active
+}
+
+// ---------------------------------------------------------------- After the fact
+
+Functional FR_EDIT_01 {
+  title       = "The organizer can edit a match's history"
+  description = '''
+    The organizer opens any match's log and changes, moves or deletes any event in it
+    or adds an exchange or the end. Saving rewrites the log and keeps the version it
+    replaces as a dated backup beside it, every time, and a score keeper holding the
+    match is told to reload it.
+  '''
+  rationale   = "The one deliberate exception to the append-only log (NFR_DATA_02)."
+  source      = "docs/design.md §7 item 1; §3 Sync"
+  status      = Status.Active
+}
+
+Functional FR_EXPORT_01 {
+  title       = "Results export as JSON and PDF"
+  description = '''
+    A discipline's results export as JSON, and as a PDF with a page per pool showing
+    the standings, the indices that produced them and every match, then the overall
+    ranking and the eliminations once they exist. The PDF is made on the server and
+    follows the chosen language.
+  '''
+  source      = "docs/design.md §6 item 10; §7 item 12"
+  status      = Status.Active
+}
+
+Functional FR_EXPORT_02 {
+  title       = "Pool sheets print as a paper fallback"
+  description = '''
+    Each pool prints as a sheet listing its matches with their colours, with a page
+    explaining how to rank competitors across pools and seed the eliminations by hand.
+  '''
+  source      = "docs/design.md §6 item 11; §12 Fallback ladder"
+  status      = Status.Active
+}
+
+Functional FR_REST_01 {
+  title       = "A fencer coming straight back is offered a rest"
+  description = '''
+    When someone in the match on screen fenced the match just before it on the same
+    mat, and this one has not started, the score keeper is offered a rest timer of two
+    minutes, adjustable in steps of thirty seconds. Starting the match declines or
+    ends it. The rest is the device's own and never reaches the log, the result or
+    the displays.
+  '''
+  source      = "docs/design.md §4 After the match"
+  status      = Status.Active
+}
+
+Functional FR_I18N_01 {
+  title       = "The interface is in English and Swedish"
+  description = '''
+    Every string a person reads is in English and Swedish, chosen per device, and the
+    PDFs follow the choice. Where the SM rules have a word it is used. Internal
+    identifiers stay English on the wire and on disk.
+  '''
+  source      = "docs/design.md §2 decision 11; §7 item 11; AGENTS.md"
+  status      = Status.Active
+}

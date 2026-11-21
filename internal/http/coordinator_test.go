@@ -137,6 +137,7 @@ func TestAFirstStartHasNoDisciplines(t *testing.T) {
 // One discipline answers on the paths it always did. Nothing about an event with one
 // discipline may look different from a run of the application before events existed
 // (proposal R10).
+// REQ: DC_ARCH_01
 func TestOneDisciplineAnswersAsItAlwaysDid(t *testing.T) {
 	h := openHall(t, t.TempDir())
 
@@ -165,6 +166,7 @@ func TestOneDisciplineAnswersAsItAlwaysDid(t *testing.T) {
 
 // A second discipline is another folder and server in the same process, at the same
 // address (#4). The unprefixed paths then stop meaning anything and say so.
+// REQ: DC_ARCH_01, DC_API_01, FR_DISCIPLINE_01
 func TestASecondDisciplineSharesTheAddress(t *testing.T) {
 	h := openHall(t, t.TempDir())
 
@@ -226,6 +228,7 @@ func TestASecondDisciplineSharesTheAddress(t *testing.T) {
 
 // The welcome, the programme and the wifi are typed once for the whole hall, and every
 // discipline's pages read the same copy (proposal §7).
+// REQ: DC_ARCH_03, US_ORG_01
 func TestTheDayIsTypedOnce(t *testing.T) {
 	h := openHall(t, t.TempDir())
 	var first hall.EventView
@@ -271,6 +274,7 @@ func TestTheDayIsTypedOnce(t *testing.T) {
 // A discipline whose files will not parse is contained to that discipline: it is listed
 // with the reason, every other discipline runs, and once the file is fixed it comes back
 // without a restart (proposal §11).
+// REQ: FR_DISCIPLINE_02
 func TestABrokenDisciplineIsContained(t *testing.T) {
 	dir := t.TempDir()
 	broken := filepath.Join(dir, "disciplines", "broken")
@@ -319,6 +323,7 @@ func TestABrokenDisciplineIsContained(t *testing.T) {
 	}
 }
 
+// REQ: FR_DISCIPLINE_01
 func TestRetiringADisciplineKeepsItsFolder(t *testing.T) {
 	h := openHall(t, t.TempDir())
 	h.must("POST", "/api/disciplines", map[string]string{"name": "Open Sabre"}, nil)
@@ -389,6 +394,7 @@ func TestTheEventStreamHearsEveryDiscipline(t *testing.T) {
 
 // One stream per page (#161): the event's, the mats' and a discipline's updates over one
 // connection, each tagged with the stream it came from.
+// REQ: DC_TRANSPORT_01
 func TestOneStreamCarriesEveryTopicAPageFollows(t *testing.T) {
 	h := openHall(t, t.TempDir())
 	h.must("POST", "/api/disciplines", map[string]string{"name": "Open Sabre"}, nil)

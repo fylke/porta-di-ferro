@@ -10,6 +10,7 @@ import (
 	"github.com/fylke/porta-di-ferro/internal/store"
 )
 
+// REQ: US_ORG_02
 func (s *Server) addCompetitor(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Name string `json:"name"`

@@ -38,6 +38,7 @@ func m(id, red, blue string) store.Match {
 	return store.Match{ID: id, Pool: 1, Mat: 1, Red: red, Blue: blue}
 }
 
+// REQ: FR_POOLS_03
 func TestMatchPointIndexOrdersTheTable(t *testing.T) {
 	ids := []string{"a", "b", "c"}
 	p := pool(ids, m("m1", "a", "b"), m("m2", "a", "c"), m("m3", "b", "c"))
@@ -66,6 +67,7 @@ func TestMatchPointIndexOrdersTheTable(t *testing.T) {
 	}
 }
 
+// REQ: FR_POOLS_03, FR_MATCH_04
 func TestPenaltyLossEarnsNoMatchPoints(t *testing.T) {
 	ids := []string{"a", "b"}
 	p := pool(ids, m("m1", "a", "b"))
@@ -81,6 +83,7 @@ func TestPenaltyLossEarnsNoMatchPoints(t *testing.T) {
 	}
 }
 
+// REQ: FR_MATCH_08
 func TestForfeitIsRecordedZeroEight(t *testing.T) {
 	ids := []string{"a", "b"}
 	p := pool(ids, m("m1", "a", "b"))
@@ -94,6 +97,7 @@ func TestForfeitIsRecordedZeroEight(t *testing.T) {
 	}
 }
 
+// REQ: FR_POOLS_03
 func TestHeadToHeadBreaksAnOtherwiseExactTie(t *testing.T) {
 	ids := []string{"a", "b"}
 	p := pool(ids, m("m1", "a", "b"))
@@ -109,6 +113,7 @@ func TestHeadToHeadBreaksAnOtherwiseExactTie(t *testing.T) {
 // Three fencers level on every index, each beating the next: head-to-head goes round in a
 // circle and settles nothing. The table must still come out the same every time it is
 // worked out, or the standings on the screens change between two looks.
+// REQ: FR_POOLS_03
 func TestACircleOfWinsRanksTheSameEveryTime(t *testing.T) {
 	ids := []string{"a", "b", "c"}
 	p := pool(ids, m("m1", "a", "b"), m("m2", "b", "c"), m("m3", "c", "a"))
@@ -137,6 +142,7 @@ func order(s []tournament.Standing) []string {
 }
 
 // #164: both on the losing penalty level in one exchange is a loss for both, worth nothing.
+// REQ: FR_MATCH_09
 func TestADoublePenaltyLossIsALossForBoth(t *testing.T) {
 	ids := []string{"a", "b"}
 	p := pool(ids, m("m1", "a", "b"))

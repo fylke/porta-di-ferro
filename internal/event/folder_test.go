@@ -139,6 +139,7 @@ func TestAnUnreadableTournamentStillMoves(t *testing.T) {
 	}
 }
 
+// REQ: NFR_DATA_01
 func TestAFreshFolderIsAnEmptyEvent(t *testing.T) {
 	f, err := event.Open(filepath.Join(t.TempDir(), "new"))
 	if err != nil {
@@ -153,6 +154,7 @@ func TestAFreshFolderIsAnEmptyEvent(t *testing.T) {
 	}
 }
 
+// REQ: FR_DISCIPLINE_01
 func TestDisciplinesAreCreatedOrderedAndRetired(t *testing.T) {
 	f, err := event.Open(t.TempDir())
 	if err != nil {
