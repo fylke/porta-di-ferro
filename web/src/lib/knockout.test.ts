@@ -13,6 +13,7 @@ function past(red: number, blue: number, extra: Partial<State> = {}): State {
   };
 }
 
+// REQ: FR_ELIM_03
 describe('sudden death', () => {
   it('begins when a knockout match reaches the threshold level', () => {
     expect(inSuddenDeath(past(4, 4), true)).toBe(true);

@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { aDiscipline } from './discipline';
 
 test.describe('Tournament & Organizer Flow', () => {
+  // REQ: US_ORG_01, US_ORG_03, US_SK_01
   test('adds competitors, sets up mats, draws pools, and accesses scorekeeper', async ({ page, request }) => {
     // 1. Visit the discipline's admin page. /admin is the event's (#149), and a new event
     //    has no discipline until one is added.

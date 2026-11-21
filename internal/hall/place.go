@@ -154,6 +154,7 @@ func SetItemFlags(placed map[string]store.Placement, id string, f ItemFlags) (ma
 // each time, so the projected bracket of a discipline never sits in front of the pools
 // it has just drawn. A placement the organizer made for a projected item is the real
 // item's once it is drawn. So is a place from a suggestion the organizer applied.
+// REQ: FR_MATS_02
 func Place(items []WorkItem, plan store.Plan, mats int, o PlaceOrder) (map[string]store.Placement, bool) {
 	if mats < 1 {
 		mats = 1

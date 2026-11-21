@@ -10,6 +10,7 @@ import (
 // TestWithdrawalVoidsResultsRetroactively is the case that makes dividing by matches
 // *completed* worth the trouble: a competitor who leaves during the pools is treated as
 // though they never entered, and everyone else's indices recompute correctly.
+// REQ: FR_POOLS_04
 func TestWithdrawalVoidsResultsRetroactively(t *testing.T) {
 	ids := []string{"a", "b", "c"}
 	p := pool(ids, m("m1", "a", "b"), m("m2", "a", "c"), m("m3", "b", "c"))

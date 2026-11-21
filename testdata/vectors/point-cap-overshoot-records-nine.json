@@ -1,6 +1,7 @@
 {
   "name": "point-cap-overshoot-records-nine",
   "description": "At 7, a 2 against nothing gives 9. Recorded as it happened rather than clamped to 8, because point difference feeds two of the four ranking indices.",
+  "requirements": ["FR_MATCH_02"],
   "events": [
     {
       "seq": 1,

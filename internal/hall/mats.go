@@ -181,6 +181,7 @@ func OnEventMats(snap *Snapshot, slug string, placed map[string]store.Placement,
 }
 
 // CurrentFrom is the Mats half of what Hall answers, from a view of the hall already built.
+// REQ: FR_DISPLAY_03
 func CurrentFrom(view MatsView, slug string) map[int]string {
 	out := map[int]string{}
 	for _, m := range view.Mats {
@@ -206,6 +207,7 @@ func NameMats(view *MatsView, plan store.Plan) {
 // BuildMats lays every discipline's items on the event's mats. held names the match a
 // live score keeper is holding on a mat, by discipline and match id, or "" -- a finished
 // match stays on the mat, and its result on the screens, until Next match is pressed.
+// REQ: FR_MATS_02, DC_ARCH_02
 func BuildMats(inputs []MatsInput, placed map[string]store.Placement, mats int,
 	held func(mat int) (discipline, matchID string)) MatsView {
 
@@ -299,6 +301,7 @@ func stopsBefore(head, prev *matEntry) string {
 // within one discipline it may, and into another only once the organizer has released next.
 // Pools, eliminations and finals of one discipline follow each other; another discipline's
 // work is somebody else's day, and the organizer decides when it starts.
+// REQ: FR_MATS_02
 func ShouldAdvanceToDiscipline(from, next WorkItem, p store.Placement) bool {
 	return from.Discipline == next.Discipline || p.Released
 }

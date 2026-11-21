@@ -44,6 +44,7 @@ func RecommendedMats(entrants, maxPool int, lim Limits) int {
 //
 // Anything it could not satisfy comes back in Violations rather than being guaranteed
 // away (design §6 item 9).
+// REQ: FR_POOLS_01
 func Generate(t store.Tournament, competitors []store.Competitor, lim Limits) (store.Tournament, error) {
 	entered := make([]store.Competitor, 0, len(competitors))
 	for _, c := range competitors {
@@ -117,6 +118,7 @@ func Generate(t store.Tournament, competitors []store.Competitor, lim Limits) (s
 
 // poolCount picks how many pools to draw. Uneven sizes are accepted; what is reported is
 // a range that could not be honoured at all.
+// REQ: FR_POOLS_01
 func poolCount(n, min, max, ceiling int, violations *[]string) int {
 	count := (n + max - 1) / max
 	if count < 1 {

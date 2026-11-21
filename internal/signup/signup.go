@@ -147,6 +147,7 @@ type Participant struct {
 // and its disciplines to enter (#142). The disciplines are given by the caller -- the
 // event, which knows them -- rather than read off the programme, so a discipline is
 // entered under its own name and there is nothing to match up.
+// REQ: FR_SIGNUP_01
 func BuildDefinition(ev store.Event, name string, disciplines []TournamentInfo) Definition {
 	def := Definition{
 		Format:       DefinitionFormat,
@@ -311,6 +312,7 @@ func (r *Response) follow(moved map[string]string) {
 // somebody else's to import, and says so rather than being an error. personOf is who an
 // email already is in the event, or "" -- nil for nobody -- so somebody who signed up
 // again from another device is not entered twice.
+// REQ: FR_SIGNUP_01, DC_SIGNUP_02
 func Check(def Definition, mine string, files []File, existing []store.Competitor, staff []store.StaffMember, personOf func(email string) string) Preview {
 	known := map[string]TournamentInfo{}
 	for _, t := range def.Tournaments {
@@ -463,6 +465,7 @@ func unknownEntries(res Response, known map[string]TournamentInfo) string {
 
 // Import turns the rows a preview marked New into competitors, numbered by the caller's
 // own scheme. Only New: everything else the organizer saw as a refusal stays refused.
+// REQ: FR_SIGNUP_01
 func Import(p Preview, nextID func([]store.Competitor) string, existing []store.Competitor) []store.Competitor {
 	out := append([]store.Competitor(nil), existing...)
 	for _, row := range p.Rows {

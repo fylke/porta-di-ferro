@@ -1,6 +1,7 @@
 {
   "name": "exchange-after-a-cap-is-ignored",
   "description": "After a cap the match is over by rule, so a stray write cannot move a score off a recorded result. It is not undoable either, because it changed nothing.",
+  "requirements": ["FR_MATCH_02"],
   "events": [
     {
       "seq": 1,

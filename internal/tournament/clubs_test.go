@@ -77,6 +77,7 @@ func sizesWithinOne(t *testing.T, tr store.Tournament) {
 	}
 }
 
+// REQ: FR_POOLS_01
 func TestManyClubsSpreadOnePerPool(t *testing.T) {
 	field := clubbed("MSL", 4, "GHFS", 4, "Uppsala", 4, "Malmö", 4, "Örebro", 4, "Umeå", 4, "Lund", 4)
 	tr, err := tournament.Generate(store.Tournament{Mats: 2, MinPoolSize: 7, MaxPoolSize: 7, Seed: 7}, field, tournament.DefaultLimits())
@@ -144,6 +145,7 @@ func TestGreedAloneIsNotEnough(t *testing.T) {
 	}
 }
 
+// REQ: FR_POOLS_01
 func TestUnevenPoolSizesStayWithinOne(t *testing.T) {
 	field := clubbed("MSL", 9, "GHFS", 6, "Uppsala", 5, "", 3)
 	for seed := int64(1); seed <= 20; seed++ {
@@ -179,6 +181,7 @@ func TestUnevenPoolSizesStayWithinOne(t *testing.T) {
 	}
 }
 
+// REQ: FR_POOLS_01
 func TestTheDrawIsReproducibleFromItsSeed(t *testing.T) {
 	field := clubbed("MSL", 6, "GHFS", 5, "Uppsala", 4, "Lund", 3)
 	a, _ := tournament.Generate(store.Tournament{Mats: 2, MinPoolSize: 4, MaxPoolSize: 7, Seed: 42}, field, tournament.DefaultLimits())

@@ -1,3 +1,4 @@
+<!-- REQ: US_COMP_02, US_SPEC_03 -->
 <script lang="ts">
   import { onMount } from 'svelte';
   import { Clock, Live, nameLookup } from './lib-display.svelte';

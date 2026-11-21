@@ -17,6 +17,7 @@ function item(id: string, status: ItemView['status']): ItemView {
   return { id, status } as ItemView;
 }
 
+// REQ: FR_MATS_02, FR_OFFLINE_02
 describe('runnable', () => {
   const mat: MatView = {
     mat: 1,

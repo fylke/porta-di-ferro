@@ -1,6 +1,7 @@
 {
   "name": "before-the-flash-is-an-ordinary-exchange",
   "description": "One second before the flash, a confirmation is ordinary and raises nothing.",
+  "requirements": ["FR_MATCH_06"],
   "events": [
     {
       "seq": 1,

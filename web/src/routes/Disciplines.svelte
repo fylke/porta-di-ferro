@@ -1,3 +1,4 @@
+<!-- REQ: FR_DISCIPLINE_01 -->
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api, type DisciplineSummary } from '../api';

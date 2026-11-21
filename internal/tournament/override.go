@@ -21,6 +21,7 @@ import (
 // it did before the field existed.
 
 // DefaultMat is where pool number lands with nobody overriding: ((N-1) mod mats)+1.
+// REQ: FR_MATS_01
 func DefaultMat(number, mats int) int {
 	if mats < 1 {
 		return 1
@@ -29,6 +30,7 @@ func DefaultMat(number, mats int) int {
 }
 
 // MovePool puts a pool on another mat, at the back of that mat's queue.
+// REQ: FR_MATS_01
 func MovePool(t store.Tournament, number, mat int) (store.Tournament, error) {
 	if mat < 1 || mat > t.Mats {
 		return t, fmt.Errorf("mat must be between 1 and %d", t.Mats)
@@ -56,6 +58,7 @@ func MovePool(t store.Tournament, number, mat int) (store.Tournament, error) {
 
 // ReorderPool moves a pool one step up (earlier) or down (later) in its mat's queue. A
 // step past either end is not an error: the pool is already where it was asked to go.
+// REQ: FR_MATS_01
 func ReorderPool(t store.Tournament, number int, up bool) (store.Tournament, error) {
 	i := poolIndex(t, number)
 	if i < 0 {
@@ -84,6 +87,7 @@ func ReorderPool(t store.Tournament, number int, up bool) (store.Tournament, err
 // Overridden reports whether a pool sits anywhere other than where the default mapping
 // would put it -- on another mat, or out of number order on its own. The organizer view
 // shows this, so nobody has to wonder why mat 2 is running pool 3.
+// REQ: FR_MATS_01
 func Overridden(t store.Tournament, number int) bool {
 	i := poolIndex(t, number)
 	if i < 0 {

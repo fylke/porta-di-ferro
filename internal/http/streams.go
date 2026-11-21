@@ -48,6 +48,7 @@ func (c *Coordinator) hubFor(topic string) *hub {
 // streams serves several hubs over one Server-Sent Events connection. When any of them
 // drops this subscriber -- it fell behind, or its discipline was reloaded -- the whole
 // stream ends, and the browser's EventSource opens it again and asks for a fresh picture.
+// REQ: DC_TRANSPORT_01
 func (c *Coordinator) streams(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {

@@ -13,6 +13,7 @@ import (
 // TestPDFExportIsARealDocument is design §7 item 12 against the real binary: a scored
 // tournament comes out as a PDF with a page per pool, and an undrawn one as a PDF that
 // says so rather than an error.
+// REQ: FR_EXPORT_01
 func TestPDFExportIsARealDocument(t *testing.T) {
 	s := start(t)
 

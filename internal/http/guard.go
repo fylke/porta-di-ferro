@@ -42,6 +42,7 @@ var hallWrites = regexp.MustCompile(`^/api/(matches/[^/]+/(events|claim)|clients
 var disciplinePrefix = regexp.MustCompile(`^/api/d/[^/]+/`)
 
 // guard puts the rules above in front of a handler.
+// REQ: NFR_SEC_01, NFR_SEC_02
 func guard(next http.Handler) http.Handler {
 	own := &ownAddresses{}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -75,6 +76,7 @@ const (
 )
 
 // hallWrite says a write is one any device in the hall may make.
+// REQ: NFR_SEC_01
 func hallWrite(r *http.Request) bool {
 	p := r.URL.Path
 	if loc := disciplinePrefix.FindStringIndex(p); loc != nil {
@@ -88,6 +90,7 @@ func hallWrite(r *http.Request) bool {
 }
 
 // fromLoopback says the request came from this PC.
+// REQ: NFR_SEC_01
 func fromLoopback(r *http.Request) bool {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
@@ -99,6 +102,7 @@ func fromLoopback(r *http.Request) bool {
 
 // crossSite says the browser sent the request from another site's page. A client that is
 // not a browser sends neither header, and is not one.
+// REQ: NFR_SEC_02
 func crossSite(r *http.Request) bool {
 	switch r.Header.Get("Sec-Fetch-Site") {
 	case "same-origin", "none":
@@ -124,6 +128,7 @@ type ownAddresses struct {
 	checked time.Time
 }
 
+// REQ: NFR_SEC_02
 func (o *ownAddresses) has(hostport string) bool {
 	host := hostport
 	if h, _, err := net.SplitHostPort(hostport); err == nil {

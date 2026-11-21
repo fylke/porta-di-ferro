@@ -27,6 +27,7 @@ describe('one stream per page (#161)', () => {
     FakeSource.all = [];
   });
 
+  // REQ: DC_TRANSPORT_01
   it('carries every topic a page follows over one connection, and hands each its own', async () => {
     vi.stubGlobal('EventSource', FakeSource);
     const { follow } = await import('./streams');

@@ -1,3 +1,4 @@
+<!-- REQ: US_ORG_06, US_COMP_02 -->
 <script lang="ts">
   import type { Snapshot } from '../api';
   import { nameLookup } from './lib-display.svelte';

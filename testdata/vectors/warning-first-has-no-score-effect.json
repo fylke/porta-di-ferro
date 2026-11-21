@@ -1,6 +1,7 @@
 {
   "name": "warning-first-has-no-score-effect",
   "description": "Level 1 is recorded and displayed and nothing else.",
+  "requirements": ["FR_MATCH_04"],
   "events": [
     {
       "seq": 1,

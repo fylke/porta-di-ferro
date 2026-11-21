@@ -1,3 +1,4 @@
+<!-- REQ: US_ORG_02 -->
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api, type Competitor } from '../api';

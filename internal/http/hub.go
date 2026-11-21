@@ -73,6 +73,7 @@ func (h *hub) subscribers() int {
 }
 
 // serveStream holds an SSE stream open on a hub: a discipline's, or the event's.
+// REQ: DC_TRANSPORT_01
 func serveStream(w http.ResponseWriter, r *http.Request, h *hub) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {

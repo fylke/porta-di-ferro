@@ -54,6 +54,7 @@ func TestTheSameRefereeStaysOnTheMat(t *testing.T) {
 }
 
 // Never on a mat while fencing, in any discipline; never on two mats at once.
+// REQ: FR_STAFF_01
 func TestNeverWhileFencingOrOnAnotherMat(t *testing.T) {
 	r := staffing.Assign(staffing.Input{Crew: heads,
 		Members: []store.StaffMember{member("ann", "p-ann", "head-ref"), member("bo", "p-bo", "head-ref")},
@@ -77,6 +78,7 @@ func TestNeverWhileFencingOrOnAnotherMat(t *testing.T) {
 // #153: somebody competing in another discipline is not free in the holes in their own
 // schedule, from its first item until they are out of it. In their own discipline they may
 // still referee a pool they are not in.
+// REQ: FR_STAFF_01
 func TestNeverWhileCompetingInAnotherDiscipline(t *testing.T) {
 	items := []staffing.Item{
 		item("ls/pool-1", "ls", 1, 0, 60, "p1"),
@@ -146,6 +148,7 @@ func TestOnlyOfferedRolesAndDisciplines(t *testing.T) {
 
 // The organizer's choices stand, and are reported when they break a rule; an item under
 // way keeps its crew.
+// REQ: FR_STAFF_01
 func TestTheOrganizersChoicesStand(t *testing.T) {
 	r := staffing.Assign(staffing.Input{Crew: heads,
 		Members: []store.StaffMember{member("ann", "p-ann", "head-ref"), member("bo", "p-bo", "head-ref")},

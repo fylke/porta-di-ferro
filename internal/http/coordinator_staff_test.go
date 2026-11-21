@@ -56,6 +56,7 @@ func TestEachDisciplinesStaffIsLifted(t *testing.T) {
 	}
 }
 
+// REQ: US_ORG_05
 func TestStaffByHand(t *testing.T) {
 	h, ls := twoDisciplines(t)
 	h.must("POST", "/api/d/"+ls+"/competitors", map[string]string{"name": "Astrid", "club": "Gbg"}, nil)
@@ -107,6 +108,7 @@ type drawnState struct {
 }
 
 // The staff on the plan: suggested, applied, checked, chosen by hand, and on a person's page.
+// REQ: US_ORG_05, FR_STAFF_01
 func TestStaffingThePlan(t *testing.T) {
 	h, ls := twoDisciplines(t)
 	h.c.Clock = func() time.Time { return time.Date(2026, 11, 14, 8, 0, 0, 0, time.Local) }

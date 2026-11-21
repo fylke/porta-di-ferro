@@ -38,6 +38,7 @@ type Suggestion struct {
 }
 
 // Suggest proposes a plan for the items not yet under way, over mats mats.
+// REQ: FR_PLAN_01
 func Suggest(in Input, mats int) Suggestion {
 	if mats < 1 {
 		mats = 1

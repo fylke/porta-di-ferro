@@ -154,6 +154,7 @@ func TestTheVisitorArrivesInARunningTournament(t *testing.T) {
 
 // The logs are real logs. The organizer's history editor opens one and the client engine
 // replays it, so what is in there has to be an ordinary match.
+// REQ: DC_API_02
 func TestTheMatchLogsAreRealLogs(t *testing.T) {
 	d := demo.New()
 	snap := state(t, d)
@@ -206,6 +207,7 @@ func TestTheMatchLogsAreRealLogs(t *testing.T) {
 // Scoring in the demo moves the standings, because the standings are computed from the
 // logs by the same code the server runs. This is the whole reason the demo is Go
 // compiled to wasm rather than a folder of fixture JSON.
+// REQ: DC_API_02
 func TestScoringMovesTheStandings(t *testing.T) {
 	d := demo.New()
 	before := state(t, d)
@@ -378,6 +380,7 @@ func TestWhatTheDemoCannotDoItRefuses(t *testing.T) {
 
 // The printable pool sheets are the same document the server produces, because it is the
 // same function building it.
+// REQ: FR_EXPORT_01
 func TestThePDFExportIsARealDocument(t *testing.T) {
 	d := demo.New()
 	res := d.Request("GET", "/api/export.pdf", nil)

@@ -279,6 +279,7 @@ func (d *Demo) Request(method, path string, body []byte) Response {
 }
 
 // routes are a discipline's paths, as httpapi.Server.Handler registers them.
+// REQ: DC_API_02
 func (d *Demo) routes() []route {
 	answer := func(f func() Response) func(call) Response { return func(call) Response { return f() } }
 	return []route{

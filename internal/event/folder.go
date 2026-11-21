@@ -305,6 +305,7 @@ func (f *Folder) readLocked() (File, error) {
 
 // Update reads event.json, lets change edit it, and writes it back, under the folder's
 // lock so two edits cannot lose each other.
+// REQ: NFR_DATA_01
 func (f *Folder) Update(change func(*File) error) (File, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -346,6 +347,7 @@ func (f *Folder) Displays() (map[string]string, error) {
 }
 
 // SaveDisplays replaces the screens' assignments.
+// REQ: FR_DISPLAY_02
 func (f *Folder) SaveDisplays(d map[string]string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -467,6 +469,7 @@ func (f *Folder) Slugs() ([]string, error) {
 // slug comes from the name and never changes after, because it is in every address and
 // in the folder's name: renaming a discipline renames what the pages say, not where it is.
 // The one exception is a discipline made with no name, which moves once (Reslug).
+// REQ: FR_DISCIPLINE_01
 func (f *Folder) Create(name string) (string, error) {
 	slugs, err := f.Slugs()
 	if err != nil {
@@ -496,6 +499,7 @@ func (f *Folder) Create(name string) (string, error) {
 // Retire takes a discipline out of the event. Its folder is moved under retired/ with
 // the time beside its name, not deleted: a discipline retired by mistake, or the results
 // of one somebody asks about next month, is a folder to move back by hand.
+// REQ: FR_DISCIPLINE_01
 func (f *Folder) Retire(slug string) (string, error) {
 	src := f.DisciplineDir(slug)
 	if _, err := os.Stat(src); err != nil {

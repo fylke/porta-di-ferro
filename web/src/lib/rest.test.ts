@@ -12,6 +12,7 @@ import {
   remaining,
 } from './rest';
 
+// REQ: FR_REST_01
 describe('the rest between back-to-back matches', () => {
   it('is offered for whoever fenced the match before', () => {
     const before = { id: 'm1', red: 'c1', blue: 'c2' };

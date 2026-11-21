@@ -274,6 +274,7 @@ func (s *Server) release(w http.ResponseWriter, r *http.Request) {
 
 // assignDisplay is the organizer telling a screen what to show. Persisted, so a hall of
 // screens survives the organizer's laptop rebooting.
+// REQ: FR_DISPLAY_02
 func (s *Server) assignDisplay(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Target string `json:"target"`

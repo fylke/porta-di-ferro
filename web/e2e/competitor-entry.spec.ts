@@ -7,6 +7,7 @@ import { aDiscipline } from './discipline';
 // The name field used to be cleared when the server answered an add. A volunteer who had
 // already started typing the next name lost it, and the add after that sent nothing --
 // four names typed in a row came out as two.
+// REQ: US_ORG_02
 test('a name typed while the last one is saving is kept', async ({ page, request }) => {
   await page.goto(`/d/${await aDiscipline(request)}/admin`);
   const name = page.getByPlaceholder('Name');

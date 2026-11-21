@@ -84,6 +84,7 @@ export class ScoreKeeperSession {
    * which is what gets it to the displays through the same path as the score and lets it
    * work with no server to talk to.
    */
+  // REQ: FR_MATCH_10
   async setOptions(patch: Partial<Options>, elapsedMs: number): Promise<void> {
     const next = { ...this.options, ...patch };
     await this.commit(this.event('options', elapsedMs, { options: next }));
@@ -102,6 +103,7 @@ export class ScoreKeeperSession {
    * most common way a match clock ends up wrong at a competition. Deselecting does not
    * stop it again: the clock is now right, and a mis-tap on the point is not a time-out.
    */
+  // REQ: FR_MATCH_07, FR_MATCH_06
   togglePoint(side: Side, value: number): void {
     const sel = this.selection(side);
     const selecting = sel.value !== value;
@@ -115,6 +117,7 @@ export class ScoreKeeperSession {
    * the next tap is an ordinary warning again. Cancelling a mis-picked escalation never
    * means going back into the menu (design §4).
    */
+  // REQ: FR_MATCH_07, FR_MATCH_04
   toggleWarning(side: Side): void {
     const sel = this.selection(side);
     sel.penalty = sel.penalty > 0 ? 0 : 1;
@@ -127,6 +130,7 @@ export class ScoreKeeperSession {
    * is the second gate. What the engine does with it is the same as with an ordinary
    * warning, applied two or three levels at once.
    */
+  // REQ: FR_MATCH_04
   escalate(side: Side, levels: 2 | 3): void {
     this.selection(side).penalty = levels;
   }
@@ -150,6 +154,7 @@ export class ScoreKeeperSession {
    * happened, and replaying it moves the base the live clock counts up from -- so the
    * anchor has to move by the same amount or the interval between them is counted twice.
    */
+  // REQ: FR_OFFLINE_01, NFR_PERF_01
   private async commit(event: Event): Promise<void> {
     const before = this.state.elapsedMs;
     await this.log.write([event]);
@@ -170,6 +175,7 @@ export class ScoreKeeperSession {
    * Commits the exchange. Confirming with nothing selected records a no-score exchange,
    * which is a real event and is logged as such.
    */
+  // REQ: FR_MATCH_07
   async confirm(elapsedMs: number): Promise<void> {
     if (this.state.ended) return;
     const event = this.event('exchange', elapsedMs, {
@@ -182,6 +188,7 @@ export class ScoreKeeperSession {
     await this.commit(event);
   }
 
+  // REQ: FR_MATCH_06
   async toggleClock(elapsedMs: number): Promise<void> {
     if (this.state.ended) return;
     if (!this.state.running) {
@@ -208,6 +215,7 @@ export class ScoreKeeperSession {
    * Puts the clock back to 00:00, stopped. For a clock started by mistake -- and a
    * correction appended like any other, so the log still shows that it happened.
    */
+  // REQ: FR_MATCH_06
   async resetClock(elapsedMs: number): Promise<void> {
     if (this.state.ended) return;
     await this.commit(this.event('timer', elapsedMs, { timer: { action: 'reset' } }));
@@ -215,6 +223,7 @@ export class ScoreKeeperSession {
   }
 
   /** Undo of the last confirmed exchange. Appends a correction; never mutates history. */
+  // REQ: FR_MATCH_05
   async undo(elapsedMs: number): Promise<void> {
     const target = this.state.undoableSeq;
     if (target === 0) return;
@@ -227,6 +236,7 @@ export class ScoreKeeperSession {
   }
 
   /** A match conceded before it starts. Recorded 0-8. */
+  // REQ: FR_MATCH_08
   async forfeit(side: Side): Promise<void> {
     await this.commit(this.event('end', 0, { end: { reason: 'forfeit', forfeiter: side } }));
     this.runningSince = null;

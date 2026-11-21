@@ -1,6 +1,7 @@
 {
   "name": "final-exchange-ends-the-match",
   "description": "The timestamp of the final confirmed exchange is the match end time; the running clock is disregarded from that point.",
+  "requirements": ["FR_MATCH_06"],
   "events": [
     {
       "seq": 1,

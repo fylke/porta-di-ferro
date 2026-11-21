@@ -1,3 +1,4 @@
+<!-- REQ: US_ORG_07, FR_MATS_02 -->
 <script lang="ts" module>
   /** Moves not applied yet, kept while the board is off screen -- a tab away, say. */
   let kept: import('../lib/board').DraftMove[] = [];

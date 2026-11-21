@@ -21,6 +21,7 @@ describe('a penalty loss is described by how it was reached', () => {
     expect(out.detail).toBe('Bo wins 8–0');
   });
 
+  // REQ: FR_MATCH_04, US_SK_05
   it('names an immediate disqualification', () => {
     const log = [exchange(1, [0, 0], [0, 3])];
     const out = penaltyLoss(MSL, replay(MSL, log), names, log);
@@ -48,6 +49,7 @@ describe('a penalty loss is described by how it was reached', () => {
     );
   });
 
+  // REQ: FR_MATCH_09
   it('says so when both reach the losing level at once', () => {
     const log = [exchange(1, [0, 3], [0, 3])];
     expect(penaltyLoss(MSL, replay(MSL, log), names, log).headline).toBe(
@@ -68,6 +70,7 @@ describe('the outcome of an ended match', () => {
     expect(ended(MSL, replay(MSL, draw), names, draw)).toEqual({ headline: 'Draw', detail: '0–0' });
   });
 
+  // REQ: FR_MATCH_08, US_SK_05
   it('names the forfeiter, not the winner', () => {
     const log: Event[] = [
       { seq: 1, type: 'end', elapsedMs: 0, end: { reason: 'forfeit', forfeiter: 'blue' } },
@@ -84,6 +87,7 @@ describe('the outcome of an ended match', () => {
   });
 });
 
+// REQ: FR_MATCH_02, US_SK_06
 describe('the dialog that asks whether to end the match', () => {
   it('names the winner and the score at a point cap', () => {
     const state = { ...replay(MSL, [exchange(1, [2, 0], [0, 0])]), pending: 'point_cap' as const };

@@ -9,6 +9,7 @@ import (
 	"github.com/fylke/porta-di-ferro/internal/store"
 )
 
+// REQ: FR_OFFLINE_01, NFR_DATA_02
 func TestAppendIsIdempotentOnSequence(t *testing.T) {
 	s, err := store.Open(t.TempDir())
 	if err != nil {
@@ -37,6 +38,7 @@ func TestAppendIsIdempotentOnSequence(t *testing.T) {
 	}
 }
 
+// REQ: FR_OFFLINE_01
 func TestEventsAfterSequence(t *testing.T) {
 	s, _ := store.Open(t.TempDir())
 	s.Append("p1m1", []match.Event{{Seq: 1, Type: match.TypeExchange, Exchange: &match.Exchange{}}})
@@ -52,6 +54,7 @@ func TestEventsAfterSequence(t *testing.T) {
 
 // TestTruncatedFinalLineCostsOneEvent is why the log is newline-delimited: a crash
 // mid-write loses the last line, not the file.
+// REQ: NFR_DATA_01
 func TestTruncatedFinalLineCostsOneEvent(t *testing.T) {
 	dir := t.TempDir()
 	s, _ := store.Open(dir)
@@ -80,6 +83,7 @@ func TestTruncatedFinalLineCostsOneEvent(t *testing.T) {
 	}
 }
 
+// REQ: NFR_DATA_01
 func TestMissingFilesAreAnEmptyTournament(t *testing.T) {
 	s, _ := store.Open(t.TempDir())
 	competitors, err := s.Competitors()
@@ -162,6 +166,7 @@ func TestARetryAfterAFailedWriteLands(t *testing.T) {
 }
 
 // #166: a history edit moves the revision too, so the hall built after it is not the old one.
+// REQ: FR_EDIT_01
 func TestAHistoryEditMovesTheRevision(t *testing.T) {
 	s, err := store.Open(t.TempDir())
 	if err != nil {

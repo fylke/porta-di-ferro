@@ -1,3 +1,4 @@
+<!-- REQ: US_SK_01 -->
 <script lang="ts">
   import { onMount } from 'svelte';
   import { navigate } from '../router.svelte';

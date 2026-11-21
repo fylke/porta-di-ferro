@@ -178,6 +178,7 @@ func stamp(t time.Time) string {
 }
 
 // ViewForecast turns the forecast into what the pages read.
+// REQ: FR_PLAN_01
 func ViewForecast(in forecast.Input, r forecast.Result, inputs []MatsInput, timings store.Timings) ForecastView {
 	out := ForecastView{Items: []ItemTimes{}, Pace: []PaceView{}, Warnings: []WarningView{}, Programme: []ProgrammeRow{},
 		End: stamp(r.End), PlannedEnd: stamp(r.PlannedEnd), Timings: timings}

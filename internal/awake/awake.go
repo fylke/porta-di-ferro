@@ -13,6 +13,7 @@ import "time"
 const every = time.Minute
 
 // Keep asks the system to stay awake until stop is closed.
+// REQ: NFR_INSTALL_02
 func Keep(stop <-chan struct{}) {
 	go func() {
 		t := time.NewTicker(every)

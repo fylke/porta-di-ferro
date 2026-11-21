@@ -1,6 +1,7 @@
 {
   "name": "end-match-red-wins",
   "description": "An ordinary win: the higher score takes it, and match points follow in the standings.",
+  "requirements": ["FR_MATCH_01"],
   "events": [
     {
       "seq": 1,

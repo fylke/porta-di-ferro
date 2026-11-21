@@ -15,6 +15,7 @@ import (
 //
 // This is not a separate mode anyone has to build. Local-first writes already give it,
 // and the client simply pushes when it can.
+// REQ: FR_OFFLINE_02, NFR_PERF_01
 func TestOfflineClientResumes(t *testing.T) {
 	s := start(t)
 	id := setupOneMatch(t, s)
@@ -62,6 +63,7 @@ func TestOfflineClientResumes(t *testing.T) {
 // TestRetriesAreIdempotent is what makes the write path safe to call blindly: the primary
 // key is (match, seq), so a client that pushes the same batch again -- because it never
 // saw the response -- changes nothing.
+// REQ: FR_OFFLINE_01
 func TestRetriesAreIdempotent(t *testing.T) {
 	s := start(t)
 	id := setupOneMatch(t, s)
@@ -106,6 +108,7 @@ func TestRetriesAreIdempotent(t *testing.T) {
 // TestUndoIsAppendedNotMutated checks that a correction leaves the history intact -- the
 // property that makes full history editing a UI change in Milestone 2 rather than a data
 // migration.
+// REQ: FR_MATCH_05, NFR_DATA_02, US_SK_04
 func TestUndoIsAppendedNotMutated(t *testing.T) {
 	s := start(t)
 	id := setupOneMatch(t, s)

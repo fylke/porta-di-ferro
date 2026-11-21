@@ -17,6 +17,8 @@ const vectorDir = join(import.meta.dirname, '../../../../testdata/vectors');
 interface Vector {
   name: string;
   description: string;
+  /** The IDs in req/ the vector verifies, for the requirements check (req/trace.sh). */
+  requirements: string[];
   events: Event[];
   expect: State;
 }
@@ -28,6 +30,7 @@ function loadVectors(): Vector[] {
     .map((f) => JSON.parse(readFileSync(join(vectorDir, f), 'utf8')) as Vector);
 }
 
+// REQ: DC_ENGINE_01
 describe('shared vectors', () => {
   const vectors = loadVectors();
 
@@ -41,6 +44,7 @@ describe('shared vectors', () => {
     });
   }
 
+  // REQ: FR_MATCH_01
   it('replays deterministically', () => {
     for (const v of vectors) {
       expect(replay(MSL, v.events)).toEqual(replay(MSL, v.events));
@@ -106,6 +110,7 @@ describe('properties', () => {
     );
   });
 
+  // REQ: FR_MATCH_04
   it('penalty escalation is monotonic', () => {
     fc.assert(
       fc.property(arbLog, (events) => {

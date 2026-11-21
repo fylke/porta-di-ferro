@@ -12,6 +12,7 @@ import (
 // TestEditingAMatchLogRewritesItAndKeepsABackup is design §7 item 1 against the real
 // binary: the organizer corrects a finished match, the derived state and the standings
 // follow, and the version that was replaced is on disk beside the log.
+// REQ: FR_EDIT_01
 func TestEditingAMatchLogRewritesItAndKeepsABackup(t *testing.T) {
 	s := start(t)
 	id := setupOneMatch(t, s)

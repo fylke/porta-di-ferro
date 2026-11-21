@@ -1,3 +1,4 @@
+<!-- REQ: US_SPEC_01, FR_DISPLAY_01, FR_DISPLAY_03 -->
 <script lang="ts">
   import { onMount } from 'svelte';
   import { keepAwake } from '../lib/wakelock';

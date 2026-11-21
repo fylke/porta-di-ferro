@@ -94,6 +94,7 @@ type worker struct {
 
 // NewCoordinator loads every discipline in the event folder. An event with none has none
 // (#149): a first start is a welcome, and the disciplines come from planning the event.
+// REQ: DC_ARCH_01
 func NewCoordinator(folder *event.Folder, assets fs.FS) (*Coordinator, error) {
 	c := &Coordinator{
 		folder:   folder,
@@ -140,6 +141,7 @@ func (c *Coordinator) Close() {
 
 // load opens one discipline. Its two files are read once here so a parse error is found
 // now, named, and kept to this discipline.
+// REQ: FR_DISCIPLINE_02
 func (c *Coordinator) load(slug string) *worker {
 	w := &worker{slug: slug}
 	dir := c.folder.DisciplineDir(slug)
@@ -253,6 +255,7 @@ func (c *Coordinator) announce() {
 
 // recoverLogged is the rule for background goroutines (proposal §11): a panic in one is
 // logged and contained rather than taking every discipline down with it.
+// REQ: FR_DISCIPLINE_02
 func recoverLogged(what string) {
 	if r := recover(); r != nil {
 		log.Printf("porta: recovered from a panic while %s: %v", what, r)
@@ -268,6 +271,7 @@ func (c *Coordinator) EventInfo() (store.Event, error) {
 }
 
 // SaveEventInfo writes the day around the fencing and tells every page in the hall.
+// REQ: DC_ARCH_03
 func (c *Coordinator) SaveEventInfo(ev store.Event) error {
 	if _, err := c.folder.Update(func(f *event.File) error {
 		f.Event = ev
@@ -379,6 +383,7 @@ func (c *Coordinator) summarizeFrom(sn snapped) hall.DisciplineSummary {
 // Handler is the whole hall's address. The path says what a request is about: the event,
 // one discipline by name, or -- while the event has one discipline -- that one, by the
 // paths every client used before there were several (proposal §6).
+// REQ: DC_ARCH_01
 func (c *Coordinator) Handler() http.Handler {
 	mux := http.NewServeMux()
 
@@ -472,6 +477,7 @@ func (c *Coordinator) Handler() http.Handler {
 
 // discipline hands a request to the discipline it names, with the prefix taken off: what
 // it answers is exactly what it answered as a run of its own.
+// REQ: DC_API_01
 func (c *Coordinator) discipline(w http.ResponseWriter, r *http.Request) {
 	slug := r.PathValue("d")
 	c.mu.Lock()
@@ -645,6 +651,7 @@ func (c *Coordinator) nameTaken(name, except string) error {
 
 // addDiscipline is another folder and another Server in this same process: what used to
 // be a second copy of the application on the next free port (#49).
+// REQ: FR_DISCIPLINE_01
 func (c *Coordinator) addDiscipline(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Name string `json:"name"`
@@ -684,6 +691,7 @@ func (c *Coordinator) addDiscipline(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, c.summarize(wk))
 }
 
+// REQ: FR_DISCIPLINE_01
 func (c *Coordinator) renameDiscipline(w http.ResponseWriter, r *http.Request) {
 	slug := r.PathValue("d")
 	var in struct {
@@ -810,6 +818,7 @@ func (c *Coordinator) moveWorker(old *worker, move func() (string, error)) (*wor
 // retireDiscipline takes a discipline out of the event. Its folder is kept under
 // retired/, never deleted. The last one can go too: an event with none is one still being
 // planned (#149).
+// REQ: FR_DISCIPLINE_01
 func (c *Coordinator) retireDiscipline(w http.ResponseWriter, r *http.Request) {
 	slug := r.PathValue("d")
 	c.mu.Lock()

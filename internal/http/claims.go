@@ -56,6 +56,7 @@ type claimResult struct {
 
 // claimMatch is POST /api/matches/{id}/claim. Must be called with writeMu held by
 // nobody: it takes it.
+// REQ: FR_TABLET_01
 func (s *Server) claimMatch(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var in struct {
@@ -143,6 +144,7 @@ func (s *Server) getClaim(w http.ResponseWriter, r *http.Request) {
 }
 
 // releaseClaim is DELETE /api/matches/{id}/claim: the graceful half.
+// REQ: FR_TABLET_01
 func (s *Server) releaseClaim(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	client := r.URL.Query().Get("client")
@@ -193,6 +195,7 @@ var errBadEpoch = errors.New("the epoch header is not a number")
 
 // admit decides whether a push may be appended. Called with writeMu held. A stale push
 // is quarantined here and reported back as such; the caller only has to stop.
+// REQ: FR_TABLET_02
 func (s *Server) admit(r *http.Request, id string, events []match.Event) (stale bool, err error) {
 	// Scored in a draw that has since been replaced (#160): the match id is the same, the
 	// match is not. Set aside for the organizer, exactly like a push on a dead epoch,

@@ -24,6 +24,7 @@ function ids(board: Map<number, ItemView[]>, mat: number): string[] {
   return (board.get(mat) ?? []).map((it) => it.id);
 }
 
+// REQ: US_ORG_07, FR_MATS_02
 describe('drafted', () => {
   const items = [
     item('sa/pool-1', 1, 1, { status: 'running', movable: false }),

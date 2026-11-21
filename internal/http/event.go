@@ -14,6 +14,7 @@ import (
 //
 // A server without one -- the Go tests, mostly -- keeps the day in its own
 // tournament.json, as every run did before events existed.
+// REQ: DC_ARCH_03
 type EventInfo interface {
 	EventInfo() (store.Event, error)
 	SaveEventInfo(store.Event) error

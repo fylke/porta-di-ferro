@@ -32,6 +32,7 @@ let flushingAll = false;
  * Outstanding is derived the same way load() derives it, by asking the server what it has,
  * so nothing has to be flagged in storage.
  */
+// REQ: FR_OFFLINE_02
 export async function flushAll(except?: { discipline: string; match: string }): Promise<void> {
   if (flushingAll) return;
   flushingAll = true;
@@ -199,6 +200,7 @@ export class MatchLog {
    * device; refused when another device has it, alive or not, in which case `contested`
    * names it and nothing is pushed until the score keeper takes over or walks away.
    */
+  // REQ: FR_TABLET_01
   private async claim(force = false): Promise<boolean> {
     if (this.epoch > 0 && !force) return true;
     try {
@@ -218,6 +220,7 @@ export class MatchLog {
   }
 
   /** The score keeper has chosen to take the match from the device that holds it. */
+  // REQ: FR_TABLET_01
   async takeOver(): Promise<void> {
     if (await this.claim(true)) await this.flush();
   }
@@ -226,6 +229,7 @@ export class MatchLog {
    * The graceful half of handover: everything this device holds goes to the server, then
    * the match is let go, so the next device claims it without having to take it over.
    */
+  // REQ: FR_TABLET_01
   async release(): Promise<void> {
     this.stop();
     await this.flush();
@@ -239,6 +243,7 @@ export class MatchLog {
   }
 
   /** Appends to the log and returns. The push happens after; so does the disk write. */
+  // REQ: FR_OFFLINE_01, NFR_PERF_01
   async write(events: Event[]): Promise<void> {
     this.events = [...this.events, ...events].sort((a, b) => a.seq - b.seq);
     await db.append(this.discipline, this.matchId, events, this.draw);
@@ -279,6 +284,7 @@ export class MatchLog {
   }
 
   /** Hands everything unsent to the server. Safe to call at any time, from anywhere. */
+  // REQ: FR_OFFLINE_01
   async flush(): Promise<void> {
     if (this.sync === 'pushing' || this.sync === 'stale') return;
     const batch = this.outstanding();
@@ -361,6 +367,7 @@ export class MatchLog {
    * A score keeper between exchanges sends nothing, so without asking it would only find
    * out it had been taken over by having its next exchange set aside (#150).
    */
+  // REQ: FR_TABLET_01
   private async stillOurs(): Promise<void> {
     let claim: Awaited<ReturnType<typeof this.api.claimOf>>;
     try {

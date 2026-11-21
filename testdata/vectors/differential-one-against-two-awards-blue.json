@@ -1,6 +1,7 @@
 {
   "name": "differential-one-against-two-awards-blue",
   "description": "The differential works both ways round; nothing about it favours red.",
+  "requirements": ["FR_MATCH_03"],
   "events": [
     {
       "seq": 1,

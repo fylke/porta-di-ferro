@@ -128,6 +128,7 @@ func TestTheDisciplineNameSurvivesARestart(t *testing.T) {
 // A second discipline is another folder in the event and another tournament in the same
 // process, at the same address (#4, #102). It used to be a second copy of the
 // application on the next free port (#49).
+// REQ: FR_DISCIPLINE_01
 func TestAnEventRunsASecondDiscipline(t *testing.T) {
 	s := start(t)
 

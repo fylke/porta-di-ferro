@@ -1,3 +1,4 @@
+<!-- REQ: US_SK_05, FR_MATCH_10 -->
 <script lang="ts">
   import { COLOURS, type Options, type Side } from '../lib/match';
   import { t } from '../lib/i18n.svelte';

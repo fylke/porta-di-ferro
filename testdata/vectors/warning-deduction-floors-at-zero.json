@@ -1,6 +1,7 @@
 {
   "name": "warning-deduction-floors-at-zero",
   "description": "A deduction against a competitor on no points leaves them on none rather than going negative. design 5 does not say which; a negative score would feed straight into two ranking indices.",
+  "requirements": ["FR_MATCH_04"],
   "events": [
     {
       "seq": 1,

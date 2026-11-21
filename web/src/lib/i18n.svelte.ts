@@ -38,6 +38,7 @@ function detect(): Lang {
 export const lang = $state<{ current: Lang }>({ current: 'en' });
 lang.current = detect();
 
+// REQ: FR_I18N_01
 export function setLang(next: Lang): void {
   lang.current = next;
   try {
@@ -52,6 +53,7 @@ export function setLang(next: Lang): void {
  * Translates a string, filling `{name}` placeholders from params. Reads the current
  * language, so a template expression that calls it follows the toggle.
  */
+// REQ: FR_I18N_01
 export function t(key: string, params?: Record<string, string | number>): string {
   let out = lang.current === 'sv' ? (sv[key] ?? key) : key;
   if (params) {

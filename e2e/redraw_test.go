@@ -20,6 +20,7 @@ import (
 // or losing the scores, because nothing on screen says the numbers are not theirs.
 //
 // So this drives the real binary: score a match, draw again, and read the same slot back.
+// REQ: US_ORG_03
 func TestRedrawingThePoolsRestartsThem(t *testing.T) {
 	s := start(t)
 	for i := 1; i <= 10; i++ {

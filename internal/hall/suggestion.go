@@ -58,6 +58,7 @@ func SignatureOf(s forecast.Suggestion) string {
 
 // ApplySuggestion is the placements a suggestion makes. Every item keeps its draw stamp,
 // its pin and its hold; its mat and place are the suggestion's, settled as planned.
+// REQ: FR_PLAN_01
 func ApplySuggestion(placed map[string]store.Placement, s forecast.Suggestion) map[string]store.Placement {
 	next := make(map[string]store.Placement, len(placed))
 	for k, v := range placed {

@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { aDiscipline } from './discipline';
 
 test.describe('Display & Spectator Views', () => {
+  // REQ: US_SPEC_01, US_SPEC_02, US_SPEC_03, FR_DISPLAY_01, FR_EXPORT_02, FR_I18N_01
   test('renders display views cleanly', async ({ page, request }) => {
     // The roster and the pool sheets are a discipline's, so they are asked for at its own
     // address: other specs add disciplines to the server they share, and the unprefixed

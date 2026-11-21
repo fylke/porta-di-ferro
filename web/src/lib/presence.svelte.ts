@@ -22,6 +22,7 @@ const ID_KEY = 'porta.clientId';
  * threw before it drew, and the taps looked dead (issue #81). getRandomValues works
  * everywhere; Math.random is the fallback for a browser without even that.
  */
+// REQ: NFR_OFFLINE_02
 export function randomId(): string {
   const bytes = new Uint8Array(8);
   if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {

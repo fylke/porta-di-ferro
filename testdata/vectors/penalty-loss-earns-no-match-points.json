@@ -1,6 +1,7 @@
 {
   "name": "penalty-loss-earns-no-match-points",
   "description": "Unlike an ordinary loss, which is worth 3, a penalty loss earns nothing.",
+  "requirements": ["FR_MATCH_04"],
   "events": [
     {
       "seq": 1,

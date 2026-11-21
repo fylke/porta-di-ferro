@@ -57,6 +57,7 @@ func (s *Store) writeAtomic(name string, v any) error {
 
 // WriteJSONAtomic writes v as indented JSON to dir/name by atomic replace. Exported for
 // the event folder above the tournaments, whose files follow the same rule.
+// REQ: NFR_DATA_01
 func WriteJSONAtomic(dir, name string, v any) error {
 	b, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
@@ -155,6 +156,7 @@ func matchFile(id string) (string, error) {
 // Events reads a match log, returning only the records after seq. "Everything after
 // sequence N" is how a client resumes, and it is the same call the Milestone 3 mirror
 // will replicate over.
+// REQ: FR_OFFLINE_01
 func (s *Store) Events(id string, after int) ([]match.Event, error) {
 	rel, err := matchFile(id)
 	if err != nil {
@@ -217,6 +219,7 @@ func (s *Store) LastEventAt(id string) (time.Time, bool) {
 
 // Append writes events to a match log, skipping any sequence number already there.
 // Returns the events actually written, so a caller can push exactly those to subscribers.
+// REQ: FR_OFFLINE_01, NFR_DATA_02
 func (s *Store) Append(id string, events []match.Event) ([]match.Event, error) {
 	rel, err := matchFile(id)
 	if err != nil {

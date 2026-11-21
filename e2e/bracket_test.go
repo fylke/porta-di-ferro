@@ -51,6 +51,7 @@ func inBracket(views []matchView, id string) matchView {
 // TestEliminationsFromPoolsToPodium is design §7 item 3 against the real binary: the
 // cut waits for finished pools, seeds from the overall ranking, fills each round from the
 // results of the last, and ends with a podium.
+// REQ: US_ORG_04, US_COMP_02, FR_ELIM_01, FR_ELIM_02
 func TestEliminationsFromPoolsToPodium(t *testing.T) {
 	s := start(t)
 	for i := 1; i <= 10; i++ {

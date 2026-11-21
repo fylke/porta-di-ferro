@@ -96,6 +96,7 @@ func quarantineFile(id string) (string, error) {
 }
 
 // Quarantine appends late events to a match's quarantine log.
+// REQ: FR_TABLET_02
 func (s *Store) Quarantine(id, client, clientName string, events []match.Event) error {
 	rel, err := quarantineFile(id)
 	if err != nil {

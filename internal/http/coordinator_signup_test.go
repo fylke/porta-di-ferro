@@ -54,6 +54,7 @@ func threeDisciplines(t *testing.T) (*testHall, string) {
 	return h, ls.Slug
 }
 
+// REQ: FR_SIGNUP_01
 func TestOneImportForTheWholeEvent(t *testing.T) {
 	h, ls := threeDisciplines(t)
 

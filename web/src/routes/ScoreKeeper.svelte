@@ -1,3 +1,4 @@
+<!-- REQ: US_SK_02, US_SK_03, US_SK_04, US_SK_05, US_SK_06, NFR_BROWSER_02 -->
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
   import { MatsLive, matOf, runnable, slotKey } from '../lib/mats.svelte';
@@ -80,6 +81,7 @@
    * let go, and the device leaves the mat -- so the next one claims without having to
    * take anything over (design §7 item 10, the graceful case).
    */
+  // REQ: FR_TABLET_01
   async function handOver() {
     menuOpen = false;
     await sk?.log.release();
@@ -187,6 +189,7 @@
   }
 
   /** The score keeper has read the result and is ready for the next two. */
+  // REQ: FR_DISPLAY_03, FR_OFFLINE_02
   function nextMatch() {
     // Let go of the finished match on the way out, so the log is flushed and the claim
     // released before the next device could want it.
@@ -319,6 +322,7 @@
     await sk?.undo(elapsed);
   }
 
+  // REQ: FR_MATCH_08
   function askToForfeit(side: 'red' | 'blue') {
     menuOpen = false;
     askForfeit = side;
@@ -406,6 +410,7 @@
     return who.length === 2 ? t('{a} and {b}', { a: who[0], b: who[1] }) : (who[0] ?? '');
   });
 
+  // REQ: FR_REST_01
   function startRest() {
     keepRest(Date.now() + restLength);
   }

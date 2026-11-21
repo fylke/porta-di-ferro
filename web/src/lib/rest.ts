@@ -26,6 +26,7 @@ interface Bout {
  * once that one is finished. Empty when nobody did, which is when there is nothing to
  * offer.
  */
+// REQ: FR_REST_01
 export function backToBack(previous: Bout | null, next: Bout | null): string[] {
   if (!previous || !next) return [];
   const before = new Set([previous.red, previous.blue].filter(Boolean));
@@ -36,6 +37,7 @@ export function backToBack(previous: Bout | null, next: Bout | null): string[] {
  * A rest length after one press of plus or minus. Before it starts it cannot go below one
  * step -- a rest of nothing is Play -- and a running one is adjusted through `remaining`.
  */
+// REQ: FR_REST_01
 export function adjustLength(ms: number, delta: number): number {
   return Math.max(REST_STEP_MS, ms + delta);
 }

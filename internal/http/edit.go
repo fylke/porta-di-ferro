@@ -12,6 +12,7 @@ import (
 // bracket recompute from the log as they always do, and a score keeper client holding
 // the match is told to reload it, so the correction reaches the mat as well as the
 // tables.
+// REQ: FR_EDIT_01
 func (s *Server) replaceEvents(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var events []match.Event

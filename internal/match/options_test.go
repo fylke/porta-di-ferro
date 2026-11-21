@@ -24,6 +24,7 @@ func TestOptionsOfLastRecordWinsAndDefaultsFillIn(t *testing.T) {
 
 // TestOptionsDoNotTouchTheScore is the property the shared vector states for both engines,
 // checked here directly as well so a change to Replay cannot quietly start reading them.
+// REQ: FR_MATCH_10
 func TestOptionsDoNotTouchTheScore(t *testing.T) {
 	base := []match.Event{
 		{Seq: 1, Type: match.TypeExchange, ElapsedMS: 1000,

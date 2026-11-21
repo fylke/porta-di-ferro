@@ -1,6 +1,7 @@
 {
   "name": "timer-reset-returns-to-zero",
   "description": "A reset puts the clock back to 00:00 and stops it, whatever time the event was stamped with.",
+  "requirements": ["FR_MATCH_06"],
   "events": [
     {
       "seq": 1,

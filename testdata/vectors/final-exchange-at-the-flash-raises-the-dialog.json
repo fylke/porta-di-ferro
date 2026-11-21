@@ -1,6 +1,7 @@
 {
   "name": "final-exchange-at-the-flash-raises-the-dialog",
   "description": "From 02:50, when the clock starts flashing, a confirmation asks whether that was the last one.",
+  "requirements": ["FR_MATCH_06"],
   "events": [
     {
       "seq": 1,

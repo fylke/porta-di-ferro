@@ -59,6 +59,7 @@ func TestWhoANewEntryIs(t *testing.T) {
 
 // Two people with the same name and two different addresses are two people: nobody
 // asks the organizer about them (#142).
+// REQ: FR_PEOPLE_01
 func TestTwoAddressesAreNeverTheSamePerson(t *testing.T) {
 	reg := []store.Person{
 		{ID: "a", Name: "Anna Nilsson", Email: "anna@one.se"},
@@ -75,6 +76,7 @@ func TestTwoAddressesAreNeverTheSamePerson(t *testing.T) {
 	}
 }
 
+// REQ: FR_PEOPLE_01
 func TestDuplicatesAreOfferedNotMerged(t *testing.T) {
 	reg := []store.Person{{ID: "a", Name: "Karl-Johan"}, {ID: "b", Name: "Karl Johan"}, {ID: "c", Name: "Bo"}}
 	entries := map[string][]people.Entry{
@@ -92,6 +94,7 @@ func TestDuplicatesAreOfferedNotMerged(t *testing.T) {
 }
 
 // A merge moves the entries and can be undone exactly.
+// REQ: FR_PEOPLE_01
 func TestAMergeCanBeUndone(t *testing.T) {
 	reg := []store.Person{{ID: "a", Name: "Astrid", Signup: "s"}, {ID: "b", Name: "Astrid"}}
 	reg, err := people.Merge(reg, "a", "b", []string{"sa/c3"})

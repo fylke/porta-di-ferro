@@ -142,6 +142,7 @@ func TestPlacementsSurviveUntilTheDrawChanges(t *testing.T) {
 	}
 }
 
+// REQ: FR_MATS_02, DC_ARCH_02
 func TestTwoDisciplinesShareTheMats(t *testing.T) {
 	ls := discipline("ls", "d", []pool{{1, 1, 2, "cc"}, {2, 2, 2, "c"}}, nil, nil, nil)
 	sa := discipline("sa", "d", []pool{{1, 1, 2, ""}}, nil, nil, nil)
@@ -205,6 +206,7 @@ func ptr[T any](v T) *T { return &v }
 
 // The organizer's hold (QUEUE-1/2): a mat stops in front of a held item, even within one
 // discipline, until it is released -- and never in the middle of one under way.
+// REQ: FR_MATS_02
 func TestAHeldItemStopsItsMat(t *testing.T) {
 	ls := discipline("ls", "d", []pool{{1, 1, 2, "cc"}, {2, 1, 2, ""}, {3, 2, 2, "r"}}, nil, nil, nil)
 	placed, _ := hall.Place(items(ls), store.Plan{}, 2, hall.PlaceOrder{})
@@ -451,6 +453,7 @@ func TestOnlyPoolsMoveAndNeverBehindTheirBracket(t *testing.T) {
 // The hall's mats are the authority (field test, 2026-11): a discipline never spreads
 // over more mats than the hall has, and the hall never takes a discipline's choice to
 // use fewer.
+// REQ: FR_MATS_02
 func TestEffectiveMatCount(t *testing.T) {
 	for _, c := range []struct{ hall, discipline, want int }{
 		{1, 2, 1}, // a mat taken away is taken from the discipline too

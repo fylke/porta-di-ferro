@@ -12,6 +12,7 @@ func DefaultOptions() Options {
 // It is separate from Replay on purpose. State is what the vectors pin, field for field,
 // in both engines; colours are not a scoring matter and must not be able to make a vector
 // fail.
+// REQ: FR_MATCH_10
 func OptionsOf(events []Event) Options {
 	out := DefaultOptions()
 	for _, e := range events {

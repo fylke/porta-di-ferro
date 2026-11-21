@@ -10,6 +10,7 @@ import (
 // The organizer reads names, not identifiers. The warning is stored with identifiers and
 // named on the way out, so a rename after the draw is reflected and older files read the
 // same way.
+// REQ: FR_POOLS_01, FR_POOLS_02
 func TestDrawWarningsNameTheCompetitors(t *testing.T) {
 	byID := map[string]store.Competitor{
 		"c3": {ID: "c3", Name: "Torun Sandström Wadell"},

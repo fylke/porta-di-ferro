@@ -17,6 +17,7 @@ import (
 )
 
 //go:embed all:dist
+// REQ: NFR_OFFLINE_01, NFR_INSTALL_01
 var dist embed.FS
 
 // The participant's offline signup app (issue #91). One self-contained file of plain

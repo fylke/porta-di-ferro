@@ -89,6 +89,7 @@ type SharePreview struct {
 
 // CombineSignups is the disciplines' checks as one answer: per response, where it goes.
 // previews are by index into shares. Shared with the browser demo.
+// REQ: FR_SIGNUP_01
 func CombineSignups(def signup.Definition, files []signup.File, shares []SignupShare, previews map[int]SharePreview) EventSignupPreview {
 	out := EventSignupPreview{Rows: []EventSignupRow{}, Disciplines: shares}
 	var each [][]signup.Row
@@ -156,6 +157,7 @@ const definitionMarker = `<script id="definition" type="application/json">null</
 
 // BakeSignupApp writes an event into a copy of the participant app, which is what makes
 // the download one file instead of two.
+// REQ: FR_SIGNUP_01
 func BakeSignupApp(page []byte, def signup.Definition) ([]byte, error) {
 	if !bytes.Contains(page, []byte(definitionMarker)) {
 		return nil, fmt.Errorf("the signup app has no definition slot to fill")

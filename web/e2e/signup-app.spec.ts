@@ -55,6 +55,7 @@ async function save(page: Page) {
   return JSON.parse(await readFile(await (await download).path(), 'utf8'));
 }
 
+// REQ: DC_SIGNUP_01, FR_SIGNUP_01
 test.describe('The offline signup app', () => {
   test('offers to staff what you are not fencing, and writes it into the file', async ({ page }, info) => {
     const errors = await openFromDisk(page, info.outputPath('signup.html'));
@@ -118,6 +119,7 @@ test.describe('The offline signup app', () => {
   });
 });
 
+// REQ: DC_SIGNUP_01
 test.describe('A signup file preview without JavaScript', () => {
   test.use({ javaScriptEnabled: false, viewport: { width: 390, height: 844 } });
 

@@ -16,6 +16,7 @@ async function ok(res: Awaited<ReturnType<APIRequestContext['get']>>) {
   return res.json();
 }
 
+// REQ: US_SK_02
 test('a scored match reaches the server, and a redraw is not undone by the tablet that scored it', async ({ page, request }) => {
   const slug = await aPoolOfOurOwn(request, 'Redraw');
   // Its pool 1 first on a mat nobody else uses.

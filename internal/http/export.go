@@ -16,6 +16,7 @@ type Export struct {
 	Snapshot   hall.Snapshot `json:"tournament"`
 }
 
+// REQ: FR_EXPORT_01
 func (s *Server) exportJSON(w http.ResponseWriter, r *http.Request) {
 	snap, err := s.snapshot()
 	if err != nil {

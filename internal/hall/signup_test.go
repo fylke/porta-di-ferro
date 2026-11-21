@@ -14,6 +14,7 @@ import (
 // goes into ever moves, every participant gets an app that asks them for a definition
 // they were never sent -- and nobody finds out until a file comes back empty.
 
+// REQ: FR_SIGNUP_01
 func TestTheSignupAppCarriesTheEvent(t *testing.T) {
 	page, err := web.SignupApp()
 	if err != nil {

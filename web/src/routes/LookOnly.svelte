@@ -1,3 +1,4 @@
+<!-- REQ: NFR_SEC_01 -->
 <script lang="ts">
   import { onOrganizerPC } from '../lib/organizer';
   import { t } from '../lib/i18n.svelte';

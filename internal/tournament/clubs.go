@@ -30,6 +30,7 @@ import (
 // tie-break is what spreads a club across the pools instead of leaving it to the shuffle.
 // Competitors with no club go last, so the clubs get first pick of the spread and the
 // unaffiliated fill in.
+// REQ: FR_POOLS_01
 func deal(order []store.Competitor, count int) [][]store.Competitor {
 	byClub := map[string][]store.Competitor{}
 	var clubs []string
@@ -71,6 +72,7 @@ func deal(order []store.Competitor, count int) [][]store.Competitor {
 // end up together in one pool while a swap with a bigger club's member would have spread
 // both. Each swap exchanges exactly one competitor for one, so sizes never move, and it
 // is taken only when the total overspill strictly falls, so it terminates.
+// REQ: FR_POOLS_01
 func balance(buckets [][]store.Competitor) []string {
 	for improved := true; improved; {
 		improved = false

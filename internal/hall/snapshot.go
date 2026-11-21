@@ -184,6 +184,7 @@ func namedViolations(violations []string, byID map[string]store.Competitor) []st
 //
 // scorekeeperOn names the match a live score keeper is holding on a mat, or "" -- a
 // server reads that from the presence registry, and the demo has nobody connected.
+// REQ: DC_ARCH_02
 func BuildSnapshot(src Source, rules match.Ruleset, self Instance,
 	scorekeeperOn func(mat int) string) (Snapshot, error) {
 

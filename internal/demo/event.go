@@ -173,6 +173,7 @@ func (e *Event) Request(method, path string, body []byte) Response {
 
 // routes are the event's own paths, as httpapi.Coordinator.Handler registers them, and a
 // discipline's by its address.
+// REQ: DC_API_02
 func (e *Event) routes() []route {
 	answer := func(f func() Response) func(call) Response { return func(call) Response { return f() } }
 	bodied := func(f func([]byte) Response) func(call) Response { return func(c call) Response { return f(c.body) } }

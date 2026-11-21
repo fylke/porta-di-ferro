@@ -1,3 +1,4 @@
+<!-- REQ: US_ORG_02, FR_SIGNUP_01 -->
 <script lang="ts">
   import { onMount, untrack } from "svelte";
   import {

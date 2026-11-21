@@ -1,6 +1,7 @@
 {
   "name": "differential-two-against-two-nets-zero",
   "description": "A 2 against a 2 gives nobody anything. This is why doubles need no special handling.",
+  "requirements": ["FR_MATCH_03"],
   "events": [
     {
       "seq": 1,

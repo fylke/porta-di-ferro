@@ -1,6 +1,7 @@
 {
   "name": "escalation-to-level-three-loses-the-match",
   "description": "Jumping straight to 3 is a match loss, recorded exactly as a third warning is. Disqualification is recorded this way too while the rules are hardcoded.",
+  "requirements": ["FR_MATCH_04"],
   "events": [
     {
       "seq": 1,

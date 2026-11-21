@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { apiBase, disciplineOf, namespace, routeOf, within } from './paths';
 
+// REQ: DC_API_01
 describe('addresses in an event', () => {
   it('reads the discipline from a page of it', () => {
     expect(disciplineOf('/d/open-sabre/score/1')).toBe('open-sabre');

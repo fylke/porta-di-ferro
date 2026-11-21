@@ -41,6 +41,7 @@ func equal(a, b []int) bool {
 	return true
 }
 
+// REQ: FR_MATS_01
 func TestTheDefaultIsNotAnOverride(t *testing.T) {
 	tr := drawn(t, 2, 16) // four pools: 1 and 3 on mat 1, 2 and 4 on mat 2
 	for _, p := range tr.Pools {
@@ -53,6 +54,7 @@ func TestTheDefaultIsNotAnOverride(t *testing.T) {
 	}
 }
 
+// REQ: FR_MATS_01
 func TestMovePoolQueuesBehindTheMatsOwnPools(t *testing.T) {
 	tr := drawn(t, 2, 16)
 	moved, err := tournament.MovePool(tr, 2, 1)
@@ -86,6 +88,7 @@ func TestMovePoolQueuesBehindTheMatsOwnPools(t *testing.T) {
 	}
 }
 
+// REQ: FR_MATS_01
 func TestReorderPoolStepsThroughTheQueueAndStopsAtTheEnds(t *testing.T) {
 	tr := drawn(t, 1, 16) // pools 1-4, all on mat 1
 	up, err := tournament.ReorderPool(tr, 3, true)

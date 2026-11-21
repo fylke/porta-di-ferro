@@ -10,6 +10,7 @@ import (
 // TestFourMatsAndEightPools is the Milestone 2 ceiling against the real binary: 56
 // competitors on four mats draw eight pools, pool N lands on mat ((N-1) mod 4)+1, and
 // every mat has something to run.
+// REQ: FR_POOLS_01, FR_MATS_01
 func TestFourMatsAndEightPools(t *testing.T) {
 	s := start(t)
 

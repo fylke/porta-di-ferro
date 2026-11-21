@@ -74,6 +74,7 @@ func exchangeAt(seq int, elapsed int64) match.Event {
 // TestHandoverQuarantinesTheOldDevice is design §7 item 10 against the real binary: a
 // contested claim is refused, a forced one bumps the epoch, and what the displaced device
 // sends afterwards is set aside for the organizer rather than appended or dropped.
+// REQ: FR_TABLET_02
 func TestHandoverQuarantinesTheOldDevice(t *testing.T) {
 	s := start(t)
 	id := setupOneMatch(t, s)
@@ -132,6 +133,7 @@ func TestHandoverQuarantinesTheOldDevice(t *testing.T) {
 
 // TestGracefulHandoverNeedsNoForce: the outgoing device releases, the next claims without
 // ceremony, and the epoch still moves on so the old one can never write again.
+// REQ: FR_TABLET_01
 func TestGracefulHandoverNeedsNoForce(t *testing.T) {
 	s := start(t)
 	id := setupOneMatch(t, s)
@@ -153,6 +155,7 @@ func TestGracefulHandoverNeedsNoForce(t *testing.T) {
 // TestADeadDeviceIsAskedAbout: a claim that was never heartbeated -- or whose device has
 // gone quiet -- is still contested, and the refusal says the holder is not alive (#150).
 // A dark screen looks exactly like a flat battery; taking over is the score keeper's call.
+// REQ: FR_TABLET_01
 func TestADeadDeviceIsAskedAbout(t *testing.T) {
 	s := start(t)
 	id := setupOneMatch(t, s)
@@ -172,6 +175,7 @@ func TestADeadDeviceIsAskedAbout(t *testing.T) {
 // TestTheMatFollowsItsScoreKeeper: the match a mat is showing is the one the live score
 // keeper says it is on, finished or not -- so the displays hold a result for exactly as
 // long as the score keeper does.
+// REQ: FR_DISPLAY_03, US_SK_06
 func TestTheMatFollowsItsScoreKeeper(t *testing.T) {
 	s := start(t)
 	for i := 1; i <= 4; i++ {
@@ -216,6 +220,7 @@ func TestTheMatFollowsItsScoreKeeper(t *testing.T) {
 
 // TestServerAssignedDisplays is design §7 item 4: a screen registers, the organizer tells
 // it what to show, and the assignment survives in the store.
+// REQ: FR_DISPLAY_02
 func TestServerAssignedDisplays(t *testing.T) {
 	s := start(t)
 	var c client
